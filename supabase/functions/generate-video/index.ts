@@ -140,7 +140,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     console.log("Step 1: Generating script with Gemini 2.5 Pro Preview...");
     
     const scriptResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-05-06:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -239,7 +239,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       try {
         // Use Gemini's text-to-speech capability
         const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
