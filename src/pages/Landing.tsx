@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Headphones, Presentation, Mic, ArrowRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import audiomaxLogo from "@/assets/audiomax-logo.png";
 
 const features = [
@@ -58,17 +59,18 @@ export default function Landing() {
               Pricing
             </a>
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button
               variant="ghost"
               className="text-sm font-medium"
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/auth")}
             >
               Log In
             </Button>
             <Button
               className="rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground"
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/auth")}
             >
               Get Started
             </Button>
@@ -193,7 +195,7 @@ export default function Landing() {
             <Button
               size="lg"
               className="group gap-2 rounded-full bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30"
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/auth")}
             >
               Start Creating Free
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -332,7 +334,7 @@ export default function Landing() {
             <Button
               size="lg"
               className="mt-8 gap-2 rounded-full bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/20"
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/auth")}
             >
               Start Creating Free
               <ArrowRight className="h-4 w-4" />

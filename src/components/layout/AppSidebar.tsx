@@ -1,5 +1,7 @@
 import { Plus, History, User, Settings, LogOut, Moon, Sun, Video, Film, Clapperboard, Presentation, Play } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
+import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAuth } from "@/hooks/useAuth";
 import audiomaxLogo from "@/assets/audiomax-logo.png";
 
 // Mock recent projects with Lucide icons
@@ -41,6 +44,14 @@ interface AppSidebarProps {
 export function AppSidebar({ onNewProject }: AppSidebarProps) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const { theme, setTheme } = useTheme();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
@@ -125,8 +136,10 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
                     </AvatarFallback>
                   </Avatar>
                   {!isCollapsed && (
-                    <div className="flex flex-col items-start">
-                      <span className="text-sm font-medium">Guest User</span>
+                    <div className="flex flex-col items-start overflow-hidden">
+                      <span className="truncate text-sm font-medium">
+                        {user?.email?.split("@")[0] || "User"}
+                      </span>
                       <span className="text-[11px] text-muted-foreground/70">Free Plan</span>
                     </div>
                   )}
@@ -145,13 +158,19 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
               <span>Usage & Billing</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
-            <DropdownMenuItem className="cursor-pointer rounded-lg">
+            <DropdownMenuItem 
+              className="cursor-pointer rounded-lg"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
               <Sun className="mr-2 h-4 w-4 text-muted-foreground dark:hidden" />
               <Moon className="mr-2 hidden h-4 w-4 text-muted-foreground dark:block" />
-              <span>Toggle Theme</span>
+              <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
-            <DropdownMenuItem className="cursor-pointer rounded-lg text-destructive focus:text-destructive">
+            <DropdownMenuItem 
+              className="cursor-pointer rounded-lg text-destructive focus:text-destructive"
+              onClick={handleSignOut}
+            >
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log Out</span>
             </DropdownMenuItem>
