@@ -45,7 +45,7 @@ export default function Landing() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <img src={audiomaxLogo} alt="AudioMax" className="h-8 w-auto" />
+            <img src={audiomaxLogo} alt="AudioMax" className="h-10 w-auto" />
           </div>
           <nav className="hidden items-center gap-8 md:flex">
             <a href="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
@@ -101,11 +101,9 @@ export default function Landing() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-8 flex justify-center"
+            className="mb-10 flex justify-center"
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/10 shadow-lg shadow-primary/10">
-              <Play className="h-10 w-10 text-primary" fill="currentColor" />
-            </div>
+            <img src={audiomaxLogo} alt="AudioMax" className="h-20 w-auto md:h-24" />
           </motion.div>
 
           {/* Headline */}
@@ -347,7 +345,7 @@ export default function Landing() {
       <footer className="border-t border-border/30 py-12">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <img src={audiomaxLogo} alt="AudioMax" className="h-6 w-auto opacity-60" />
+            <img src={audiomaxLogo} alt="AudioMax" className="h-8 w-auto opacity-60" />
           </div>
           <p className="text-sm text-muted-foreground/60">
             © 2024 AudioMax. All rights reserved.
