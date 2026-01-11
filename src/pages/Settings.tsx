@@ -23,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import audiomaxLogo from "@/assets/audiomax-logo.png";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -70,7 +70,7 @@ export default function Settings() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <img src={audiomaxLogo} alt="AudioMax" className="h-8 w-auto" />
+            <ThemedLogo className="h-8 w-auto" />
           </div>
           <ThemeToggle />
         </div>

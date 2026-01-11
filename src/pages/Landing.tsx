@@ -4,7 +4,7 @@ import { FileText, Headphones, Presentation, Mic, ArrowRight, Play } from "lucid
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import audiomaxLogo from "@/assets/audiomax-logo.png";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 const features = [
   {
@@ -46,7 +46,7 @@ export default function Landing() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <img src={audiomaxLogo} alt="AudioMax" className="h-10 w-auto" />
+            <ThemedLogo className="h-10 w-auto" />
           </div>
           <nav className="hidden items-center gap-8 md:flex">
             <a href="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
@@ -105,7 +105,7 @@ export default function Landing() {
             transition={{ duration: 0.6 }}
             className="mb-10 flex justify-center"
           >
-            <img src={audiomaxLogo} alt="AudioMax" className="h-20 w-auto md:h-24" />
+            <ThemedLogo className="h-20 w-auto md:h-24" />
           </motion.div>
 
           {/* Headline */}
@@ -346,8 +346,8 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border/30 py-12">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <img src={audiomaxLogo} alt="AudioMax" className="h-8 w-auto opacity-60" />
+          <div className="flex items-center gap-2 opacity-60">
+            <ThemedLogo className="h-8 w-auto" />
           </div>
           <p className="text-sm text-muted-foreground/60">
             © 2024 AudioMax. All rights reserved.

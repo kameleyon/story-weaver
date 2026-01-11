@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import audiomaxLogo from "@/assets/audiomax-logo.png";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 // Mock recent projects with Lucide icons
 const recentProjects = [
@@ -57,13 +57,12 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2">
-          <motion.img
-            src={audiomaxLogo}
-            alt="AudioMax"
-            className="h-8 w-auto"
+          <motion.div
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-          />
+          >
+            <ThemedLogo className="h-8 w-auto" />
+          </motion.div>
         </div>
         
         <div className="mt-6">
