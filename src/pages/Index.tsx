@@ -1,13 +1,22 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
+import { Workspace } from "@/components/workspace/Workspace";
 
 const Index = () => {
+  const handleNewProject = () => {
+    // This would reset the workspace - handled by Workspace component
+    window.location.reload();
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <AppSidebar onNewProject={handleNewProject} />
+        <main className="flex-1">
+          <Workspace />
+        </main>
       </div>
-    </div>
+    </SidebarProvider>
   );
 };
 
