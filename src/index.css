@@ -2,95 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* AudioMax Design System - Teal & Mist Theme
+   All colors in HSL format */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Teal & Mist Color Palette */
+    --brand-dark: 180 7% 13%; /* #1E2223 - Carbon Black */
+    --brand-primary: 186 76% 21%; /* #0D565F - Dark Teal */
+    --brand-secondary: 178 40% 29%; /* #2D6967 - Stormy Teal */
+    --brand-accent: 170 36% 48%; /* #4EA69A - Ocean Mist */
+    --brand-light: 168 47% 67%; /* #86D2CA - Pearl Aqua */
+    --brand-pop: 179 40% 60%; /* #71C0C2 - Tropical Teal */
+    --brand-surface: 165 43% 89%; /* #DAEEE9 - Frozen Water */
+
+    /* Semantic Tokens - Light Mode */
+    --background: 165 43% 96%;
+    --foreground: 180 7% 13%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 180 7% 13%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 180 7% 13%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 186 76% 21%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 178 40% 29%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 165 30% 90%;
+    --muted-foreground: 180 7% 40%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 170 36% 48%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 168 30% 80%;
+    --input: 168 30% 85%;
+    --ring: 186 76% 21%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar Tokens - Light */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 180 7% 13%;
+    --sidebar-primary: 186 76% 21%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 165 43% 92%;
+    --sidebar-accent-foreground: 180 7% 13%;
+    --sidebar-border: 168 30% 85%;
+    --sidebar-ring: 186 76% 21%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Dark Mode - Teal & Mist */
+    --background: 180 7% 10%;
+    --foreground: 165 43% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 180 7% 13%;
+    --card-foreground: 165 43% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 180 7% 13%;
+    --popover-foreground: 165 43% 92%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 170 36% 48%;
+    --primary-foreground: 180 7% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 178 40% 29%;
+    --secondary-foreground: 165 43% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 180 7% 18%;
+    --muted-foreground: 168 30% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 179 40% 60%;
+    --accent-foreground: 180 7% 10%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 180 7% 20%;
+    --input: 180 7% 18%;
+    --ring: 170 36% 48%;
+
+    /* Sidebar Tokens - Dark */
+    --sidebar-background: 180 7% 10%;
+    --sidebar-foreground: 165 43% 92%;
+    --sidebar-primary: 170 36% 48%;
+    --sidebar-primary-foreground: 180 7% 10%;
+    --sidebar-accent: 180 7% 15%;
+    --sidebar-accent-foreground: 165 43% 92%;
+    --sidebar-border: 180 7% 18%;
+    --sidebar-ring: 170 36% 48%;
   }
 }
 
@@ -100,6 +106,12 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    @apply backdrop-blur-md bg-white/80 dark:bg-card/80;
   }
 }
