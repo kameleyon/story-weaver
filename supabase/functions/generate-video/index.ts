@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,19 +15,28 @@ interface GenerationRequest {
   customStyle?: string;
 }
 
+interface Scene {
+  number: number;
+  voiceover: string;
+  visualPrompt: string;
+  duration: number;
+  imageUrl?: string;
+  audioUrl?: string;
+}
+
+interface ScriptResponse {
+  title: string;
+  scenes: Scene[];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
 
     // Get the user from the authorization header
     const authHeader = req.headers.get("authorization");
@@ -50,6 +60,38 @@ serve(async (req) => {
       );
     }
 
+    // Get user's API keys from database
+    const { data: apiKeys, error: apiKeysError } = await supabase
+      .from("user_api_keys")
+      .select("gemini_api_key, replicate_api_token")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (apiKeysError) {
+      console.error("Error fetching API keys:", apiKeysError);
+      return new Response(
+        JSON.stringify({ error: "Failed to retrieve API keys" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!apiKeys?.gemini_api_key) {
+      return new Response(
+        JSON.stringify({ error: "Please add your Google Gemini API key in Settings" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!apiKeys?.replicate_api_token) {
+      return new Response(
+        JSON.stringify({ error: "Please add your Replicate API token in Settings" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const GEMINI_API_KEY = apiKeys.gemini_api_key;
+    const REPLICATE_API_TOKEN = apiKeys.replicate_api_token;
+
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
     // Determine scene count based on video length
@@ -60,7 +102,10 @@ serve(async (req) => {
     };
     const sceneCount = sceneCounts[length] || 6;
 
-    // Step 1: Generate script with scenes
+    // ===============================================
+    // STEP 1: THE DIRECTOR - Script Generation
+    // Using Google Gemini 2.5 Pro Preview
+    // ===============================================
     const styleDescription = style === "custom" ? customStyle : style;
     
     const scriptPrompt = `You are a video script writer. Create a compelling video script from the following content.
@@ -75,11 +120,11 @@ Requirements:
 
 For each scene, provide:
 1. Scene number
-2. Voiceover text (what will be spoken)
+2. Voiceover text (what will be spoken - keep it natural and engaging)
 3. Visual description (detailed prompt for image generation in the ${styleDescription} style)
-4. Duration in seconds
+4. Duration in seconds (based on voiceover length, roughly 150 words per minute)
 
-Format your response as JSON with this structure:
+IMPORTANT: Return ONLY valid JSON with this exact structure:
 {
   "title": "Video Title",
   "scenes": [
@@ -92,53 +137,42 @@ Format your response as JSON with this structure:
   ]
 }`;
 
-    console.log("Generating script...");
+    console.log("Step 1: Generating script with Gemini 2.5 Pro Preview...");
     
-    const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: "You are an expert video script writer. Always respond with valid JSON only." },
-          { role: "user", content: scriptPrompt }
-        ],
-      }),
-    });
+    const scriptResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-05-06:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ 
+            parts: [{ text: scriptPrompt }] 
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+          }
+        }),
+      }
+    );
 
     if (!scriptResponse.ok) {
-      const status = scriptResponse.status;
-      if (status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await scriptResponse.text();
-      console.error("Script generation error:", status, errorText);
-      throw new Error("Failed to generate script");
+      console.error("Gemini script error:", scriptResponse.status, errorText);
+      throw new Error(`Script generation failed: ${scriptResponse.status}`);
     }
 
     const scriptData = await scriptResponse.json();
-    const scriptContent = scriptData.choices?.[0]?.message?.content;
+    const scriptContent = scriptData.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!scriptContent) {
-      throw new Error("No script content received");
+      throw new Error("No script content received from Gemini");
     }
 
     // Parse the script JSON
-    let parsedScript;
+    let parsedScript: ScriptResponse;
     try {
-      // Try to extract JSON from the response
       const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         parsedScript = JSON.parse(jsonMatch[0]);
@@ -150,7 +184,7 @@ Format your response as JSON with this structure:
       throw new Error("Failed to parse generated script");
     }
 
-    console.log("Script generated:", parsedScript.title);
+    console.log("Script generated:", parsedScript.title, `(${parsedScript.scenes.length} scenes)`);
 
     // Create project in database
     const { data: project, error: projectError } = await supabase
@@ -179,7 +213,7 @@ Format your response as JSON with this structure:
         project_id: project.id,
         user_id: user.id,
         status: "generating",
-        progress: 25,
+        progress: 10,
         script: scriptContent,
         scenes: parsedScript.scenes,
         started_at: new Date().toISOString(),
@@ -192,68 +226,186 @@ Format your response as JSON with this structure:
       throw new Error("Failed to create generation record");
     }
 
-    // Step 2: Generate images for each scene (using Lovable AI image model)
-    console.log("Generating scene images...");
-    const sceneImages: string[] = [];
-    
+    // ===============================================
+    // STEP 2: THE NARRATOR - Audio Generation (TTS)
+    // Using Google Gemini 2.5 Pro Preview TTS
+    // ===============================================
+    console.log("Step 2: Generating audio with Gemini TTS...");
+    const audioUrls: (string | null)[] = [];
+
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
       
       try {
-        const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash-image-preview",
-            messages: [
-              { 
-                role: "user", 
-                content: `Create a ${format} aspect ratio image: ${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional.`
+        // Use Gemini's text-to-speech capability
+        const ttsResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ 
+                parts: [{ text: scene.voiceover }] 
+              }],
+              generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: "Kore"
+                    }
+                  }
+                }
               }
-            ],
-            modalities: ["image", "text"]
-          }),
-        });
+            }),
+          }
+        );
 
-        if (imageResponse.ok) {
-          const imageData = await imageResponse.json();
-          const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-          if (imageUrl) {
-            sceneImages.push(imageUrl);
-            console.log(`Scene ${i + 1} image generated`);
+        if (ttsResponse.ok) {
+          const ttsData = await ttsResponse.json();
+          const audioData = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+          
+          if (audioData?.data) {
+            // Upload audio to Supabase Storage
+            const audioBuffer = Uint8Array.from(atob(audioData.data), c => c.charCodeAt(0));
+            const audioPath = `${user.id}/${project.id}/scene-${i + 1}.mp3`;
+            
+            const { error: uploadError } = await supabase.storage
+              .from("audio")
+              .upload(audioPath, audioBuffer, {
+                contentType: audioData.mimeType || "audio/mp3",
+                upsert: true
+              });
+
+            if (!uploadError) {
+              const { data: { publicUrl } } = supabase.storage
+                .from("audio")
+                .getPublicUrl(audioPath);
+              audioUrls.push(publicUrl);
+              console.log(`Scene ${i + 1} audio generated`);
+            } else {
+              console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
+              audioUrls.push(null);
+            }
           } else {
-            sceneImages.push(""); // Placeholder for failed image
-            console.log(`Scene ${i + 1} image failed - no URL`);
+            audioUrls.push(null);
           }
         } else {
-          sceneImages.push("");
-          console.log(`Scene ${i + 1} image failed - status ${imageResponse.status}`);
+          const errorText = await ttsResponse.text();
+          console.error(`Scene ${i + 1} TTS failed:`, ttsResponse.status, errorText);
+          audioUrls.push(null);
         }
-      } catch (imgError) {
-        console.error(`Scene ${i + 1} image error:`, imgError);
-        sceneImages.push("");
+      } catch (ttsError) {
+        console.error(`Scene ${i + 1} TTS error:`, ttsError);
+        audioUrls.push(null);
       }
 
       // Update progress
-      const progress = 25 + Math.floor(((i + 1) / parsedScript.scenes.length) * 50);
+      const progress = 10 + Math.floor(((i + 1) / parsedScript.scenes.length) * 30);
       await supabase
         .from("generations")
-        .update({ progress, scenes: parsedScript.scenes.map((s: any, idx: number) => ({
-          ...s,
-          imageUrl: sceneImages[idx] || null
-        })) })
+        .update({ progress })
         .eq("id", generation.id);
     }
 
-    // Update generation as complete
-    const finalScenes = parsedScript.scenes.map((s: any, idx: number) => ({
-      ...s,
-      imageUrl: sceneImages[idx] || null
+    // ===============================================
+    // STEP 3: THE ILLUSTRATOR - Image Generation
+    // Using Replicate Flux 1.1 Pro
+    // ===============================================
+    console.log("Step 3: Generating images with Replicate Flux 1.1 Pro...");
+    const imageUrls: (string | null)[] = [];
+
+    const aspectRatioMap: Record<string, string> = {
+      landscape: "16:9",
+      portrait: "9:16",
+      square: "1:1"
+    };
+    const aspectRatio = aspectRatioMap[format] || "16:9";
+
+    for (let i = 0; i < parsedScript.scenes.length; i++) {
+      const scene = parsedScript.scenes[i];
+      
+      try {
+        // Create prediction on Replicate
+        const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${REPLICATE_API_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            version: "4c8f74db4d1a6838ec15c89127e5873c97c14e5d17f3b6e9f3b3e7dc8c20d5e8",
+            input: {
+              prompt: `${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic.`,
+              aspect_ratio: aspectRatio,
+              output_format: "webp",
+              output_quality: 90,
+            }
+          }),
+        });
+
+        if (!createResponse.ok) {
+          const errorText = await createResponse.text();
+          console.error(`Scene ${i + 1} Replicate create failed:`, createResponse.status, errorText);
+          imageUrls.push(null);
+          continue;
+        }
+
+        const prediction = await createResponse.json();
+        
+        // Poll for completion
+        let result = prediction;
+        let attempts = 0;
+        const maxAttempts = 60; // 60 seconds timeout
+        
+        while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const statusResponse = await fetch(result.urls.get, {
+            headers: {
+              "Authorization": `Bearer ${REPLICATE_API_TOKEN}`,
+            },
+          });
+          
+          if (statusResponse.ok) {
+            result = await statusResponse.json();
+          }
+          attempts++;
+        }
+
+        if (result.status === "succeeded" && result.output) {
+          const outputUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+          imageUrls.push(outputUrl);
+          console.log(`Scene ${i + 1} image generated`);
+        } else {
+          console.error(`Scene ${i + 1} image failed:`, result.status, result.error);
+          imageUrls.push(null);
+        }
+      } catch (imgError) {
+        console.error(`Scene ${i + 1} image error:`, imgError);
+        imageUrls.push(null);
+      }
+
+      // Update progress
+      const progress = 40 + Math.floor(((i + 1) / parsedScript.scenes.length) * 50);
+      await supabase
+        .from("generations")
+        .update({ progress })
+        .eq("id", generation.id);
+    }
+
+    // ===============================================
+    // STEP 4: FINALIZE - Compile results
+    // ===============================================
+    console.log("Step 4: Finalizing generation...");
+    
+    const finalScenes = parsedScript.scenes.map((scene, idx) => ({
+      ...scene,
+      imageUrl: imageUrls[idx] || null,
+      audioUrl: audioUrls[idx] || null,
     }));
 
+    // Update generation as complete
     await supabase
       .from("generations")
       .update({

@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
   User, 
   Key, 
-  CreditCard, 
   Bell, 
   Shield,
   Eye,
@@ -24,6 +23,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -36,6 +36,7 @@ export default function Settings() {
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showReplicateKey, setShowReplicateKey] = useState(false);
   const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [isLoadingKeys, setIsLoadingKeys] = useState(true);
   const [keysSaved, setKeysSaved] = useState(false);
 
   // Notification settings
@@ -43,17 +44,90 @@ export default function Settings() {
   const [projectUpdates, setProjectUpdates] = useState(true);
   const [marketingEmails, setMarketingEmails] = useState(false);
 
+  // Load existing API keys on mount
+  useEffect(() => {
+    const loadApiKeys = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from("user_api_keys")
+          .select("gemini_api_key, replicate_api_token")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error loading API keys:", error);
+          return;
+        }
+
+        if (data) {
+          setGeminiKey(data.gemini_api_key || "");
+          setReplicateKey(data.replicate_api_token || "");
+        }
+      } catch (err) {
+        console.error("Failed to load API keys:", err);
+      } finally {
+        setIsLoadingKeys(false);
+      }
+    };
+
+    loadApiKeys();
+  }, [user]);
+
   const handleSaveApiKeys = async () => {
+    if (!user) return;
+    
     setIsSavingKeys(true);
-    // Simulating API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSavingKeys(false);
-    setKeysSaved(true);
-    toast({
-      title: "API keys saved",
-      description: "Your API keys have been securely stored.",
-    });
-    setTimeout(() => setKeysSaved(false), 2000);
+    
+    try {
+      // Check if record exists
+      const { data: existing } = await supabase
+        .from("user_api_keys")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing record
+        const { error } = await supabase
+          .from("user_api_keys")
+          .update({
+            gemini_api_key: geminiKey || null,
+            replicate_api_token: replicateKey || null,
+          })
+          .eq("user_id", user.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new record
+        const { error } = await supabase
+          .from("user_api_keys")
+          .insert({
+            user_id: user.id,
+            gemini_api_key: geminiKey || null,
+            replicate_api_token: replicateKey || null,
+          });
+
+        if (error) throw error;
+      }
+
+      setKeysSaved(true);
+      toast({
+        title: "API keys saved",
+        description: "Your API keys have been securely stored.",
+      });
+      setTimeout(() => setKeysSaved(false), 2000);
+    } catch (error) {
+      console.error("Error saving API keys:", error);
+      toast({
+        title: "Error saving API keys",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingKeys(false);
+    }
   };
 
   return (
@@ -152,10 +226,11 @@ export default function Settings() {
                     <div className="relative">
                       <Input
                         type={showGeminiKey ? "text" : "password"}
-                        placeholder="Enter your Gemini API key"
+                        placeholder={isLoadingKeys ? "Loading..." : "Enter your Gemini API key"}
                         value={geminiKey}
                         onChange={(e) => setGeminiKey(e.target.value)}
                         className="pr-10"
+                        disabled={isLoadingKeys}
                       />
                       <button
                         type="button"
@@ -193,10 +268,11 @@ export default function Settings() {
                     <div className="relative">
                       <Input
                         type={showReplicateKey ? "text" : "password"}
-                        placeholder="Enter your Replicate API token"
+                        placeholder={isLoadingKeys ? "Loading..." : "Enter your Replicate API token"}
                         value={replicateKey}
                         onChange={(e) => setReplicateKey(e.target.value)}
                         className="pr-10"
+                        disabled={isLoadingKeys}
                       />
                       <button
                         type="button"
@@ -224,7 +300,7 @@ export default function Settings() {
               <Button 
                 onClick={handleSaveApiKeys} 
                 className="gap-2 rounded-full"
-                disabled={isSavingKeys || (!geminiKey && !replicateKey)}
+                disabled={isSavingKeys || isLoadingKeys}
               >
                 {isSavingKeys ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
