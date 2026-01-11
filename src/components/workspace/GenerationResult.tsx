@@ -114,6 +114,16 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
                 {currentScene?.voiceover}
               </p>
             </div>
+
+            {currentScene?.audioUrl ? (
+              <audio
+                key={currentScene.audioUrl}
+                controls
+                preload="none"
+                src={currentScene.audioUrl}
+                className="w-full"
+              />
+            ) : null}
           </div>
         </div>
       </Card>

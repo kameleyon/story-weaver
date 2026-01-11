@@ -29,6 +29,58 @@ interface ScriptResponse {
   scenes: Scene[];
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function createReplicatePredictionWithRetry({
+  replicateToken,
+  input,
+  maxRetries = 12,
+}: {
+  replicateToken: string;
+  input: Record<string, unknown>;
+  maxRetries?: number;
+}): Promise<{ ok: true; prediction: any } | { ok: false; status: number; error: string }> {
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    const resp = await fetch(
+      "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input }),
+      }
+    );
+
+    if (resp.status === 429) {
+      let retryMs = 11_000;
+      try {
+        const j = await resp.json();
+        const retryAfter = (j?.retry_after ?? j?.detail?.retry_after) as number | undefined;
+        if (typeof retryAfter === "number") retryMs = Math.max(1000, retryAfter * 1000) + 250;
+      } catch {
+        // ignore
+      }
+      console.error("Replicate rate-limited (429). Waiting", retryMs, "ms");
+      await sleep(retryMs);
+      attempt++;
+      continue;
+    }
+
+    if (!resp.ok) {
+      const t = await resp.text();
+      return { ok: false, status: resp.status, error: t };
+    }
+
+    const prediction = await resp.json();
+    return { ok: true, prediction };
+  }
+
+  return { ok: false, status: 429, error: "Replicate rate limit retries exceeded" };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -239,7 +291,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       try {
         // Use Gemini's text-to-speech capability
         const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -266,15 +318,24 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
           const audioData = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData;
           
           if (audioData?.data) {
-            // Upload audio to Supabase Storage
-            const audioBuffer = Uint8Array.from(atob(audioData.data), c => c.charCodeAt(0));
-            const audioPath = `${user.id}/${project.id}/scene-${i + 1}.mp3`;
-            
+            // Upload audio to Storage
+            const mimeType = audioData.mimeType || "audio/wav";
+            const ext = mimeType.includes("wav")
+              ? "wav"
+              : mimeType.includes("mpeg") || mimeType.includes("mp3")
+                ? "mp3"
+                : "bin";
+
+            const audioBytes = Uint8Array.from(atob(audioData.data), (c) => c.charCodeAt(0));
+            const audioBlob = new Blob([audioBytes], { type: mimeType });
+
+            const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
+
             const { error: uploadError } = await supabase.storage
               .from("audio")
-              .upload(audioPath, audioBuffer, {
-                contentType: audioData.mimeType || "audio/mp3",
-                upsert: true
+              .upload(audioPath, audioBlob, {
+                contentType: mimeType,
+                upsert: true,
               });
 
             if (!uploadError) {
@@ -326,32 +387,28 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       const scene = parsedScript.scenes[i];
       
       try {
-        // Create prediction on Replicate
-        const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${REPLICATE_API_TOKEN}`,
-            "Content-Type": "application/json",
+        // Create prediction on Replicate (use latest model version)
+        const created = await createReplicatePredictionWithRetry({
+          replicateToken: REPLICATE_API_TOKEN,
+          input: {
+            prompt: `${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic.`,
+            aspect_ratio: aspectRatio,
+            output_format: "webp",
+            output_quality: 90,
           },
-          body: JSON.stringify({
-            version: "4c8f74db4d1a6838ec15c89127e5873c97c14e5d17f3b6e9f3b3e7dc8c20d5e8",
-            input: {
-              prompt: `${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic.`,
-              aspect_ratio: aspectRatio,
-              output_format: "webp",
-              output_quality: 90,
-            }
-          }),
         });
 
-        if (!createResponse.ok) {
-          const errorText = await createResponse.text();
-          console.error(`Scene ${i + 1} Replicate create failed:`, createResponse.status, errorText);
+        if (!created.ok) {
+          console.error(
+            `Scene ${i + 1} Replicate create failed:`,
+            created.status,
+            created.error
+          );
           imageUrls.push(null);
           continue;
         }
 
-        const prediction = await createResponse.json();
+        const prediction = created.prediction;
         
         // Poll for completion
         let result = prediction;
@@ -392,6 +449,11 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
         .from("generations")
         .update({ progress })
         .eq("id", generation.id);
+
+      // Replicate free-tier burst limits are extremely low; space requests out
+      if (i < parsedScript.scenes.length - 1) {
+        await sleep(11_000);
+      }
     }
 
     // ===============================================
