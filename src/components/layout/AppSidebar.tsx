@@ -1,4 +1,4 @@
-import { Plus, History, User, Settings, LogOut, PanelLeftClose, Moon, Sun, Sparkles } from "lucide-react";
+import { Plus, History, User, Settings, LogOut, Moon, Sun, Video, Film, Clapperboard, Presentation, Play } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sidebar,
@@ -11,7 +11,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -24,14 +23,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import audiomaxLogo from "@/assets/audiomax-logo.png";
 
-// Mock recent projects
+// Mock recent projects with Lucide icons
 const recentProjects = [
-  { id: "1", title: "Product Demo Video", date: "2 hours ago", thumbnail: "📹" },
-  { id: "2", title: "Tutorial Series Ep.1", date: "Yesterday", thumbnail: "🎬" },
-  { id: "3", title: "Marketing Pitch", date: "2 days ago", thumbnail: "📊" },
-  { id: "4", title: "Onboarding Guide", date: "3 days ago", thumbnail: "📚" },
-  { id: "5", title: "Feature Walkthrough", date: "1 week ago", thumbnail: "✨" },
+  { id: "1", title: "Product Demo Video", date: "2 hours ago", icon: Video },
+  { id: "2", title: "Tutorial Series Ep.1", date: "Yesterday", icon: Film },
+  { id: "3", title: "Marketing Pitch", date: "2 days ago", icon: Clapperboard },
+  { id: "4", title: "Onboarding Guide", date: "3 days ago", icon: Presentation },
+  { id: "5", title: "Feature Walkthrough", date: "1 week ago", icon: Play },
 ];
 
 interface AppSidebarProps {
@@ -43,40 +43,28 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
   const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <motion.div
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <Sparkles className="h-5 w-5" />
-          </motion.div>
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.span
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="text-lg font-bold text-foreground"
-              >
-                AudioMax
-              </motion.span>
-            )}
-          </AnimatePresence>
+        <div className="flex items-center gap-2">
+          <motion.img
+            src={audiomaxLogo}
+            alt="AudioMax"
+            className="h-8 w-auto"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          />
         </div>
         
-        <div className="mt-4">
+        <div className="mt-6">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 onClick={onNewProject}
-                className="w-full justify-start gap-2 bg-brand-pop text-brand-dark hover:bg-brand-light"
+                className="w-full justify-start gap-2.5 rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 size={isCollapsed ? "icon" : "default"}
               >
                 <Plus className="h-4 w-4" />
-                {!isCollapsed && <span>New Project</span>}
+                {!isCollapsed && <span className="font-medium">New Project</span>}
               </Button>
             </TooltipTrigger>
             {isCollapsed && <TooltipContent side="right">New Project</TooltipContent>}
@@ -84,59 +72,62 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-2">
         <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 px-4">
-            <History className="h-4 w-4" />
-            {!isCollapsed && <span>Recent Activity</span>}
+          <SidebarGroupLabel className="flex items-center gap-2 px-3 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+            <History className="h-3.5 w-3.5" />
+            {!isCollapsed && <span>Recent</span>}
           </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {recentProjects.map((project) => (
-                <SidebarMenuItem key={project.id}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SidebarMenuButton className="w-full cursor-pointer transition-colors hover:bg-sidebar-accent">
-                        <span className="text-lg">{project.thumbnail}</span>
-                        {!isCollapsed && (
-                          <div className="flex flex-col items-start overflow-hidden">
-                            <span className="truncate text-sm font-medium">{project.title}</span>
-                            <span className="text-xs text-muted-foreground">{project.date}</span>
+          <SidebarGroupContent className="mt-2">
+            <SidebarMenu className="space-y-1">
+              {recentProjects.map((project) => {
+                const IconComponent = project.icon;
+                return (
+                  <SidebarMenuItem key={project.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
+                          <IconComponent className="h-4 w-4 text-muted-foreground" />
+                          {!isCollapsed && (
+                            <div className="flex flex-col items-start overflow-hidden">
+                              <span className="truncate text-sm font-medium">{project.title}</span>
+                              <span className="text-[11px] text-muted-foreground/70">{project.date}</span>
+                            </div>
+                          )}
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {isCollapsed && (
+                        <TooltipContent side="right">
+                          <div>
+                            <p className="font-medium">{project.title}</p>
+                            <p className="text-xs text-muted-foreground">{project.date}</p>
                           </div>
-                        )}
-                      </SidebarMenuButton>
-                    </TooltipTrigger>
-                    {isCollapsed && (
-                      <TooltipContent side="right">
-                        <div>
-                          <p className="font-medium">{project.title}</p>
-                          <p className="text-xs text-muted-foreground">{project.date}</p>
-                        </div>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                </SidebarMenuItem>
-              ))}
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-3">
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-3 px-2">
+                <Button variant="ghost" className="w-full justify-start gap-3 rounded-lg px-3 py-2.5 hover:bg-sidebar-accent/50">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-brand-accent text-brand-dark">
+                    <AvatarFallback className="bg-muted text-muted-foreground">
                       <User className="h-4 w-4" />
                     </AvatarFallback>
                   </Avatar>
                   {!isCollapsed && (
                     <div className="flex flex-col items-start">
                       <span className="text-sm font-medium">Guest User</span>
-                      <span className="text-xs text-muted-foreground">Free Plan</span>
+                      <span className="text-[11px] text-muted-foreground/70">Free Plan</span>
                     </div>
                   )}
                 </Button>
@@ -144,23 +135,23 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
             </TooltipTrigger>
             {isCollapsed && <TooltipContent side="right">User Menu</TooltipContent>}
           </Tooltip>
-          <DropdownMenuContent align="start" side="top" className="w-56">
-            <DropdownMenuItem className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
+          <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-lg">
+            <DropdownMenuItem className="cursor-pointer rounded-lg">
+              <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer">
-              <History className="mr-2 h-4 w-4" />
+            <DropdownMenuItem className="cursor-pointer rounded-lg">
+              <History className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Usage & Billing</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer">
-              <Sun className="mr-2 h-4 w-4 dark:hidden" />
-              <Moon className="mr-2 hidden h-4 w-4 dark:block" />
+            <DropdownMenuSeparator className="bg-border/50" />
+            <DropdownMenuItem className="cursor-pointer rounded-lg">
+              <Sun className="mr-2 h-4 w-4 text-muted-foreground dark:hidden" />
+              <Moon className="mr-2 hidden h-4 w-4 text-muted-foreground dark:block" />
               <span>Toggle Theme</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer text-destructive">
+            <DropdownMenuSeparator className="bg-border/50" />
+            <DropdownMenuItem className="cursor-pointer rounded-lg text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log Out</span>
             </DropdownMenuItem>

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { Check, Loader2, Play, Download, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GenerationState, GenerationStep } from "@/hooks/useGenerationPipeline";
 
@@ -27,21 +27,21 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6 rounded-2xl border bg-card p-6"
+      className="space-y-8 rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur-sm"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <motion.div
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-pop"
+          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10"
           animate={{ rotate: state.isGenerating ? 360 : 0 }}
-          transition={{ duration: 2, repeat: state.isGenerating ? Infinity : 0, ease: "linear" }}
+          transition={{ duration: 3, repeat: state.isGenerating ? Infinity : 0, ease: "linear" }}
         >
-          <Sparkles className="h-5 w-5 text-brand-dark" />
+          <Play className="h-5 w-5 text-primary" />
         </motion.div>
         <div>
-          <h3 className="font-semibold">
-            {state.step === "complete" ? "Video Ready!" : "Generating Your Video"}
+          <h3 className="text-lg font-semibold text-foreground">
+            {state.step === "complete" ? "Video Ready" : "Creating Your Video"}
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground/70">
             {state.step === "complete"
               ? "Your video has been created successfully"
               : "This will take about 15 seconds"}
@@ -49,7 +49,7 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-1">
         {steps.map((step, index) => {
           const isActive = state.step === step.id;
           const isComplete = currentStepIndex > index || state.step === "complete";
@@ -60,39 +60,39 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
               <div className="flex flex-col items-center">
                 <motion.div
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors",
-                    isComplete && "border-brand-accent bg-brand-accent text-white",
-                    isActive && "border-brand-pop bg-brand-pop/10",
-                    isPending && "border-muted bg-muted"
+                    "flex h-8 w-8 items-center justify-center rounded-full transition-all",
+                    isComplete && "bg-primary text-primary-foreground",
+                    isActive && "bg-primary/10 text-primary ring-2 ring-primary/20",
+                    isPending && "bg-muted/50 text-muted-foreground/50"
                   )}
-                  animate={isActive ? { scale: [1, 1.1, 1] } : {}}
-                  transition={{ duration: 0.5, repeat: isActive ? Infinity : 0 }}
+                  animate={isActive ? { scale: [1, 1.05, 1] } : {}}
+                  transition={{ duration: 1.5, repeat: isActive ? Infinity : 0 }}
                 >
                   {isComplete ? (
                     <Check className="h-4 w-4" />
                   ) : isActive ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-brand-pop" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <span className="text-xs font-medium text-muted-foreground">{index + 1}</span>
+                    <span className="text-xs font-medium">{index + 1}</span>
                   )}
                 </motion.div>
                 {index < steps.length - 1 && (
                   <div
                     className={cn(
-                      "h-8 w-0.5 transition-colors",
-                      isComplete ? "bg-brand-accent" : "bg-muted"
+                      "h-10 w-px transition-colors",
+                      isComplete ? "bg-primary/50" : "bg-border/50"
                     )}
                   />
                 )}
               </div>
 
-              <div className="flex-1 pt-1">
+              <div className="flex-1 pt-1 pb-2">
                 <p
                   className={cn(
                     "font-medium transition-colors",
-                    isComplete && "text-brand-accent",
+                    isComplete && "text-primary",
                     isActive && "text-foreground",
-                    isPending && "text-muted-foreground"
+                    isPending && "text-muted-foreground/50"
                   )}
                 >
                   {step.label}
@@ -105,14 +105,14 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
                       exit={{ opacity: 0, height: 0 }}
                       className="mt-2 space-y-2"
                     >
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground/70">
                         {step.id === "visuals"
-                          ? `Creating images for scene ${state.currentScene}/${state.sceneCount}...`
+                          ? `Creating scene ${state.currentScene} of ${state.sceneCount}...`
                           : step.description}
                       </p>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-1 overflow-hidden rounded-full bg-muted/30">
                         <motion.div
-                          className="h-full bg-gradient-to-r from-brand-accent to-brand-pop"
+                          className="h-full bg-primary"
                           initial={{ width: 0 }}
                           animate={{ width: `${state.progress}%` }}
                           transition={{ duration: 0.1 }}
@@ -130,30 +130,34 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
       <AnimatePresence>
         {state.step === "complete" && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl bg-brand-surface/50 p-4 dark:bg-brand-dark/30"
+            className="rounded-xl bg-muted/30 p-5"
           >
-            <div className="flex aspect-video items-center justify-center rounded-lg bg-muted">
+            <div className="flex aspect-video items-center justify-center rounded-lg bg-muted/50">
               <div className="text-center">
-                <Sparkles className="mx-auto h-12 w-12 text-brand-accent" />
-                <p className="mt-2 font-medium">Video Preview</p>
-                <p className="text-sm text-muted-foreground">8 scenes generated</p>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Play className="h-6 w-6 text-primary" />
+                </div>
+                <p className="mt-3 text-sm font-medium text-foreground">Video Preview</p>
+                <p className="text-xs text-muted-foreground/70">8 scenes generated</p>
               </div>
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex gap-3">
               <motion.button
-                className="flex-1 rounded-xl bg-brand-pop py-2.5 font-medium text-brand-dark"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
+                <Download className="h-4 w-4" />
                 Download
               </motion.button>
               <motion.button
-                className="flex-1 rounded-xl border border-border py-2.5 font-medium"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-border/50 bg-background py-3 text-sm font-medium transition-colors hover:bg-muted/30"
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
+                <Share2 className="h-4 w-4" />
                 Share
               </motion.button>
             </div>
