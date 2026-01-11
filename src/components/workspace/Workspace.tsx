@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Sparkles, PanelLeftClose } from "lucide-react";
+import { Play, Menu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ContentInput } from "./ContentInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { LengthSelector, type VideoLength } from "./LengthSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
 import { GenerationProgress } from "./GenerationProgress";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
+import audiomaxLogo from "@/assets/audiomax-logo.png";
 
 export function Workspace() {
   const [projectName, setProjectName] = useState("Untitled Project");
@@ -36,34 +36,35 @@ export function Workspace() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       {/* Top Bar */}
-      <header className="flex h-14 items-center gap-4 border-b bg-card/50 px-4">
-        <SidebarTrigger>
-          <PanelLeftClose className="h-5 w-5" />
-        </SidebarTrigger>
-        <Input
-          value={projectName}
-          onChange={(e) => setProjectName(e.target.value)}
-          className="max-w-xs border-none bg-transparent text-lg font-medium focus-visible:ring-0"
-        />
-        <div className="ml-auto flex items-center gap-2">
+      <header className="flex h-16 items-center justify-between border-b border-border/30 bg-background/80 px-6 backdrop-blur-sm">
+        <div className="flex items-center gap-4">
+          <SidebarTrigger className="lg:hidden">
+            <Menu className="h-5 w-5 text-muted-foreground" />
+          </SidebarTrigger>
+          <div className="hidden lg:flex items-center gap-3">
+            <img src={audiomaxLogo} alt="AudioMax" className="h-7 w-auto" />
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
           {generationState.step !== "idle" && generationState.step !== "complete" && (
-            <motion.span
-              className="flex items-center gap-2 rounded-full bg-brand-pop/20 px-3 py-1 text-sm text-brand-primary"
+            <motion.div
+              className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5"
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
             >
-              <span className="h-2 w-2 animate-pulse rounded-full bg-brand-pop" />
-              Generating...
-            </motion.span>
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              <span className="text-sm font-medium text-primary">Generating...</span>
+            </motion.div>
           )}
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+      <main className="flex-1 overflow-auto">
+        <div className="mx-auto max-w-2xl px-6 py-12">
           <AnimatePresence mode="wait">
             {generationState.step === "idle" ? (
               <motion.div
@@ -71,13 +72,15 @@ export function Workspace() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-6"
+                className="space-y-8"
               >
-                {/* Hero Text */}
+                {/* Hero */}
                 <div className="text-center">
-                  <h1 className="text-3xl font-bold">What would you like to create?</h1>
-                  <p className="mt-2 text-muted-foreground">
-                    Paste your content or upload a file to get started
+                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                    What would you like to create?
+                  </h1>
+                  <p className="mt-2 text-muted-foreground/70">
+                    Paste your content or upload a file to begin
                   </p>
                 </div>
 
@@ -85,10 +88,11 @@ export function Workspace() {
                 <ContentInput content={content} onContentChange={setContent} />
 
                 {/* Configuration */}
-                <div className="space-y-6 rounded-2xl border bg-card p-6">
-                  <h2 className="font-semibold">Configure Your Video</h2>
+                <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm">
                   <FormatSelector selected={format} onSelect={setFormat} />
+                  <div className="h-px bg-border/30" />
                   <LengthSelector selected={length} onSelect={setLength} />
+                  <div className="h-px bg-border/30" />
                   <StyleSelector
                     selected={style}
                     customStyle={customStyle}
@@ -98,13 +102,13 @@ export function Workspace() {
                 </div>
 
                 {/* Generate Button */}
-                <motion.div whileHover={{ scale: canGenerate ? 1.02 : 1 }} whileTap={{ scale: canGenerate ? 0.98 : 1 }}>
+                <motion.div whileHover={{ scale: canGenerate ? 1.01 : 1 }} whileTap={{ scale: canGenerate ? 0.99 : 1 }}>
                   <Button
                     onClick={handleGenerate}
                     disabled={!canGenerate}
-                    className="w-full gap-2 bg-brand-pop py-6 text-lg font-semibold text-brand-dark hover:bg-brand-light disabled:opacity-50"
+                    className="w-full gap-2.5 rounded-full bg-primary py-6 text-base font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-40"
                   >
-                    <Sparkles className="h-5 w-5" />
+                    <Play className="h-4 w-4" />
                     Generate Video
                   </Button>
                 </motion.div>
@@ -127,8 +131,8 @@ export function Workspace() {
                   >
                     <Button
                       onClick={handleNewProject}
-                      variant="outline"
-                      className="w-full"
+                      variant="ghost"
+                      className="w-full rounded-full py-6 text-muted-foreground hover:text-foreground"
                     >
                       Create Another Video
                     </Button>

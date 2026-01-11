@@ -1,9 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* AudioMax Design System - Teal & Mist Theme
-   All colors in HSL format */
+   Elegant, Minimal, Sophisticated */
 
 @layer base {
   :root {
@@ -17,23 +19,23 @@
     --brand-surface: 165 43% 89%; /* #DAEEE9 - Frozen Water */
 
     /* Semantic Tokens - Light Mode */
-    --background: 165 43% 96%;
-    --foreground: 180 7% 13%;
+    --background: 0 0% 99%;
+    --foreground: 180 7% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 180 7% 13%;
+    --card-foreground: 180 7% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 180 7% 13%;
+    --popover-foreground: 180 7% 15%;
 
     --primary: 186 76% 21%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 178 40% 29%;
+    --secondary: 170 36% 48%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 165 30% 90%;
-    --muted-foreground: 180 7% 40%;
+    --muted: 180 10% 95%;
+    --muted-foreground: 180 7% 45%;
 
     --accent: 170 36% 48%;
     --accent-foreground: 0 0% 100%;
@@ -41,61 +43,61 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 168 30% 80%;
-    --input: 168 30% 85%;
+    --border: 180 10% 90%;
+    --input: 180 10% 92%;
     --ring: 186 76% 21%;
 
     --radius: 0.75rem;
 
     /* Sidebar Tokens - Light */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 180 7% 13%;
+    --sidebar-foreground: 180 7% 15%;
     --sidebar-primary: 186 76% 21%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 165 43% 92%;
-    --sidebar-accent-foreground: 180 7% 13%;
-    --sidebar-border: 168 30% 85%;
+    --sidebar-accent: 180 10% 96%;
+    --sidebar-accent-foreground: 180 7% 15%;
+    --sidebar-border: 180 10% 92%;
     --sidebar-ring: 186 76% 21%;
   }
 
   .dark {
     /* Dark Mode - Teal & Mist */
-    --background: 180 7% 10%;
-    --foreground: 165 43% 92%;
+    --background: 180 7% 8%;
+    --foreground: 0 0% 95%;
 
-    --card: 180 7% 13%;
-    --card-foreground: 165 43% 92%;
+    --card: 180 7% 10%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 180 7% 13%;
-    --popover-foreground: 165 43% 92%;
+    --popover: 180 7% 10%;
+    --popover-foreground: 0 0% 95%;
 
     --primary: 170 36% 48%;
-    --primary-foreground: 180 7% 10%;
+    --primary-foreground: 180 7% 8%;
 
     --secondary: 178 40% 29%;
-    --secondary-foreground: 165 43% 92%;
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 180 7% 18%;
-    --muted-foreground: 168 30% 60%;
+    --muted: 180 7% 15%;
+    --muted-foreground: 180 10% 55%;
 
     --accent: 179 40% 60%;
-    --accent-foreground: 180 7% 10%;
+    --accent-foreground: 180 7% 8%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 180 7% 20%;
-    --input: 180 7% 18%;
+    --border: 180 7% 15%;
+    --input: 180 7% 13%;
     --ring: 170 36% 48%;
 
     /* Sidebar Tokens - Dark */
-    --sidebar-background: 180 7% 10%;
-    --sidebar-foreground: 165 43% 92%;
+    --sidebar-background: 180 7% 8%;
+    --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 170 36% 48%;
-    --sidebar-primary-foreground: 180 7% 10%;
-    --sidebar-accent: 180 7% 15%;
-    --sidebar-accent-foreground: 165 43% 92%;
-    --sidebar-border: 180 7% 18%;
+    --sidebar-primary-foreground: 180 7% 8%;
+    --sidebar-accent: 180 7% 12%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 180 7% 13%;
     --sidebar-ring: 170 36% 48%;
   }
 }
@@ -105,8 +107,14 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 

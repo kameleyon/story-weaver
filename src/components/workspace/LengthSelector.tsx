@@ -17,23 +17,26 @@ const lengths: { id: VideoLength; label: string; duration: string }[] = [
 export function LengthSelector({ selected, onSelect }: LengthSelectorProps) {
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-medium text-muted-foreground">Length</h3>
+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Length</h3>
       <div className="flex gap-2">
         {lengths.map((length) => (
           <motion.button
             key={length.id}
             onClick={() => onSelect(length.id)}
             className={cn(
-              "flex-1 rounded-xl border-2 px-4 py-3 transition-all",
+              "flex-1 rounded-xl border px-4 py-3 transition-all",
               selected === length.id
-                ? "border-primary bg-primary/5"
-                : "border-border bg-card hover:border-muted-foreground/30"
+                ? "border-primary/50 bg-primary/5 shadow-sm"
+                : "border-transparent bg-muted/30 hover:bg-muted/50"
             )}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
           >
-            <p className="text-sm font-medium">{length.label}</p>
-            <p className="text-xs text-muted-foreground">{length.duration}</p>
+            <p className={cn(
+              "text-sm font-medium",
+              selected === length.id ? "text-foreground" : "text-muted-foreground"
+            )}>{length.label}</p>
+            <p className="text-xs text-muted-foreground/70">{length.duration}</p>
           </motion.button>
         ))}
       </div>
