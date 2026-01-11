@@ -148,11 +148,17 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
             {isCollapsed && <TooltipContent side="right">User Menu</TooltipContent>}
           </Tooltip>
           <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-lg">
-            <DropdownMenuItem className="cursor-pointer rounded-lg">
+            <DropdownMenuItem 
+              className="cursor-pointer rounded-lg"
+              onClick={() => navigate("/settings")}
+            >
               <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer rounded-lg">
+            <DropdownMenuItem 
+              className="cursor-pointer rounded-lg"
+              onClick={() => navigate("/usage")}
+            >
               <History className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Usage & Billing</span>
             </DropdownMenuItem>
