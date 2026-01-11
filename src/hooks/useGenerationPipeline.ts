@@ -10,6 +10,7 @@ export interface Scene {
   visualPrompt: string;
   duration: number;
   imageUrl?: string;
+  audioUrl?: string;
 }
 
 export interface GenerationState {
