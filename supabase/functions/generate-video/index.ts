@@ -289,9 +289,9 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       const scene = parsedScript.scenes[i];
       
       try {
-        // Use Gemini's text-to-speech capability
+        // Use Gemini 2.5 Pro Preview TTS (confirmed working model)
         const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -315,6 +315,8 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
 
         if (ttsResponse.ok) {
           const ttsData = await ttsResponse.json();
+          console.log(`Scene ${i + 1} TTS response structure:`, JSON.stringify(Object.keys(ttsData)));
+          
           const audioData = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData;
           
           if (audioData?.data) {
@@ -324,7 +326,9 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
               ? "wav"
               : mimeType.includes("mpeg") || mimeType.includes("mp3")
                 ? "mp3"
-                : "bin";
+                : mimeType.includes("l16") || mimeType.includes("pcm")
+                  ? "wav"
+                  : "bin";
 
             const audioBytes = Uint8Array.from(atob(audioData.data), (c) => c.charCodeAt(0));
             const audioBlob = new Blob([audioBytes], { type: mimeType });
@@ -343,17 +347,18 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
                 .from("audio")
                 .getPublicUrl(audioPath);
               audioUrls.push(publicUrl);
-              console.log(`Scene ${i + 1} audio generated`);
+              console.log(`Scene ${i + 1} audio generated, mimeType: ${mimeType}`);
             } else {
               console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
               audioUrls.push(null);
             }
           } else {
+            console.error(`Scene ${i + 1} no audio data in response. Parts:`, JSON.stringify(ttsData.candidates?.[0]?.content?.parts));
             audioUrls.push(null);
           }
         } else {
           const errorText = await ttsResponse.text();
-          console.error(`Scene ${i + 1} TTS failed:`, ttsResponse.status, errorText);
+          console.error(`Scene ${i + 1} TTS failed (${ttsResponse.status}):`, errorText);
           audioUrls.push(null);
         }
       } catch (ttsError) {
