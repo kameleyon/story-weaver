@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import audiomaxLogo from "@/assets/audiomax-logo.png";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 // Mock usage data
 const usageData = {
@@ -52,7 +52,7 @@ export default function Usage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <img src={audiomaxLogo} alt="AudioMax" className="h-8 w-auto" />
+            <ThemedLogo className="h-8 w-auto" />
           </div>
           <ThemeToggle />
         </div>

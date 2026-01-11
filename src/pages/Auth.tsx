@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import audiomaxLogo from "@/assets/audiomax-logo.png";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -63,7 +63,7 @@ export default function Auth() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <button onClick={() => navigate("/")} className="flex items-center gap-2">
-            <img src={audiomaxLogo} alt="AudioMax" className="h-10 w-auto" />
+            <ThemedLogo className="h-10 w-auto" />
           </button>
           <ThemeToggle />
         </div>
