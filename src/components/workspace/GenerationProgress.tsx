@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Loader2, Play, Download, Share2 } from "lucide-react";
+import { Check, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GenerationState, GenerationStep } from "@/hooks/useGenerationPipeline";
 
@@ -7,17 +7,20 @@ interface GenerationProgressProps {
   state: GenerationState;
 }
 
-const steps: { id: GenerationStep; label: string; description: string }[] = [
-  { id: "analysis", label: "Analysis", description: "Analyzing your content..." },
-  { id: "scripting", label: "Scripting", description: "Generating narration script..." },
-  { id: "visuals", label: "Visuals", description: "Creating images..." },
-  { id: "rendering", label: "Rendering", description: "Assembling your video..." },
+type VisualStep = "analysis" | "scripting" | "visuals";
+
+const steps: { id: VisualStep; label: string; description: string }[] = [
+  { id: "analysis", label: "Analyzing Content", description: "Understanding your content..." },
+  { id: "scripting", label: "Writing Script", description: "Creating scenes and narration..." },
+  { id: "visuals", label: "Generating Visuals", description: "Creating AI-powered images..." },
 ];
 
-const stepOrder: GenerationStep[] = ["analysis", "scripting", "visuals", "rendering"];
+const stepOrder: VisualStep[] = ["analysis", "scripting", "visuals"];
 
 function getStepIndex(step: GenerationStep): number {
-  return stepOrder.indexOf(step);
+  if (step === "idle" || step === "error") return -1;
+  if (step === "complete" || step === "rendering") return stepOrder.length;
+  return stepOrder.indexOf(step as VisualStep);
 }
 
 export function GenerationProgress({ state }: GenerationProgressProps) {
@@ -32,19 +35,17 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
       <div className="flex items-center gap-4">
         <motion.div
           className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10"
-          animate={{ rotate: state.isGenerating ? 360 : 0 }}
-          transition={{ duration: 3, repeat: state.isGenerating ? Infinity : 0, ease: "linear" }}
+          animate={{ scale: state.isGenerating ? [1, 1.1, 1] : 1 }}
+          transition={{ duration: 2, repeat: state.isGenerating ? Infinity : 0, ease: "easeInOut" }}
         >
-          <Play className="h-5 w-5 text-primary" />
+          <Sparkles className="h-5 w-5 text-primary" />
         </motion.div>
         <div>
           <h3 className="text-lg font-semibold text-foreground">
-            {state.step === "complete" ? "Video Ready" : "Creating Your Video"}
+            Creating Your Video
           </h3>
           <p className="text-sm text-muted-foreground/70">
-            {state.step === "complete"
-              ? "Your video has been created successfully"
-              : "This will take about 15 seconds"}
+            AI is generating your script and visuals...
           </p>
         </div>
       </div>
@@ -127,43 +128,6 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
         })}
       </div>
 
-      <AnimatePresence>
-        {state.step === "complete" && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl bg-muted/30 p-5"
-          >
-            <div className="flex aspect-video items-center justify-center rounded-lg bg-muted/50">
-              <div className="text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                  <Play className="h-6 w-6 text-primary" />
-                </div>
-                <p className="mt-3 text-sm font-medium text-foreground">Video Preview</p>
-                <p className="text-xs text-muted-foreground/70">8 scenes generated</p>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-3">
-              <motion.button
-                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                <Download className="h-4 w-4" />
-                Download
-              </motion.button>
-              <motion.button
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-border/50 bg-background py-3 text-sm font-medium transition-colors hover:bg-muted/30"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                <Share2 className="h-4 w-4" />
-                Share
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

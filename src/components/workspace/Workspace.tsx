@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, Menu } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,11 @@ import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { LengthSelector, type VideoLength } from "./LengthSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
 import { GenerationProgress } from "./GenerationProgress";
+import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
 
 export function Workspace() {
-  const [projectName, setProjectName] = useState("Untitled Project");
   const [content, setContent] = useState("");
   const [format, setFormat] = useState<VideoFormat>("landscape");
   const [length, setLength] = useState<VideoLength>("brief");
@@ -25,14 +25,19 @@ export function Workspace() {
 
   const handleGenerate = () => {
     if (canGenerate) {
-      startGeneration();
+      startGeneration({
+        content,
+        format,
+        length,
+        style,
+        customStyle: style === "custom" ? customStyle : undefined,
+      });
     }
   };
 
   const handleNewProject = () => {
     reset();
     setContent("");
-    setProjectName("Untitled Project");
   };
 
   return (
@@ -49,7 +54,7 @@ export function Workspace() {
         </div>
         
         <div className="flex items-center gap-3">
-          {generationState.step !== "idle" && generationState.step !== "complete" && (
+          {generationState.step !== "idle" && generationState.step !== "complete" && generationState.step !== "error" && (
             <motion.div
               className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5"
               initial={{ opacity: 0, x: 10 }}
@@ -64,7 +69,7 @@ export function Workspace() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-2xl px-6 py-12">
+        <div className="mx-auto max-w-4xl px-6 py-12">
           <AnimatePresence mode="wait">
             {generationState.step === "idle" ? (
               <motion.div
@@ -72,7 +77,7 @@ export function Workspace() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-8"
+                className="max-w-2xl mx-auto space-y-8"
               >
                 {/* Hero */}
                 <div className="text-center">
@@ -80,7 +85,7 @@ export function Workspace() {
                     What would you like to create?
                   </h1>
                   <p className="mt-2 text-muted-foreground/70">
-                    Paste your content or upload a file to begin
+                    Paste your content or describe your video idea
                   </p>
                 </div>
 
@@ -113,31 +118,47 @@ export function Workspace() {
                   </Button>
                 </motion.div>
               </motion.div>
+            ) : generationState.step === "error" ? (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="max-w-2xl mx-auto space-y-6"
+              >
+                <div className="rounded-2xl border border-destructive/50 bg-destructive/10 p-8 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                  <h2 className="text-xl font-semibold text-foreground mb-2">Generation Failed</h2>
+                  <p className="text-muted-foreground mb-6">{generationState.error}</p>
+                  <Button onClick={handleNewProject} variant="outline" className="gap-2">
+                    <RotateCcw className="h-4 w-4" />
+                    Try Again
+                  </Button>
+                </div>
+              </motion.div>
+            ) : generationState.step === "complete" && generationState.scenes ? (
+              <motion.div
+                key="result"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <GenerationResult
+                  title={generationState.title || "Untitled Video"}
+                  scenes={generationState.scenes}
+                  onNewProject={handleNewProject}
+                />
+              </motion.div>
             ) : (
               <motion.div
                 key="progress"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-6"
+                className="max-w-2xl mx-auto space-y-6"
               >
                 <GenerationProgress state={generationState} />
-                
-                {generationState.step === "complete" && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    <Button
-                      onClick={handleNewProject}
-                      variant="ghost"
-                      className="w-full rounded-full py-6 text-muted-foreground hover:text-foreground"
-                    >
-                      Create Another Video
-                    </Button>
-                  </motion.div>
-                )}
               </motion.div>
             )}
           </AnimatePresence>
