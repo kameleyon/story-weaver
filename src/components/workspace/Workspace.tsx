@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { Play, Menu, AlertCircle, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -12,7 +12,11 @@ import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
 
-export function Workspace() {
+export interface WorkspaceHandle {
+  resetWorkspace: () => void;
+}
+
+export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) {
   const [content, setContent] = useState("");
   const [format, setFormat] = useState<VideoFormat>("landscape");
   const [length, setLength] = useState<VideoLength>("brief");
@@ -38,7 +42,15 @@ export function Workspace() {
   const handleNewProject = () => {
     reset();
     setContent("");
+    setFormat("landscape");
+    setLength("brief");
+    setStyle("minimalist");
+    setCustomStyle("");
   };
+
+  useImperativeHandle(ref, () => ({
+    resetWorkspace: handleNewProject,
+  }));
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -167,4 +179,4 @@ export function Workspace() {
       </main>
     </div>
   );
-}
+});
