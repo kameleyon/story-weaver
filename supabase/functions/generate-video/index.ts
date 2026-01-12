@@ -1013,10 +1013,13 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
-    
-    // Process images with rate limiting - use smaller delays to avoid timeouts
-    const IMAGE_DELAY_MS = useReplicate ? 8000 : 300; // Reduced from 12s to 8s for Replicate
-    const IMAGE_BATCH_SIZE = useReplicate ? 1 : 3;
+
+    // If Replicate starts throttling (common on low-credit accounts), disable it mid-run to avoid long delays/timeouts.
+    let replicateEnabled = useReplicate;
+
+    // Process images sequentially; delay adapts based on whether Replicate is enabled.
+    const IMAGE_BATCH_SIZE = 1;
+    const getImageDelayMs = () => (replicateEnabled ? 8000 : 300);
     
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
@@ -1063,18 +1066,28 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
                 : `Scene ${task.sceneIndex + 1}`;
               
               // Try Replicate first if available (exact aspect ratios)
-              if (useReplicate) {
-                console.log(`${logPrefix}: Trying Replicate (image ${batchStart + 1}/${imageTasks.length})...`);
+              if (replicateEnabled && useReplicate) {
+                console.log(`${logPrefix}: Trying Replicate (image ${t + 1}/${imageTasks.length})...`);
                 result = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
-                
+
+                // If Replicate is throttling, disable it for the rest of this run to avoid timeouts.
+                if (!result.ok) {
+                  const msg = (result.error || "").toLowerCase();
+                  const isThrottle = msg.includes("api error 429") || msg.includes("throttled") || msg.includes("\"status\":429");
+                  if (isThrottle) {
+                    console.log(`${logPrefix}: Replicate throttled; switching to Lovable AI for remaining images...`);
+                    replicateEnabled = false;
+                  }
+                }
+
                 // If Replicate fails, fallback to Lovable AI
                 if (!result.ok && LOVABLE_API_KEY) {
                   console.log(`${logPrefix}: Replicate failed (${result.error}), falling back to Lovable AI...`);
                   result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
                 }
               } else if (LOVABLE_API_KEY) {
-                // No Replicate key, use Lovable AI directly
-                console.log(`${logPrefix}: Using Lovable AI (image ${batchStart + 1}/${imageTasks.length})...`);
+                // Replicate disabled or not configured, use Lovable AI
+                console.log(`${logPrefix}: Using Lovable AI (image ${t + 1}/${imageTasks.length})...`);
                 result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
               } else {
                 return { task, url: null };
@@ -1133,7 +1146,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       
       // Rate limit delay between batches (critical for Replicate)
       if (batchEnd < imageTasks.length) {
-        await sleep(IMAGE_DELAY_MS);
+        await sleep(getImageDelayMs());
       }
     }
     
