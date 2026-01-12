@@ -43,9 +43,10 @@ import { ThemedLogo } from "@/components/ThemedLogo";
 
 interface AppSidebarProps {
   onNewProject: () => void;
+  onOpenProject: (projectId: string) => void;
 }
 
-export function AppSidebar({ onNewProject }: AppSidebarProps) {
+export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme, setTheme } = useTheme();
@@ -144,7 +145,10 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
                 ) : (
                   recentProjects.map((project) => (
                     <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
+                      <SidebarMenuButton
+                        onClick={() => onOpenProject(project.id)}
+                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50"
+                      >
                         <Video className="h-4 w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
                           <span className="truncate text-sm font-medium">{project.title}</span>
