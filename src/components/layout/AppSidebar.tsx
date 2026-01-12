@@ -100,8 +100,8 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
             <TooltipTrigger asChild>
               <Button
                 onClick={onNewProject}
-                className={`rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
-                  isCollapsed ? "h-8 w-8 p-0" : "w-full justify-start gap-2.5"
+                className={`bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
+                  isCollapsed ? "h-8 w-8 rounded-full p-0" : "w-full justify-start gap-2.5 rounded-full"
                 }`}
                 size={isCollapsed ? "icon" : "default"}
               >

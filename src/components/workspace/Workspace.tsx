@@ -61,7 +61,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
             <Menu className="h-5 w-5 text-muted-foreground" />
           </SidebarTrigger>
           <div className="hidden lg:flex items-center gap-3">
-            <ThemedLogo className="h-7 w-auto" />
+            <ThemedLogo className="h-10 w-auto" />
           </div>
         </div>
         
