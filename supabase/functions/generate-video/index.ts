@@ -156,12 +156,17 @@ async function generateImageWithReplicate(
   replicateApiToken: string,
   format: string
 ): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
-  // z-image-turbo uses height parameter
-  const height = format === "portrait" ? 1024 : format === "square" ? 768 : 768;
+  // z-image-turbo needs both width and height for proper aspect ratio
+  // Portrait 9:16: 576x1024, Landscape 16:9: 1024x576, Square 1:1: 768x768
+  const dimensions = format === "portrait" 
+    ? { width: 576, height: 1024 }  // 9:16 ratio
+    : format === "square" 
+    ? { width: 768, height: 768 }   // 1:1 ratio
+    : { width: 1024, height: 576 }; // 16:9 ratio
   
   console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
-  console.log(`[REPLICATE] Format: ${format}, Height: ${height}`);
+  console.log(`[REPLICATE] Format: ${format}, Dimensions: ${dimensions.width}x${dimensions.height}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
   
   try {
@@ -179,7 +184,8 @@ async function generateImageWithReplicate(
         version: "prunaai/z-image-turbo",
         input: {
           prompt: prompt,
-          height: height,
+          width: dimensions.width,
+          height: dimensions.height,
         },
       }),
     });
@@ -654,14 +660,25 @@ COMPOSITION REQUIREMENTS:
 - Use gradient or solid zones behind text for legibility
 
 === VISUAL PROMPT FORMAT ===
-Each visualPrompt and subVisual MUST include:
-1. The narrative beat in brackets: [HOOK], [CONFLICT], [CHOICE], [SOLUTION], [FORMULA]
-2. The layout type: Split Layout, Ascending Layout, Equation Layout, etc.
-3. Explicit text content and WHERE it sits in the frame
-4. Background/contrast zone description for text legibility
+CRITICAL: Visual prompts describe WHAT TO ILLUSTRATE, not metadata!
+- DO NOT include style names, beat labels, or formatting instructions in the visual description
+- DO NOT write things like "Hook Urban Minimalist" - these are INSTRUCTIONS, not content
+- DESCRIBE the actual visual scene: objects, people, actions, composition, colors
+- Write prompts as if describing a photograph or painting to an artist
 
-EXAMPLE visualPrompt format:
-"[CONFLICT - Split Layout] Left side: chaotic, scattered elements representing 'Switching/Chaos' - multiple half-started projects in disarray. Right side: organized, stacked elements representing 'Patience/Mastery' - a single focused tower building upward. HEADLINE 'CHOOSE YOUR PATH' centered in upper third with clean gradient zone for legibility. LEFT LABEL 'The Scattered Approach' and RIGHT LABEL 'The Focused Builder' anchored at bottom of each section. Muted background separating the two halves."
+Each visualPrompt MUST be a PURE SCENE DESCRIPTION containing:
+1. Concrete visual elements: objects, characters, settings
+2. Composition: how elements are arranged (split, centered, ascending)
+3. Mood and lighting: atmosphere, colors, contrast
+4. Action or state: what's happening in the scene
+
+GOOD visualPrompt example:
+"A split composition showing contrast. LEFT SIDE: A chaotic desk with scattered papers, multiple browser tabs visible on a monitor, coffee cups piling up - visual chaos representing distraction. RIGHT SIDE: A clean, organized workspace with a single focused project, neat stacks, a plant - calm productivity. Warm lighting on the organized side, harsh fluorescent on the chaotic side. Muted earth tones with a pop of green on the success side."
+
+BAD visualPrompt example (DO NOT do this):
+"[HOOK - Urban Minimalist Doodle] Hook scene showing concept..." - This puts labels in the image!
+
+REMEMBER: The visualPrompt goes directly to an AI image generator. It must describe VISUALS, not concepts or labels.
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON with this exact structure:
