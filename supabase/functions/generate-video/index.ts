@@ -418,9 +418,10 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     console.log("Step 2: Generating audio with Gemini TTS...");
 
     const TTS_MODEL_CANDIDATES = [
-      // Official Gemini TTS models
-      "gemini-2.5-flash-tts",
-      "gemini-2.5-pro-tts",
+      // Prefer dedicated TTS models when available
+      "gemini-2.5-flash-preview-tts",
+      "gemini-2.5-pro-preview-tts",
+      "gemini-2.0-flash-preview-tts",
     ];
 
     const audioUrls: (string | null)[] = [];
