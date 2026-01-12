@@ -417,15 +417,18 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     // ===============================================
     console.log("Step 2: Generating audio with Gemini TTS...");
 
-    const TTS_MODEL_CANDIDATES = [
-      // Use TTS-preview models that support generateContent with responseModalities: AUDIO
-      "gemini-2.5-flash-preview-tts",
-      "gemini-2.5-pro-preview-tts",
+    let enableFlashTts = true;
+    let enableProTts = true;
+
+    const getTtsModelCandidates = () => [
+      ...(enableFlashTts ? ["gemini-2.5-flash-preview-tts"] : []),
+      ...(enableProTts ? ["gemini-2.5-pro-preview-tts"] : []),
     ];
 
-    const TTS_ATTEMPTS_PER_MODEL = 3;
-    const TTS_RETRY_BASE_DELAY_MS = 900;
-    const TTS_INTER_SCENE_DELAY_MS = 750;
+    // Keep this tight to avoid backend timeouts.
+    const TTS_ATTEMPTS_PER_MODEL = 2;
+    const TTS_RETRY_BASE_DELAY_MS = 250;
+    const TTS_INTER_SCENE_DELAY_MS = 150;
 
     const audioUrls: (string | null)[] = [];
 
@@ -435,7 +438,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       let finalAudioUrl: string | null = null;
       let lastTtsError: string | null = null;
 
-      for (const modelName of TTS_MODEL_CANDIDATES) {
+      for (const modelName of getTtsModelCandidates()) {
         for (let attempt = 1; attempt <= TTS_ATTEMPTS_PER_MODEL; attempt++) {
           try {
             const ttsResponse = await fetch(
@@ -486,6 +489,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
               // Some keys show "limit: 0" for models they don't have access to.
               if (ttsResponse.status === 429 && errorText.includes("limit: 0")) {
                 console.error(`Scene ${i + 1} TTS model quota is 0 / not enabled:`, lastTtsError);
+                if (modelName.includes("-pro-")) enableProTts = false;
                 break; // next model
               }
 
@@ -517,13 +521,17 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
             const inlineAudio = pickFirstInlineAudio(ttsData);
 
             if (!inlineAudio?.data) {
-              // This happens intermittently on preview TTS models; retry a few times before moving on.
+              // This happens intermittently on preview TTS models; retry briefly.
               lastTtsError = `model=${modelName} attempt=${attempt} no inline audio data`;
               if (attempt < TTS_ATTEMPTS_PER_MODEL) {
                 const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
                 await sleep(backoff);
                 continue;
               }
+
+              // If flash keeps returning no audio, stop using it to avoid timeouts.
+              if (modelName.includes("flash-preview-tts")) enableFlashTts = false;
+
               console.error(`Scene ${i + 1} no audio data returned:`, lastTtsError);
               continue;
             }
@@ -695,10 +703,6 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
         .update({ progress })
         .eq("id", generation.id);
 
-      // Small delay to avoid rate limits
-      if (i < parsedScript.scenes.length - 1) {
-        await sleep(2000);
-      }
     }
 
     // ===============================================
