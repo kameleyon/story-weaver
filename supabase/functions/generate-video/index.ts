@@ -36,6 +36,33 @@ interface ScriptResponse {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// Style-specific prompts optimized for AI image generation
+const STYLE_PROMPTS: Record<string, string> = {
+  "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
+  
+  "doodle": `Flat 2D vector illustration with an indie comic aesthetic. Bold, monoline black outlines with slightly rounded terminals. Color palette of muted primary tones (dusty red, sage green, mustard yellow, slate blue) set against a warm, textured off-white recycled paper background. Use 'object-head' surrealism for characters. Apply lo-fi texturing, subtle paper grain, and intentional print misalignments. Composition should feel centralized with floating iconographic elements. Vibe: Chill, entrepreneurial, and whimsical.`,
+  
+  "stick": `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
+  
+  "realistic": `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
+  
+  "anime": `High-quality Anime art style. Crisp cel-shaded coloring with dramatic lighting and lens flares. Vibrant, saturated color palette with emphasis on deep blue skies and lush greens. Detailed backgrounds in the style of Makoto Shinkai or Studio Ghibli. Clean fine line work. Expressive characters with large eyes. Atmospheric, emotional, and polished animation aesthetic. 2D animation look.`,
+  
+  "3d-pixar": `3D animated feature film style (Pixar/Disney). Soft, subsurface scattering on materials to make them look soft and touchable. Warm, bounce lighting and global illumination. Stylized characters with exaggerated features but realistic textures (fabric, hair). Vibrant, friendly color palette. Rendered in Redshift or Octane. Cute, appealing, and high-budget animation look. Smooth shapes, no sharp edges.`,
+  
+  "claymation": `Stop-motion claymation style. Textures of plasticine and modeling clay with visible fingerprints and imperfections. Handmade, tactile look. Soft, physical studio lighting with real shadows. Miniature photography aesthetic with tilt-shift depth of field. Vibrant, playful colors. Characters and objects look like physical toys. Imperfect, organic shapes. Aardman Animations vibe.`,
+  
+  "futuristic": `Clean futuristic sci-fi aesthetic. Dark background with glowing neon accents (cyan, magenta, electric purple). Holographic interfaces (HUDs) and glass textures. Sleek, metallic surfaces (chrome, brushed aluminum, matte black). Cyberpunk but minimal and tidy. High-tech, digital atmosphere. Lens flares, bloom effects, and volumetric lighting. Smooth curves, floating UI elements, and data streams.`
+};
+
+// Helper to get style prompt - uses detailed prompt if available, falls back to style name or custom style
+function getStylePrompt(style: string, customStyle?: string): string {
+  if (style === "custom" && customStyle) {
+    return customStyle;
+  }
+  return STYLE_PROMPTS[style.toLowerCase()] || style;
+}
+
 function normalizeBase64(b64: string) {
   return b64.replace(/-/g, "+").replace(/_/g, "/");
 }
@@ -597,7 +624,7 @@ serve(async (req) => {
     // ===============================================
     // STEP 1: THE DIRECTOR - Script Generation
     // ===============================================
-    const styleDescription = style === "custom" ? customStyle : style;
+    const styleDescription = getStylePrompt(style, customStyle);
     const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
     const dimensions = getImageDimensions(format);
     
