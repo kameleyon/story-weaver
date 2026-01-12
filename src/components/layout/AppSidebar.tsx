@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 interface AppSidebarProps {
   onNewProject: () => void;
@@ -63,6 +64,13 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-3">
+        {/* Logo - only when expanded */}
+        {!isCollapsed && (
+          <div className="mb-4 px-1">
+            <ThemedLogo className="h-10 w-auto" />
+          </div>
+        )}
+
         {/* Collapse/Expand Toggle */}
         <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"}`}>
           <Tooltip>
@@ -92,12 +100,12 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
             <TooltipTrigger asChild>
               <Button
                 onClick={onNewProject}
-                className={`w-full rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
-                  isCollapsed ? "justify-center px-0" : "justify-start gap-2.5"
+                className={`rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
+                  isCollapsed ? "h-9 w-9 p-0" : "w-full justify-start gap-2.5"
                 }`}
                 size={isCollapsed ? "icon" : "default"}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className={isCollapsed ? "h-4 w-4" : "h-4 w-4"} />
                 {!isCollapsed && <span className="font-medium">New Project</span>}
               </Button>
             </TooltipTrigger>
