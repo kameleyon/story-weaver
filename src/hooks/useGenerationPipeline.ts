@@ -23,6 +23,8 @@ export interface GenerationState {
   progress: number;
   sceneCount: number;
   currentScene: number;
+  totalImages: number;      // Total image tasks (may be > sceneCount with subVisuals)
+  completedImages: number;  // How many images have been generated
   isGenerating: boolean;
   projectId?: string;
   generationId?: string;
@@ -47,6 +49,8 @@ export function useGenerationPipeline() {
     progress: 0,
     sceneCount: 6,
     currentScene: 0,
+    totalImages: 6,
+    completedImages: 0,
     isGenerating: false,
   });
 
@@ -65,6 +69,22 @@ export function useGenerationPipeline() {
     return Math.max(1, Math.min(sceneCount, Math.round(p * sceneCount)));
   };
 
+  // Extract image progress metadata from scenes if available
+  const extractImageMeta = (scenes: any[]): { totalImages: number; completedImages: number } => {
+    if (!Array.isArray(scenes) || scenes.length === 0) {
+      return { totalImages: 0, completedImages: 0 };
+    }
+    // Look for _meta in first scene (backend stores it there)
+    const meta = scenes[0]?._meta;
+    if (meta && typeof meta.totalImages === "number") {
+      return {
+        totalImages: meta.totalImages,
+        completedImages: typeof meta.completedImages === "number" ? meta.completedImages : 0
+      };
+    }
+    return { totalImages: scenes.length, completedImages: 0 };
+  };
+
   const startGeneration = useCallback(async (params: GenerationParams) => {
     // Updated scene counts based on minimum duration requirements
     // Short: min 60s, Brief: min 150s, Presentation: min 360s
@@ -80,6 +100,8 @@ export function useGenerationPipeline() {
       progress: 0,
       sceneCount: expectedSceneCount,
       currentScene: 0,
+      totalImages: expectedSceneCount,
+      completedImages: 0,
       isGenerating: true,
     });
 
@@ -127,11 +149,14 @@ export function useGenerationPipeline() {
       }
 
       // Update state with results
+      const finalSceneCount = result.scenes?.length || expectedSceneCount;
       setState({
         step: "complete",
         progress: 100,
-        sceneCount: result.scenes?.length || expectedSceneCount,
-        currentScene: result.scenes?.length || expectedSceneCount,
+        sceneCount: finalSceneCount,
+        currentScene: finalSceneCount,
+        totalImages: finalSceneCount,
+        completedImages: finalSceneCount,
         isGenerating: false,
         projectId: result.projectId,
         generationId: result.generationId,
@@ -221,11 +246,14 @@ export function useGenerationPipeline() {
                 if (generation?.status === "complete") {
                   const scenes = normalizeScenes(generation.scenes);
 
+                  const sceneLen = scenes?.length || 0;
                   setState({
                     step: "complete",
                     progress: 100,
-                    sceneCount: scenes?.length || 0,
-                    currentScene: scenes?.length || 0,
+                    sceneCount: sceneLen,
+                    currentScene: sceneLen,
+                    totalImages: sceneLen,
+                    completedImages: sceneLen,
                     isGenerating: false,
                     projectId: project.id,
                     generationId: generation.id,
@@ -249,6 +277,9 @@ export function useGenerationPipeline() {
                 const dbProgress = typeof generation?.progress === "number" ? generation.progress : 0;
                 const scenes = normalizeScenes(generation.scenes);
 
+                const rawScenes = generation?.scenes;
+                const imageMeta = extractImageMeta(Array.isArray(rawScenes) ? rawScenes : []);
+
                 setState((prev) => {
                   const sceneCount = scenes?.length ?? prev.sceneCount;
                   const step = inferStepFromDb(generation?.status, dbProgress);
@@ -258,6 +289,8 @@ export function useGenerationPipeline() {
                     progress: dbProgress,
                     sceneCount,
                     currentScene: inferCurrentSceneFromDb(dbProgress, sceneCount),
+                    totalImages: imageMeta.totalImages || prev.totalImages,
+                    completedImages: imageMeta.completedImages,
                   };
                 });
               }
@@ -291,6 +324,8 @@ export function useGenerationPipeline() {
       progress: 0,
       sceneCount: 6,
       currentScene: 0,
+      totalImages: 6,
+      completedImages: 0,
       isGenerating: false,
     });
   }, []);
