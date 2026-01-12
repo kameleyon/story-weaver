@@ -109,7 +109,9 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
                     >
                       <p className="text-sm text-muted-foreground/70">
                         {step.id === "visuals"
-                          ? `Creating scene ${Math.max(1, state.currentScene)} of ${state.sceneCount}...`
+                          ? state.totalImages > 0 && state.completedImages > 0
+                            ? `Image ${state.completedImages} of ${state.totalImages}...`
+                            : `Creating scene ${Math.max(1, state.currentScene)} of ${state.sceneCount}...`
                           : step.description}
                       </p>
                       <div className="h-1 overflow-hidden rounded-full bg-muted/30">

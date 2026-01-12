@@ -1001,12 +1001,50 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     
     console.log(`Total images to generate: ${imageTasks.length} for ${parsedScript.scenes.length} scenes`);
     
+    // Store image task count in generation record for frontend progress display
+    await supabase.from("generations").update({ 
+      progress: 40,
+      // Store metadata for frontend: totalImages field in scenes JSON
+      scenes: parsedScript.scenes.map((s, idx) => ({
+        ...s,
+        _meta: { totalImages: imageTasks.length, sceneIndex: idx }
+      }))
+    }).eq("id", generation.id);
+    
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
     
-    // Process images with rate limiting
-    const IMAGE_DELAY_MS = useReplicate ? 12000 : 500; // 12s between Replicate requests = 5/min
+    // Process images with rate limiting - use smaller delays to avoid timeouts
+    const IMAGE_DELAY_MS = useReplicate ? 8000 : 300; // Reduced from 12s to 8s for Replicate
     const IMAGE_BATCH_SIZE = useReplicate ? 1 : 3;
+    
+    // Helper to update progress and persist partial results after each image
+    const persistProgress = async (completedCount: number) => {
+      const progress = 40 + Math.floor((completedCount / imageTasks.length) * 50);
+      
+      // Build partial scenes with current image URLs for recovery
+      const partialScenes = parsedScript.scenes.map((scene, idx) => {
+        const allImages = sceneImageUrls[idx].filter(url => url !== null) as string[];
+        return {
+          ...scene,
+          imageUrl: allImages[0] || null,
+          imageUrls: allImages.length > 0 ? allImages : undefined,
+          audioUrl: audioUrls[idx] || null,
+          _meta: { 
+            totalImages: imageTasks.length, 
+            completedImages: completedCount,
+            sceneIndex: idx 
+          }
+        };
+      });
+      
+      await supabase.from("generations").update({ 
+        progress,
+        scenes: partialScenes
+      }).eq("id", generation.id);
+    };
+
+    let completedImages = 0;
 
     for (let batchStart = 0; batchStart < imageTasks.length; batchStart += IMAGE_BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + IMAGE_BATCH_SIZE, imageTasks.length);
@@ -1026,7 +1064,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
               
               // Try Replicate first if available (exact aspect ratios)
               if (useReplicate) {
-                console.log(`${logPrefix}: Trying Replicate...`);
+                console.log(`${logPrefix}: Trying Replicate (image ${batchStart + 1}/${imageTasks.length})...`);
                 result = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
                 
                 // If Replicate fails, fallback to Lovable AI
@@ -1036,7 +1074,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
                 }
               } else if (LOVABLE_API_KEY) {
                 // No Replicate key, use Lovable AI directly
-                console.log(`${logPrefix}: Using Lovable AI...`);
+                console.log(`${logPrefix}: Using Lovable AI (image ${batchStart + 1}/${imageTasks.length})...`);
                 result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
               } else {
                 return { task, url: null };
@@ -1086,15 +1124,15 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
           sceneImageUrls[task.sceneIndex].push(null);
         }
         sceneImageUrls[task.sceneIndex][task.subIndex] = url;
+        completedImages++;
       }
 
-      // Update progress
-      const progress = 40 + Math.floor((batchEnd / imageTasks.length) * 50);
-      await supabase.from("generations").update({ progress }).eq("id", generation.id);
+      // Persist progress after each batch for recovery
+      await persistProgress(completedImages);
+      console.log(`Image progress: ${completedImages}/${imageTasks.length} complete`);
       
       // Rate limit delay between batches (critical for Replicate)
       if (batchEnd < imageTasks.length) {
-        console.log(`Waiting ${IMAGE_DELAY_MS}ms before next image (${batchEnd}/${imageTasks.length} complete)...`);
         await sleep(IMAGE_DELAY_MS);
       }
     }
