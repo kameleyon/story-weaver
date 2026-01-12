@@ -150,19 +150,24 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Replicate Flux with exact dimensions
+// Generate image using Replicate prunaai/z-image-turbo
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
   format: string
 ): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
-  const dimensions = getImageDimensions(format);
+  // z-image-turbo uses height parameter
+  const height = format === "portrait" ? 1024 : format === "square" ? 768 : 768;
   
-  // Map format to Flux aspect ratio string
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
+  console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
+  console.log(`[REPLICATE] Format: ${format}, Height: ${height}`);
+  console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
   
   try {
-    // Create prediction with Flux schnell model (fast, good quality)
+    const startTime = Date.now();
+    
+    // Create prediction with prunaai/z-image-turbo model
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -171,67 +176,93 @@ async function generateImageWithReplicate(
         "Prefer": "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
-        version: "black-forest-labs/flux-schnell",
+        version: "prunaai/z-image-turbo",
         input: {
           prompt: prompt,
-          aspect_ratio: aspectRatio,
-          output_format: "png",
-          output_quality: 90,
+          height: height,
         },
       }),
     });
 
+    console.log(`[REPLICATE] Response status: ${createResponse.status}`);
+    console.log(`[REPLICATE] Response headers: ${JSON.stringify(Object.fromEntries(createResponse.headers))}`);
+
     if (!createResponse.ok) {
       const errorText = await createResponse.text();
+      console.error(`[REPLICATE ERROR] Status: ${createResponse.status}`);
+      console.error(`[REPLICATE ERROR] Body: ${errorText}`);
+      console.error(`[REPLICATE ERROR] Time elapsed: ${Date.now() - startTime}ms`);
+      
       if (createResponse.status === 401) {
-        return { ok: false, error: "Invalid Replicate API token" };
+        return { ok: false, error: "Invalid Replicate API token - please update in Settings" };
       }
       if (createResponse.status === 402) {
-        return { ok: false, error: "Replicate credits exhausted" };
+        return { ok: false, error: "Replicate credits exhausted - add funds at replicate.com" };
+      }
+      if (createResponse.status === 429) {
+        return { ok: false, error: `Replicate throttled (429): ${errorText}` };
       }
       return { ok: false, error: `Replicate API error ${createResponse.status}: ${errorText}` };
     }
 
     let prediction = await createResponse.json();
+    console.log(`[REPLICATE] Initial prediction status: ${prediction.status}, id: ${prediction.id}`);
     
-    // If not completed yet, poll for result
+    // Poll for completion if not done
     let pollAttempts = 0;
-    const maxPolls = 30; // 30 seconds max
+    const maxPolls = 60; // 60 seconds max
     
     while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
-      if (prediction.status === "failed" || prediction.status === "canceled") {
-        return { ok: false, error: prediction.error || "Image generation failed" };
+      if (prediction.status === "canceled") {
+        console.error(`[REPLICATE ERROR] Prediction was canceled`);
+        return { ok: false, error: "Image generation was canceled" };
       }
       
       await new Promise(r => setTimeout(r, 1000));
       pollAttempts++;
+      
+      console.log(`[REPLICATE] Polling attempt ${pollAttempts}, status: ${prediction.status}`);
       
       const pollResponse = await fetch(prediction.urls.get, {
         headers: { Authorization: `Bearer ${replicateApiToken}` },
       });
       
       if (!pollResponse.ok) {
-        return { ok: false, error: "Failed to poll prediction status" };
+        const pollErrorText = await pollResponse.text();
+        console.error(`[REPLICATE ERROR] Poll failed: ${pollResponse.status} - ${pollErrorText}`);
+        return { ok: false, error: `Failed to poll prediction status: ${pollResponse.status}` };
       }
       
       prediction = await pollResponse.json();
     }
     
+    console.log(`[REPLICATE] Final status: ${prediction.status}, time: ${Date.now() - startTime}ms`);
+    
     if (prediction.status !== "succeeded") {
+      console.error(`[REPLICATE ERROR] Generation failed: ${prediction.error || "timeout"}`);
+      console.error(`[REPLICATE ERROR] Full prediction: ${JSON.stringify(prediction)}`);
       return { ok: false, error: prediction.error || "Image generation timed out" };
     }
     
-    // Get the output URL (Flux returns an array with one URL)
-    const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    // Get the output URL - z-image-turbo returns URL directly or in output
+    const outputUrl = typeof prediction.output === "string" 
+      ? prediction.output 
+      : Array.isArray(prediction.output) 
+        ? prediction.output[0] 
+        : prediction.output?.url;
+    
+    console.log(`[REPLICATE] Output URL: ${outputUrl?.substring(0, 80)}...`);
     
     if (!outputUrl) {
+      console.error(`[REPLICATE ERROR] No output URL. Full output: ${JSON.stringify(prediction.output)}`);
       return { ok: false, error: "No image URL in prediction output" };
     }
     
     // Download the image and convert to base64 (chunked to avoid stack overflow)
     const imageResponse = await fetch(outputUrl);
     if (!imageResponse.ok) {
-      return { ok: false, error: "Failed to download generated image" };
+      console.error(`[REPLICATE ERROR] Failed to download image: ${imageResponse.status}`);
+      return { ok: false, error: `Failed to download generated image: ${imageResponse.status}` };
     }
     
     const imageBuffer = await imageResponse.arrayBuffer();
@@ -246,51 +277,16 @@ async function generateImageWithReplicate(
     }
     base64 = btoa(base64);
     
+    console.log(`[REPLICATE] Success! Image size: ${bytes.length} bytes, time: ${Date.now() - startTime}ms`);
+    
     return { ok: true, imageBase64: base64 };
   } catch (error) {
+    console.error(`[REPLICATE ERROR] Exception: ${error}`);
     return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
 
-// Fallback: Generate image using Lovable AI Gateway (no dimension control)
-async function generateImageWithLovable(
-  prompt: string,
-  lovableApiKey: string,
-  format: string
-): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
-  try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image-preview",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      if (response.status === 429) return { ok: false, error: "Rate limited" };
-      if (response.status === 402) return { ok: false, error: "Credits exhausted" };
-      return { ok: false, error: `API error ${response.status}: ${errorText}` };
-    }
-
-    const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!imageUrl) return { ok: false, error: "No image returned" };
-
-    const base64Match = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
-    if (!base64Match) return { ok: false, error: "Invalid image format" };
-
-    return { ok: true, imageBase64: base64Match[1] };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
-  }
-}
+// REMOVED: Lovable AI fallback - now using Replicate only
 
 
 // Helpers to classify TTS failures
@@ -542,20 +538,16 @@ serve(async (req) => {
     const GEMINI_API_KEY = apiKeys.gemini_api_key;
     const REPLICATE_API_TOKEN = apiKeys.replicate_api_token;
     
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
-    // Determine image generation method
-    const useReplicate = !!REPLICATE_API_TOKEN;
-    if (useReplicate) {
-      console.log("Using Replicate for image generation (exact aspect ratios)");
-    } else if (LOVABLE_API_KEY) {
-      console.log("Using Lovable AI for image generation (no Replicate key)");
-    } else {
+    // Replicate is REQUIRED for image generation (no fallback)
+    if (!REPLICATE_API_TOKEN) {
       return new Response(
-        JSON.stringify({ error: "No image generation API configured. Please add your Replicate API key in Settings." }),
+        JSON.stringify({ error: "Please add your Replicate API key in Settings to generate images." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    console.log(`[REPLICATE] Using API key: ${REPLICATE_API_TOKEN.substring(0, 12)}...`);
+    console.log("Using Replicate (prunaai/z-image-turbo) for image generation");
 
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
@@ -1014,12 +1006,9 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
-    // If Replicate starts throttling (common on low-credit accounts), disable it mid-run to avoid long delays/timeouts.
-    let replicateEnabled = useReplicate;
-
-    // Process images sequentially; delay adapts based on whether Replicate is enabled.
+    // Process images sequentially with 2s delay between each
     const IMAGE_BATCH_SIZE = 1;
-    const getImageDelayMs = () => (replicateEnabled ? 8000 : 300);
+    const IMAGE_DELAY_MS = 2000; // 2 seconds between images for z-image-turbo
     
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
@@ -1065,36 +1054,14 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
                 ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}` 
                 : `Scene ${task.sceneIndex + 1}`;
               
-              // Try Replicate first if available (exact aspect ratios)
-              if (replicateEnabled && useReplicate) {
-                console.log(`${logPrefix}: Trying Replicate (image ${t + 1}/${imageTasks.length})...`);
-                result = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
-
-                // If Replicate is throttling, disable it for the rest of this run to avoid timeouts.
-                if (!result.ok) {
-                  const msg = (result.error || "").toLowerCase();
-                  const isThrottle = msg.includes("api error 429") || msg.includes("throttled") || msg.includes("\"status\":429");
-                  if (isThrottle) {
-                    console.log(`${logPrefix}: Replicate throttled; switching to Lovable AI for remaining images...`);
-                    replicateEnabled = false;
-                  }
-                }
-
-                // If Replicate fails, fallback to Lovable AI
-                if (!result.ok && LOVABLE_API_KEY) {
-                  console.log(`${logPrefix}: Replicate failed (${result.error}), falling back to Lovable AI...`);
-                  result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
-                }
-              } else if (LOVABLE_API_KEY) {
-                // Replicate disabled or not configured, use Lovable AI
-                console.log(`${logPrefix}: Using Lovable AI (image ${t + 1}/${imageTasks.length})...`);
-                result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
-              } else {
-                return { task, url: null };
-              }
+              // Generate image with Replicate (required, no fallback)
+              console.log(`${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length})...`);
+              result = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
 
               if (!result.ok) {
-                console.error(`${logPrefix} image failed:`, result.error);
+                console.error(`${logPrefix} image failed: ${result.error}`);
+                // Log the full error for debugging
+                console.error(`[REPLICATE ERROR] Scene ${task.sceneIndex + 1}, sub ${task.subIndex}: ${result.error}`);
                 return { task, url: null };
               }
 
@@ -1146,7 +1113,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       
       // Rate limit delay between batches (critical for Replicate)
       if (batchEnd < imageTasks.length) {
-        await sleep(getImageDelayMs());
+        await sleep(IMAGE_DELAY_MS);
       }
     }
     
