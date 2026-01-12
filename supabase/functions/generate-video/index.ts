@@ -155,7 +155,10 @@ async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
   format: string
-): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; imageBase64: string }
+  | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
+> {
   // z-image-turbo needs both width and height for proper aspect ratio
   // Portrait 9:16: 576x1024, Landscape 16:9: 1024x576, Square 1:1: 768x768
   const dimensions = format === "portrait" 
@@ -195,20 +198,39 @@ async function generateImageWithReplicate(
 
     if (!createResponse.ok) {
       const errorText = await createResponse.text();
+      const retryAfterHeader = createResponse.headers.get("retry-after");
+      const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : undefined;
+
       console.error(`[REPLICATE ERROR] Status: ${createResponse.status}`);
       console.error(`[REPLICATE ERROR] Body: ${errorText}`);
       console.error(`[REPLICATE ERROR] Time elapsed: ${Date.now() - startTime}ms`);
-      
+
+      // Try to extract retry_after from JSON body too
+      let retryAfterFromBody: number | undefined;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (typeof parsed?.retry_after === "number") retryAfterFromBody = parsed.retry_after;
+      } catch {
+        // ignore
+      }
+
+      const retryAfter = retryAfterFromBody ?? retryAfterSeconds;
+
       if (createResponse.status === 401) {
-        return { ok: false, error: "Invalid Replicate API token - please update in Settings" };
+        return { ok: false, status: 401, error: "Invalid Replicate API token - please update in Settings" };
       }
       if (createResponse.status === 402) {
-        return { ok: false, error: "Replicate credits exhausted - add funds at replicate.com" };
+        return { ok: false, status: 402, error: "Replicate credits exhausted - add funds at replicate.com" };
       }
       if (createResponse.status === 429) {
-        return { ok: false, error: `Replicate throttled (429): ${errorText}` };
+        return {
+          ok: false,
+          status: 429,
+          retryAfterSeconds: retryAfter,
+          error: `Replicate throttled (429): ${errorText}`,
+        };
       }
-      return { ok: false, error: `Replicate API error ${createResponse.status}: ${errorText}` };
+      return { ok: false, status: createResponse.status, error: `Replicate API error ${createResponse.status}: ${errorText}` };
     }
 
     let prediction = await createResponse.json();
@@ -1023,9 +1045,10 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
-    // Process images sequentially with 2s delay between each
+    // Process images sequentially with a conservative delay between each prediction.
+    // NOTE: Some Replicate accounts get temporarily reduced to ~6 predictions/min (burst=1).
     const IMAGE_BATCH_SIZE = 1;
-    const IMAGE_DELAY_MS = 2000; // 2 seconds between images for z-image-turbo
+    const IMAGE_DELAY_MS = 11000; // ~5-6 predictions/min, avoids 429-induced "skipped" images
     
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
@@ -1065,21 +1088,56 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
         batchPromises.push(
           (async () => {
             try {
-              let result: { ok: true; imageBase64: string } | { ok: false; error: string };
-              
-              const logPrefix = task.subIndex > 0 
-                ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}` 
-                : `Scene ${task.sceneIndex + 1}`;
-              
-              // Generate image with Replicate (required, no fallback)
-              console.log(`${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length})...`);
-              result = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
+              let result:
+                | { ok: true; imageBase64: string }
+                | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
+                | undefined;
 
-              if (!result.ok) {
-                console.error(`${logPrefix} image failed: ${result.error}`);
-                // Log the full error for debugging
-                console.error(`[REPLICATE ERROR] Scene ${task.sceneIndex + 1}, sub ${task.subIndex}: ${result.error}`);
-                return { task, url: null };
+              let lastError = "";
+
+              const logPrefix = task.subIndex > 0
+                ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}`
+                : `Scene ${task.sceneIndex + 1}`;
+
+              // Generate image with Replicate (required, no fallback) + retry on throttling
+              const MAX_IMAGE_ATTEMPTS = 10;
+              for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
+                console.log(
+                  `${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length}) attempt ${attempt}/${MAX_IMAGE_ATTEMPTS}...`
+                );
+
+                const attemptResult = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
+
+                if (attemptResult.ok) {
+                  result = attemptResult;
+                  break;
+                }
+
+                lastError = attemptResult.error;
+                console.error(`${logPrefix} image failed: ${attemptResult.error}`);
+                console.error(
+                  `[REPLICATE ERROR] Scene ${task.sceneIndex + 1}, sub ${task.subIndex}: ${attemptResult.error}`
+                );
+
+                if (attempt === MAX_IMAGE_ATTEMPTS) {
+                  throw new Error(
+                    `${logPrefix}: Image generation failed after ${MAX_IMAGE_ATTEMPTS} attempts: ${attemptResult.error}`
+                  );
+                }
+
+                // If throttled, honor retry_after when present; otherwise back off conservatively.
+                const retryAfterMs =
+                  attemptResult.status === 429
+                    ? Math.max(1000, (attemptResult.retryAfterSeconds ?? 8) * 1000)
+                    : 8000;
+
+                const jitter = Math.floor(Math.random() * 400);
+                await sleep(retryAfterMs + jitter);
+              }
+
+              if (!result || !result.ok) {
+                // Should be unreachable because we either break on success or throw on final failure.
+                throw new Error(`${logPrefix}: Image generation failed: ${lastError || "unknown error"}`);
               }
 
               const imageBytes = new Uint8Array(base64Decode(result.imageBase64));
