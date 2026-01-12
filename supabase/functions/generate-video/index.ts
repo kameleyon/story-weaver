@@ -51,6 +51,76 @@ function pickFirstInlineAudio(ttsData: any): { data: string; mimeType?: string }
   return null;
 }
 
+function parsePcmSampleRate(mimeType: string | undefined) {
+  if (!mimeType) return null;
+  const m = mimeType.match(/rate=(\d+)/i);
+  if (!m) return null;
+  const rate = Number(m[1]);
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
+}
+
+function pcm16beToWav(pcm16be: Uint8Array, sampleRate: number, channels = 1) {
+  // WAV is little-endian PCM. "audio/L16" is typically big-endian PCM.
+  // Convert to little-endian by swapping bytes per 16-bit sample.
+  const pcm16le = new Uint8Array(pcm16be.length);
+  for (let i = 0; i + 1 < pcm16be.length; i += 2) {
+    pcm16le[i] = pcm16be[i + 1];
+    pcm16le[i + 1] = pcm16be[i];
+  }
+
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * channels * (bitsPerSample / 8);
+  const blockAlign = channels * (bitsPerSample / 8);
+
+  const dataSize = pcm16le.length;
+  const header = new Uint8Array(44);
+  const dv = new DataView(header.buffer);
+
+  // "RIFF"
+  header[0] = 0x52;
+  header[1] = 0x49;
+  header[2] = 0x46;
+  header[3] = 0x46;
+  // Chunk size = 36 + dataSize
+  dv.setUint32(4, 36 + dataSize, true);
+  // "WAVE"
+  header[8] = 0x57;
+  header[9] = 0x41;
+  header[10] = 0x56;
+  header[11] = 0x45;
+  // "fmt "
+  header[12] = 0x66;
+  header[13] = 0x6d;
+  header[14] = 0x74;
+  header[15] = 0x20;
+  // Subchunk1Size (16 for PCM)
+  dv.setUint32(16, 16, true);
+  // AudioFormat (1 = PCM)
+  dv.setUint16(20, 1, true);
+  // NumChannels
+  dv.setUint16(22, channels, true);
+  // SampleRate
+  dv.setUint32(24, sampleRate, true);
+  // ByteRate
+  dv.setUint32(28, byteRate, true);
+  // BlockAlign
+  dv.setUint16(32, blockAlign, true);
+  // BitsPerSample
+  dv.setUint16(34, bitsPerSample, true);
+  // "data"
+  header[36] = 0x64;
+  header[37] = 0x61;
+  header[38] = 0x74;
+  header[39] = 0x61;
+  // Subchunk2Size
+  dv.setUint32(40, dataSize, true);
+
+  const wav = new Uint8Array(44 + dataSize);
+  wav.set(header, 0);
+  wav.set(pcm16le, 44);
+  return wav;
+}
+
 // Generate image using Lovable AI Gateway (free, no API key needed from user)
 async function generateImageWithLovable(
   prompt: string,
@@ -386,25 +456,50 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
             continue;
           }
 
-          const mimeType = inlineAudio.mimeType || "audio/wav";
-          const ext = mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3" : "wav";
+          const mimeTypeRaw = inlineAudio.mimeType || "audio/wav";
 
           // Ensure the underlying buffer is a plain ArrayBuffer (Blob typing compatibility)
-          const audioBytes = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
+          const decoded = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
 
-          if (!audioBytes?.length || audioBytes.length < 512) {
-            lastTtsError = `model=${modelName} decoded audio too small (${audioBytes?.length ?? 0} bytes)`;
+          // Convert raw PCM -> WAV so browsers can actually play it.
+          let uploadBytes: Uint8Array = decoded;
+          let uploadMime = mimeTypeRaw;
+          let ext = "wav";
+
+          if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
+            const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
+            uploadBytes = pcm16beToWav(decoded, rate, 1);
+            uploadMime = "audio/wav";
+            ext = "wav";
+          } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
+            uploadMime = "audio/mpeg";
+            ext = "mp3";
+          } else if (mimeTypeRaw.includes("wav")) {
+            uploadMime = "audio/wav";
+            ext = "wav";
+          } else {
+            // Default to wav to maximize browser compatibility.
+            uploadMime = "audio/wav";
+            ext = "wav";
+          }
+
+          if (!uploadBytes?.length || uploadBytes.length < 512) {
+            lastTtsError = `model=${modelName} decoded audio too small (${uploadBytes?.length ?? 0} bytes)`;
             console.error(`Scene ${i + 1} invalid audio payload:`, lastTtsError);
             continue;
           }
 
-          const audioBlob = new Blob([audioBytes], { type: mimeType });
+          // Force a non-shared ArrayBuffer backing store for Blob compatibility in Deno.
+          const uploadCopy = new Uint8Array(uploadBytes.length);
+          uploadCopy.set(uploadBytes);
+
+          const audioBlob = new Blob([uploadCopy.buffer], { type: uploadMime });
           const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
 
           const { error: uploadError } = await supabase.storage
             .from("audio")
             .upload(audioPath, audioBlob, {
-              contentType: mimeType,
+              contentType: uploadMime,
               upsert: true,
             });
 
@@ -419,7 +514,9 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
           } = supabase.storage.from("audio").getPublicUrl(audioPath);
 
           finalAudioUrl = publicUrl;
-          console.log(`Scene ${i + 1} audio generated (model=${modelName}, mime=${mimeType})`);
+          console.log(
+            `Scene ${i + 1} audio generated (model=${modelName}, mime=${uploadMime}, srcMime=${mimeTypeRaw})`
+          );
           break; // stop trying models
         } catch (ttsError) {
           lastTtsError = `model=${modelName} exception=${ttsError instanceof Error ? ttsError.message : String(ttsError)}`;
