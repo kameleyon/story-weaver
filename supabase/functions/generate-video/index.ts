@@ -852,10 +852,25 @@ Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image u
         batchPromises.push(
           (async () => {
             try {
-              // Use Replicate if available (exact aspect ratios), otherwise Lovable AI
-              const result = useReplicate
-                ? await generateImageWithReplicate(prompt, REPLICATE_API_TOKEN!, format)
-                : await generateImageWithLovable(prompt, LOVABLE_API_KEY!, format);
+              let result: { ok: true; imageBase64: string } | { ok: false; error: string };
+              
+              // Try Replicate first if available (exact aspect ratios)
+              if (useReplicate) {
+                console.log(`Scene ${i + 1}: Trying Replicate...`);
+                result = await generateImageWithReplicate(prompt, REPLICATE_API_TOKEN!, format);
+                
+                // If Replicate fails, fallback to Lovable AI
+                if (!result.ok && LOVABLE_API_KEY) {
+                  console.log(`Scene ${i + 1}: Replicate failed (${result.error}), falling back to Lovable AI...`);
+                  result = await generateImageWithLovable(prompt, LOVABLE_API_KEY, format);
+                }
+              } else if (LOVABLE_API_KEY) {
+                // No Replicate key, use Lovable AI directly
+                console.log(`Scene ${i + 1}: Using Lovable AI...`);
+                result = await generateImageWithLovable(prompt, LOVABLE_API_KEY, format);
+              } else {
+                return { index: i, url: null };
+              }
 
               if (!result.ok) {
                 console.error(`Scene ${i + 1} image failed:`, result.error);
@@ -882,7 +897,7 @@ Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image u
                 .from("audio")
                 .getPublicUrl(imagePath);
 
-              console.log(`Scene ${i + 1} image generated`);
+              console.log(`Scene ${i + 1} image generated successfully`);
               return { index: i, url: publicUrl };
             } catch (imgError) {
               console.error(`Scene ${i + 1} image error:`, imgError);
