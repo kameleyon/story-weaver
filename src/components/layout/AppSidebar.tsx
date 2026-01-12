@@ -43,10 +43,9 @@ import { ThemedLogo } from "@/components/ThemedLogo";
 
 interface AppSidebarProps {
   onNewProject: () => void;
-  onOpenProject: (projectId: string) => void;
 }
 
-export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
+export function AppSidebar({ onNewProject }: AppSidebarProps) {
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme, setTheme } = useTheme();
@@ -108,16 +107,16 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               {isCollapsed ? (
                 <button
                   onClick={onNewProject}
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/25 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/40 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
-                  <Plus className="h-3 w-3" strokeWidth={2.5} />
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               ) : (
                 <Button
                   onClick={onNewProject}
-                  className="w-full justify-start gap-2.5 rounded-full bg-primary/25 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="w-full justify-start gap-2.5 rounded-full bg-primary/40 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-4 w-4" />
                   <span className="font-medium">New Project</span>
                 </Button>
               )}
@@ -145,10 +144,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 ) : (
                   recentProjects.map((project) => (
                     <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton
-                        onClick={() => onOpenProject(project.id)}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50"
-                      >
+                      <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
                         <Video className="h-4 w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
                           <span className="truncate text-sm font-medium">{project.title}</span>
