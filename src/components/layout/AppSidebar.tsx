@@ -1,4 +1,16 @@
-import { Plus, User, Settings, LogOut, Moon, Sun, Video, Loader2, PanelLeftClose, PanelLeft, History } from "lucide-react";
+import {
+  Plus,
+  User,
+  Settings,
+  LogOut,
+  Moon,
+  Sun,
+  Video,
+  Loader2,
+  PanelLeftClose,
+  PanelLeft,
+  History,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -27,13 +39,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { ThemedLogo } from "@/components/ThemedLogo";
+import { ProjectSearch } from "@/components/layout/ProjectSearch";
 
 interface AppSidebarProps {
   onNewProject: () => void;
+  onOpenProject: (projectId: string) => void;
 }
 
-export function AppSidebar({ onNewProject }: AppSidebarProps) {
+export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme, setTheme } = useTheme();
@@ -64,10 +77,10 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-3">
-        {/* Logo - only when expanded */}
+        {/* Search - only when expanded */}
         {!isCollapsed && (
-          <div className="mb-4 px-1">
-            <ThemedLogo className="h-12 w-auto" />
+          <div className="mb-4">
+            <ProjectSearch onSelectProject={onOpenProject} />
           </div>
         )}
 
@@ -99,16 +112,19 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               {isCollapsed ? (
-                <button
+                <Button
                   onClick={onNewProject}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  variant="secondary"
+                  size="icon"
+                  className="h-8 w-8 rounded-full shadow-sm"
                 >
-                  <Plus className="h-3 w-3" strokeWidth={2.5} />
-                </button>
+                  <Plus className="h-4 w-4" />
+                </Button>
               ) : (
                 <Button
                   onClick={onNewProject}
-                  className="w-full justify-start gap-2.5 rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  variant="secondary"
+                  className="w-full justify-start gap-2.5 rounded-full shadow-sm"
                 >
                   <Plus className="h-4 w-4" />
                   <span className="font-medium">New Project</span>
@@ -140,7 +156,10 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
                 ) : (
                   recentProjects.map((project) => (
                     <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
+                      <SidebarMenuButton
+                        onClick={() => onOpenProject(project.id)}
+                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50"
+                      >
                         <Video className="h-4 w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
                           <span className="truncate text-sm font-medium">{project.title}</span>

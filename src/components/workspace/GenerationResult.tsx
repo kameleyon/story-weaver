@@ -35,6 +35,20 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
+  const shouldAutoDownloadRef = useRef(false);
+  const lastAutoDownloadedUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!shouldAutoDownloadRef.current) return;
+    if (exportState.status !== "complete" || !exportState.videoUrl) return;
+    if (lastAutoDownloadedUrlRef.current === exportState.videoUrl) return;
+
+    lastAutoDownloadedUrlRef.current = exportState.videoUrl;
+    shouldAutoDownloadRef.current = false;
+
+    const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+    downloadVideo(exportState.videoUrl, `${safeName}.mp4`);
+  }, [downloadVideo, exportState.status, exportState.videoUrl, title]);
 
   const currentScene = scenes[currentSceneIndex];
   const currentImages = currentScene?.imageUrls && currentScene.imageUrls.length > 0 
@@ -481,7 +495,10 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
         ) : (
           <Button
             className="flex-1 gap-2"
-            onClick={() => exportVideo(scenes, format)}
+            onClick={() => {
+              shouldAutoDownloadRef.current = true;
+              exportVideo(scenes, format);
+            }}
             disabled={
               exportState.status === "loading" ||
               exportState.status === "rendering" ||
