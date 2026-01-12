@@ -1,5 +1,4 @@
-import { Plus, History, User, Settings, LogOut, Moon, Sun, Video, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Plus, User, Settings, LogOut, Moon, Sun, Video, Loader2, PanelLeftClose, PanelLeft, History } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -11,7 +10,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -29,14 +27,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { ThemedLogo } from "@/components/ThemedLogo";
 
 interface AppSidebarProps {
   onNewProject: () => void;
 }
 
 export function AppSidebar({ onNewProject }: AppSidebarProps) {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
@@ -65,22 +62,39 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <ThemedLogo className="h-8 w-auto" />
-          </motion.div>
+      <SidebarHeader className="p-3">
+        {/* Collapse/Expand Toggle */}
+        <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"}`}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/50"
+              >
+                {isCollapsed ? (
+                  <PanelLeft className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            </TooltipContent>
+          </Tooltip>
         </div>
-        
-        <div className="mt-6">
+
+        {/* New Project Button */}
+        <div className="mt-4">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 onClick={onNewProject}
-                className="w-full justify-start gap-2.5 rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                className={`w-full rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
+                  isCollapsed ? "justify-center px-0" : "justify-start gap-2.5"
+                }`}
                 size={isCollapsed ? "icon" : "default"}
               >
                 <Plus className="h-4 w-4" />
@@ -93,55 +107,41 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 px-3 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-            <History className="h-3.5 w-3.5" />
-            {!isCollapsed && <span>Recent</span>}
-          </SidebarGroupLabel>
-          <SidebarGroupContent className="mt-2">
-            <SidebarMenu className="space-y-1">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : recentProjects.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-muted-foreground/70">
-                  {!isCollapsed && "No projects yet"}
-                </div>
-              ) : (
-                recentProjects.map((project) => (
-                  <SidebarMenuItem key={project.id}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
-                          <Video className="h-4 w-4 text-muted-foreground" />
-                          {!isCollapsed && (
-                            <div className="flex flex-col items-start overflow-hidden">
-                              <span className="truncate text-sm font-medium">{project.title}</span>
-                              <span className="text-[11px] text-muted-foreground/70">
-                                {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
-                              </span>
-                            </div>
-                          )}
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      {isCollapsed && (
-                        <TooltipContent side="right">
-                          <div>
-                            <p className="font-medium">{project.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
-                            </p>
-                          </div>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </SidebarMenuItem>
-                ))
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {!isCollapsed && (
+          <SidebarGroup>
+            <div className="flex items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              <History className="h-3.5 w-3.5" />
+              <span>Recent</span>
+            </div>
+            <SidebarGroupContent className="mt-1">
+              <SidebarMenu className="space-y-1">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : recentProjects.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground/70">
+                    No projects yet
+                  </div>
+                ) : (
+                  recentProjects.map((project) => (
+                    <SidebarMenuItem key={project.id}>
+                      <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
+                        <Video className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex flex-col items-start overflow-hidden">
+                          <span className="truncate text-sm font-medium">{project.title}</span>
+                          <span className="text-[11px] text-muted-foreground/70">
+                            {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-3">
@@ -149,7 +149,13 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-3 rounded-lg px-3 py-2.5 hover:bg-sidebar-accent/50">
+                <Button
+                  variant="ghost"
+                  className={`w-full rounded-lg hover:bg-sidebar-accent/50 ${
+                    isCollapsed ? "justify-center px-0" : "justify-start gap-3 px-3"
+                  } py-2.5`}
+                  size={isCollapsed ? "icon" : "default"}
+                >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-muted text-muted-foreground">
                       <User className="h-4 w-4" />
@@ -166,17 +172,17 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            {isCollapsed && <TooltipContent side="right">User Menu</TooltipContent>}
+            {isCollapsed && <TooltipContent side="right">Account</TooltipContent>}
           </Tooltip>
           <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-lg">
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="cursor-pointer rounded-lg"
               onClick={() => navigate("/settings")}
             >
               <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="cursor-pointer rounded-lg"
               onClick={() => navigate("/usage")}
             >
@@ -184,7 +190,7 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
               <span>Usage & Billing</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="cursor-pointer rounded-lg"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
@@ -193,7 +199,7 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
               <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="cursor-pointer rounded-lg text-destructive focus:text-destructive"
               onClick={handleSignOut}
             >
