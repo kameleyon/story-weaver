@@ -186,23 +186,22 @@ async function generateImageWithReplicate(
   | { ok: true; imageBase64: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // p-image needs both width and height for proper aspect ratio
-  // Portrait 9:16: 576x1024, Landscape 16:9: 1024x576, Square 1:1: 768x768
-  const dimensions = format === "portrait" 
-    ? { width: 576, height: 1024 }  // 9:16 ratio
+  // p-image uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
+  const aspectRatio = format === "portrait" 
+    ? "9:16"
     : format === "square" 
-    ? { width: 768, height: 768 }   // 1:1 ratio
-    : { width: 1024, height: 576 }; // 16:9 ratio
+    ? "1:1"
+    : "16:9";
   
   console.log(`[REPLICATE] Starting image generation with prunaai/p-image`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
-  console.log(`[REPLICATE] Format: ${format}, Dimensions: ${dimensions.width}x${dimensions.height}`);
+  console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
   
   try {
     const startTime = Date.now();
     
-    // Create prediction with prunaai/p-image model
+    // Create prediction with prunaai/p-image model using aspect_ratio
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -214,8 +213,7 @@ async function generateImageWithReplicate(
         version: "prunaai/p-image",
         input: {
           prompt: prompt,
-          width: dimensions.width,
-          height: dimensions.height,
+          aspect_ratio: aspectRatio,
         },
       }),
     });
