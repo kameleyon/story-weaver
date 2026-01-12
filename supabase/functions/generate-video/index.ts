@@ -448,21 +448,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
                     ],
                   },
                 ],
-                // Some Gemini SDKs use `config` while the raw REST API uses `generationConfig`.
-                // Provide both to maximize compatibility across TTS preview models.
                 generationConfig: {
-                  responseModalities: ["AUDIO"],
-                  speechConfig: {
-                    voiceConfig: {
-                      prebuiltVoiceConfig: {
-                        // If a voice is restricted on an account, the call may fail.
-                        // Aoede tends to be broadly available.
-                        voiceName: "Aoede",
-                      },
-                    },
-                  },
-                },
-                config: {
                   responseModalities: ["AUDIO"],
                   speechConfig: {
                     voiceConfig: {
