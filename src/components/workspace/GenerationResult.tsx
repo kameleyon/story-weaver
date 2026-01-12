@@ -21,10 +21,11 @@ import { useVideoExport } from "@/hooks/useVideoExport";
 interface GenerationResultProps {
   title: string;
   scenes: Scene[];
+  format: "landscape" | "portrait" | "square";
   onNewProject: () => void;
 }
 
-export function GenerationResult({ title, scenes, onNewProject }: GenerationResultProps) {
+export function GenerationResult({ title, scenes, format, onNewProject }: GenerationResultProps) {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
@@ -196,7 +197,11 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
       {/* Scene Preview */}
       <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm">
         {/* Image Preview */}
-        <div className="relative aspect-video bg-muted/50 flex items-center justify-center">
+        <div className={`relative bg-muted/50 flex items-center justify-center ${
+          format === "portrait" ? "aspect-[9/16] max-h-[70vh] mx-auto" : 
+          format === "square" ? "aspect-square" : 
+          "aspect-video"
+        }`}>
           <div className="absolute inset-x-0 top-0 z-10 h-1 bg-background/30">
             <div
               className="h-full bg-primary transition-[width] duration-150"
@@ -400,7 +405,7 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
         ) : (
           <Button
             className="flex-1 gap-2"
-            onClick={() => exportVideo(scenes, "landscape")}
+            onClick={() => exportVideo(scenes, format)}
             disabled={
               exportState.status === "loading" ||
               exportState.status === "rendering" ||

@@ -24,6 +24,7 @@ export interface GenerationState {
   title?: string;
   scenes?: Scene[];
   error?: string;
+  format?: "landscape" | "portrait" | "square";
 }
 
 interface GenerationParams {
@@ -115,6 +116,7 @@ export function useGenerationPipeline() {
         generationId: result.generationId,
         title: result.title,
         scenes: result.scenes,
+        format: params.format as "landscape" | "portrait" | "square",
       });
 
       toast({

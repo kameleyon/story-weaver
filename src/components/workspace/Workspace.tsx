@@ -144,9 +144,10 @@ export function Workspace() {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-6"
               >
-                <GenerationResult
+              <GenerationResult
                   title={generationState.title || "Untitled Video"}
                   scenes={generationState.scenes}
+                  format={generationState.format || "landscape"}
                   onNewProject={handleNewProject}
                 />
               </motion.div>
