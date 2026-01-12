@@ -423,6 +423,10 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       "gemini-2.5-pro-preview-tts",
     ];
 
+    const TTS_ATTEMPTS_PER_MODEL = 3;
+    const TTS_RETRY_BASE_DELAY_MS = 900;
+    const TTS_INTER_SCENE_DELAY_MS = 750;
+
     const audioUrls: (string | null)[] = [];
 
     for (let i = 0; i < parsedScript.scenes.length; i++) {
@@ -432,132 +436,183 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       let lastTtsError: string | null = null;
 
       for (const modelName of TTS_MODEL_CANDIDATES) {
-        try {
-          const ttsResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [
-                      {
-                        text: `Please read this text clearly and naturally:\n\n${scene.voiceover}`,
-                      },
-                    ],
-                  },
-                ],
-                generationConfig: {
-                  responseModalities: ["AUDIO"],
-                  speechConfig: {
-                    voiceConfig: {
-                      prebuiltVoiceConfig: {
-                        voiceName: "Aoede",
+        for (let attempt = 1; attempt <= TTS_ATTEMPTS_PER_MODEL; attempt++) {
+          try {
+            const ttsResponse = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      parts: [
+                        {
+                          text: `Please read this text clearly and naturally:\n\n${scene.voiceover}`,
+                        },
+                      ],
+                    },
+                  ],
+                  generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                      voiceConfig: {
+                        prebuiltVoiceConfig: {
+                          voiceName: "Aoede",
+                        },
                       },
                     },
                   },
-                },
-              }),
-            }
-          );
+                }),
+              }
+            );
 
-          if (!ttsResponse.ok) {
-            const errorText = await ttsResponse.text();
-            lastTtsError = `model=${modelName} status=${ttsResponse.status} body=${errorText}`;
+            if (!ttsResponse.ok) {
+              const errorText = await ttsResponse.text();
+              lastTtsError = `model=${modelName} status=${ttsResponse.status} attempt=${attempt} body=${errorText}`;
 
-            // Common failure: model doesn't support AUDIO -> try next model candidate.
-            if (ttsResponse.status === 400 && errorText.includes("response modalities")) {
-              console.error(`Scene ${i + 1} TTS model not AUDIO-capable:`, lastTtsError);
+              // Common failure: model doesn't support AUDIO -> try next model candidate.
+              if (ttsResponse.status === 400 && errorText.includes("response modalities")) {
+                console.error(`Scene ${i + 1} TTS model not AUDIO-capable:`, lastTtsError);
+                break; // next model
+              }
+
+              // If the model doesn't exist / isn't enabled on this key -> try next.
+              if (ttsResponse.status === 404) {
+                console.error(`Scene ${i + 1} TTS model not found:`, lastTtsError);
+                break; // next model
+              }
+
+              // Some keys show "limit: 0" for models they don't have access to.
+              if (ttsResponse.status === 429 && errorText.includes("limit: 0")) {
+                console.error(`Scene ${i + 1} TTS model quota is 0 / not enabled:`, lastTtsError);
+                break; // next model
+              }
+
+              const retriable = ttsResponse.status === 429 || ttsResponse.status >= 500;
+              if (retriable && attempt < TTS_ATTEMPTS_PER_MODEL) {
+                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+                await sleep(backoff);
+                continue;
+              }
+
+              console.error(`Scene ${i + 1} TTS failed:`, lastTtsError);
               continue;
             }
 
-            // If the model doesn't exist / isn't enabled on this key -> try next.
-            if (ttsResponse.status === 404) {
-              console.error(`Scene ${i + 1} TTS model not found:`, lastTtsError);
+            const ttsData = await ttsResponse.json();
+
+            // Sometimes the API returns 200 with an embedded error object.
+            if (ttsData?.error) {
+              lastTtsError = `model=${modelName} attempt=${attempt} embedded_error=${JSON.stringify(ttsData.error)}`;
+              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+                await sleep(backoff);
+                continue;
+              }
+              console.error(`Scene ${i + 1} TTS embedded error:`, lastTtsError);
               continue;
             }
 
-            console.error(`Scene ${i + 1} TTS failed:`, lastTtsError);
-            continue;
-          }
+            const inlineAudio = pickFirstInlineAudio(ttsData);
 
-          const ttsData = await ttsResponse.json();
-          const inlineAudio = pickFirstInlineAudio(ttsData);
+            if (!inlineAudio?.data) {
+              // This happens intermittently on preview TTS models; retry a few times before moving on.
+              lastTtsError = `model=${modelName} attempt=${attempt} no inline audio data`;
+              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+                await sleep(backoff);
+                continue;
+              }
+              console.error(`Scene ${i + 1} no audio data returned:`, lastTtsError);
+              continue;
+            }
 
-          if (!inlineAudio?.data) {
-            lastTtsError = `model=${modelName} no inline audio data`;
-            console.error(`Scene ${i + 1} no audio data returned:`, lastTtsError);
-            continue;
-          }
+            const mimeTypeRaw = inlineAudio.mimeType || "audio/wav";
 
-          const mimeTypeRaw = inlineAudio.mimeType || "audio/wav";
+            // Ensure the underlying buffer is a plain ArrayBuffer (Blob typing compatibility)
+            const decoded = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
 
-          // Ensure the underlying buffer is a plain ArrayBuffer (Blob typing compatibility)
-          const decoded = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
+            // Convert raw PCM -> WAV so browsers can actually play it.
+            let uploadBytes: Uint8Array = decoded;
+            let uploadMime = mimeTypeRaw;
+            let ext = "wav";
 
-          // Convert raw PCM -> WAV so browsers can actually play it.
-          let uploadBytes: Uint8Array = decoded;
-          let uploadMime = mimeTypeRaw;
-          let ext = "wav";
+            if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
+              const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
+              uploadBytes = pcm16ToWavAuto(decoded, rate, 1);
+              uploadMime = "audio/wav";
+              ext = "wav";
+            } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
+              uploadMime = "audio/mpeg";
+              ext = "mp3";
+            } else if (mimeTypeRaw.includes("wav")) {
+              uploadMime = "audio/wav";
+              ext = "wav";
+            } else {
+              // Default to wav to maximize browser compatibility.
+              uploadMime = "audio/wav";
+              ext = "wav";
+            }
 
-          if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
-            const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
-            uploadBytes = pcm16ToWavAuto(decoded, rate, 1);
-            uploadMime = "audio/wav";
-            ext = "wav";
-          } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
-            uploadMime = "audio/mpeg";
-            ext = "mp3";
-          } else if (mimeTypeRaw.includes("wav")) {
-            uploadMime = "audio/wav";
-            ext = "wav";
-          } else {
-            // Default to wav to maximize browser compatibility.
-            uploadMime = "audio/wav";
-            ext = "wav";
-          }
+            if (!uploadBytes?.length || uploadBytes.length < 512) {
+              lastTtsError = `model=${modelName} attempt=${attempt} decoded audio too small (${uploadBytes?.length ?? 0} bytes)`;
+              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+                await sleep(backoff);
+                continue;
+              }
+              console.error(`Scene ${i + 1} invalid audio payload:`, lastTtsError);
+              continue;
+            }
 
-          if (!uploadBytes?.length || uploadBytes.length < 512) {
-            lastTtsError = `model=${modelName} decoded audio too small (${uploadBytes?.length ?? 0} bytes)`;
-            console.error(`Scene ${i + 1} invalid audio payload:`, lastTtsError);
-            continue;
-          }
+            // Force a non-shared ArrayBuffer backing store for Blob compatibility in Deno.
+            const uploadCopy = new Uint8Array(uploadBytes.length);
+            uploadCopy.set(uploadBytes);
 
-          // Force a non-shared ArrayBuffer backing store for Blob compatibility in Deno.
-          const uploadCopy = new Uint8Array(uploadBytes.length);
-          uploadCopy.set(uploadBytes);
+            const audioBlob = new Blob([uploadCopy.buffer], { type: uploadMime });
+            const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
 
-          const audioBlob = new Blob([uploadCopy.buffer], { type: uploadMime });
-          const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from("audio")
-            .upload(audioPath, audioBlob, {
+            const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
               contentType: uploadMime,
               upsert: true,
             });
 
-          if (uploadError) {
-            lastTtsError = `model=${modelName} uploadError=${uploadError.message}`;
-            console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
-            continue;
+            if (uploadError) {
+              lastTtsError = `model=${modelName} attempt=${attempt} uploadError=${uploadError.message}`;
+              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+                await sleep(backoff);
+                continue;
+              }
+              console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
+              continue;
+            }
+
+            const {
+              data: { publicUrl },
+            } = supabase.storage.from("audio").getPublicUrl(audioPath);
+
+            finalAudioUrl = publicUrl;
+            console.log(
+              `Scene ${i + 1} audio generated (model=${modelName}, mime=${uploadMime}, srcMime=${mimeTypeRaw}, attempt=${attempt})`
+            );
+
+            break;
+          } catch (ttsError) {
+            lastTtsError = `model=${modelName} attempt=${attempt} exception=${ttsError instanceof Error ? ttsError.message : String(ttsError)}`;
+
+            if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+              const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+              await sleep(backoff);
+              continue;
+            }
+
+            console.error(`Scene ${i + 1} TTS error:`, ttsError);
           }
-
-          const {
-            data: { publicUrl },
-          } = supabase.storage.from("audio").getPublicUrl(audioPath);
-
-          finalAudioUrl = publicUrl;
-          console.log(
-            `Scene ${i + 1} audio generated (model=${modelName}, mime=${uploadMime}, srcMime=${mimeTypeRaw})`
-          );
-          break; // stop trying models
-        } catch (ttsError) {
-          lastTtsError = `model=${modelName} exception=${ttsError instanceof Error ? ttsError.message : String(ttsError)}`;
-          console.error(`Scene ${i + 1} TTS error:`, ttsError);
-          // try next model
         }
+
+        if (finalAudioUrl) break; // stop trying models
       }
 
       if (!finalAudioUrl) {
@@ -569,7 +624,13 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       // Update progress
       const progress = 10 + Math.floor(((i + 1) / parsedScript.scenes.length) * 30);
       await supabase.from("generations").update({ progress }).eq("id", generation.id);
+
+      // Small delay to avoid TTS throttling
+      if (i < parsedScript.scenes.length - 1) {
+        await sleep(TTS_INTER_SCENE_DELAY_MS);
+      }
     }
+
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
     // Using Lovable AI (free, no user API key needed)
