@@ -1,7 +1,10 @@
-import { Plus, History, User, Settings, LogOut, Moon, Sun, Video, Film, Clapperboard, Presentation, Play } from "lucide-react";
+import { Plus, History, User, Settings, LogOut, Moon, Sun, Video, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { formatDistanceToNow } from "date-fns";
 import {
   Sidebar,
   SidebarContent,
@@ -28,15 +31,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAuth } from "@/hooks/useAuth";
 import { ThemedLogo } from "@/components/ThemedLogo";
 
-// Mock recent projects with Lucide icons
-const recentProjects = [
-  { id: "1", title: "Product Demo Video", date: "2 hours ago", icon: Video },
-  { id: "2", title: "Tutorial Series Ep.1", date: "Yesterday", icon: Film },
-  { id: "3", title: "Marketing Pitch", date: "2 days ago", icon: Clapperboard },
-  { id: "4", title: "Onboarding Guide", date: "3 days ago", icon: Presentation },
-  { id: "5", title: "Feature Walkthrough", date: "1 week ago", icon: Play },
-];
-
 interface AppSidebarProps {
   onNewProject: () => void;
 }
@@ -47,6 +41,22 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  const { data: recentProjects = [], isLoading } = useQuery({
+    queryKey: ["recent-projects", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, title, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id,
+  });
 
   const handleSignOut = async () => {
     await signOut();
@@ -90,18 +100,27 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
           </SidebarGroupLabel>
           <SidebarGroupContent className="mt-2">
             <SidebarMenu className="space-y-1">
-              {recentProjects.map((project) => {
-                const IconComponent = project.icon;
-                return (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : recentProjects.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground/70">
+                  {!isCollapsed && "No projects yet"}
+                </div>
+              ) : (
+                recentProjects.map((project) => (
                   <SidebarMenuItem key={project.id}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
-                          <IconComponent className="h-4 w-4 text-muted-foreground" />
+                          <Video className="h-4 w-4 text-muted-foreground" />
                           {!isCollapsed && (
                             <div className="flex flex-col items-start overflow-hidden">
                               <span className="truncate text-sm font-medium">{project.title}</span>
-                              <span className="text-[11px] text-muted-foreground/70">{project.date}</span>
+                              <span className="text-[11px] text-muted-foreground/70">
+                                {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
+                              </span>
                             </div>
                           )}
                         </SidebarMenuButton>
@@ -110,14 +129,16 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
                         <TooltipContent side="right">
                           <div>
                             <p className="font-medium">{project.title}</p>
-                            <p className="text-xs text-muted-foreground">{project.date}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
+                            </p>
                           </div>
                         </TooltipContent>
                       )}
                     </Tooltip>
                   </SidebarMenuItem>
-                );
-              })}
+                ))
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
