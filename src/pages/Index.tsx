@@ -10,10 +10,14 @@ const Index = () => {
     workspaceRef.current?.resetWorkspace();
   };
 
+  const handleOpenProject = (projectId: string) => {
+    void workspaceRef.current?.openProject(projectId);
+  };
+
   return (
     <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full">
-        <AppSidebar onNewProject={handleNewProject} />
+        <AppSidebar onNewProject={handleNewProject} onOpenProject={handleOpenProject} />
         <main className="flex-1">
           <Workspace ref={workspaceRef} />
         </main>

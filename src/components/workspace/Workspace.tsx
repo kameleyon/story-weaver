@@ -14,6 +14,7 @@ import { ThemedLogo } from "@/components/ThemedLogo";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
+  openProject: (projectId: string) => Promise<void>;
 }
 
 export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) {
@@ -23,7 +24,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [style, setStyle] = useState<VisualStyle>("minimalist");
   const [customStyle, setCustomStyle] = useState("");
 
-  const { state: generationState, startGeneration, reset } = useGenerationPipeline();
+  const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
   const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
 
@@ -48,8 +49,41 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
     setCustomStyle("");
   };
 
+  const handleOpenProject = async (projectId: string) => {
+    const project = await loadProject(projectId);
+    if (!project) return;
+
+    setContent(project.content ?? "");
+
+    const nextFormat = (project.format as VideoFormat) ?? "landscape";
+    setFormat(["landscape", "portrait", "square"].includes(nextFormat) ? nextFormat : "landscape");
+
+    const nextLength = (project.length as VideoLength) ?? "brief";
+    setLength(["short", "brief", "presentation"].includes(nextLength) ? nextLength : "brief");
+
+    const savedStyle = (project.style ?? "minimalist") as VisualStyle;
+    if (
+      savedStyle === "minimalist" ||
+      savedStyle === "doodle" ||
+      savedStyle === "stick" ||
+      savedStyle === "anime" ||
+      savedStyle === "realistic" ||
+      savedStyle === "3d-pixar" ||
+      savedStyle === "claymation" ||
+      savedStyle === "futuristic" ||
+      savedStyle === "custom"
+    ) {
+      setStyle(savedStyle);
+      if (savedStyle !== "custom") setCustomStyle("");
+    } else {
+      setStyle("custom");
+      setCustomStyle(project.style);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     resetWorkspace: handleNewProject,
+    openProject: handleOpenProject,
   }));
 
   return (
