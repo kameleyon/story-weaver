@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +31,25 @@ interface ScriptResponse {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+function normalizeBase64(b64: string) {
+  // Handle base64url variants just in case
+  return b64.replace(/-/g, "+").replace(/_/g, "/");
+}
+
+function decodeInlineDataToBytes(inlineData: { data: string }) {
+  return base64Decode(normalizeBase64(inlineData.data));
+}
+
+function pickFirstInlineAudio(ttsData: any): { data: string; mimeType?: string } | null {
+  const parts = ttsData?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+
+  for (const part of parts) {
+    const inline = part?.inlineData ?? part?.inline_data;
+    if (inline?.data) return inline;
+  }
+  return null;
+}
 async function createReplicatePredictionWithRetry({
   replicateToken,
   input,
@@ -280,100 +299,139 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
 
     // ===============================================
     // STEP 2: THE NARRATOR - Audio Generation (TTS)
-    // Using Google Gemini 2.5 Pro Preview TTS
+    // IMPORTANT: Requires a *TTS-capable* Gemini model.
     // ===============================================
     console.log("Step 2: Generating audio with Gemini TTS...");
+
+    const TTS_MODEL_CANDIDATES = [
+      // Prefer dedicated TTS models when available
+      "gemini-2.5-flash-preview-tts",
+      "gemini-2.5-pro-preview-tts",
+      "gemini-2.0-flash-preview-tts",
+    ];
+
     const audioUrls: (string | null)[] = [];
 
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
-      
-      try {
-        // Use Gemini 2.0 Flash with responseModalities: ["AUDIO"] for stable TTS
-        const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [{ text: `Please read this text clearly: ${scene.voiceover}` }],
-                },
-              ],
-              generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: {
-                      voiceName: "Aoede", // Stable voice, Kore can be restricted
+
+      let finalAudioUrl: string | null = null;
+      let lastTtsError: string | null = null;
+
+      for (const modelName of TTS_MODEL_CANDIDATES) {
+        try {
+          const ttsResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: `Please read this text clearly and naturally:\n\n${scene.voiceover}`,
+                      },
+                    ],
+                  },
+                ],
+                generationConfig: {
+                  responseModalities: ["AUDIO"],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: {
+                        // If a voice is restricted on an account, the call may fail.
+                        // Aoede tends to be broadly available.
+                        voiceName: "Aoede",
+                      },
                     },
                   },
                 },
-              },
-            }),
-          }
-        );
-
-        if (ttsResponse.ok) {
-          const ttsData = await ttsResponse.json();
-          console.log(`Scene ${i + 1} TTS response keys:`, JSON.stringify(Object.keys(ttsData)));
-          
-          const audioData = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-          
-          if (audioData?.data) {
-            const mimeType = audioData.mimeType || "audio/wav";
-            console.log(`Scene ${i + 1} audio mimeType: ${mimeType}, data length: ${audioData.data.length}`);
-            const ext = mimeType.includes("wav") || mimeType.includes("l16") || mimeType.includes("pcm")
-              ? "wav"
-              : mimeType.includes("mpeg") || mimeType.includes("mp3")
-                ? "mp3"
-                : "wav"; // Default to wav
-
-            const audioBytes = Uint8Array.from(atob(audioData.data), (c) => c.charCodeAt(0));
-            const audioBlob = new Blob([audioBytes], { type: mimeType });
-
-            const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
-
-            const { error: uploadError } = await supabase.storage
-              .from("audio")
-              .upload(audioPath, audioBlob, {
-                contentType: mimeType,
-                upsert: true,
-              });
-
-            if (!uploadError) {
-              const { data: { publicUrl } } = supabase.storage
-                .from("audio")
-                .getPublicUrl(audioPath);
-              audioUrls.push(publicUrl);
-              console.log(`Scene ${i + 1} audio generated, mimeType: ${mimeType}`);
-            } else {
-              console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
-              audioUrls.push(null);
+              }),
             }
-          } else {
-            console.error(`Scene ${i + 1} no audio data in response. Parts:`, JSON.stringify(ttsData.candidates?.[0]?.content?.parts));
-            audioUrls.push(null);
+          );
+
+          if (!ttsResponse.ok) {
+            const errorText = await ttsResponse.text();
+            lastTtsError = `model=${modelName} status=${ttsResponse.status} body=${errorText}`;
+
+            // Common failure: model doesn't support AUDIO -> try next model candidate.
+            if (ttsResponse.status === 400 && errorText.includes("response modalities")) {
+              console.error(`Scene ${i + 1} TTS model not AUDIO-capable:`, lastTtsError);
+              continue;
+            }
+
+            // If the model doesn't exist / isn't enabled on this key -> try next.
+            if (ttsResponse.status === 404) {
+              console.error(`Scene ${i + 1} TTS model not found:`, lastTtsError);
+              continue;
+            }
+
+            console.error(`Scene ${i + 1} TTS failed:`, lastTtsError);
+            continue;
           }
-        } else {
-          const errorText = await ttsResponse.text();
-          console.error(`Scene ${i + 1} TTS failed (${ttsResponse.status}):`, errorText);
-          audioUrls.push(null);
+
+          const ttsData = await ttsResponse.json();
+          const inlineAudio = pickFirstInlineAudio(ttsData);
+
+          if (!inlineAudio?.data) {
+            lastTtsError = `model=${modelName} no inline audio data`;
+            console.error(`Scene ${i + 1} no audio data returned:`, lastTtsError);
+            continue;
+          }
+
+          const mimeType = inlineAudio.mimeType || "audio/wav";
+          const ext = mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3" : "wav";
+
+          // Ensure the underlying buffer is a plain ArrayBuffer (Blob typing compatibility)
+          const audioBytes = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
+
+          if (!audioBytes?.length || audioBytes.length < 512) {
+            lastTtsError = `model=${modelName} decoded audio too small (${audioBytes?.length ?? 0} bytes)`;
+            console.error(`Scene ${i + 1} invalid audio payload:`, lastTtsError);
+            continue;
+          }
+
+          const audioBlob = new Blob([audioBytes], { type: mimeType });
+          const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("audio")
+            .upload(audioPath, audioBlob, {
+              contentType: mimeType,
+              upsert: true,
+            });
+
+          if (uploadError) {
+            lastTtsError = `model=${modelName} uploadError=${uploadError.message}`;
+            console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
+            continue;
+          }
+
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("audio").getPublicUrl(audioPath);
+
+          finalAudioUrl = publicUrl;
+          console.log(`Scene ${i + 1} audio generated (model=${modelName}, mime=${mimeType})`);
+          break; // stop trying models
+        } catch (ttsError) {
+          lastTtsError = `model=${modelName} exception=${ttsError instanceof Error ? ttsError.message : String(ttsError)}`;
+          console.error(`Scene ${i + 1} TTS error:`, ttsError);
+          // try next model
         }
-      } catch (ttsError) {
-        console.error(`Scene ${i + 1} TTS error:`, ttsError);
-        audioUrls.push(null);
       }
+
+      if (!finalAudioUrl) {
+        console.error(`Scene ${i + 1} audio generation failed for all models.`, lastTtsError);
+      }
+
+      audioUrls.push(finalAudioUrl);
 
       // Update progress
       const progress = 10 + Math.floor(((i + 1) / parsedScript.scenes.length) * 30);
-      await supabase
-        .from("generations")
-        .update({ progress })
-        .eq("id", generation.id);
+      await supabase.from("generations").update({ progress }).eq("id", generation.id);
     }
-
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
     // Using Replicate Flux 1.1 Pro

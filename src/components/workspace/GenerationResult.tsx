@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Play, ChevronLeft, ChevronRight, Plus, Download, Volume2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Pause,
+  Play,
+  Plus,
+  Square,
+  Volume2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { Scene } from "@/hooks/useGenerationPipeline";
@@ -13,6 +22,9 @@ interface GenerationResultProps {
 
 export function GenerationResult({ title, scenes, onNewProject }: GenerationResultProps) {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+  const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const currentScene = scenes[currentSceneIndex];
 
   const goToNextScene = () => {
@@ -27,8 +39,85 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
     }
   };
 
+  const stopPlayAll = () => {
+    const el = playAllAudioRef.current;
+    setIsPlayingAll(false);
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
+      // Clearing src stops downloads and prevents replay glitches
+      el.removeAttribute("src");
+      el.load();
+    }
+  };
+
+  const playSceneAudio = async (index: number) => {
+    const el = playAllAudioRef.current;
+    const scene = scenes[index];
+    if (!el) return;
+
+    if (!scene?.audioUrl) {
+      // No audio for this scene: advance immediately.
+      handlePlayAllEnded(index);
+      return;
+    }
+
+    try {
+      el.src = scene.audioUrl;
+      await el.play();
+    } catch {
+      // Autoplay policies can block; user interaction should allow this, but fall back gracefully.
+      handlePlayAllEnded(index);
+    }
+  };
+
+  const startPlayAll = async (startIndex: number) => {
+    setIsPlayingAll(true);
+    setCurrentSceneIndex(startIndex);
+    await playSceneAudio(startIndex);
+  };
+
+  const pausePlayAll = () => {
+    const el = playAllAudioRef.current;
+    if (el) el.pause();
+    setIsPlayingAll(false);
+  };
+
+  const resumePlayAll = async () => {
+    const el = playAllAudioRef.current;
+    if (!el) return;
+    try {
+      await el.play();
+      setIsPlayingAll(true);
+    } catch {
+      // If resume fails for any reason, restart current scene.
+      await startPlayAll(currentSceneIndex);
+    }
+  };
+
+  const handlePlayAllEnded = async (endedIndex?: number) => {
+    const idx = typeof endedIndex === "number" ? endedIndex : currentSceneIndex;
+    const nextIndex = idx + 1;
+
+    if (nextIndex >= scenes.length) {
+      stopPlayAll();
+      return;
+    }
+
+    setCurrentSceneIndex(nextIndex);
+    await playSceneAudio(nextIndex);
+  };
+
+  useEffect(() => {
+    return () => stopPlayAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
   return (
     <div className="space-y-8">
+      <audio ref={playAllAudioRef} onEnded={() => handlePlayAllEnded()} className="hidden" />
+
       {/* Header */}
       <div className="text-center">
         <motion.div
@@ -41,6 +130,29 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
         </motion.div>
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <p className="text-muted-foreground mt-1">{scenes.length} scenes generated</p>
+
+        <div className="mt-4 flex items-center justify-center gap-2">
+          {!isPlayingAll ? (
+            <Button
+              onClick={resumePlayAll}
+              className="gap-2"
+              disabled={!scenes.some((s) => !!s.audioUrl)}
+            >
+              <Play className="h-4 w-4" />
+              Play Preview
+            </Button>
+          ) : (
+            <Button onClick={pausePlayAll} className="gap-2">
+              <Pause className="h-4 w-4" />
+              Pause
+            </Button>
+          )}
+
+          <Button variant="outline" onClick={stopPlayAll} className="gap-2" disabled={!isPlayingAll}>
+            <Square className="h-4 w-4" />
+            Stop
+          </Button>
+        </div>
       </div>
 
       {/* Scene Preview */}
