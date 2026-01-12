@@ -285,12 +285,20 @@ export function useVideoExport() {
   );
 
   const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
+    if (!url) return;
+
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    a.style.display = "none";
+
     document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+
+    // Some browsers are flaky unless the click happens on the next frame.
+    requestAnimationFrame(() => {
+      a.click();
+      document.body.removeChild(a);
+    });
   }, []);
 
   return {

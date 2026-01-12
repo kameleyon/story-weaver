@@ -391,7 +391,7 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
             className="flex-1 gap-2"
             onClick={() => {
               const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
-              downloadVideo(exportState.videoUrl!, `${safeName}.webm`);
+              downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
             }}
           >
             <Download className="h-4 w-4" />
