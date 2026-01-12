@@ -39,14 +39,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { ProjectSearch } from "@/components/layout/ProjectSearch";
+import { ThemedLogo } from "@/components/ThemedLogo";
 
 interface AppSidebarProps {
   onNewProject: () => void;
-  onOpenProject: (projectId: string) => void;
 }
 
-export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
+export function AppSidebar({ onNewProject }: AppSidebarProps) {
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme, setTheme } = useTheme();
@@ -77,10 +76,10 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-3">
-        {/* Search - only when expanded */}
+        {/* Logo - only when expanded */}
         {!isCollapsed && (
-          <div className="mb-4">
-            <ProjectSearch onSelectProject={onOpenProject} />
+          <div className="mb-4 px-1">
+            <ThemedLogo className="h-12 w-auto" />
           </div>
         )}
 
@@ -94,16 +93,10 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 onClick={toggleSidebar}
                 className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/50"
               >
-                {isCollapsed ? (
-                  <PanelLeft className="h-4 w-4" />
-                ) : (
-                  <PanelLeftClose className="h-4 w-4" />
-                )}
+                {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
-              {isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            </TooltipContent>
+            <TooltipContent side="right">{isCollapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
           </Tooltip>
         </div>
 
@@ -112,21 +105,18 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               {isCollapsed ? (
-                <Button
+                <button
                   onClick={onNewProject}
-                  variant="secondary"
-                  size="icon"
-                  className="h-8 w-8 rounded-full shadow-sm"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                  <Plus className="h-3 w-3" strokeWidth={2.5} />
+                </button>
               ) : (
                 <Button
                   onClick={onNewProject}
-                  variant="secondary"
-                  className="w-full justify-start gap-2.5 rounded-full shadow-sm"
+                  className="w-full justify-start gap-2.5 rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-3 w-3" />
                   <span className="font-medium">New Project</span>
                 </Button>
               )}
@@ -150,16 +140,11 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 ) : recentProjects.length === 0 ? (
-                  <div className="px-3 py-2 text-sm text-muted-foreground/70">
-                    No projects yet
-                  </div>
+                  <div className="px-3 py-2 text-sm text-muted-foreground/70">No projects yet</div>
                 ) : (
                   recentProjects.map((project) => (
                     <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton
-                        onClick={() => onOpenProject(project.id)}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50"
-                      >
+                      <SidebarMenuButton className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50">
                         <Video className="h-4 w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
                           <span className="truncate text-sm font-medium">{project.title}</span>
@@ -196,9 +181,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   </Avatar>
                   {!isCollapsed && (
                     <div className="flex flex-col items-start overflow-hidden">
-                      <span className="truncate text-sm font-medium">
-                        {user?.email?.split("@")[0] || "User"}
-                      </span>
+                      <span className="truncate text-sm font-medium">{user?.email?.split("@")[0] || "User"}</span>
                       <span className="text-[11px] text-muted-foreground/70">Free Plan</span>
                     </div>
                   )}
@@ -208,17 +191,11 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
             {isCollapsed && <TooltipContent side="right">Account</TooltipContent>}
           </Tooltip>
           <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-lg">
-            <DropdownMenuItem
-              className="cursor-pointer rounded-lg"
-              onClick={() => navigate("/settings")}
-            >
+            <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => navigate("/settings")}>
               <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="cursor-pointer rounded-lg"
-              onClick={() => navigate("/usage")}
-            >
+            <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => navigate("/usage")}>
               <History className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Usage & Billing</span>
             </DropdownMenuItem>
