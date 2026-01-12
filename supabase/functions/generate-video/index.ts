@@ -583,11 +583,30 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     console.log("Step 2: Generating audio...");
 
     const audioUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
-    const enabledModels = { flash: true, pro: true };
+    // Track disabled models but don't stop trying entirely
+    const modelStatus = { flashDisabled: false, proDisabled: false, lastSuccessModel: "" };
     const AUDIO_BATCH_SIZE = 2;
+    const INTER_BATCH_DELAY_MS = 1500; // Longer delay to avoid rate limits
 
     for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += AUDIO_BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + AUDIO_BATCH_SIZE, parsedScript.scenes.length);
+      
+      console.log(`Audio batch: scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length}`);
+      
+      // Determine which models to try for this batch
+      const enabledModels = { 
+        flash: !modelStatus.flashDisabled, 
+        pro: !modelStatus.proDisabled 
+      };
+      
+      // If both are disabled, re-enable flash and try with longer delays
+      if (!enabledModels.flash && !enabledModels.pro) {
+        console.log("Both models were rate-limited, waiting 3s and re-enabling flash...");
+        await sleep(3000);
+        enabledModels.flash = true;
+        modelStatus.flashDisabled = false;
+      }
+      
       const batchPromises: Promise<{ index: number; result: { url: string | null; disableFlash: boolean; disablePro: boolean } }>[] = [];
 
       for (let i = batchStart; i < batchEnd; i++) {
@@ -600,21 +619,32 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
 
       const batchResults = await Promise.all(batchPromises);
       
+      let batchSuccessCount = 0;
       for (const { index, result } of batchResults) {
         audioUrls[index] = result.url;
-        if (result.disableFlash) enabledModels.flash = false;
-        if (result.disablePro) enabledModels.pro = false;
+        if (result.url) batchSuccessCount++;
+        // Only disable if we got a hard quota error (not just a temporary 429)
+        if (result.disablePro) {
+          console.log("Pro model quota exhausted, disabling for remaining scenes");
+          modelStatus.proDisabled = true;
+        }
+        // Don't disable flash - just retry with delays
       }
+      
+      console.log(`Audio batch complete: ${batchSuccessCount}/${batchEnd - batchStart} succeeded`);
 
       // Update progress
       const progress = 10 + Math.floor((batchEnd / parsedScript.scenes.length) * 30);
       await supabase.from("generations").update({ progress }).eq("id", generation.id);
 
-      // Small delay between batches
+      // Delay between batches to avoid rate limits
       if (batchEnd < parsedScript.scenes.length) {
-        await sleep(100);
+        await sleep(INTER_BATCH_DELAY_MS);
       }
     }
+    
+    const successfulAudio = audioUrls.filter(u => u !== null).length;
+    console.log(`Audio generation complete: ${successfulAudio}/${parsedScript.scenes.length} scenes have audio`);
 
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
