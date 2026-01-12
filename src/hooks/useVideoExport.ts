@@ -48,36 +48,53 @@ export function useVideoExport() {
 
       try {
         // Step 1: Preload all images and audio
+        // For scenes with multiple images, load all of them
         console.log("[VideoExport] Loading assets for", scenes.length, "scenes");
-        const assets = await Promise.all(
+        
+        // Build a flat list of all images to load
+        interface SceneAsset {
+          images: HTMLImageElement[];
+          audioBuffer: AudioBuffer | null;
+          duration: number;
+        }
+        
+        const assets: SceneAsset[] = await Promise.all(
           scenes.map(async (scene, idx) => {
             if (abortRef.current) throw new Error("Export cancelled");
 
-            let loadedImg: HTMLImageElement | null = null;
-
-            if (scene.imageUrl) {
-              // Try with CORS first, fallback to no-cors (will still work for same-origin or public buckets)
+            // Get all image URLs for this scene
+            const imageUrls = scene.imageUrls && scene.imageUrls.length > 0 
+              ? scene.imageUrls 
+              : scene.imageUrl 
+                ? [scene.imageUrl] 
+                : [];
+            
+            // Load all images for this scene
+            const loadedImages: HTMLImageElement[] = [];
+            for (const url of imageUrls) {
               try {
-                loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-                  const img = new Image();
-                  img.crossOrigin = "anonymous";
-                  img.onload = () => resolve(img);
-                  img.onerror = () => reject(new Error("CORS load failed"));
-                  img.src = scene.imageUrl!;
-                });
-              } catch {
-                // Retry without crossOrigin (works if bucket is public with proper CORS)
-                console.warn(`Scene ${idx + 1}: Retrying image load without CORS attribute`);
+                // Try with CORS first, fallback to no-cors
+                let loadedImg: HTMLImageElement;
                 try {
+                  loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error("CORS load failed"));
+                    img.src = url;
+                  });
+                } catch {
+                  // Retry without crossOrigin
                   loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
                     const img = new Image();
                     img.onload = () => resolve(img);
                     img.onerror = () => reject(new Error("Image load failed"));
-                    img.src = scene.imageUrl!;
+                    img.src = url;
                   });
-                } catch (e) {
-                  console.error(`Scene ${idx + 1}: Failed to load image:`, e);
                 }
+                loadedImages.push(loadedImg);
+              } catch (e) {
+                console.warn(`Scene ${idx + 1}: Failed to load image:`, e);
               }
             }
 
@@ -99,14 +116,18 @@ export function useVideoExport() {
               progress: Math.round(((idx + 1) / scenes.length) * 20),
             }));
 
-            return { img: loadedImg, audioBuffer, duration: scene.duration };
+            return { 
+              images: loadedImages, 
+              audioBuffer, 
+              duration: scene.duration 
+            };
           })
         );
 
         if (abortRef.current) throw new Error("Export cancelled");
 
-        const loadedCount = assets.filter(a => a.img !== null).length;
-        console.log(`[VideoExport] Loaded ${loadedCount}/${assets.length} images`);
+        const totalImagesLoaded = assets.reduce((sum, a) => sum + a.images.length, 0);
+        console.log(`[VideoExport] Loaded ${totalImagesLoaded} total images for ${assets.length} scenes`);
 
         // Step 2: Setup MP4 muxer and video encoder
         setState({ status: "rendering", progress: 20 });
@@ -227,8 +248,8 @@ export function useVideoExport() {
         }
 
         // Step 3: Render each frame
+        // For scenes with multiple images, divide the scene duration equally among images
         let currentFrame = 0;
-        let sceneStartFrame = 0;
 
         for (let sceneIdx = 0; sceneIdx < assets.length; sceneIdx++) {
           if (abortRef.current) {
@@ -237,15 +258,30 @@ export function useVideoExport() {
             throw new Error("Export cancelled");
           }
 
-          const { img, duration } = assets[sceneIdx];
+          const { images, duration } = assets[sceneIdx];
           const sceneFrames = Math.ceil(duration * fps);
+          
+          // If we have multiple images, divide the scene into segments
+          const imageCount = Math.max(1, images.length);
+          const framesPerImage = Math.ceil(sceneFrames / imageCount);
 
           for (let frameInScene = 0; frameInScene < sceneFrames; frameInScene++) {
             if (abortRef.current) throw new Error("Export cancelled");
 
+            // Determine which image to show based on frame position
+            const imageIndex = Math.min(
+              Math.floor(frameInScene / framesPerImage),
+              imageCount - 1
+            );
+            const img = images[imageIndex] || null;
+
+            // Progress within current image segment for Ken Burns
+            const segmentStart = imageIndex * framesPerImage;
+            const segmentEnd = Math.min((imageIndex + 1) * framesPerImage, sceneFrames);
+            const progressInSegment = (frameInScene - segmentStart) / (segmentEnd - segmentStart);
+            
             // Ken Burns effect: slow zoom
-            const progress = frameInScene / sceneFrames;
-            const scale = 1 + progress * 0.05;
+            const scale = 1 + progressInSegment * 0.05;
 
             ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, width, height);
@@ -277,7 +313,8 @@ export function useVideoExport() {
               duration: Math.round((1 / fps) * 1_000_000),
             });
 
-            const isKeyframe = frameInScene === 0; // Keyframe at start of each scene
+            // Keyframe at start of each scene and at image transitions
+            const isKeyframe = frameInScene === 0 || frameInScene === segmentStart;
             videoEncoder.encode(frame, { keyFrame: isKeyframe });
             frame.close();
 
@@ -291,8 +328,6 @@ export function useVideoExport() {
               await yieldToUI();
             }
           }
-
-          sceneStartFrame += sceneFrames;
         }
 
         // Step 4: Finalize encoding

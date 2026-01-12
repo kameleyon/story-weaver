@@ -28,34 +28,71 @@ interface GenerationResultProps {
 
 export function GenerationResult({ title, scenes, format, onNewProject }: GenerationResultProps) {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
   const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
+  const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
 
   const currentScene = scenes[currentSceneIndex];
+  const currentImages = currentScene?.imageUrls && currentScene.imageUrls.length > 0 
+    ? currentScene.imageUrls 
+    : currentScene?.imageUrl 
+      ? [currentScene.imageUrl] 
+      : [];
+  const displayedImageUrl = currentImages[currentImageIndex] || currentScene?.imageUrl;
 
   const goToNextScene = () => {
     if (currentSceneIndex < scenes.length - 1) {
       setCurrentSceneIndex(currentSceneIndex + 1);
+      setCurrentImageIndex(0);
     }
   };
 
   const goToPrevScene = () => {
     if (currentSceneIndex > 0) {
       setCurrentSceneIndex(currentSceneIndex - 1);
+      setCurrentImageIndex(0);
     }
   };
+
+  // Image cycling timer for multi-image scenes during playback
+  useEffect(() => {
+    if (imageTimerRef.current) {
+      clearInterval(imageTimerRef.current);
+      imageTimerRef.current = null;
+    }
+
+    if (isPlayingAll && currentImages.length > 1) {
+      const duration = currentScene?.duration || 10;
+      const timePerImage = (duration * 1000) / currentImages.length;
+      
+      imageTimerRef.current = setInterval(() => {
+        setCurrentImageIndex(prev => (prev + 1) % currentImages.length);
+      }, timePerImage);
+    }
+
+    return () => {
+      if (imageTimerRef.current) {
+        clearInterval(imageTimerRef.current);
+      }
+    };
+  }, [isPlayingAll, currentSceneIndex, currentImages.length, currentScene?.duration]);
 
   const stopPlayAll = () => {
     const el = playAllAudioRef.current;
     setIsPlayingAll(false);
     setSceneProgress(0);
+    setCurrentImageIndex(0);
+    if (imageTimerRef.current) {
+      clearInterval(imageTimerRef.current);
+      imageTimerRef.current = null;
+    }
     if (el) {
       el.pause();
       el.currentTime = 0;
-      // Clearing src stops downloads and prevents replay glitches
       el.removeAttribute("src");
       el.load();
     }
@@ -68,9 +105,9 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
 
     setSceneProgress(0);
     setCurrentSceneIndex(index);
+    setCurrentImageIndex(0);
 
     if (!scene?.audioUrl) {
-      // No audio for this scene: advance immediately.
       handlePlayAllEnded(index);
       return;
     }
@@ -79,7 +116,6 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
       el.src = scene.audioUrl;
       await el.play();
     } catch {
-      // Autoplay policies can block; user interaction should allow this, but fall back gracefully.
       handlePlayAllEnded(index);
     }
   };
@@ -99,7 +135,6 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
     const el = playAllAudioRef.current;
     if (!el) return;
 
-    // If we have an active audio source, resume; otherwise start from the current scene.
     const hasActiveSrc = !!el.getAttribute("src");
     const hasProgress = Number.isFinite(el.currentTime) && el.currentTime > 0;
 
@@ -130,15 +165,24 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
 
   useEffect(() => {
     setSceneProgress(0);
+    setCurrentImageIndex(0);
   }, [currentSceneIndex]);
 
   useEffect(() => {
-    return () => stopPlayAll();
+    return () => {
+      stopPlayAll();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const aspectClass =
     format === "portrait" ? "aspect-[9/16]" : format === "square" ? "aspect-square" : "aspect-video";
+
+  // Calculate total images for display
+  const totalImages = scenes.reduce((sum, scene) => {
+    const imgCount = scene.imageUrls?.length || (scene.imageUrl ? 1 : 0);
+    return sum + imgCount;
+  }, 0);
 
   return (
     <div className="space-y-8">
@@ -171,7 +215,9 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
           <span className="text-sm font-medium text-primary">Generation Complete</span>
         </motion.div>
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-        <p className="text-muted-foreground mt-1">{scenes.length} scenes generated</p>
+        <p className="text-muted-foreground mt-1">
+          {scenes.length} scenes • {totalImages} images generated
+        </p>
 
         <div className="mt-4 flex items-center justify-center gap-2">
           {!isPlayingAll ? (
@@ -208,12 +254,19 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
             />
           </div>
 
+          {/* Image indicator for multi-image scenes */}
+          {currentImages.length > 1 && (
+            <div className="absolute top-3 right-3 z-10 px-2 py-1 rounded bg-black/60 text-xs text-white">
+              {currentImageIndex + 1} / {currentImages.length}
+            </div>
+          )}
+
           <AnimatePresence mode="wait" initial={false}>
-            {currentScene?.imageUrl ? (
+            {displayedImageUrl ? (
               <motion.img
-                key={currentScene.imageUrl}
-                src={currentScene.imageUrl}
-                alt={`Scene ${currentScene.number}`}
+                key={displayedImageUrl}
+                src={displayedImageUrl}
+                alt={`Scene ${currentScene?.number}`}
                 loading="lazy"
                 className="w-full h-full object-cover"
                 initial={{ opacity: 0, scale: 1 }}
@@ -224,7 +277,12 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
                 exit={{ opacity: 0 }}
                 transition={{
                   opacity: { duration: 0.35, ease: "easeOut" },
-                  scale: { duration: Math.max(1, currentScene?.duration ?? 6), ease: "linear" },
+                  scale: { 
+                    duration: currentImages.length > 1 
+                      ? (currentScene?.duration ?? 6) / currentImages.length 
+                      : Math.max(1, currentScene?.duration ?? 6), 
+                    ease: "linear" 
+                  },
                 }}
               />
             ) : (
@@ -259,7 +317,10 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
                 {scenes.map((_, idx) => (
                   <button
                     key={idx}
-                    onClick={() => setCurrentSceneIndex(idx)}
+                    onClick={() => {
+                      setCurrentSceneIndex(idx);
+                      setCurrentImageIndex(0);
+                    }}
                     className={`h-2 rounded-full transition-all ${
                       idx === currentSceneIndex
                         ? "w-6 bg-white"
@@ -285,7 +346,14 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
         {/* Scene Details */}
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-foreground">Scene {currentScene?.number}</h3>
+            <h3 className="font-medium text-foreground">
+              Scene {currentScene?.number}
+              {currentImages.length > 1 && (
+                <span className="text-muted-foreground ml-2 text-sm font-normal">
+                  ({currentImages.length} visuals)
+                </span>
+              )}
+            </h3>
             <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
           </div>
           
@@ -314,34 +382,41 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-foreground">All Scenes</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {scenes.map((scene, idx) => (
-            <button
-              key={scene.number}
-              onClick={() => setCurrentSceneIndex(idx)}
-              className={cn(
-                "relative rounded-lg overflow-hidden border transition-all",
-                aspectClass,
-                idx === currentSceneIndex
-                  ? "border-primary ring-2 ring-primary/20"
-                  : "border-border/50 hover:border-border"
-              )}
-            >
-              {scene.imageUrl ? (
-                <img
-                  src={scene.imageUrl}
-                  alt={`Scene ${scene.number}`}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-muted/50 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">Scene {scene.number}</span>
+          {scenes.map((scene, idx) => {
+            const sceneImageCount = scene.imageUrls?.length || (scene.imageUrl ? 1 : 0);
+            return (
+              <button
+                key={scene.number}
+                onClick={() => {
+                  setCurrentSceneIndex(idx);
+                  setCurrentImageIndex(0);
+                }}
+                className={cn(
+                  "relative rounded-lg overflow-hidden border transition-all",
+                  aspectClass,
+                  idx === currentSceneIndex
+                    ? "border-primary ring-2 ring-primary/20"
+                    : "border-border/50 hover:border-border"
+                )}
+              >
+                {scene.imageUrl ? (
+                  <img
+                    src={scene.imageUrl}
+                    alt={`Scene ${scene.number}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-muted/50 flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground">Scene {scene.number}</span>
+                  </div>
+                )}
+                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-xs text-white">
+                  {scene.duration}s
+                  {sceneImageCount > 1 && ` • ${sceneImageCount} imgs`}
                 </div>
-              )}
-              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-xs text-white">
-                {scene.duration}s
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 

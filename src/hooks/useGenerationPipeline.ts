@@ -8,9 +8,13 @@ export interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
+  subVisuals?: string[];       // Additional visual prompts for longer scenes
   duration: number;
   imageUrl?: string;
+  imageUrls?: string[];        // Multiple images per scene
   audioUrl?: string;
+  title?: string;
+  subtitle?: string;
 }
 
 export interface GenerationState {
@@ -46,13 +50,14 @@ export function useGenerationPipeline() {
   });
 
   const startGeneration = useCallback(async (params: GenerationParams) => {
-    // Determine expected scene count based on length
+    // Updated scene counts based on minimum duration requirements
+    // Short: min 60s, Brief: min 150s, Presentation: min 360s
     const sceneCounts: Record<string, number> = {
-      short: 4,
-      brief: 6,
-      presentation: 10,
+      short: 6,
+      brief: 12,
+      presentation: 24,
     };
-    const expectedSceneCount = sceneCounts[params.length] || 6;
+    const expectedSceneCount = sceneCounts[params.length] || 12;
 
     setState({
       step: "analysis",
@@ -165,9 +170,13 @@ export function useGenerationPipeline() {
                 number: s?.number ?? idx + 1,
                 voiceover: s?.voiceover ?? s?.narration ?? "",
                 visualPrompt: s?.visualPrompt ?? s?.visual_prompt ?? "",
+                subVisuals: Array.isArray(s?.subVisuals) ? s.subVisuals : undefined,
                 duration: typeof s?.duration === "number" ? s.duration : 8,
                 imageUrl: s?.imageUrl ?? s?.image_url,
+                imageUrls: Array.isArray(s?.imageUrls) ? s.imageUrls : undefined,
                 audioUrl: s?.audioUrl ?? s?.audio_url,
+                title: s?.title,
+                subtitle: s?.subtitle,
               }));
             };
 
