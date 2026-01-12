@@ -4,15 +4,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Loader2,
   Pause,
   Play,
   Plus,
   Square,
   Volume2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import type { Scene } from "@/hooks/useGenerationPipeline";
+import { useVideoExport } from "@/hooks/useVideoExport";
 
 interface GenerationResultProps {
   title: string;
@@ -25,6 +29,8 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
   const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
 
   const currentScene = scenes[currentSceneIndex];
 
@@ -333,12 +339,88 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
         </div>
       </div>
 
+      {/* Export Progress Modal */}
+      {exportState.status !== "idle" && exportState.status !== "complete" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">
+                {exportState.status === "error" ? "Export Failed" : "Exporting Video..."}
+              </h3>
+              {exportState.status === "error" && (
+                <Button variant="ghost" size="icon" onClick={resetExport}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {exportState.status === "error" ? (
+              <p className="text-sm text-destructive">{exportState.error}</p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>
+                      {exportState.status === "loading" && "Loading assets..."}
+                      {exportState.status === "rendering" && "Rendering video..."}
+                      {exportState.status === "encoding" && "Encoding..."}
+                    </span>
+                    <span>{exportState.progress}%</span>
+                  </div>
+                  <Progress value={exportState.progress} className="h-2" />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Please keep this tab open. The video is being rendered in your browser.
+                </p>
+              </>
+            )}
+
+            {exportState.status === "error" && (
+              <Button onClick={resetExport} variant="outline" className="w-full">
+                Close
+              </Button>
+            )}
+          </Card>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <Button className="flex-1 gap-2" disabled>
-          <Download className="h-4 w-4" />
-          Export Video (Coming Soon)
-        </Button>
+        {exportState.status === "complete" && exportState.videoUrl ? (
+          <Button
+            className="flex-1 gap-2"
+            onClick={() => {
+              const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+              downloadVideo(exportState.videoUrl!, `${safeName}.webm`);
+            }}
+          >
+            <Download className="h-4 w-4" />
+            Download Video
+          </Button>
+        ) : (
+          <Button
+            className="flex-1 gap-2"
+            onClick={() => exportVideo(scenes, "landscape")}
+            disabled={
+              exportState.status === "loading" ||
+              exportState.status === "rendering" ||
+              exportState.status === "encoding" ||
+              !scenes.some((s) => !!s.imageUrl)
+            }
+          >
+            {exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error" ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                Export Video
+              </>
+            )}
+          </Button>
+        )}
         <Button variant="outline" onClick={onNewProject} className="gap-2">
           <Plus className="h-4 w-4" />
           Create Another
