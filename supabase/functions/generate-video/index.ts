@@ -580,17 +580,17 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     const imageUrls: (string | null)[] = [];
 
     const aspectRatioHint: Record<string, string> = {
-      landscape: "16:9 landscape",
-      portrait: "9:16 portrait",
-      square: "1:1 square"
+      landscape: "16:9 landscape (1920x1080)",
+      portrait: "9:16 portrait (1080x1920)",
+      square: "1:1 square (1080x1080)"
     };
-    const aspectHint = aspectRatioHint[format] || "16:9 landscape";
+    const aspectHint = aspectRatioHint[format] || "16:9 landscape (1920x1080)";
 
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
       
       try {
-        const imagePrompt = `Generate a ${aspectHint} image: ${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic lighting.`;
+        const imagePrompt = `Create a ${aspectHint} aspect ratio image. IMPORTANT: The image MUST be in ${format === "portrait" ? "vertical/portrait" : format === "square" ? "square" : "horizontal/landscape"} orientation. Content: ${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic lighting.`;
         
         const result = await generateImageWithLovable(imagePrompt, LOVABLE_API_KEY);
 
