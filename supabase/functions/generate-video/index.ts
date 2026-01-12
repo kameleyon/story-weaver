@@ -289,46 +289,46 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       const scene = parsedScript.scenes[i];
       
       try {
-        // Use Gemini 2.5 Pro Preview TTS (confirmed working model)
+        // Use Gemini 2.0 Flash with responseModalities: ["AUDIO"] for stable TTS
         const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [{ 
-                parts: [{ text: scene.voiceover }] 
-              }],
+              contents: [
+                {
+                  parts: [{ text: `Please read this text clearly: ${scene.voiceover}` }],
+                },
+              ],
               generationConfig: {
                 responseModalities: ["AUDIO"],
                 speechConfig: {
                   voiceConfig: {
                     prebuiltVoiceConfig: {
-                      voiceName: "Kore"
-                    }
-                  }
-                }
-              }
+                      voiceName: "Aoede", // Stable voice, Kore can be restricted
+                    },
+                  },
+                },
+              },
             }),
           }
         );
 
         if (ttsResponse.ok) {
           const ttsData = await ttsResponse.json();
-          console.log(`Scene ${i + 1} TTS response structure:`, JSON.stringify(Object.keys(ttsData)));
+          console.log(`Scene ${i + 1} TTS response keys:`, JSON.stringify(Object.keys(ttsData)));
           
           const audioData = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData;
           
           if (audioData?.data) {
-            // Upload audio to Storage
             const mimeType = audioData.mimeType || "audio/wav";
-            const ext = mimeType.includes("wav")
+            console.log(`Scene ${i + 1} audio mimeType: ${mimeType}, data length: ${audioData.data.length}`);
+            const ext = mimeType.includes("wav") || mimeType.includes("l16") || mimeType.includes("pcm")
               ? "wav"
               : mimeType.includes("mpeg") || mimeType.includes("mp3")
                 ? "mp3"
-                : mimeType.includes("l16") || mimeType.includes("pcm")
-                  ? "wav"
-                  : "bin";
+                : "wav"; // Default to wav
 
             const audioBytes = Uint8Array.from(atob(audioData.data), (c) => c.charCodeAt(0));
             const audioBlob = new Blob([audioBytes], { type: mimeType });
