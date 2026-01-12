@@ -150,7 +150,7 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Replicate prunaai/z-image-turbo
+// Generate image using Replicate prunaai/p-image
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
@@ -159,7 +159,7 @@ async function generateImageWithReplicate(
   | { ok: true; imageBase64: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // z-image-turbo needs both width and height for proper aspect ratio
+  // p-image needs both width and height for proper aspect ratio
   // Portrait 9:16: 576x1024, Landscape 16:9: 1024x576, Square 1:1: 768x768
   const dimensions = format === "portrait" 
     ? { width: 576, height: 1024 }  // 9:16 ratio
@@ -167,7 +167,7 @@ async function generateImageWithReplicate(
     ? { width: 768, height: 768 }   // 1:1 ratio
     : { width: 1024, height: 576 }; // 16:9 ratio
   
-  console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
+  console.log(`[REPLICATE] Starting image generation with prunaai/p-image`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
   console.log(`[REPLICATE] Format: ${format}, Dimensions: ${dimensions.width}x${dimensions.height}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
@@ -175,7 +175,7 @@ async function generateImageWithReplicate(
   try {
     const startTime = Date.now();
     
-    // Create prediction with prunaai/z-image-turbo model
+    // Create prediction with prunaai/p-image model
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -184,7 +184,7 @@ async function generateImageWithReplicate(
         "Prefer": "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
-        version: "prunaai/z-image-turbo",
+        version: "prunaai/p-image",
         input: {
           prompt: prompt,
           width: dimensions.width,
