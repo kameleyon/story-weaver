@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +23,7 @@ interface GenerationResultProps {
 export function GenerationResult({ title, scenes, onNewProject }: GenerationResultProps) {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const [sceneProgress, setSceneProgress] = useState(0);
   const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const currentScene = scenes[currentSceneIndex];
@@ -42,6 +43,7 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
   const stopPlayAll = () => {
     const el = playAllAudioRef.current;
     setIsPlayingAll(false);
+    setSceneProgress(0);
     if (el) {
       el.pause();
       el.currentTime = 0;
@@ -55,6 +57,9 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
     const el = playAllAudioRef.current;
     const scene = scenes[index];
     if (!el) return;
+
+    setSceneProgress(0);
+    setCurrentSceneIndex(index);
 
     if (!scene?.audioUrl) {
       // No audio for this scene: advance immediately.
@@ -73,7 +78,6 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
 
   const startPlayAll = async (startIndex: number) => {
     setIsPlayingAll(true);
-    setCurrentSceneIndex(startIndex);
     await playSceneAudio(startIndex);
   };
 
@@ -86,13 +90,22 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
   const resumePlayAll = async () => {
     const el = playAllAudioRef.current;
     if (!el) return;
-    try {
-      await el.play();
-      setIsPlayingAll(true);
-    } catch {
-      // If resume fails for any reason, restart current scene.
-      await startPlayAll(currentSceneIndex);
+
+    // If we have an active audio source, resume; otherwise start from the current scene.
+    const hasActiveSrc = !!el.getAttribute("src");
+    const hasProgress = Number.isFinite(el.currentTime) && el.currentTime > 0;
+
+    if (hasActiveSrc && hasProgress) {
+      try {
+        await el.play();
+        setIsPlayingAll(true);
+        return;
+      } catch {
+        // fall through to restart
+      }
     }
+
+    await startPlayAll(currentSceneIndex);
   };
 
   const handlePlayAllEnded = async (endedIndex?: number) => {
@@ -104,9 +117,12 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
       return;
     }
 
-    setCurrentSceneIndex(nextIndex);
     await playSceneAudio(nextIndex);
   };
+
+  useEffect(() => {
+    setSceneProgress(0);
+  }, [currentSceneIndex]);
 
   useEffect(() => {
     return () => stopPlayAll();
@@ -116,7 +132,23 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
 
   return (
     <div className="space-y-8">
-      <audio ref={playAllAudioRef} onEnded={() => handlePlayAllEnded()} className="hidden" />
+      <audio
+        ref={playAllAudioRef}
+        onEnded={() => handlePlayAllEnded()}
+        onLoadedMetadata={() => {
+          const el = playAllAudioRef.current;
+          if (!el) return;
+          const dur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : currentScene?.duration ?? 0;
+          setSceneProgress(dur > 0 ? Math.min(1, el.currentTime / dur) : 0);
+        }}
+        onTimeUpdate={() => {
+          const el = playAllAudioRef.current;
+          if (!el) return;
+          const dur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : currentScene?.duration ?? 0;
+          setSceneProgress(dur > 0 ? Math.min(1, el.currentTime / dur) : 0);
+        }}
+        className="hidden"
+      />
 
       {/* Header */}
       <div className="text-center">
@@ -159,18 +191,46 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
       <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm">
         {/* Image Preview */}
         <div className="relative aspect-video bg-muted/50 flex items-center justify-center">
-          {currentScene?.imageUrl ? (
-            <img
-              src={currentScene.imageUrl}
-              alt={`Scene ${currentScene.number}`}
-              className="w-full h-full object-cover"
+          <div className="absolute inset-x-0 top-0 z-10 h-1 bg-background/30">
+            <div
+              className="h-full bg-primary transition-[width] duration-150"
+              style={{ width: `${Math.round(sceneProgress * 100)}%` }}
             />
-          ) : (
-            <div className="text-center text-muted-foreground">
-              <Play className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Scene {currentScene?.number} preview</p>
-            </div>
-          )}
+          </div>
+
+          <AnimatePresence mode="wait" initial={false}>
+            {currentScene?.imageUrl ? (
+              <motion.img
+                key={currentScene.imageUrl}
+                src={currentScene.imageUrl}
+                alt={`Scene ${currentScene.number}`}
+                loading="lazy"
+                className="w-full h-full object-cover"
+                initial={{ opacity: 0, scale: 1 }}
+                animate={{
+                  opacity: 1,
+                  scale: isPlayingAll ? 1.06 : 1,
+                }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  opacity: { duration: 0.35, ease: "easeOut" },
+                  scale: { duration: Math.max(1, currentScene?.duration ?? 6), ease: "linear" },
+                }}
+              />
+            ) : (
+              <motion.div
+                key={`placeholder-${currentScene?.number ?? "none"}`}
+                className="text-center text-muted-foreground"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Play className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Scene {currentScene?.number} preview</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Scene Navigation Overlay */}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
