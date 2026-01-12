@@ -1,9 +1,9 @@
-import { Sparkles, Pencil, Users, Cherry, Camera, Wand2 } from "lucide-react";
+import { Sparkles, Pencil, Users, Cherry, Camera, Wand2, Box, Hand, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "custom";
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "futuristic" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
@@ -18,6 +18,9 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType }[] = [
   { id: "stick", label: "Stick Figure", icon: Users },
   { id: "anime", label: "Anime", icon: Cherry },
   { id: "realistic", label: "Realistic", icon: Camera },
+  { id: "3d-pixar", label: "3D Pixar", icon: Box },
+  { id: "claymation", label: "Claymation", icon: Hand },
+  { id: "futuristic", label: "Futuristic", icon: Zap },
   { id: "custom", label: "Custom", icon: Wand2 },
 ];
 
