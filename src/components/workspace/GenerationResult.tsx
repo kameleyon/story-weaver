@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import type { Scene } from "@/hooks/useGenerationPipeline";
 import { useVideoExport } from "@/hooks/useVideoExport";
 
@@ -136,6 +137,8 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const aspectClass =
+    format === "portrait" ? "aspect-[9/16]" : format === "square" ? "aspect-square" : "aspect-video";
 
   return (
     <div className="space-y-8">
@@ -197,7 +200,7 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
       {/* Scene Preview */}
       <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm">
         {/* Image Preview */}
-        <div className="relative aspect-video bg-muted/50 flex items-center justify-center">
+        <div className={cn("relative bg-muted/50 flex items-center justify-center", aspectClass)}>
           <div className="absolute inset-x-0 top-0 z-10 h-1 bg-background/30">
             <div
               className="h-full bg-primary transition-[width] duration-150"
@@ -315,11 +318,13 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
             <button
               key={scene.number}
               onClick={() => setCurrentSceneIndex(idx)}
-              className={`relative aspect-video rounded-lg overflow-hidden border transition-all ${
+              className={cn(
+                "relative rounded-lg overflow-hidden border transition-all",
+                aspectClass,
                 idx === currentSceneIndex
                   ? "border-primary ring-2 ring-primary/20"
                   : "border-border/50 hover:border-border"
-              }`}
+              )}
             >
               {scene.imageUrl ? (
                 <img
