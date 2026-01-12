@@ -125,10 +125,117 @@ export function useGenerationPipeline() {
       });
     } catch (error) {
       console.error("Generation error:", error);
-      
+
       const errorMessage = error instanceof Error ? error.message : "Generation failed";
-      
-      setState(prev => ({
+
+      // If the request times out / connection is closed, the backend job can still finish.
+      // In that case, poll the database for the most recent generation and recover the result.
+      const isFailedFetch =
+        typeof errorMessage === "string" &&
+        (errorMessage.toLowerCase().includes("failed to fetch") ||
+          errorMessage.toLowerCase().includes("networkerror"));
+
+      if (isFailedFetch) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          const userId = session?.user?.id;
+
+          if (userId) {
+            toast({
+              title: "Still generating…",
+              description: "Connection dropped, but generation may still complete. Checking status…",
+            });
+
+            setState((prev) => ({
+              ...prev,
+              step: "rendering",
+              progress: Math.max(prev.progress, 60),
+              isGenerating: true,
+              error: undefined,
+            }));
+
+            const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
+            const normalizeScenes = (raw: unknown): Scene[] | undefined => {
+              if (!Array.isArray(raw)) return undefined;
+              return raw.map((s: any, idx: number) => ({
+                number: s?.number ?? idx + 1,
+                voiceover: s?.voiceover ?? s?.narration ?? "",
+                visualPrompt: s?.visualPrompt ?? s?.visual_prompt ?? "",
+                duration: typeof s?.duration === "number" ? s.duration : 8,
+                imageUrl: s?.imageUrl ?? s?.image_url,
+                audioUrl: s?.audioUrl ?? s?.audio_url,
+              }));
+            };
+
+            // Poll for up to ~3 minutes
+            for (let i = 0; i < 90; i++) {
+              const { data: project } = await supabase
+                .from("projects")
+                .select("id,title")
+                .eq("user_id", userId)
+                .gte("created_at", since)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (project?.id) {
+                const { data: generation } = await supabase
+                  .from("generations")
+                  .select("id,status,progress,scenes,error_message")
+                  .eq("project_id", project.id)
+                  .order("created_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (generation?.status === "complete") {
+                  const scenes = normalizeScenes(generation.scenes);
+
+                  setState({
+                    step: "complete",
+                    progress: 100,
+                    sceneCount: scenes?.length || 0,
+                    currentScene: scenes?.length || 0,
+                    isGenerating: false,
+                    projectId: project.id,
+                    generationId: generation.id,
+                    title: project.title ?? "Your video",
+                    scenes,
+                    format: params.format as "landscape" | "portrait" | "square",
+                  });
+
+                  toast({
+                    title: "Video Generated!",
+                    description: `"${project.title ?? "Your video"}" is ready with ${scenes?.length || 0} scenes.`,
+                  });
+
+                  return;
+                }
+
+                if (generation?.status === "error") {
+                  throw new Error(generation.error_message || "Generation failed");
+                }
+
+                const dbProgress = typeof generation?.progress === "number" ? generation.progress : 0;
+                setState((prev) => ({
+                  ...prev,
+                  step: "rendering",
+                  progress: Math.max(prev.progress, 60 + Math.round((dbProgress / 100) * 35)),
+                }));
+              }
+
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+          }
+        } catch (recoveryError) {
+          console.warn("Failed-fetch recovery failed:", recoveryError);
+        }
+      }
+
+      setState((prev) => ({
         ...prev,
         step: "error",
         isGenerating: false,
