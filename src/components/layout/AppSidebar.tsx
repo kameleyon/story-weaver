@@ -67,7 +67,7 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
         {/* Logo - only when expanded */}
         {!isCollapsed && (
           <div className="mb-4 px-1">
-            <ThemedLogo className="h-10 w-auto" />
+            <ThemedLogo className="h-12 w-auto" />
           </div>
         )}
 
@@ -95,17 +95,17 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
         </div>
 
         {/* New Project Button */}
-        <div className="mt-4">
+        <div className={`mt-4 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 onClick={onNewProject}
                 className={`rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
-                  isCollapsed ? "h-9 w-9 p-0" : "w-full justify-start gap-2.5"
+                  isCollapsed ? "h-8 w-8 p-0" : "w-full justify-start gap-2.5"
                 }`}
                 size={isCollapsed ? "icon" : "default"}
               >
-                <Plus className={isCollapsed ? "h-4 w-4" : "h-4 w-4"} />
+                <Plus className="h-4 w-4" />
                 {!isCollapsed && <span className="font-medium">New Project</span>}
               </Button>
             </TooltipTrigger>
