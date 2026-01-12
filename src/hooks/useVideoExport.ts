@@ -11,6 +11,9 @@ interface ExportState {
   videoUrl?: string;
 }
 
+// Yield to the event loop to allow UI updates
+const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 /**
  * Client-side MP4 export using Canvas + VideoEncoder + mp4-muxer.
  * Renders scene images with audio into a downloadable MP4 video.
@@ -18,7 +21,6 @@ interface ExportState {
 export function useVideoExport() {
   const [state, setState] = useState<ExportState>({ status: "idle", progress: 0 });
   const abortRef = useRef(false);
-
   const reset = useCallback(() => {
     abortRef.current = true;
     setState({ status: "idle", progress: 0 });
@@ -191,6 +193,11 @@ export function useVideoExport() {
 
           audioEncoder.encode(audioData);
           audioData.close();
+
+          // Yield every 50 audio chunks to keep UI responsive
+          if ((i / audioChunkSize) % 50 === 0) {
+            await yieldToUI();
+          }
         }
 
         // Step 3: Render each frame
@@ -250,9 +257,13 @@ export function useVideoExport() {
 
             currentFrame++;
 
-            // Update progress
+            // Update progress and yield every 5 frames to keep UI responsive
             const progressPct = 20 + Math.round((currentFrame / totalFrames) * 70);
             setState((s) => ({ ...s, progress: progressPct }));
+
+            if (currentFrame % 5 === 0) {
+              await yieldToUI();
+            }
           }
 
           sceneStartFrame += sceneFrames;
