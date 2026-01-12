@@ -289,7 +289,26 @@ async function generateImageWithLovable(
   }
 }
 
-// Generate TTS for a single scene
+
+// Helpers to classify TTS failures
+function truncateForLogs(input: string, maxLen = 220) {
+  if (!input) return "";
+  return input.length > maxLen ? input.slice(0, maxLen) + "…" : input;
+}
+
+function isHardQuotaExhausted(status: number, errorText: string) {
+  if (status !== 429 && status !== 402) return false;
+  const t = (errorText || "").toLowerCase();
+  return (
+    t.includes("limit: 0") ||
+    t.includes("resource_exhausted") ||
+    t.includes("quota") ||
+    t.includes("exhaust") ||
+    t.includes("insufficient")
+  );
+}
+
+ // Generate TTS for a single scene
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
@@ -348,19 +367,27 @@ async function generateSceneAudio(
           const errorText = await ttsResponse.text();
           lastTtsError = `model=${modelName} status=${ttsResponse.status} attempt=${attempt}`;
 
-          if (ttsResponse.status === 400 && errorText.includes("response modalities")) {
+          console.warn(
+            `Scene ${sceneIndex + 1} TTS HTTP error (${modelName}) status=${ttsResponse.status} attempt=${attempt}: ${truncateForLogs(errorText)}`
+          );
+
+          // Permanent / configuration issues
+          if (ttsResponse.status === 400 && errorText.toLowerCase().includes("response modalities")) {
             break;
           }
-
           if (ttsResponse.status === 404) {
             break;
           }
 
-          if (ttsResponse.status === 429 && errorText.includes("limit: 0")) {
+          // Hard quota exhaustion (no point retrying this model)
+          const hardQuota = isHardQuotaExhausted(ttsResponse.status, errorText);
+          if (hardQuota) {
+            if (modelName.includes("flash-preview-tts")) disableFlash = true;
             if (modelName.includes("-pro-")) disablePro = true;
             break;
           }
 
+          // Retriable (rate limit / transient)
           const retriable = ttsResponse.status === 429 || ttsResponse.status >= 500;
           if (retriable && attempt < TTS_ATTEMPTS_PER_MODEL) {
             await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
@@ -433,6 +460,7 @@ async function generateSceneAudio(
         });
 
         if (uploadError) {
+          console.error(`Scene ${sceneIndex + 1} audio upload failed:`, uploadError);
           if (attempt < TTS_ATTEMPTS_PER_MODEL) {
             await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
             continue;
@@ -714,17 +742,20 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       const batchResults = await Promise.all(batchPromises);
       
       let batchSuccessCount = 0;
-      for (const { index, result } of batchResults) {
-        audioUrls[index] = result.url;
-        if (result.url) batchSuccessCount++;
-        // Only disable if we got a hard quota error (not just a temporary 429)
-        if (result.disablePro) {
-          console.log("Pro model quota exhausted, disabling for remaining scenes");
-          modelStatus.proDisabled = true;
-        }
-        // Don't disable flash - just retry with delays
-      }
-      
+       for (const { index, result } of batchResults) {
+         audioUrls[index] = result.url;
+         if (result.url) batchSuccessCount++;
+
+         if (result.disablePro) {
+           console.log("Pro TTS quota exhausted, disabling for remaining scenes");
+           modelStatus.proDisabled = true;
+         }
+         if (result.disableFlash) {
+           console.log("Flash TTS quota exhausted, disabling for remaining scenes");
+           modelStatus.flashDisabled = true;
+         }
+       }
+
       console.log(`Audio batch complete: ${batchSuccessCount}/${batchEnd - batchStart} succeeded`);
 
       // Update progress
@@ -737,8 +768,34 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       }
     }
     
-    const successfulAudio = audioUrls.filter(u => u !== null).length;
-    console.log(`Audio generation complete: ${successfulAudio}/${parsedScript.scenes.length} scenes have audio`);
+     const successfulAudio = audioUrls.filter((u) => u !== null).length;
+     console.log(
+       `Audio generation complete: ${successfulAudio}/${parsedScript.scenes.length} scenes have audio`
+     );
+
+     // If we produced zero audio, fail fast with a clear, actionable message.
+     // (Otherwise the UI shows a "success" result but all scenes are silent.)
+     if (successfulAudio === 0) {
+       const msg =
+         "Audio generation failed: your Gemini text-to-speech quota appears exhausted (or your key doesn't have audio access). Update your Gemini API key/credits in Settings and try again.";
+
+       await supabase
+         .from("generations")
+         .update({
+           status: "error",
+           error_message: msg,
+           progress: 100,
+           completed_at: new Date().toISOString(),
+         })
+         .eq("id", generation.id);
+
+       await supabase.from("projects").update({ status: "error" }).eq("id", project.id);
+
+       return new Response(JSON.stringify({ error: msg }), {
+         status: 400,
+         headers: { ...corsHeaders, "Content-Type": "application/json" },
+       });
+     }
 
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
