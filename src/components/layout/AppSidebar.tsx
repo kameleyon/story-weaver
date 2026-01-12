@@ -147,7 +147,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     <SidebarMenuItem key={project.id}>
                       <SidebarMenuButton
                         onClick={() => onOpenProject(project.id)}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50"
+                        className="group w-full cursor-pointer rounded-lg px-3 py-2.5 opacity-80 transition-all hover:bg-sidebar-accent/50 hover:opacity-95"
                       >
                         <Video className="h-4 w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
