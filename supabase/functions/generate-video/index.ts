@@ -19,8 +19,10 @@ interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
+  subVisuals?: string[];       // Additional visual prompts for longer scenes
   duration: number;
   imageUrl?: string;
+  imageUrls?: string[];        // Multiple images per scene
   audioUrl?: string;
   title?: string;
   subtitle?: string;
@@ -556,12 +558,20 @@ serve(async (req) => {
 
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
-    const sceneCounts: Record<string, number> = {
-      short: 4,
-      brief: 6,
-      presentation: 10,
+    // Scene count calculation based on minimum video duration requirements:
+    // Short: min 60s (1 min), max 120s (2 min), target ~90s
+    // Brief: min 150s (2.5 min), max 300s (5 min), target ~225s
+    // Presentation: min 360s (6 min), max 600s (10 min), target ~480s
+    // Using ~15-20s average per scene for dynamic pacing
+    const lengthConfig: Record<string, { count: number; minDuration: number; maxDuration: number; targetDuration: number; avgSceneDuration: number }> = {
+      short: { count: 6, minDuration: 60, maxDuration: 120, targetDuration: 90, avgSceneDuration: 15 },
+      brief: { count: 12, minDuration: 150, maxDuration: 300, targetDuration: 225, avgSceneDuration: 18 },
+      presentation: { count: 24, minDuration: 360, maxDuration: 600, targetDuration: 480, avgSceneDuration: 20 },
     };
-    const sceneCount = sceneCounts[length] || 6;
+    const config = lengthConfig[length] || lengthConfig.brief;
+    const sceneCount = config.count;
+    const avgSceneDuration = config.avgSceneDuration;
+    const targetWords = Math.floor(avgSceneDuration * 2.5); // ~150 words/min = 2.5 words/sec
 
     // ===============================================
     // STEP 1: THE DIRECTOR - Script Generation
@@ -570,45 +580,72 @@ serve(async (req) => {
     const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
     const dimensions = getImageDimensions(format);
     
-    const scriptPrompt = `You are a video script writer. Create a compelling video script from the following content.
-    
+    const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, fast-paced content that keeps viewers hooked.
+
 Content: ${content}
 
-Requirements:
-- Video format: ${format} (${format === "landscape" ? "16:9 horizontal" : format === "portrait" ? "9:16 vertical" : "1:1 square"})
-- Exact dimensions: ${dimensions.width}x${dimensions.height} pixels
-- Target length: ${length === "short" ? "under 2 minutes" : length === "brief" ? "2-5 minutes" : "5-10 minutes"}
-- Visual style: ${styleDescription}
+=== TIMING REQUIREMENTS (CRITICAL) ===
+- Target video duration: ${config.targetDuration} seconds (${Math.floor(config.targetDuration / 60)} min ${config.targetDuration % 60}s)
 - Create exactly ${sceneCount} scenes
+- MAXIMUM 25 seconds per scene (HARD LIMIT - no exceptions)
+- Average scene duration: ${avgSceneDuration} seconds
+- Each scene's voiceover: approximately ${targetWords} words (at 150 words/minute pace)
+
+=== VIDEO SPECIFICATIONS ===
+- Format: ${format} (${format === "landscape" ? "16:9 horizontal" : format === "portrait" ? "9:16 vertical" : "1:1 square"})
+- Exact dimensions: ${dimensions.width}x${dimensions.height} pixels
+- Visual style: ${styleDescription}
+
+=== VOICEOVER STYLE (Critical for engagement) ===
+- Use an ENERGETIC, conversational tone like a TED speaker or top YouTuber
+- Start EACH scene with a HOOK: surprising fact, provocative question, or bold statement
+- Examples: "But here's what nobody tells you..." "What if I told you..." "The shocking truth is..."
+- Mix short punchy sentences (5-8 words) with longer explanations
+- Include rhetorical questions to create engagement pauses
+- Vary emotional energy - build up, then resolve
+- Use smooth transitions between scenes
+
 ${includeTextOverlay ? `
-IMPORTANT: For each scene, also provide:
-- A short scene title (2-5 words, like a headline)
-- A brief subtitle (one short sentence summarizing the key point)
-These will be displayed as text overlays on the image, similar to educational explainer videos.
+=== TEXT OVERLAY REQUIREMENTS ===
+- Provide a punchy scene title (2-5 words, like a headline)
+- Provide a subtitle (one impactful sentence - the key takeaway)
+These will be integrated directly into the illustration style.
 ` : ""}
 
-For each scene, provide:
-1. Scene number
-2. Voiceover text (what will be spoken - keep it natural and engaging)
-3. Visual description (detailed prompt for image generation in the ${styleDescription} style)
-4. Duration in seconds (based on voiceover length, roughly 150 words per minute)
-${includeTextOverlay ? `5. Title (short headline text for the scene)
-6. Subtitle (one sentence key point)` : ""}
+=== VISUAL PROMPTS (Critical for dynamic content) ===
+For each scene, provide visual prompts based on duration:
+- Scenes UNDER 12 seconds: provide 1 visual prompt (visualPrompt only)
+- Scenes 12-18 seconds: provide 2 visual prompts (visualPrompt + 1 subVisual showing different angle/moment)
+- Scenes 19-25 seconds: provide 3 visual prompts (visualPrompt + 2 subVisuals showing progression: setup → action → result)
 
-IMPORTANT: Return ONLY valid JSON with this exact structure:
+Each visual MUST show ACTION or MOVEMENT:
+- Dynamic compositions: diagonal lines, off-center subjects, dramatic angles
+- Show cause/effect, before/after, or progression
+- Avoid static, centered, boring compositions
+- Include visual tension, contrast, or storytelling elements
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON with this exact structure:
 {
-  "title": "Video Title",
+  "title": "Engaging Video Title",
   "scenes": [
     {
       "number": 1,
-      "voiceover": "Text to be spoken...",
-      "visualPrompt": "Detailed image generation prompt...",
-      "duration": 15${includeTextOverlay ? `,
-      "title": "Scene Headline",
-      "subtitle": "Key point or call to action"` : ""}
+      "voiceover": "Hook opening that grabs attention... main content with varied pacing...",
+      "visualPrompt": "Primary dynamic visual with action and movement...",
+      "subVisuals": ["Second visual showing different angle or moment...", "Third visual showing result or progression..."],
+      "duration": 18${includeTextOverlay ? `,
+      "title": "Punchy Headline",
+      "subtitle": "Key takeaway in one impactful line"` : ""}
     }
   ]
-}`;
+}
+
+REMEMBER:
+- NO scene over 25 seconds
+- Exactly ${sceneCount} scenes
+- Hook-driven, energetic voiceovers
+- Multiple visual prompts for scenes over 12 seconds`;
 
     console.log("Step 1: Generating script...");
     
@@ -801,16 +838,10 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     // STEP 3: THE ILLUSTRATOR - Image Generation
     // Process images in parallel batches of 3 for speed
     // ===============================================
-    console.log("Step 3: Generating images...");
-    const imageUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
+    console.log("Step 3: Generating images (with sub-visuals for longer scenes)...");
     
-    // Process images SEQUENTIALLY to respect Replicate rate limits (6/min when low credits)
-    const IMAGE_DELAY_MS = useReplicate ? 12000 : 500; // 12s between Replicate requests = 5/min
-    // When using Replicate, process one at a time; otherwise batch of 3
-    const IMAGE_BATCH_SIZE = useReplicate ? 1 : 3;
-
-    // Build all image prompts with correct aspect ratio and optional text overlay
-    const imagePrompts = parsedScript.scenes.map((scene, i) => {
+    // Build image prompt helper function
+    const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number = 0): string => {
       const orientationDesc = format === "portrait" 
         ? "VERTICAL/PORTRAIT orientation (taller than wide, 9:16 aspect ratio)"
         : format === "square" 
@@ -818,7 +849,8 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
         : "HORIZONTAL/LANDSCAPE orientation (wider than tall, 16:9 aspect ratio)";
       
       let textOverlayInstructions = "";
-      if (includeTextOverlay && scene.title) {
+      // Only include text overlay on the primary image (subIndex 0)
+      if (includeTextOverlay && scene.title && subIndex === 0) {
         textOverlayInstructions = `
 
 IMPORTANT - Include these text elements directly in the image:
@@ -828,6 +860,8 @@ IMPORTANT - Include these text elements directly in the image:
 The text should be integrated into the illustration style, with decorative elements around it. Use hand-drawn looking text that matches the ${styleDescription} style. The text should be clearly readable and positioned to not obstruct key visual elements.`;
       }
 
+      const subVisualNote = subIndex > 0 ? `\n\nNote: This is visual ${subIndex + 1} of ${(scene.subVisuals?.length || 0) + 1} for this scene - show a different angle, moment, or progression from the previous visual.` : "";
+
       return `Generate an image in EXACTLY ${orientationDesc}.
 
 CRITICAL REQUIREMENTS:
@@ -835,51 +869,101 @@ CRITICAL REQUIREMENTS:
 - Dimensions: ${dimensions.width}x${dimensions.height} pixels
 - Aspect ratio: ${format === "portrait" ? "9:16 (vertical)" : format === "square" ? "1:1 (square)" : "16:9 (horizontal)"}
 
-Visual content: ${scene.visualPrompt}
+Visual content: ${visualPrompt}
 
-Style: ${styleDescription} style illustration. High quality, professional, with consistent aesthetic throughout.${textOverlayInstructions}
+Style: ${styleDescription} style illustration. High quality, professional, with consistent aesthetic throughout.
+Create DYNAMIC composition with action, movement, or visual tension. Avoid static, centered subjects.${textOverlayInstructions}${subVisualNote}
 
 Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image unless specifically requested.`;
-    });
+    };
 
-    for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += IMAGE_BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + IMAGE_BATCH_SIZE, parsedScript.scenes.length);
-      const batchPromises: Promise<{ index: number; url: string | null }>[] = [];
+    // Collect all image prompts (including sub-visuals for longer scenes)
+    interface ImageTask {
+      sceneIndex: number;
+      subIndex: number; // 0 = primary, 1+ = sub-visuals
+      prompt: string;
+    }
+    
+    const imageTasks: ImageTask[] = [];
+    
+    for (let i = 0; i < parsedScript.scenes.length; i++) {
+      const scene = parsedScript.scenes[i];
+      
+      // Primary visual (always)
+      imageTasks.push({
+        sceneIndex: i,
+        subIndex: 0,
+        prompt: buildImagePrompt(scene.visualPrompt, scene, 0)
+      });
+      
+      // Sub-visuals based on scene duration
+      if (scene.subVisuals && scene.subVisuals.length > 0 && scene.duration >= 12) {
+        // Scenes 12-18s: 1 sub-visual, 19-25s: 2 sub-visuals
+        const maxSubVisuals = scene.duration >= 19 ? 2 : 1;
+        const subVisualsToUse = Math.min(scene.subVisuals.length, maxSubVisuals);
+        
+        for (let j = 0; j < subVisualsToUse; j++) {
+          imageTasks.push({
+            sceneIndex: i,
+            subIndex: j + 1,
+            prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1)
+          });
+        }
+      }
+    }
+    
+    console.log(`Total images to generate: ${imageTasks.length} for ${parsedScript.scenes.length} scenes`);
+    
+    // Storage for results: sceneIndex -> array of image URLs
+    const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
+    
+    // Process images with rate limiting
+    const IMAGE_DELAY_MS = useReplicate ? 12000 : 500; // 12s between Replicate requests = 5/min
+    const IMAGE_BATCH_SIZE = useReplicate ? 1 : 3;
 
-      for (let i = batchStart; i < batchEnd; i++) {
-        const prompt = imagePrompts[i];
+    for (let batchStart = 0; batchStart < imageTasks.length; batchStart += IMAGE_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + IMAGE_BATCH_SIZE, imageTasks.length);
+      const batchPromises: Promise<{ task: ImageTask; url: string | null }>[] = [];
+
+      for (let t = batchStart; t < batchEnd; t++) {
+        const task = imageTasks[t];
         
         batchPromises.push(
           (async () => {
             try {
               let result: { ok: true; imageBase64: string } | { ok: false; error: string };
               
+              const logPrefix = task.subIndex > 0 
+                ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}` 
+                : `Scene ${task.sceneIndex + 1}`;
+              
               // Try Replicate first if available (exact aspect ratios)
               if (useReplicate) {
-                console.log(`Scene ${i + 1}: Trying Replicate...`);
-                result = await generateImageWithReplicate(prompt, REPLICATE_API_TOKEN!, format);
+                console.log(`${logPrefix}: Trying Replicate...`);
+                result = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
                 
                 // If Replicate fails, fallback to Lovable AI
                 if (!result.ok && LOVABLE_API_KEY) {
-                  console.log(`Scene ${i + 1}: Replicate failed (${result.error}), falling back to Lovable AI...`);
-                  result = await generateImageWithLovable(prompt, LOVABLE_API_KEY, format);
+                  console.log(`${logPrefix}: Replicate failed (${result.error}), falling back to Lovable AI...`);
+                  result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
                 }
               } else if (LOVABLE_API_KEY) {
                 // No Replicate key, use Lovable AI directly
-                console.log(`Scene ${i + 1}: Using Lovable AI...`);
-                result = await generateImageWithLovable(prompt, LOVABLE_API_KEY, format);
+                console.log(`${logPrefix}: Using Lovable AI...`);
+                result = await generateImageWithLovable(task.prompt, LOVABLE_API_KEY, format);
               } else {
-                return { index: i, url: null };
+                return { task, url: null };
               }
 
               if (!result.ok) {
-                console.error(`Scene ${i + 1} image failed:`, result.error);
-                return { index: i, url: null };
+                console.error(`${logPrefix} image failed:`, result.error);
+                return { task, url: null };
               }
 
               const imageBytes = new Uint8Array(base64Decode(result.imageBase64));
               const imageBlob = new Blob([imageBytes], { type: "image/png" });
-              const imagePath = `${user.id}/${project.id}/scene-${i + 1}.png`;
+              const imageSuffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
+              const imagePath = `${user.id}/${project.id}/scene-${task.sceneIndex + 1}${imageSuffix}.png`;
 
               const { error: uploadError } = await supabase.storage
                 .from("audio")
@@ -889,19 +973,19 @@ Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image u
                 });
 
               if (uploadError) {
-                console.error(`Scene ${i + 1} image upload failed:`, uploadError);
-                return { index: i, url: null };
+                console.error(`${logPrefix} image upload failed:`, uploadError);
+                return { task, url: null };
               }
 
               const { data: { publicUrl } } = supabase.storage
                 .from("audio")
                 .getPublicUrl(imagePath);
 
-              console.log(`Scene ${i + 1} image generated successfully`);
-              return { index: i, url: publicUrl };
+              console.log(`${logPrefix} image generated successfully`);
+              return { task, url: publicUrl };
             } catch (imgError) {
-              console.error(`Scene ${i + 1} image error:`, imgError);
-              return { index: i, url: null };
+              console.error(`Scene ${task.sceneIndex + 1} image error:`, imgError);
+              return { task, url: null };
             }
           })()
         );
@@ -909,34 +993,42 @@ Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image u
 
       const batchResults = await Promise.all(batchPromises);
       
-      for (const { index, url } of batchResults) {
-        imageUrls[index] = url;
+      for (const { task, url } of batchResults) {
+        // Ensure the array is long enough
+        while (sceneImageUrls[task.sceneIndex].length <= task.subIndex) {
+          sceneImageUrls[task.sceneIndex].push(null);
+        }
+        sceneImageUrls[task.sceneIndex][task.subIndex] = url;
       }
 
       // Update progress
-      const progress = 40 + Math.floor((batchEnd / parsedScript.scenes.length) * 50);
+      const progress = 40 + Math.floor((batchEnd / imageTasks.length) * 50);
       await supabase.from("generations").update({ progress }).eq("id", generation.id);
       
       // Rate limit delay between batches (critical for Replicate)
-      if (batchEnd < parsedScript.scenes.length) {
-        console.log(`Waiting ${IMAGE_DELAY_MS}ms before next image...`);
+      if (batchEnd < imageTasks.length) {
+        console.log(`Waiting ${IMAGE_DELAY_MS}ms before next image (${batchEnd}/${imageTasks.length} complete)...`);
         await sleep(IMAGE_DELAY_MS);
       }
     }
     
-    const successfulImages = imageUrls.filter(u => u !== null).length;
-    console.log(`Image generation complete: ${successfulImages}/${parsedScript.scenes.length} scenes have images`);
+    const totalImagesGenerated = sceneImageUrls.flat().filter(u => u !== null).length;
+    console.log(`Image generation complete: ${totalImagesGenerated}/${imageTasks.length} images for ${parsedScript.scenes.length} scenes`);
 
     // ===============================================
     // STEP 4: FINALIZE - Compile results
     // ===============================================
     console.log("Step 4: Finalizing generation...");
     
-    const finalScenes = parsedScript.scenes.map((scene, idx) => ({
-      ...scene,
-      imageUrl: imageUrls[idx] || null,
-      audioUrl: audioUrls[idx] || null,
-    }));
+    const finalScenes = parsedScript.scenes.map((scene, idx) => {
+      const allImages = sceneImageUrls[idx].filter(url => url !== null) as string[];
+      return {
+        ...scene,
+        imageUrl: allImages[0] || null,          // Primary image (backward compatible)
+        imageUrls: allImages.length > 0 ? allImages : undefined,  // All images for the scene
+        audioUrl: audioUrls[idx] || null,
+      };
+    });
 
     // Update generation as complete
     await supabase
