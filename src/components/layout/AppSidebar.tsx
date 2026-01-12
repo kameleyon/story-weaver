@@ -107,16 +107,16 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
               {isCollapsed ? (
                 <button
                   onClick={onNewProject}
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/25 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
-                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                  <Plus className="h-3 w-3" strokeWidth={2.5} />
                 </button>
               ) : (
                 <Button
                   onClick={onNewProject}
-                  className="w-full justify-start gap-2.5 rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="w-full justify-start gap-2.5 rounded-full bg-primary/25 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-3 w-3" />
                   <span className="font-medium">New Project</span>
                 </Button>
               )}
