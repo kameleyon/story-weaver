@@ -107,7 +107,7 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
               {isCollapsed ? (
                 <button
                   onClick={onNewProject}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
                   <Plus className="h-3 w-3" strokeWidth={2.5} />
                 </button>
