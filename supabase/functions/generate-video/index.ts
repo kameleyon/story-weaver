@@ -225,14 +225,23 @@ async function generateImageWithReplicate(
       return { ok: false, error: "No image URL in prediction output" };
     }
     
-    // Download the image and convert to base64
+    // Download the image and convert to base64 (chunked to avoid stack overflow)
     const imageResponse = await fetch(outputUrl);
     if (!imageResponse.ok) {
       return { ok: false, error: "Failed to download generated image" };
     }
     
     const imageBuffer = await imageResponse.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+    const bytes = new Uint8Array(imageBuffer);
+    
+    // Convert to base64 in chunks to avoid stack overflow on large images
+    let base64 = "";
+    const chunkSize = 32768; // 32KB chunks
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+      base64 += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    base64 = btoa(base64);
     
     return { ok: true, imageBase64: base64 };
   } catch (error) {
@@ -735,10 +744,13 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     // STEP 3: THE ILLUSTRATOR - Image Generation
     // Process images in parallel batches of 3 for speed
     // ===============================================
-    console.log("Step 3: Generating images (parallel)...");
+    console.log("Step 3: Generating images...");
     const imageUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
     
-    const IMAGE_BATCH_SIZE = 3; // Generate 3 images at a time for speed
+    // Process images SEQUENTIALLY to respect Replicate rate limits (6/min when low credits)
+    const IMAGE_DELAY_MS = useReplicate ? 12000 : 500; // 12s between Replicate requests = 5/min
+    // When using Replicate, process one at a time; otherwise batch of 3
+    const IMAGE_BATCH_SIZE = useReplicate ? 1 : 3;
 
     // Build all image prompts with correct aspect ratio and optional text overlay
     const imagePrompts = parsedScript.scenes.map((scene, i) => {
@@ -832,7 +844,16 @@ Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image u
       // Update progress
       const progress = 40 + Math.floor((batchEnd / parsedScript.scenes.length) * 50);
       await supabase.from("generations").update({ progress }).eq("id", generation.id);
+      
+      // Rate limit delay between batches (critical for Replicate)
+      if (batchEnd < parsedScript.scenes.length) {
+        console.log(`Waiting ${IMAGE_DELAY_MS}ms before next image...`);
+        await sleep(IMAGE_DELAY_MS);
+      }
     }
+    
+    const successfulImages = imageUrls.filter(u => u !== null).length;
+    console.log(`Image generation complete: ${successfulImages}/${parsedScript.scenes.length} scenes have images`);
 
     // ===============================================
     // STEP 4: FINALIZE - Compile results
