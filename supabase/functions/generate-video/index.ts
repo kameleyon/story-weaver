@@ -21,6 +21,7 @@ interface Scene {
   visualPrompt: string;
   subVisuals?: string[];       // Additional visual prompts for longer scenes
   duration: number;
+  narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula"; // Track story position
   imageUrl?: string;
   imageUrls?: string[];        // Multiple images per scene
   audioUrl?: string;
@@ -580,7 +581,7 @@ serve(async (req) => {
     const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
     const dimensions = getImageDimensions(format);
     
-    const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, fast-paced content that keeps viewers hooked.
+    const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content that follows a compelling story arc.
 
 Content: ${content}
 
@@ -596,33 +597,79 @@ Content: ${content}
 - Exact dimensions: ${dimensions.width}x${dimensions.height} pixels
 - Visual style: ${styleDescription}
 
+=== NARRATIVE ARC STRUCTURE (CRITICAL - Map scenes to these story beats) ===
+Distribute your ${sceneCount} scenes across this narrative framework:
+
+1. THE HOOK (Scenes 1-2, narrativeBeat: "hook"):
+   - Visual represents the "Secret Advantage" or core promise
+   - Create intrigue with a mysterious element that draws viewers in
+   - Example: A glowing key, hidden door, or unexplored opportunity
+
+2. THE CONFLICT (Early-middle scenes, narrativeBeat: "conflict"):
+   - Split-screen or comparative compositions showing TENSION
+   - Contrast: Success vs. Failure, Old Way vs. New Way, Patience vs. Chaos
+   - Visual must be DIVIDED to show opposing forces
+
+3. THE CHOICE (Middle scenes, narrativeBeat: "choice"):
+   - Visualize the fork in the road, the decision point
+   - Two modes: Power Mode (construction, progress, light) vs. Shadow Mode (doubt, stagnation, darkness)
+   - Show the viewer they have agency
+
+4. THE SOLUTION (Later scenes, narrativeBeat: "solution"):
+   - Visualization of the method, system, or game plan
+   - Show Time + Effort = Results as a visual progression
+   - Timeline or ascending structure showing growth
+
+5. THE FORMULA (Final scenes, narrativeBeat: "formula"):
+   - Summary visual showing the complete framework/equation
+   - Clear visual equation: Input + Action = Outcome
+   - Triumphant, resolution imagery
+
 === VOICEOVER STYLE (Critical for engagement) ===
-- Use an ENERGETIC, conversational tone like a TED speaker or top YouTuber
+- Use an ENERGETIC, conversational tone like a TED speaker
 - Start EACH scene with a HOOK: surprising fact, provocative question, or bold statement
 - Examples: "But here's what nobody tells you..." "What if I told you..." "The shocking truth is..."
 - Mix short punchy sentences (5-8 words) with longer explanations
 - Include rhetorical questions to create engagement pauses
 - Vary emotional energy - build up, then resolve
-- Use smooth transitions between scenes
 
 ${includeTextOverlay ? `
 === TEXT OVERLAY REQUIREMENTS ===
 - Provide a punchy scene title (2-5 words, like a headline)
 - Provide a subtitle (one impactful sentence - the key takeaway)
-These will be integrated directly into the illustration style.
+These will be integrated directly into the illustration as PART OF THE COMPOSITION.
 ` : ""}
 
-=== VISUAL PROMPTS (Critical for dynamic content) ===
-For each scene, provide visual prompts based on duration:
-- Scenes UNDER 12 seconds: provide 1 visual prompt (visualPrompt only)
-- Scenes 12-18 seconds: provide 2 visual prompts (visualPrompt + 1 subVisual showing different angle/moment)
-- Scenes 19-25 seconds: provide 3 visual prompts (visualPrompt + 2 subVisuals showing progression: setup → action → result)
+=== EDITORIAL ILLUSTRATION DESIGN RULES (CRITICAL for visual prompts) ===
+Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES. Text MUST be part of the composition, not overlays.
 
-Each visual MUST show ACTION or MOVEMENT:
-- Dynamic compositions: diagonal lines, off-center subjects, dramatic angles
-- Show cause/effect, before/after, or progression
-- Avoid static, centered, boring compositions
-- Include visual tension, contrast, or storytelling elements
+SEMANTIC LAYOUT RULES (visual structure MUST match concept):
+- "Two Modes" or "Comparison" → composition MUST be visually SPLIT (left/right or top/bottom)
+- "Stacking Up" or "Growth" → visual elements MUST be vertical and ASCENDING
+- "Timeline" or "Journey" → HORIZONTAL progression with clear stages
+- "Formula" or "Equation" → equation-style layout with visual operators (+, =, →)
+- "Choice" or "Fork" → clear DIVERGING paths
+
+TEXT HIERARCHY (Strictly follow in each visual prompt):
+1. HEADLINE: Big, bold, central or upper-third placement (e.g., "THE 90-DAY RULE")
+2. SUBTEXT: Smaller, supporting elements below or integrated
+3. LABELS: Minimal, integrated with visual elements
+
+COMPOSITION REQUIREMENTS:
+- Reserve "negative space" zones specifically for text placement
+- Describe WHERE text sits: "Title centered in upper third, illustration anchoring bottom"
+- Text must NEVER clash with busy artwork areas
+- Use gradient or solid zones behind text for legibility
+
+=== VISUAL PROMPT FORMAT ===
+Each visualPrompt and subVisual MUST include:
+1. The narrative beat in brackets: [HOOK], [CONFLICT], [CHOICE], [SOLUTION], [FORMULA]
+2. The layout type: Split Layout, Ascending Layout, Equation Layout, etc.
+3. Explicit text content and WHERE it sits in the frame
+4. Background/contrast zone description for text legibility
+
+EXAMPLE visualPrompt format:
+"[CONFLICT - Split Layout] Left side: chaotic, scattered elements representing 'Switching/Chaos' - multiple half-started projects in disarray. Right side: organized, stacked elements representing 'Patience/Mastery' - a single focused tower building upward. HEADLINE 'CHOOSE YOUR PATH' centered in upper third with clean gradient zone for legibility. LEFT LABEL 'The Scattered Approach' and RIGHT LABEL 'The Focused Builder' anchored at bottom of each section. Muted background separating the two halves."
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON with this exact structure:
@@ -631,9 +678,10 @@ Return ONLY valid JSON with this exact structure:
   "scenes": [
     {
       "number": 1,
+      "narrativeBeat": "hook",
       "voiceover": "Hook opening that grabs attention... main content with varied pacing...",
-      "visualPrompt": "Primary dynamic visual with action and movement...",
-      "subVisuals": ["Second visual showing different angle or moment...", "Third visual showing result or progression..."],
+      "visualPrompt": "[HOOK - Centered Mystery] Primary dynamic visual with action and movement... HEADLINE 'TEXT' placement... negative space description...",
+      "subVisuals": ["[HOOK - Detail] Second visual with different angle...", "[HOOK - Reveal] Third visual showing result..."],
       "duration": 18${includeTextOverlay ? `,
       "title": "Punchy Headline",
       "subtitle": "Key takeaway in one impactful line"` : ""}
@@ -644,8 +692,9 @@ Return ONLY valid JSON with this exact structure:
 REMEMBER:
 - NO scene over 25 seconds
 - Exactly ${sceneCount} scenes
-- Hook-driven, energetic voiceovers
-- Multiple visual prompts for scenes over 12 seconds`;
+- Map each scene to a narrativeBeat: hook, conflict, choice, solution, or formula
+- Visual prompts MUST include [BEAT - Layout] prefix and explicit text placement
+- Semantic layouts: visual structure matches conceptual structure`;
 
     console.log("Step 1: Generating script...");
     
@@ -840,7 +889,7 @@ REMEMBER:
     // ===============================================
     console.log("Step 3: Generating images (with sub-visuals for longer scenes)...");
     
-    // Build image prompt helper function
+    // Build image prompt helper function with editorial design rules
     const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number = 0): string => {
       const orientationDesc = format === "portrait" 
         ? "VERTICAL/PORTRAIT orientation (taller than wide, 9:16 aspect ratio)"
@@ -848,33 +897,71 @@ REMEMBER:
         ? "SQUARE orientation (equal width and height, 1:1 aspect ratio)"
         : "HORIZONTAL/LANDSCAPE orientation (wider than tall, 16:9 aspect ratio)";
       
+      // Narrative beat context for image generation
+      const beatContext = scene.narrativeBeat ? `
+NARRATIVE CONTEXT: This is a "${scene.narrativeBeat.toUpperCase()}" scene in the story arc.
+${scene.narrativeBeat === "hook" ? "Create intrigue and mystery - draw viewers in with something captivating." : ""}
+${scene.narrativeBeat === "conflict" ? "Show TENSION through split/comparative composition - opposing forces clearly divided." : ""}
+${scene.narrativeBeat === "choice" ? "Visualize DIVERGING paths or two distinct options - the fork in the road." : ""}
+${scene.narrativeBeat === "solution" ? "Show PROGRESSION and growth - ascending elements, timeline, building upward." : ""}
+${scene.narrativeBeat === "formula" ? "Create a SUMMARY visual - equation layout showing Input + Action = Outcome." : ""}` : "";
+
+      // Editorial design rules
+      const editorialRules = `
+EDITORIAL ILLUSTRATION REQUIREMENTS:
+- This is an INFOGRAPHIC SLIDE, not just an illustration
+- Text is PART OF THE COMPOSITION, not a label stuck on top
+- Visual structure MUST match conceptual structure semantically:
+  * Comparisons → SPLIT composition (left/right or top/bottom)
+  * Growth/Progress → ASCENDING/vertical elements
+  * Timelines → HORIZONTAL progression
+  * Formulas → EQUATION layout with visual operators
+- Reserve clear NEGATIVE SPACE zones for all text elements
+- Background must have CONTRAST zones for text legibility
+- Text hierarchy: Headline (big/bold/upper-third), Subtext (smaller/integrated), Labels (minimal)`;
+
       let textOverlayInstructions = "";
       // Only include text overlay on the primary image (subIndex 0)
       if (includeTextOverlay && scene.title && subIndex === 0) {
         textOverlayInstructions = `
 
-IMPORTANT - Include these text elements directly in the image:
-- Display the number "${scene.number}" prominently (large, stylized, like a chapter number)
-- Display the title text: "${scene.title}" (bold, readable headline style)
-- Display subtitle: "${scene.subtitle || ""}" (smaller text below the title)
-The text should be integrated into the illustration style, with decorative elements around it. Use hand-drawn looking text that matches the ${styleDescription} style. The text should be clearly readable and positioned to not obstruct key visual elements.`;
+TEXT INTEGRATION (Critical - text is part of the artwork):
+- Display scene number "${scene.number}" prominently (large, stylized, like a chapter number)
+- HEADLINE: "${scene.title}" - big, bold, positioned in upper third with clean background zone
+- SUBTITLE: "${scene.subtitle || ""}" - smaller text below headline, integrated into composition
+- Use ${styleDescription} style lettering that matches the illustration
+- Ensure dedicated NEGATIVE SPACE behind text - never place text over busy areas
+- Text placement: Upper third for headline, supporting elements anchor the composition below`;
       }
 
-      const subVisualNote = subIndex > 0 ? `\n\nNote: This is visual ${subIndex + 1} of ${(scene.subVisuals?.length || 0) + 1} for this scene - show a different angle, moment, or progression from the previous visual.` : "";
+      const subVisualNote = subIndex > 0 
+        ? `\n\nSEQUENCE NOTE: This is visual ${subIndex + 1} of ${(scene.subVisuals?.length || 0) + 1} for this scene.
+Show PROGRESSION from the previous visual: different angle, next moment in time, or evolution of the concept.
+Maintain visual continuity with previous images in this scene.` 
+        : "";
 
-      return `Generate an image in EXACTLY ${orientationDesc}.
+      return `Generate an EDITORIAL ILLUSTRATION in EXACTLY ${orientationDesc}.
 
-CRITICAL REQUIREMENTS:
-- The image MUST be in ${format.toUpperCase()} format
+=== TECHNICAL REQUIREMENTS ===
+- Format: ${format.toUpperCase()}
 - Dimensions: ${dimensions.width}x${dimensions.height} pixels
 - Aspect ratio: ${format === "portrait" ? "9:16 (vertical)" : format === "square" ? "1:1 (square)" : "16:9 (horizontal)"}
+${beatContext}
+${editorialRules}
 
-Visual content: ${visualPrompt}
+=== VISUAL CONTENT ===
+${visualPrompt}
 
-Style: ${styleDescription} style illustration. High quality, professional, with consistent aesthetic throughout.
-Create DYNAMIC composition with action, movement, or visual tension. Avoid static, centered subjects.${textOverlayInstructions}${subVisualNote}
+=== STYLE ===
+${styleDescription} style editorial illustration. Professional, cohesive aesthetic.
+${textOverlayInstructions}${subVisualNote}
 
-Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image unless specifically requested.`;
+=== COMPOSITION REMINDER ===
+The visual structure must SEMANTICALLY MATCH the concept:
+- If it's a comparison → use SPLIT composition
+- If it's progression → use ASCENDING layout
+- If it's a formula → use EQUATION layout with visual operators
+Create DYNAMIC composition with clear focal hierarchy. Reserve negative space for text.`
     };
 
     // Collect all image prompts (including sub-visuals for longer scenes)
