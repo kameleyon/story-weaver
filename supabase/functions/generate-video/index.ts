@@ -50,54 +50,59 @@ function pickFirstInlineAudio(ttsData: any): { data: string; mimeType?: string }
   }
   return null;
 }
-async function createReplicatePredictionWithRetry({
-  replicateToken,
-  input,
-  maxRetries = 12,
-}: {
-  replicateToken: string;
-  input: Record<string, unknown>;
-  maxRetries?: number;
-}): Promise<{ ok: true; prediction: any } | { ok: false; status: number; error: string }> {
-  let attempt = 0;
-  while (attempt <= maxRetries) {
-    const resp = await fetch(
-      "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${replicateToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ input }),
-      }
-    );
 
-    if (resp.status === 429) {
-      let retryMs = 11_000;
-      try {
-        const j = await resp.json();
-        const retryAfter = (j?.retry_after ?? j?.detail?.retry_after) as number | undefined;
-        if (typeof retryAfter === "number") retryMs = Math.max(1000, retryAfter * 1000) + 250;
-      } catch {
-        // ignore
+// Generate image using Lovable AI Gateway (free, no API key needed from user)
+async function generateImageWithLovable(
+  prompt: string,
+  lovableApiKey: string
+): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (response.status === 429) {
+        return { ok: false, error: "Rate limited - please try again later" };
       }
-      console.error("Replicate rate-limited (429). Waiting", retryMs, "ms");
-      await sleep(retryMs);
-      attempt++;
-      continue;
+      if (response.status === 402) {
+        return { ok: false, error: "Credits exhausted - please add credits to your workspace" };
+      }
+      return { ok: false, error: `API error ${response.status}: ${errorText}` };
     }
 
-    if (!resp.ok) {
-      const t = await resp.text();
-      return { ok: false, status: resp.status, error: t };
+    const data = await response.json();
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+    if (!imageUrl) {
+      return { ok: false, error: "No image returned from API" };
     }
 
-    const prediction = await resp.json();
-    return { ok: true, prediction };
+    // Extract base64 data from data URL
+    const base64Match = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+    if (!base64Match) {
+      return { ok: false, error: "Invalid image format returned" };
+    }
+
+    return { ok: true, imageBase64: base64Match[1] };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
-
-  return { ok: false, status: 429, error: "Replicate rate limit retries exceeded" };
 }
 
 serve(async (req) => {
@@ -153,15 +158,16 @@ serve(async (req) => {
       );
     }
 
-    if (!apiKeys?.replicate_api_token) {
+    const GEMINI_API_KEY = apiKeys.gemini_api_key;
+    
+    // Use Lovable AI for image generation (free, no user API key needed)
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "Please add your Replicate API token in Settings" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Lovable AI not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const GEMINI_API_KEY = apiKeys.gemini_api_key;
-    const REPLICATE_API_TOKEN = apiKeys.replicate_api_token;
 
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
@@ -434,73 +440,56 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
     }
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
-    // Using Replicate Flux 1.1 Pro
+    // Using Lovable AI (free, no user API key needed)
     // ===============================================
-    console.log("Step 3: Generating images with Replicate Flux 1.1 Pro...");
+    console.log("Step 3: Generating images with Lovable AI...");
     const imageUrls: (string | null)[] = [];
 
-    const aspectRatioMap: Record<string, string> = {
-      landscape: "16:9",
-      portrait: "9:16",
-      square: "1:1"
+    const aspectRatioHint: Record<string, string> = {
+      landscape: "16:9 landscape",
+      portrait: "9:16 portrait",
+      square: "1:1 square"
     };
-    const aspectRatio = aspectRatioMap[format] || "16:9";
+    const aspectHint = aspectRatioHint[format] || "16:9 landscape";
 
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
       
       try {
-        // Create prediction on Replicate (use latest model version)
-        const created = await createReplicatePredictionWithRetry({
-          replicateToken: REPLICATE_API_TOKEN,
-          input: {
-            prompt: `${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic.`,
-            aspect_ratio: aspectRatio,
-            output_format: "webp",
-            output_quality: 90,
-          },
-        });
+        const imagePrompt = `Generate a ${aspectHint} image: ${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic lighting.`;
+        
+        const result = await generateImageWithLovable(imagePrompt, LOVABLE_API_KEY);
 
-        if (!created.ok) {
-          console.error(
-            `Scene ${i + 1} Replicate create failed:`,
-            created.status,
-            created.error
-          );
+        if (!result.ok) {
+          console.error(`Scene ${i + 1} image failed:`, result.error);
           imageUrls.push(null);
           continue;
         }
 
-        const prediction = created.prediction;
-        
-        // Poll for completion
-        let result = prediction;
-        let attempts = 0;
-        const maxAttempts = 60; // 60 seconds timeout
-        
-        while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const statusResponse = await fetch(result.urls.get, {
-            headers: {
-              "Authorization": `Bearer ${REPLICATE_API_TOKEN}`,
-            },
+        // Upload base64 image to Supabase storage
+        const imageBytes = new Uint8Array(base64Decode(result.imageBase64));
+        const imageBlob = new Blob([imageBytes], { type: "image/png" });
+        const imagePath = `${user.id}/${project.id}/scene-${i + 1}.png`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("audio") // Reusing audio bucket for now, or create images bucket
+          .upload(imagePath, imageBlob, {
+            contentType: "image/png",
+            upsert: true,
           });
-          
-          if (statusResponse.ok) {
-            result = await statusResponse.json();
-          }
-          attempts++;
+
+        if (uploadError) {
+          console.error(`Scene ${i + 1} image upload failed:`, uploadError);
+          imageUrls.push(null);
+          continue;
         }
 
-        if (result.status === "succeeded" && result.output) {
-          const outputUrl = Array.isArray(result.output) ? result.output[0] : result.output;
-          imageUrls.push(outputUrl);
-          console.log(`Scene ${i + 1} image generated`);
-        } else {
-          console.error(`Scene ${i + 1} image failed:`, result.status, result.error);
-          imageUrls.push(null);
-        }
+        const { data: { publicUrl } } = supabase.storage
+          .from("audio")
+          .getPublicUrl(imagePath);
+
+        imageUrls.push(publicUrl);
+        console.log(`Scene ${i + 1} image generated and uploaded`);
       } catch (imgError) {
         console.error(`Scene ${i + 1} image error:`, imgError);
         imageUrls.push(null);
@@ -513,9 +502,9 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
         .update({ progress })
         .eq("id", generation.id);
 
-      // Replicate free-tier burst limits are extremely low; space requests out
+      // Small delay to avoid rate limits
       if (i < parsedScript.scenes.length - 1) {
-        await sleep(11_000);
+        await sleep(2000);
       }
     }
 
