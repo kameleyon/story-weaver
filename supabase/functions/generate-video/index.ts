@@ -147,14 +147,105 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Lovable AI Gateway with correct dimensions
+// Generate image using Replicate Flux with exact dimensions
+async function generateImageWithReplicate(
+  prompt: string,
+  replicateApiToken: string,
+  format: string
+): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
+  const dimensions = getImageDimensions(format);
+  
+  // Map format to Flux aspect ratio string
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  try {
+    // Create prediction with Flux schnell model (fast, good quality)
+    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiToken}`,
+        "Content-Type": "application/json",
+        "Prefer": "wait", // Wait for completion (up to 60s)
+      },
+      body: JSON.stringify({
+        version: "black-forest-labs/flux-schnell",
+        input: {
+          prompt: prompt,
+          aspect_ratio: aspectRatio,
+          output_format: "png",
+          output_quality: 90,
+        },
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      if (createResponse.status === 401) {
+        return { ok: false, error: "Invalid Replicate API token" };
+      }
+      if (createResponse.status === 402) {
+        return { ok: false, error: "Replicate credits exhausted" };
+      }
+      return { ok: false, error: `Replicate API error ${createResponse.status}: ${errorText}` };
+    }
+
+    let prediction = await createResponse.json();
+    
+    // If not completed yet, poll for result
+    let pollAttempts = 0;
+    const maxPolls = 30; // 30 seconds max
+    
+    while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
+      if (prediction.status === "failed" || prediction.status === "canceled") {
+        return { ok: false, error: prediction.error || "Image generation failed" };
+      }
+      
+      await new Promise(r => setTimeout(r, 1000));
+      pollAttempts++;
+      
+      const pollResponse = await fetch(prediction.urls.get, {
+        headers: { Authorization: `Bearer ${replicateApiToken}` },
+      });
+      
+      if (!pollResponse.ok) {
+        return { ok: false, error: "Failed to poll prediction status" };
+      }
+      
+      prediction = await pollResponse.json();
+    }
+    
+    if (prediction.status !== "succeeded") {
+      return { ok: false, error: prediction.error || "Image generation timed out" };
+    }
+    
+    // Get the output URL (Flux returns an array with one URL)
+    const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    
+    if (!outputUrl) {
+      return { ok: false, error: "No image URL in prediction output" };
+    }
+    
+    // Download the image and convert to base64
+    const imageResponse = await fetch(outputUrl);
+    if (!imageResponse.ok) {
+      return { ok: false, error: "Failed to download generated image" };
+    }
+    
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+    
+    return { ok: true, imageBase64: base64 };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+// Fallback: Generate image using Lovable AI Gateway (no dimension control)
 async function generateImageWithLovable(
   prompt: string,
   lovableApiKey: string,
   format: string
 ): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
-  const dimensions = getImageDimensions(format);
-  
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -164,38 +255,24 @@ async function generateImageWithLovable(
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash-image-preview",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
+        messages: [{ role: "user", content: prompt }],
         modalities: ["image", "text"],
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (response.status === 429) {
-        return { ok: false, error: "Rate limited - please try again later" };
-      }
-      if (response.status === 402) {
-        return { ok: false, error: "Credits exhausted - please add credits to your workspace" };
-      }
+      if (response.status === 429) return { ok: false, error: "Rate limited" };
+      if (response.status === 402) return { ok: false, error: "Credits exhausted" };
       return { ok: false, error: `API error ${response.status}: ${errorText}` };
     }
 
     const data = await response.json();
     const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!imageUrl) {
-      return { ok: false, error: "No image returned from API" };
-    }
+    if (!imageUrl) return { ok: false, error: "No image returned" };
 
     const base64Match = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
-    if (!base64Match) {
-      return { ok: false, error: "Invalid image format returned" };
-    }
+    if (!base64Match) return { ok: false, error: "Invalid image format" };
 
     return { ok: true, imageBase64: base64Match[1] };
   } catch (error) {
@@ -423,12 +500,20 @@ serve(async (req) => {
     }
 
     const GEMINI_API_KEY = apiKeys.gemini_api_key;
+    const REPLICATE_API_TOKEN = apiKeys.replicate_api_token;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    
+    // Determine image generation method
+    const useReplicate = !!REPLICATE_API_TOKEN;
+    if (useReplicate) {
+      console.log("Using Replicate for image generation (exact aspect ratios)");
+    } else if (LOVABLE_API_KEY) {
+      console.log("Using Lovable AI for image generation (no Replicate key)");
+    } else {
       return new Response(
-        JSON.stringify({ error: "Lovable AI not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "No image generation API configured. Please add your Replicate API key in Settings." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -698,7 +783,10 @@ Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image u
         batchPromises.push(
           (async () => {
             try {
-              const result = await generateImageWithLovable(prompt, LOVABLE_API_KEY, format);
+              // Use Replicate if available (exact aspect ratios), otherwise Lovable AI
+              const result = useReplicate
+                ? await generateImageWithReplicate(prompt, REPLICATE_API_TOKEN!, format)
+                : await generateImageWithLovable(prompt, LOVABLE_API_KEY!, format);
 
               if (!result.ok) {
                 console.error(`Scene ${i + 1} image failed:`, result.error);
