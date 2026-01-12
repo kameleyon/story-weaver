@@ -48,18 +48,38 @@ export function useVideoExport() {
 
       try {
         // Step 1: Preload all images and audio
+        console.log("[VideoExport] Loading assets for", scenes.length, "scenes");
         const assets = await Promise.all(
           scenes.map(async (scene, idx) => {
             if (abortRef.current) throw new Error("Export cancelled");
 
-            const img = new Image();
-            img.crossOrigin = "anonymous";
+            let loadedImg: HTMLImageElement | null = null;
 
-            const imgPromise = new Promise<HTMLImageElement>((resolve, reject) => {
-              img.onload = () => resolve(img);
-              img.onerror = () => reject(new Error(`Failed to load image for scene ${idx + 1}`));
-              img.src = scene.imageUrl || "";
-            });
+            if (scene.imageUrl) {
+              // Try with CORS first, fallback to no-cors (will still work for same-origin or public buckets)
+              try {
+                loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+                  const img = new Image();
+                  img.crossOrigin = "anonymous";
+                  img.onload = () => resolve(img);
+                  img.onerror = () => reject(new Error("CORS load failed"));
+                  img.src = scene.imageUrl!;
+                });
+              } catch {
+                // Retry without crossOrigin (works if bucket is public with proper CORS)
+                console.warn(`Scene ${idx + 1}: Retrying image load without CORS attribute`);
+                try {
+                  loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error("Image load failed"));
+                    img.src = scene.imageUrl!;
+                  });
+                } catch (e) {
+                  console.error(`Scene ${idx + 1}: Failed to load image:`, e);
+                }
+              }
+            }
 
             let audioBuffer: AudioBuffer | null = null;
             if (scene.audioUrl) {
@@ -74,8 +94,6 @@ export function useVideoExport() {
               }
             }
 
-            const loadedImg = scene.imageUrl ? await imgPromise : null;
-
             setState((s) => ({
               ...s,
               progress: Math.round(((idx + 1) / scenes.length) * 20),
@@ -86,6 +104,9 @@ export function useVideoExport() {
         );
 
         if (abortRef.current) throw new Error("Export cancelled");
+
+        const loadedCount = assets.filter(a => a.img !== null).length;
+        console.log(`[VideoExport] Loaded ${loadedCount}/${assets.length} images`);
 
         // Step 2: Setup MP4 muxer and video encoder
         setState({ status: "rendering", progress: 20 });
