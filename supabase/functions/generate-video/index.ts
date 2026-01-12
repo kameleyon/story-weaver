@@ -59,20 +59,42 @@ function parsePcmSampleRate(mimeType: string | undefined) {
   return Number.isFinite(rate) && rate > 0 ? rate : null;
 }
 
-function pcm16beToWav(pcm16be: Uint8Array, sampleRate: number, channels = 1) {
-  // WAV is little-endian PCM. "audio/L16" is typically big-endian PCM.
-  // Convert to little-endian by swapping bytes per 16-bit sample.
-  const pcm16le = new Uint8Array(pcm16be.length);
-  for (let i = 0; i + 1 < pcm16be.length; i += 2) {
-    pcm16le[i] = pcm16be[i + 1];
-    pcm16le[i + 1] = pcm16be[i];
+function scorePcm16(pcmBytes: Uint8Array, littleEndian: boolean) {
+  const dv = new DataView(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength);
+  const sampleCount = Math.floor(pcmBytes.byteLength / 2);
+
+  let sumAbs = 0;
+  let clipCount = 0;
+  const CLIP_THRESHOLD = 32000;
+
+  for (let i = 0; i + 1 < pcmBytes.byteLength; i += 2) {
+    const s = dv.getInt16(i, littleEndian);
+    const a = Math.abs(s);
+    sumAbs += a;
+    if (a >= CLIP_THRESHOLD) clipCount++;
   }
 
+  const meanAbs = sampleCount > 0 ? sumAbs / sampleCount : 0;
+  const clipFrac = sampleCount > 0 ? clipCount / sampleCount : 0;
+
+  return { meanAbs, clipFrac, sampleCount };
+}
+
+function swap16(pcm: Uint8Array) {
+  const out = new Uint8Array(pcm.length - (pcm.length % 2));
+  for (let i = 0; i + 1 < out.length; i += 2) {
+    out[i] = pcm[i + 1];
+    out[i + 1] = pcm[i];
+  }
+  return out;
+}
+
+function pcm16leToWav(pcm16le: Uint8Array, sampleRate: number, channels = 1) {
   const bitsPerSample = 16;
   const byteRate = sampleRate * channels * (bitsPerSample / 8);
   const blockAlign = channels * (bitsPerSample / 8);
 
-  const dataSize = pcm16le.length;
+  const dataSize = pcm16le.length - (pcm16le.length % 2);
   const header = new Uint8Array(44);
   const dv = new DataView(header.buffer);
 
@@ -117,8 +139,24 @@ function pcm16beToWav(pcm16be: Uint8Array, sampleRate: number, channels = 1) {
 
   const wav = new Uint8Array(44 + dataSize);
   wav.set(header, 0);
-  wav.set(pcm16le, 44);
+  wav.set(pcm16le.subarray(0, dataSize), 44);
   return wav;
+}
+
+function pcm16ToWavAuto(pcm: Uint8Array, sampleRate: number, channels = 1) {
+  // Gemini returns raw PCM ("audio/L16;codec=pcm;rate=...").
+  // WAV expects little-endian PCM. The "L16" payload endian can vary.
+  // Heuristic: pick the interpretation that looks less clipped / less "full scale".
+  const le = scorePcm16(pcm, true);
+  const be = scorePcm16(pcm, false);
+
+  // Prefer the one with fewer clipped samples; fall back to lower mean amplitude.
+  const beClearlyBetter =
+    be.clipFrac + 0.01 < le.clipFrac ||
+    (be.clipFrac < le.clipFrac && be.meanAbs < le.meanAbs * 0.85);
+
+  const pcm16le = beClearlyBetter ? swap16(pcm) : pcm.subarray(0, pcm.length - (pcm.length % 2));
+  return pcm16leToWav(pcm16le, sampleRate, channels);
 }
 
 // Generate image using Lovable AI Gateway (free, no API key needed from user)
@@ -468,7 +506,7 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
 
           if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
             const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
-            uploadBytes = pcm16beToWav(decoded, rate, 1);
+            uploadBytes = pcm16ToWavAuto(decoded, rate, 1);
             uploadMime = "audio/wav";
             ext = "wav";
           } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
