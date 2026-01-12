@@ -98,16 +98,22 @@ export function AppSidebar({ onNewProject }: AppSidebarProps) {
         <div className={`mt-4 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                onClick={onNewProject}
-                className={`bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md ${
-                  isCollapsed ? "h-8 w-8 rounded-full p-0" : "w-full justify-start gap-2.5 rounded-full"
-                }`}
-                size={isCollapsed ? "icon" : "default"}
-              >
-                <Plus className="h-4 w-4" />
-                {!isCollapsed && <span className="font-medium">New Project</span>}
-              </Button>
+              {isCollapsed ? (
+                <button
+                  onClick={onNewProject}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              ) : (
+                <Button
+                  onClick={onNewProject}
+                  className="w-full justify-start gap-2.5 rounded-full bg-primary/75 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="font-medium">New Project</span>
+                </Button>
+              )}
             </TooltipTrigger>
             {isCollapsed && <TooltipContent side="right">New Project</TooltipContent>}
           </Tooltip>
