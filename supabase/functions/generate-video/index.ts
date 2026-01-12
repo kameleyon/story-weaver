@@ -22,6 +22,8 @@ interface Scene {
   duration: number;
   imageUrl?: string;
   audioUrl?: string;
+  title?: string;
+  subtitle?: string;
 }
 
 interface ScriptResponse {
@@ -32,7 +34,6 @@ interface ScriptResponse {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function normalizeBase64(b64: string) {
-  // Handle base64url variants just in case
   return b64.replace(/-/g, "+").replace(/_/g, "/");
 }
 
@@ -98,43 +99,18 @@ function pcm16leToWav(pcm16le: Uint8Array, sampleRate: number, channels = 1) {
   const header = new Uint8Array(44);
   const dv = new DataView(header.buffer);
 
-  // "RIFF"
-  header[0] = 0x52;
-  header[1] = 0x49;
-  header[2] = 0x46;
-  header[3] = 0x46;
-  // Chunk size = 36 + dataSize
+  header[0] = 0x52; header[1] = 0x49; header[2] = 0x46; header[3] = 0x46;
   dv.setUint32(4, 36 + dataSize, true);
-  // "WAVE"
-  header[8] = 0x57;
-  header[9] = 0x41;
-  header[10] = 0x56;
-  header[11] = 0x45;
-  // "fmt "
-  header[12] = 0x66;
-  header[13] = 0x6d;
-  header[14] = 0x74;
-  header[15] = 0x20;
-  // Subchunk1Size (16 for PCM)
+  header[8] = 0x57; header[9] = 0x41; header[10] = 0x56; header[11] = 0x45;
+  header[12] = 0x66; header[13] = 0x6d; header[14] = 0x74; header[15] = 0x20;
   dv.setUint32(16, 16, true);
-  // AudioFormat (1 = PCM)
   dv.setUint16(20, 1, true);
-  // NumChannels
   dv.setUint16(22, channels, true);
-  // SampleRate
   dv.setUint32(24, sampleRate, true);
-  // ByteRate
   dv.setUint32(28, byteRate, true);
-  // BlockAlign
   dv.setUint16(32, blockAlign, true);
-  // BitsPerSample
   dv.setUint16(34, bitsPerSample, true);
-  // "data"
-  header[36] = 0x64;
-  header[37] = 0x61;
-  header[38] = 0x74;
-  header[39] = 0x61;
-  // Subchunk2Size
+  header[36] = 0x64; header[37] = 0x61; header[38] = 0x74; header[39] = 0x61;
   dv.setUint32(40, dataSize, true);
 
   const wav = new Uint8Array(44 + dataSize);
@@ -144,13 +120,9 @@ function pcm16leToWav(pcm16le: Uint8Array, sampleRate: number, channels = 1) {
 }
 
 function pcm16ToWavAuto(pcm: Uint8Array, sampleRate: number, channels = 1) {
-  // Gemini returns raw PCM ("audio/L16;codec=pcm;rate=...").
-  // WAV expects little-endian PCM. The "L16" payload endian can vary.
-  // Heuristic: pick the interpretation that looks less clipped / less "full scale".
   const le = scorePcm16(pcm, true);
   const be = scorePcm16(pcm, false);
 
-  // Prefer the one with fewer clipped samples; fall back to lower mean amplitude.
   const beClearlyBetter =
     be.clipFrac + 0.01 < le.clipFrac ||
     (be.clipFrac < le.clipFrac && be.meanAbs < le.meanAbs * 0.85);
@@ -159,11 +131,30 @@ function pcm16ToWavAuto(pcm: Uint8Array, sampleRate: number, channels = 1) {
   return pcm16leToWav(pcm16le, sampleRate, channels);
 }
 
-// Generate image using Lovable AI Gateway (free, no API key needed from user)
+// Styles that should include text overlays
+const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
+
+// Get image dimensions based on format
+function getImageDimensions(format: string): { width: number; height: number } {
+  switch (format) {
+    case "portrait":
+      return { width: 1080, height: 1920 };
+    case "square":
+      return { width: 1080, height: 1080 };
+    case "landscape":
+    default:
+      return { width: 1920, height: 1080 };
+  }
+}
+
+// Generate image using Lovable AI Gateway with correct dimensions
 async function generateImageWithLovable(
   prompt: string,
-  lovableApiKey: string
+  lovableApiKey: string,
+  format: string
 ): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string }> {
+  const dimensions = getImageDimensions(format);
+  
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -201,7 +192,6 @@ async function generateImageWithLovable(
       return { ok: false, error: "No image returned from API" };
     }
 
-    // Extract base64 data from data URL
     const base64Match = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
     if (!base64Match) {
       return { ok: false, error: "Invalid image format returned" };
@@ -213,6 +203,175 @@ async function generateImageWithLovable(
   }
 }
 
+// Generate TTS for a single scene
+async function generateSceneAudio(
+  scene: Scene,
+  sceneIndex: number,
+  GEMINI_API_KEY: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  enabledModels: { flash: boolean; pro: boolean }
+): Promise<{ url: string | null; disableFlash: boolean; disablePro: boolean }> {
+  const TTS_ATTEMPTS_PER_MODEL = 2;
+  const TTS_RETRY_BASE_DELAY_MS = 200;
+
+  let finalAudioUrl: string | null = null;
+  let lastTtsError: string | null = null;
+  let disableFlash = false;
+  let disablePro = false;
+
+  const modelCandidates = [
+    ...(enabledModels.flash ? ["gemini-2.5-flash-preview-tts"] : []),
+    ...(enabledModels.pro ? ["gemini-2.5-pro-preview-tts"] : []),
+  ];
+
+  for (const modelName of modelCandidates) {
+    for (let attempt = 1; attempt <= TTS_ATTEMPTS_PER_MODEL; attempt++) {
+      try {
+        const ttsResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `Please read this text clearly and naturally:\n\n${scene.voiceover}`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: "Aoede",
+                    },
+                  },
+                },
+              },
+            }),
+          }
+        );
+
+        if (!ttsResponse.ok) {
+          const errorText = await ttsResponse.text();
+          lastTtsError = `model=${modelName} status=${ttsResponse.status} attempt=${attempt}`;
+
+          if (ttsResponse.status === 400 && errorText.includes("response modalities")) {
+            break;
+          }
+
+          if (ttsResponse.status === 404) {
+            break;
+          }
+
+          if (ttsResponse.status === 429 && errorText.includes("limit: 0")) {
+            if (modelName.includes("-pro-")) disablePro = true;
+            break;
+          }
+
+          const retriable = ttsResponse.status === 429 || ttsResponse.status >= 500;
+          if (retriable && attempt < TTS_ATTEMPTS_PER_MODEL) {
+            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+            continue;
+          }
+          continue;
+        }
+
+        const ttsData = await ttsResponse.json();
+
+        if (ttsData?.error) {
+          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+            continue;
+          }
+          continue;
+        }
+
+        const inlineAudio = pickFirstInlineAudio(ttsData);
+
+        if (!inlineAudio?.data) {
+          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+            continue;
+          }
+          if (modelName.includes("flash-preview-tts")) disableFlash = true;
+          continue;
+        }
+
+        const mimeTypeRaw = inlineAudio.mimeType || "audio/wav";
+        const decoded = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
+
+        let uploadBytes: Uint8Array = decoded;
+        let uploadMime = mimeTypeRaw;
+        let ext = "wav";
+
+        if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
+          const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
+          uploadBytes = pcm16ToWavAuto(decoded, rate, 1);
+          uploadMime = "audio/wav";
+          ext = "wav";
+        } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
+          uploadMime = "audio/mpeg";
+          ext = "mp3";
+        } else if (mimeTypeRaw.includes("wav")) {
+          uploadMime = "audio/wav";
+          ext = "wav";
+        } else {
+          uploadMime = "audio/wav";
+          ext = "wav";
+        }
+
+        if (!uploadBytes?.length || uploadBytes.length < 512) {
+          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+            continue;
+          }
+          continue;
+        }
+
+        const uploadCopy = new Uint8Array(uploadBytes.length);
+        uploadCopy.set(uploadBytes);
+
+        const audioBlob = new Blob([uploadCopy.buffer], { type: uploadMime });
+        const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
+          contentType: uploadMime,
+          upsert: true,
+        });
+
+        if (uploadError) {
+          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+            continue;
+          }
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
+        finalAudioUrl = publicUrl;
+        console.log(`Scene ${sceneIndex + 1} audio OK (${modelName})`);
+        break;
+      } catch (ttsError) {
+        if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        console.error(`Scene ${sceneIndex + 1} TTS error:`, ttsError);
+      }
+    }
+    if (finalAudioUrl) break;
+  }
+
+  return { url: finalAudioUrl, disableFlash, disablePro };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -222,7 +381,6 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Get the user from the authorization header
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(
@@ -233,7 +391,6 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Verify the user
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
@@ -244,7 +401,6 @@ serve(async (req) => {
       );
     }
 
-    // Get user's API keys from database
     const { data: apiKeys, error: apiKeysError } = await supabase
       .from("user_api_keys")
       .select("gemini_api_key, replicate_api_token")
@@ -268,7 +424,6 @@ serve(async (req) => {
 
     const GEMINI_API_KEY = apiKeys.gemini_api_key;
     
-    // Use Lovable AI for image generation (free, no user API key needed)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(
@@ -279,7 +434,6 @@ serve(async (req) => {
 
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
-    // Determine scene count based on video length
     const sceneCounts: Record<string, number> = {
       short: 4,
       brief: 6,
@@ -289,25 +443,35 @@ serve(async (req) => {
 
     // ===============================================
     // STEP 1: THE DIRECTOR - Script Generation
-    // Using Google Gemini 2.5 Pro Preview
     // ===============================================
     const styleDescription = style === "custom" ? customStyle : style;
+    const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
+    const dimensions = getImageDimensions(format);
     
     const scriptPrompt = `You are a video script writer. Create a compelling video script from the following content.
     
 Content: ${content}
 
 Requirements:
-- Video format: ${format} (${format === "landscape" ? "16:9" : format === "portrait" ? "9:16" : "1:1"})
+- Video format: ${format} (${format === "landscape" ? "16:9 horizontal" : format === "portrait" ? "9:16 vertical" : "1:1 square"})
+- Exact dimensions: ${dimensions.width}x${dimensions.height} pixels
 - Target length: ${length === "short" ? "under 2 minutes" : length === "brief" ? "2-5 minutes" : "5-10 minutes"}
 - Visual style: ${styleDescription}
 - Create exactly ${sceneCount} scenes
+${includeTextOverlay ? `
+IMPORTANT: For each scene, also provide:
+- A short scene title (2-5 words, like a headline)
+- A brief subtitle (one short sentence summarizing the key point)
+These will be displayed as text overlays on the image, similar to educational explainer videos.
+` : ""}
 
 For each scene, provide:
 1. Scene number
 2. Voiceover text (what will be spoken - keep it natural and engaging)
 3. Visual description (detailed prompt for image generation in the ${styleDescription} style)
 4. Duration in seconds (based on voiceover length, roughly 150 words per minute)
+${includeTextOverlay ? `5. Title (short headline text for the scene)
+6. Subtitle (one sentence key point)` : ""}
 
 IMPORTANT: Return ONLY valid JSON with this exact structure:
 {
@@ -317,12 +481,14 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       "number": 1,
       "voiceover": "Text to be spoken...",
       "visualPrompt": "Detailed image generation prompt...",
-      "duration": 15
+      "duration": 15${includeTextOverlay ? `,
+      "title": "Scene Headline",
+      "subtitle": "Key point or call to action"` : ""}
     }
   ]
 }`;
 
-    console.log("Step 1: Generating script with Gemini 2.5 Pro Preview...");
+    console.log("Step 1: Generating script...");
     
     const scriptResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`,
@@ -355,7 +521,6 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
       throw new Error("No script content received from Gemini");
     }
 
-    // Parse the script JSON
     let parsedScript: ScriptResponse;
     try {
       const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
@@ -413,296 +578,142 @@ IMPORTANT: Return ONLY valid JSON with this exact structure:
 
     // ===============================================
     // STEP 2: THE NARRATOR - Audio Generation (TTS)
-    // IMPORTANT: Requires a *TTS-capable* Gemini model.
+    // Process scenes in parallel batches of 2
     // ===============================================
-    console.log("Step 2: Generating audio with Gemini TTS...");
+    console.log("Step 2: Generating audio...");
 
-    let enableFlashTts = true;
-    let enableProTts = true;
+    const audioUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
+    const enabledModels = { flash: true, pro: true };
+    const AUDIO_BATCH_SIZE = 2;
 
-    const getTtsModelCandidates = () => [
-      ...(enableFlashTts ? ["gemini-2.5-flash-preview-tts"] : []),
-      ...(enableProTts ? ["gemini-2.5-pro-preview-tts"] : []),
-    ];
+    for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += AUDIO_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + AUDIO_BATCH_SIZE, parsedScript.scenes.length);
+      const batchPromises: Promise<{ index: number; result: { url: string | null; disableFlash: boolean; disablePro: boolean } }>[] = [];
 
-    // Keep this tight to avoid backend timeouts.
-    const TTS_ATTEMPTS_PER_MODEL = 2;
-    const TTS_RETRY_BASE_DELAY_MS = 250;
-    const TTS_INTER_SCENE_DELAY_MS = 150;
-
-    const audioUrls: (string | null)[] = [];
-
-    for (let i = 0; i < parsedScript.scenes.length; i++) {
-      const scene = parsedScript.scenes[i];
-
-      let finalAudioUrl: string | null = null;
-      let lastTtsError: string | null = null;
-
-      for (const modelName of getTtsModelCandidates()) {
-        for (let attempt = 1; attempt <= TTS_ATTEMPTS_PER_MODEL; attempt++) {
-          try {
-            const ttsResponse = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: [
-                    {
-                      parts: [
-                        {
-                          text: `Please read this text clearly and naturally:\n\n${scene.voiceover}`,
-                        },
-                      ],
-                    },
-                  ],
-                  generationConfig: {
-                    responseModalities: ["AUDIO"],
-                    speechConfig: {
-                      voiceConfig: {
-                        prebuiltVoiceConfig: {
-                          voiceName: "Aoede",
-                        },
-                      },
-                    },
-                  },
-                }),
-              }
-            );
-
-            if (!ttsResponse.ok) {
-              const errorText = await ttsResponse.text();
-              lastTtsError = `model=${modelName} status=${ttsResponse.status} attempt=${attempt} body=${errorText}`;
-
-              // Common failure: model doesn't support AUDIO -> try next model candidate.
-              if (ttsResponse.status === 400 && errorText.includes("response modalities")) {
-                console.error(`Scene ${i + 1} TTS model not AUDIO-capable:`, lastTtsError);
-                break; // next model
-              }
-
-              // If the model doesn't exist / isn't enabled on this key -> try next.
-              if (ttsResponse.status === 404) {
-                console.error(`Scene ${i + 1} TTS model not found:`, lastTtsError);
-                break; // next model
-              }
-
-              // Some keys show "limit: 0" for models they don't have access to.
-              if (ttsResponse.status === 429 && errorText.includes("limit: 0")) {
-                console.error(`Scene ${i + 1} TTS model quota is 0 / not enabled:`, lastTtsError);
-                if (modelName.includes("-pro-")) enableProTts = false;
-                break; // next model
-              }
-
-              const retriable = ttsResponse.status === 429 || ttsResponse.status >= 500;
-              if (retriable && attempt < TTS_ATTEMPTS_PER_MODEL) {
-                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-                await sleep(backoff);
-                continue;
-              }
-
-              console.error(`Scene ${i + 1} TTS failed:`, lastTtsError);
-              continue;
-            }
-
-            const ttsData = await ttsResponse.json();
-
-            // Sometimes the API returns 200 with an embedded error object.
-            if (ttsData?.error) {
-              lastTtsError = `model=${modelName} attempt=${attempt} embedded_error=${JSON.stringify(ttsData.error)}`;
-              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-                await sleep(backoff);
-                continue;
-              }
-              console.error(`Scene ${i + 1} TTS embedded error:`, lastTtsError);
-              continue;
-            }
-
-            const inlineAudio = pickFirstInlineAudio(ttsData);
-
-            if (!inlineAudio?.data) {
-              // This happens intermittently on preview TTS models; retry briefly.
-              lastTtsError = `model=${modelName} attempt=${attempt} no inline audio data`;
-              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-                await sleep(backoff);
-                continue;
-              }
-
-              // If flash keeps returning no audio, stop using it to avoid timeouts.
-              if (modelName.includes("flash-preview-tts")) enableFlashTts = false;
-
-              console.error(`Scene ${i + 1} no audio data returned:`, lastTtsError);
-              continue;
-            }
-
-            const mimeTypeRaw = inlineAudio.mimeType || "audio/wav";
-
-            // Ensure the underlying buffer is a plain ArrayBuffer (Blob typing compatibility)
-            const decoded = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
-
-            // Convert raw PCM -> WAV so browsers can actually play it.
-            let uploadBytes: Uint8Array = decoded;
-            let uploadMime = mimeTypeRaw;
-            let ext = "wav";
-
-            if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
-              const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
-              uploadBytes = pcm16ToWavAuto(decoded, rate, 1);
-              uploadMime = "audio/wav";
-              ext = "wav";
-            } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
-              uploadMime = "audio/mpeg";
-              ext = "mp3";
-            } else if (mimeTypeRaw.includes("wav")) {
-              uploadMime = "audio/wav";
-              ext = "wav";
-            } else {
-              // Default to wav to maximize browser compatibility.
-              uploadMime = "audio/wav";
-              ext = "wav";
-            }
-
-            if (!uploadBytes?.length || uploadBytes.length < 512) {
-              lastTtsError = `model=${modelName} attempt=${attempt} decoded audio too small (${uploadBytes?.length ?? 0} bytes)`;
-              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-                await sleep(backoff);
-                continue;
-              }
-              console.error(`Scene ${i + 1} invalid audio payload:`, lastTtsError);
-              continue;
-            }
-
-            // Force a non-shared ArrayBuffer backing store for Blob compatibility in Deno.
-            const uploadCopy = new Uint8Array(uploadBytes.length);
-            uploadCopy.set(uploadBytes);
-
-            const audioBlob = new Blob([uploadCopy.buffer], { type: uploadMime });
-            const audioPath = `${user.id}/${project.id}/scene-${i + 1}.${ext}`;
-
-            const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
-              contentType: uploadMime,
-              upsert: true,
-            });
-
-            if (uploadError) {
-              lastTtsError = `model=${modelName} attempt=${attempt} uploadError=${uploadError.message}`;
-              if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-                const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-                await sleep(backoff);
-                continue;
-              }
-              console.error(`Scene ${i + 1} audio upload failed:`, uploadError);
-              continue;
-            }
-
-            const {
-              data: { publicUrl },
-            } = supabase.storage.from("audio").getPublicUrl(audioPath);
-
-            finalAudioUrl = publicUrl;
-            console.log(
-              `Scene ${i + 1} audio generated (model=${modelName}, mime=${uploadMime}, srcMime=${mimeTypeRaw}, attempt=${attempt})`
-            );
-
-            break;
-          } catch (ttsError) {
-            lastTtsError = `model=${modelName} attempt=${attempt} exception=${ttsError instanceof Error ? ttsError.message : String(ttsError)}`;
-
-            if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-              const backoff = TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-              await sleep(backoff);
-              continue;
-            }
-
-            console.error(`Scene ${i + 1} TTS error:`, ttsError);
-          }
-        }
-
-        if (finalAudioUrl) break; // stop trying models
+      for (let i = batchStart; i < batchEnd; i++) {
+        const scene = parsedScript.scenes[i];
+        batchPromises.push(
+          generateSceneAudio(scene, i, GEMINI_API_KEY, supabase, user.id, project.id, enabledModels)
+            .then(result => ({ index: i, result }))
+        );
       }
 
-      if (!finalAudioUrl) {
-        console.error(`Scene ${i + 1} audio generation failed for all models.`, lastTtsError);
+      const batchResults = await Promise.all(batchPromises);
+      
+      for (const { index, result } of batchResults) {
+        audioUrls[index] = result.url;
+        if (result.disableFlash) enabledModels.flash = false;
+        if (result.disablePro) enabledModels.pro = false;
       }
-
-      audioUrls.push(finalAudioUrl);
 
       // Update progress
-      const progress = 10 + Math.floor(((i + 1) / parsedScript.scenes.length) * 30);
+      const progress = 10 + Math.floor((batchEnd / parsedScript.scenes.length) * 30);
       await supabase.from("generations").update({ progress }).eq("id", generation.id);
 
-      // Small delay to avoid TTS throttling
-      if (i < parsedScript.scenes.length - 1) {
-        await sleep(TTS_INTER_SCENE_DELAY_MS);
+      // Small delay between batches
+      if (batchEnd < parsedScript.scenes.length) {
+        await sleep(100);
       }
     }
 
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
-    // Using Lovable AI (free, no user API key needed)
+    // Process images in parallel batches of 3 for speed
     // ===============================================
-    console.log("Step 3: Generating images with Lovable AI...");
-    const imageUrls: (string | null)[] = [];
+    console.log("Step 3: Generating images (parallel)...");
+    const imageUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
+    
+    const IMAGE_BATCH_SIZE = 3; // Generate 3 images at a time for speed
 
-    const aspectRatioHint: Record<string, string> = {
-      landscape: "16:9 landscape (1920x1080)",
-      portrait: "9:16 portrait (1080x1920)",
-      square: "1:1 square (1080x1080)"
-    };
-    const aspectHint = aspectRatioHint[format] || "16:9 landscape (1920x1080)";
-
-    for (let i = 0; i < parsedScript.scenes.length; i++) {
-      const scene = parsedScript.scenes[i];
+    // Build all image prompts with correct aspect ratio and optional text overlay
+    const imagePrompts = parsedScript.scenes.map((scene, i) => {
+      const orientationDesc = format === "portrait" 
+        ? "VERTICAL/PORTRAIT orientation (taller than wide, 9:16 aspect ratio)"
+        : format === "square" 
+        ? "SQUARE orientation (equal width and height, 1:1 aspect ratio)"
+        : "HORIZONTAL/LANDSCAPE orientation (wider than tall, 16:9 aspect ratio)";
       
-      try {
-        const imagePrompt = `Create a ${aspectHint} aspect ratio image. IMPORTANT: The image MUST be in ${format === "portrait" ? "vertical/portrait" : format === "square" ? "square" : "horizontal/landscape"} orientation. Content: ${scene.visualPrompt}. Style: ${styleDescription}. High quality, professional, cinematic lighting.`;
+      let textOverlayInstructions = "";
+      if (includeTextOverlay && scene.title) {
+        textOverlayInstructions = `
+
+IMPORTANT - Include these text elements directly in the image:
+- Display the number "${scene.number}" prominently (large, stylized, like a chapter number)
+- Display the title text: "${scene.title}" (bold, readable headline style)
+- Display subtitle: "${scene.subtitle || ""}" (smaller text below the title)
+The text should be integrated into the illustration style, with decorative elements around it. Use hand-drawn looking text that matches the ${styleDescription} style. The text should be clearly readable and positioned to not obstruct key visual elements.`;
+      }
+
+      return `Generate an image in EXACTLY ${orientationDesc}.
+
+CRITICAL REQUIREMENTS:
+- The image MUST be in ${format.toUpperCase()} format
+- Dimensions: ${dimensions.width}x${dimensions.height} pixels
+- Aspect ratio: ${format === "portrait" ? "9:16 (vertical)" : format === "square" ? "1:1 (square)" : "16:9 (horizontal)"}
+
+Visual content: ${scene.visualPrompt}
+
+Style: ${styleDescription} style illustration. High quality, professional, with consistent aesthetic throughout.${textOverlayInstructions}
+
+Remember: The image MUST be ${orientationDesc}. Do NOT generate a square image unless specifically requested.`;
+    });
+
+    for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += IMAGE_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + IMAGE_BATCH_SIZE, parsedScript.scenes.length);
+      const batchPromises: Promise<{ index: number; url: string | null }>[] = [];
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        const prompt = imagePrompts[i];
         
-        const result = await generateImageWithLovable(imagePrompt, LOVABLE_API_KEY);
+        batchPromises.push(
+          (async () => {
+            try {
+              const result = await generateImageWithLovable(prompt, LOVABLE_API_KEY, format);
 
-        if (!result.ok) {
-          console.error(`Scene ${i + 1} image failed:`, result.error);
-          imageUrls.push(null);
-          continue;
-        }
+              if (!result.ok) {
+                console.error(`Scene ${i + 1} image failed:`, result.error);
+                return { index: i, url: null };
+              }
 
-        // Upload base64 image to Supabase storage
-        const imageBytes = new Uint8Array(base64Decode(result.imageBase64));
-        const imageBlob = new Blob([imageBytes], { type: "image/png" });
-        const imagePath = `${user.id}/${project.id}/scene-${i + 1}.png`;
+              const imageBytes = new Uint8Array(base64Decode(result.imageBase64));
+              const imageBlob = new Blob([imageBytes], { type: "image/png" });
+              const imagePath = `${user.id}/${project.id}/scene-${i + 1}.png`;
 
-        const { error: uploadError } = await supabase.storage
-          .from("audio") // Reusing audio bucket for now, or create images bucket
-          .upload(imagePath, imageBlob, {
-            contentType: "image/png",
-            upsert: true,
-          });
+              const { error: uploadError } = await supabase.storage
+                .from("audio")
+                .upload(imagePath, imageBlob, {
+                  contentType: "image/png",
+                  upsert: true,
+                });
 
-        if (uploadError) {
-          console.error(`Scene ${i + 1} image upload failed:`, uploadError);
-          imageUrls.push(null);
-          continue;
-        }
+              if (uploadError) {
+                console.error(`Scene ${i + 1} image upload failed:`, uploadError);
+                return { index: i, url: null };
+              }
 
-        const { data: { publicUrl } } = supabase.storage
-          .from("audio")
-          .getPublicUrl(imagePath);
+              const { data: { publicUrl } } = supabase.storage
+                .from("audio")
+                .getPublicUrl(imagePath);
 
-        imageUrls.push(publicUrl);
-        console.log(`Scene ${i + 1} image generated and uploaded`);
-      } catch (imgError) {
-        console.error(`Scene ${i + 1} image error:`, imgError);
-        imageUrls.push(null);
+              console.log(`Scene ${i + 1} image generated`);
+              return { index: i, url: publicUrl };
+            } catch (imgError) {
+              console.error(`Scene ${i + 1} image error:`, imgError);
+              return { index: i, url: null };
+            }
+          })()
+        );
+      }
+
+      const batchResults = await Promise.all(batchPromises);
+      
+      for (const { index, url } of batchResults) {
+        imageUrls[index] = url;
       }
 
       // Update progress
-      const progress = 40 + Math.floor(((i + 1) / parsedScript.scenes.length) * 50);
-      await supabase
-        .from("generations")
-        .update({ progress })
-        .eq("id", generation.id);
-
+      const progress = 40 + Math.floor((batchEnd / parsedScript.scenes.length) * 50);
+      await supabase.from("generations").update({ progress }).eq("id", generation.id);
     }
 
     // ===============================================
