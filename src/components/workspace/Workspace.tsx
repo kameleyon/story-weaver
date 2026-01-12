@@ -147,6 +147,7 @@ export function Workspace() {
                 <GenerationResult
                   title={generationState.title || "Untitled Video"}
                   scenes={generationState.scenes}
+                  format={generationState.format || format}
                   onNewProject={handleNewProject}
                 />
               </motion.div>

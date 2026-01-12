@@ -21,10 +21,11 @@ import { useVideoExport } from "@/hooks/useVideoExport";
 interface GenerationResultProps {
   title: string;
   scenes: Scene[];
+  format: "landscape" | "portrait" | "square";
   onNewProject: () => void;
 }
 
-export function GenerationResult({ title, scenes, onNewProject }: GenerationResultProps) {
+export function GenerationResult({ title, scenes, format, onNewProject }: GenerationResultProps) {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
@@ -400,7 +401,7 @@ export function GenerationResult({ title, scenes, onNewProject }: GenerationResu
         ) : (
           <Button
             className="flex-1 gap-2"
-            onClick={() => exportVideo(scenes, "landscape")}
+            onClick={() => exportVideo(scenes, format)}
             disabled={
               exportState.status === "loading" ||
               exportState.status === "rendering" ||
