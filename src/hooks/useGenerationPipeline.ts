@@ -10,6 +10,7 @@ export interface Scene {
   visualPrompt: string;
   subVisuals?: string[];       // Additional visual prompts for longer scenes
   duration: number;
+  narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula"; // Track story position
   imageUrl?: string;
   imageUrls?: string[];        // Multiple images per scene
   audioUrl?: string;
