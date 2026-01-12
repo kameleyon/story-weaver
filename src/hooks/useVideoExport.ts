@@ -27,16 +27,21 @@ export function useVideoExport() {
   }, []);
 
   const exportVideo = useCallback(
-    async (scenes: Scene[], format: "landscape" | "portrait" | "square" = "landscape") => {
+    async (scenes: Scene[], format: "landscape" | "portrait" | "square") => {
       abortRef.current = false;
 
       const dimensions = {
         landscape: { width: 1920, height: 1080 },
         portrait: { width: 1080, height: 1920 },
         square: { width: 1080, height: 1080 },
-      };
+      } as const;
 
-      const { width, height } = dimensions[format];
+      const selected = dimensions[format];
+      if (!selected) {
+        throw new Error(`Unsupported export format: ${String(format)}`);
+      }
+
+      const { width, height } = selected;
       const fps = 30;
 
       setState({ status: "loading", progress: 0 });
