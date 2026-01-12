@@ -24,7 +24,8 @@ function getStepIndex(step: GenerationStep): number {
 }
 
 export function GenerationProgress({ state }: GenerationProgressProps) {
-  const currentStepIndex = getStepIndex(state.step);
+  const effectiveStep: GenerationStep = state.step === "rendering" ? "visuals" : state.step;
+  const currentStepIndex = getStepIndex(effectiveStep);
 
   return (
     <motion.div
@@ -52,9 +53,9 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
 
       <div className="space-y-1">
         {steps.map((step, index) => {
-          const isActive = state.step === step.id;
-          const isComplete = currentStepIndex > index || state.step === "complete";
-          const isPending = currentStepIndex < index && state.step !== "complete";
+          const isActive = effectiveStep === step.id;
+          const isComplete = currentStepIndex > index || effectiveStep === "complete";
+          const isPending = currentStepIndex < index && effectiveStep !== "complete";
 
           return (
             <div key={step.id} className="flex items-start gap-4">
@@ -108,7 +109,7 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
                     >
                       <p className="text-sm text-muted-foreground/70">
                         {step.id === "visuals"
-                          ? `Creating scene ${state.currentScene} of ${state.sceneCount}...`
+                          ? `Creating scene ${Math.max(1, state.currentScene)} of ${state.sceneCount}...`
                           : step.description}
                       </p>
                       <div className="h-1 overflow-hidden rounded-full bg-muted/30">

@@ -50,6 +50,21 @@ export function useGenerationPipeline() {
     isGenerating: false,
   });
 
+  const inferStepFromDb = (dbStatus: string | null | undefined, dbProgress: number): GenerationStep => {
+    if (dbStatus === "complete") return "complete";
+    if (dbStatus === "error") return "error";
+    if (dbProgress < 10) return "analysis";
+    if (dbProgress < 40) return "scripting";
+    return "visuals";
+  };
+
+  const inferCurrentSceneFromDb = (dbProgress: number, sceneCount: number): number => {
+    if (sceneCount <= 0) return 0;
+    if (dbProgress < 40) return 0;
+    const p = Math.min(1, Math.max(0, (dbProgress - 40) / 50));
+    return Math.max(1, Math.min(sceneCount, Math.round(p * sceneCount)));
+  };
+
   const startGeneration = useCallback(async (params: GenerationParams) => {
     // Updated scene counts based on minimum duration requirements
     // Short: min 60s, Brief: min 150s, Presentation: min 360s
@@ -157,8 +172,10 @@ export function useGenerationPipeline() {
 
             setState((prev) => ({
               ...prev,
-              step: "rendering",
-              progress: Math.max(prev.progress, 60),
+              // Keep the progress UI aligned with backend progress during recovery.
+              // "rendering" previously marked every step as complete in the UI.
+              step: prev.progress >= 40 ? "visuals" : "scripting",
+              progress: Math.max(prev.progress, 40),
               isGenerating: true,
               error: undefined,
             }));
@@ -181,8 +198,8 @@ export function useGenerationPipeline() {
               }));
             };
 
-            // Poll for up to ~3 minutes
-            for (let i = 0; i < 90; i++) {
+            // Poll for up to ~8 minutes (generations can be long, especially with multiple visuals).
+            for (let i = 0; i < 240; i++) {
               const { data: project } = await supabase
                 .from("projects")
                 .select("id,title")
@@ -230,11 +247,19 @@ export function useGenerationPipeline() {
                 }
 
                 const dbProgress = typeof generation?.progress === "number" ? generation.progress : 0;
-                setState((prev) => ({
-                  ...prev,
-                  step: "rendering",
-                  progress: Math.max(prev.progress, 60 + Math.round((dbProgress / 100) * 35)),
-                }));
+                const scenes = normalizeScenes(generation.scenes);
+
+                setState((prev) => {
+                  const sceneCount = scenes?.length ?? prev.sceneCount;
+                  const step = inferStepFromDb(generation?.status, dbProgress);
+                  return {
+                    ...prev,
+                    step,
+                    progress: dbProgress,
+                    sceneCount,
+                    currentScene: inferCurrentSceneFromDb(dbProgress, sceneCount),
+                  };
+                });
               }
 
               await new Promise((r) => setTimeout(r, 2000));
