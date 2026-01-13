@@ -164,6 +164,36 @@ function pcm16ToWavAuto(pcm: Uint8Array, sampleRate: number, channels = 1) {
 // Styles that should include text overlays
 const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
 
+function sanitizeVoiceover(input: unknown): string {
+  const raw = typeof input === "string" ? input : "";
+
+  // Normalize whitespace + remove common script labels/stage directions that TTS would read aloud.
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) =>
+      line
+        // Remove leading labels like "Hook:", "Scene 1:", "Narrator -", etc.
+        .replace(
+          /^\s*(?:hook|scene\s*\d+|narrator|body|solution|conflict|choice|formula)\s*[:\-–—]\s*/i,
+          ""
+        )
+        // Remove leading bracketed directions like "[pauses]"
+        .replace(/^\s*\[[^\]]+\]\s*/g, "")
+    );
+
+  let out = lines.join(" ");
+
+  // Remove any remaining bracketed stage directions anywhere in the text
+  out = out.replace(/\[[^\]]+\]/g, " ");
+
+  // Strip common markdown-ish formatting characters that can leak into speech
+  out = out.replace(/[*_~`]+/g, "");
+
+  return out.replace(/\s{2,}/g, " ").trim();
+}
+
 // Get image dimensions based on format
 function getImageDimensions(format: string): { width: number; height: number } {
   switch (format) {
@@ -635,7 +665,7 @@ Distribute your ${sceneCount} scenes across this narrative framework:
 
 === VOICEOVER STYLE (Critical for engagement) ===
 - Use an ENERGETIC, conversational tone like a TED speaker
-- Start EACH scene with a HOOK: surprising fact, provocative question, or bold statement
+- Start EACH scene with a hook — a surprising fact, provocative question, or bold statement
 - Examples: "But here's what nobody tells you..." "What if I told you..." "The shocking truth is..."
 - Mix short punchy sentences (5-8 words) with longer explanations
 - Include rhetorical questions to create engagement pauses
@@ -781,6 +811,17 @@ REMEMBER:
       console.error("Failed to parse script:", parseError, scriptContent);
       throw new Error("Failed to parse generated script");
     }
+
+    // Hard safety pass: strip any labels/stage directions the model may still include.
+    parsedScript = {
+      ...parsedScript,
+      scenes: Array.isArray(parsedScript.scenes)
+        ? parsedScript.scenes.map((s) => ({
+            ...s,
+            voiceover: sanitizeVoiceover((s as any)?.voiceover),
+          }))
+        : [],
+    };
 
     console.log("Script generated:", parsedScript.title, `(${parsedScript.scenes.length} scenes)`);
 
