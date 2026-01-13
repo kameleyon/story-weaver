@@ -560,42 +560,18 @@ serve(async (req) => {
       );
     }
 
-    const { data: apiKeys, error: apiKeysError } = await supabase
-      .from("user_api_keys")
-      .select("replicate_api_token")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (apiKeysError) {
-      console.error("Error fetching API keys:", apiKeysError);
-      return new Response(
-        JSON.stringify({ error: "Failed to retrieve API keys" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const REPLICATE_API_TOKEN = apiKeys?.replicate_api_token;
-    
-    // Replicate is REQUIRED for image generation (no fallback)
-    if (!REPLICATE_API_TOKEN) {
-      return new Response(
-        JSON.stringify({ error: "Please add your Replicate API key in Settings to generate images." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    // TTS uses the system REPLICATE_TTS_API_KEY secret
-    const REPLICATE_TTS_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
-    if (!REPLICATE_TTS_API_KEY) {
+    // Use system Replicate API key for both TTS and image generation
+    const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
+    if (!REPLICATE_API_KEY) {
       console.error("REPLICATE_TTS_API_KEY not configured");
       return new Response(
-        JSON.stringify({ error: "TTS service not configured" }),
+        JSON.stringify({ error: "Replicate service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
-    console.log(`[REPLICATE] Using API key for images: ${REPLICATE_API_TOKEN.substring(0, 12)}...`);
-    console.log(`[REPLICATE TTS] Using minimax/speech-02-turbo for audio generation`);
+    console.log(`[REPLICATE] Using system API key: ${REPLICATE_API_KEY.substring(0, 12)}...`);
+    console.log(`[REPLICATE] TTS: minimax/speech-02-turbo | Images: prunaai/p-image`);
 
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
@@ -869,7 +845,7 @@ REMEMBER:
       for (let i = batchStart; i < batchEnd; i++) {
         const scene = parsedScript.scenes[i];
         batchPromises.push(
-          generateSceneAudioReplicate(scene, i, REPLICATE_TTS_API_KEY, supabase, user.id, project.id)
+          generateSceneAudioReplicate(scene, i, REPLICATE_API_KEY, supabase, user.id, project.id)
             .then((result: { url: string | null; error?: string }) => ({ index: i, result }))
         );
       }
@@ -1118,7 +1094,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
                   `${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length}) attempt ${attempt}/${MAX_IMAGE_ATTEMPTS}...`
                 );
 
-                const attemptResult = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
+                const attemptResult = await generateImageWithReplicate(task.prompt, REPLICATE_API_KEY!, format);
 
                 if (attemptResult.ok) {
                   result = attemptResult;
