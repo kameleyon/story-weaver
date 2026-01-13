@@ -19,11 +19,11 @@ interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
-  subVisuals?: string[];       // Additional visual prompts for longer scenes
+  subVisuals?: string[]; // Additional visual prompts for longer scenes
   duration: number;
   narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula"; // Track story position
   imageUrl?: string;
-  imageUrls?: string[];        // Multiple images per scene
+  imageUrls?: string[]; // Multiple images per scene
   audioUrl?: string;
   title?: string;
   subtitle?: string;
@@ -38,21 +38,21 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 // Style-specific prompts optimized for AI image generation
 const STYLE_PROMPTS: Record<string, string> = {
-  "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
-  
-  "doodle": `Flat 2D vector illustration with an indie comic aesthetic. Bold, monoline black outlines with slightly rounded terminals. Color palette of muted primary tones (dusty red, sage green, mustard yellow, slate blue) set against a warm, textured off-white recycled paper background. Use 'object-head' surrealism for characters. Apply lo-fi texturing, subtle paper grain, and intentional print misalignments. Composition should feel centralized with floating iconographic elements. Vibe: Chill, entrepreneurial, and whimsical.`,
-  
-  "stick": `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
-  
-  "realistic": `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
-  
-  "anime": `High-quality Anime art style. Crisp cel-shaded coloring with dramatic lighting and lens flares. Vibrant, saturated color palette with emphasis on deep blue skies and lush greens. Detailed backgrounds in the style of Makoto Shinkai or Studio Ghibli. Clean fine line work. Expressive characters with large eyes. Atmospheric, emotional, and polished animation aesthetic. 2D animation look.`,
-  
+  minimalist: `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
+
+  doodle: `Flat 2D vector illustration with an indie comic aesthetic. Bold, monoline black outlines with slightly rounded terminals. Color palette of muted primary tones (dusty red, sage green, mustard yellow, slate blue) set against a warm, textured off-white recycled paper background. Use 'object-head' surrealism for characters. Apply lo-fi texturing, subtle paper grain, and intentional print misalignments. Composition should feel centralized with floating iconographic elements. Vibe: Chill, entrepreneurial, and whimsical.`,
+
+  stick: `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
+
+  realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
+
+  anime: `High-quality Anime art style. Crisp cel-shaded coloring with dramatic lighting and lens flares. Vibrant, saturated color palette with emphasis on deep blue skies and lush greens. Detailed backgrounds in the style of Makoto Shinkai or Studio Ghibli. Clean fine line work. Expressive characters with large eyes. Atmospheric, emotional, and polished animation aesthetic. 2D animation look.`,
+
   "3d-pixar": `3D animated feature film style (Pixar/Disney). Soft, subsurface scattering on materials to make them look soft and touchable. Warm, bounce lighting and global illumination. Stylized characters with exaggerated features but realistic textures (fabric, hair). Vibrant, friendly color palette. Rendered in Redshift or Octane. Cute, appealing, and high-budget animation look. Smooth shapes, no sharp edges.`,
-  
-  "claymation": `Stop-motion claymation style. Textures of plasticine and modeling clay with visible fingerprints and imperfections. Handmade, tactile look. Soft, physical studio lighting with real shadows. Miniature photography aesthetic with tilt-shift depth of field. Vibrant, playful colors. Characters and objects look like physical toys. Imperfect, organic shapes. Aardman Animations vibe.`,
-  
-  "futuristic": `Clean futuristic sci-fi aesthetic. Dark background with glowing neon accents (cyan, magenta, electric purple). Holographic interfaces (HUDs) and glass textures. Sleek, metallic surfaces (chrome, brushed aluminum, matte black). Cyberpunk but minimal and tidy. High-tech, digital atmosphere. Lens flares, bloom effects, and volumetric lighting. Smooth curves, floating UI elements, and data streams.`
+
+  claymation: `Stop-motion claymation style. Textures of plasticine and modeling clay with visible fingerprints and imperfections. Handmade, tactile look. Soft, physical studio lighting with real shadows. Miniature photography aesthetic with tilt-shift depth of field. Vibrant, playful colors. Characters and objects look like physical toys. Imperfect, organic shapes. Aardman Animations vibe.`,
+
+  futuristic: `Clean futuristic sci-fi aesthetic. Dark background with glowing neon accents (cyan, magenta, electric purple). Holographic interfaces (HUDs) and glass textures. Sleek, metallic surfaces (chrome, brushed aluminum, matte black). Cyberpunk but minimal and tidy. High-tech, digital atmosphere. Lens flares, bloom effects, and volumetric lighting. Smooth curves, floating UI elements, and data streams.`,
 };
 
 // Helper to get style prompt - uses detailed prompt if available, falls back to style name or custom style
@@ -129,10 +129,19 @@ function pcm16leToWav(pcm16le: Uint8Array, sampleRate: number, channels = 1) {
   const header = new Uint8Array(44);
   const dv = new DataView(header.buffer);
 
-  header[0] = 0x52; header[1] = 0x49; header[2] = 0x46; header[3] = 0x46;
+  header[0] = 0x52;
+  header[1] = 0x49;
+  header[2] = 0x46;
+  header[3] = 0x46;
   dv.setUint32(4, 36 + dataSize, true);
-  header[8] = 0x57; header[9] = 0x41; header[10] = 0x56; header[11] = 0x45;
-  header[12] = 0x66; header[13] = 0x6d; header[14] = 0x74; header[15] = 0x20;
+  header[8] = 0x57;
+  header[9] = 0x41;
+  header[10] = 0x56;
+  header[11] = 0x45;
+  header[12] = 0x66;
+  header[13] = 0x6d;
+  header[14] = 0x74;
+  header[15] = 0x20;
   dv.setUint32(16, 16, true);
   dv.setUint16(20, 1, true);
   dv.setUint16(22, channels, true);
@@ -140,7 +149,10 @@ function pcm16leToWav(pcm16le: Uint8Array, sampleRate: number, channels = 1) {
   dv.setUint32(28, byteRate, true);
   dv.setUint16(32, blockAlign, true);
   dv.setUint16(34, bitsPerSample, true);
-  header[36] = 0x64; header[37] = 0x61; header[38] = 0x74; header[39] = 0x61;
+  header[36] = 0x64;
+  header[37] = 0x61;
+  header[38] = 0x74;
+  header[39] = 0x61;
   dv.setUint32(40, dataSize, true);
 
   const wav = new Uint8Array(44 + dataSize);
@@ -154,8 +166,7 @@ function pcm16ToWavAuto(pcm: Uint8Array, sampleRate: number, channels = 1) {
   const be = scorePcm16(pcm, false);
 
   const beClearlyBetter =
-    be.clipFrac + 0.01 < le.clipFrac ||
-    (be.clipFrac < le.clipFrac && be.meanAbs < le.meanAbs * 0.85);
+    be.clipFrac + 0.01 < le.clipFrac || (be.clipFrac < le.clipFrac && be.meanAbs < le.meanAbs * 0.85);
 
   const pcm16le = beClearlyBetter ? swap16(pcm) : pcm.subarray(0, pcm.length - (pcm.length % 2));
   return pcm16leToWav(pcm16le, sampleRate, channels);
@@ -181,40 +192,35 @@ function getImageDimensions(format: string): { width: number; height: number } {
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
-  format: string
+  format: string,
 ): Promise<
-  | { ok: true; imageBase64: string }
-  | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
+  { ok: true; imageBase64: string } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   // z-image-turbo uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
-  const aspectRatio = format === "portrait" 
-    ? "9:16"
-    : format === "square" 
-    ? "1:1"
-    : "16:9";
-  
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
   console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
   console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
-  
+
   try {
     const startTime = Date.now();
-    
+
     // Create prediction with prunaai/z-image-turbo model
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiToken}`,
         "Content-Type": "application/json",
-        "Prefer": "wait", // Wait for completion (up to 60s)
+        Prefer: "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
         version: "prunaai/z-image-turbo",
         input: {
           prompt: prompt,
           aspect_ratio: aspectRatio,
-          num_inference_steps: 35,
+          num_inference_steps: 45,
           guidance_scale: 0,
           output_format: "png",
           output_quality: 100,
@@ -259,72 +265,77 @@ async function generateImageWithReplicate(
           error: `Replicate throttled (429): ${errorText}`,
         };
       }
-      return { ok: false, status: createResponse.status, error: `Replicate API error ${createResponse.status}: ${errorText}` };
+      return {
+        ok: false,
+        status: createResponse.status,
+        error: `Replicate API error ${createResponse.status}: ${errorText}`,
+      };
     }
 
     let prediction = await createResponse.json();
     console.log(`[REPLICATE] Initial prediction status: ${prediction.status}, id: ${prediction.id}`);
-    
+
     // Poll for completion if not done
     let pollAttempts = 0;
     const maxPolls = 60; // 60 seconds max
-    
+
     while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
       if (prediction.status === "canceled") {
         console.error(`[REPLICATE ERROR] Prediction was canceled`);
         return { ok: false, error: "Image generation was canceled" };
       }
-      
-      await new Promise(r => setTimeout(r, 1000));
+
+      await new Promise((r) => setTimeout(r, 1000));
       pollAttempts++;
-      
+
       console.log(`[REPLICATE] Polling attempt ${pollAttempts}, status: ${prediction.status}`);
-      
+
       const pollResponse = await fetch(prediction.urls.get, {
         headers: { Authorization: `Bearer ${replicateApiToken}` },
       });
-      
+
       if (!pollResponse.ok) {
         const pollErrorText = await pollResponse.text();
         console.error(`[REPLICATE ERROR] Poll failed: ${pollResponse.status} - ${pollErrorText}`);
         return { ok: false, error: `Failed to poll prediction status: ${pollResponse.status}` };
       }
-      
+
       prediction = await pollResponse.json();
     }
-    
+
     console.log(`[REPLICATE] Final status: ${prediction.status}, time: ${Date.now() - startTime}ms`);
-    
+
     if (prediction.status !== "succeeded") {
       console.error(`[REPLICATE ERROR] Generation failed: ${prediction.error || "timeout"}`);
       console.error(`[REPLICATE ERROR] Full prediction: ${JSON.stringify(prediction)}`);
       return { ok: false, error: prediction.error || "Image generation timed out" };
     }
-    
+
     // Get the output URL - z-image-turbo returns URL directly or in output
-    const outputUrl = typeof prediction.output === "string" 
-      ? prediction.output 
-      : Array.isArray(prediction.output) 
-        ? prediction.output[0] 
-        : prediction.output?.url;
-    
+    const outputUrl =
+      typeof prediction.output === "string"
+        ? prediction.output
+        : Array.isArray(prediction.output)
+          ? prediction.output[0]
+          : prediction.output?.url;
+
     console.log(`[REPLICATE] Output URL: ${outputUrl?.substring(0, 80)}...`);
-    
+
     if (!outputUrl) {
       console.error(`[REPLICATE ERROR] No output URL. Full output: ${JSON.stringify(prediction.output)}`);
       return { ok: false, error: "No image URL in prediction output" };
     }
-    
+
     // Download the image and convert to base64 (chunked to avoid stack overflow)
     const imageResponse = await fetch(outputUrl);
     if (!imageResponse.ok) {
       console.error(`[REPLICATE ERROR] Failed to download image: ${imageResponse.status}`);
       return { ok: false, error: `Failed to download generated image: ${imageResponse.status}` };
     }
-    
+
     const imageBuffer = await imageResponse.arrayBuffer();
     const bytes = new Uint8Array(imageBuffer);
-    
+
     // Convert to base64 in chunks to avoid stack overflow on large images
     let base64 = "";
     const chunkSize = 32768; // 32KB chunks
@@ -333,9 +344,9 @@ async function generateImageWithReplicate(
       base64 += String.fromCharCode.apply(null, Array.from(chunk));
     }
     base64 = btoa(base64);
-    
+
     console.log(`[REPLICATE] Success! Image size: ${bytes.length} bytes, time: ${Date.now() - startTime}ms`);
-    
+
     return { ok: true, imageBase64: base64 };
   } catch (error) {
     console.error(`[REPLICATE ERROR] Exception: ${error}`);
@@ -344,7 +355,6 @@ async function generateImageWithReplicate(
 }
 
 // REMOVED: Lovable AI fallback - now using Replicate only
-
 
 // Helpers to classify TTS failures
 function truncateForLogs(input: string, maxLen = 220) {
@@ -364,7 +374,7 @@ function isHardQuotaExhausted(status: number, errorText: string) {
   );
 }
 
- // Generate TTS for a single scene
+// Generate TTS for a single scene
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
@@ -372,7 +382,7 @@ async function generateSceneAudio(
   supabase: any,
   userId: string,
   projectId: string,
-  enabledModels: { flash: boolean; pro: boolean }
+  enabledModels: { flash: boolean; pro: boolean },
 ): Promise<{ url: string | null; disableFlash: boolean; disablePro: boolean }> {
   const TTS_ATTEMPTS_PER_MODEL = 2;
   const TTS_RETRY_BASE_DELAY_MS = 200;
@@ -416,7 +426,7 @@ async function generateSceneAudio(
                 },
               },
             }),
-          }
+          },
         );
 
         if (!ttsResponse.ok) {
@@ -424,7 +434,7 @@ async function generateSceneAudio(
           lastTtsError = `model=${modelName} status=${ttsResponse.status} attempt=${attempt}`;
 
           console.warn(
-            `Scene ${sceneIndex + 1} TTS HTTP error (${modelName}) status=${ttsResponse.status} attempt=${attempt}: ${truncateForLogs(errorText)}`
+            `Scene ${sceneIndex + 1} TTS HTTP error (${modelName}) status=${ttsResponse.status} attempt=${attempt}: ${truncateForLogs(errorText)}`,
           );
 
           // Permanent / configuration issues
@@ -524,7 +534,9 @@ async function generateSceneAudio(
           continue;
         }
 
-        const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("audio").getPublicUrl(audioPath);
         finalAudioUrl = publicUrl;
         console.log(`Scene ${sceneIndex + 1} audio OK (${modelName})`);
         break;
@@ -553,22 +565,25 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "No authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
+
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
+
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: apiKeys, error: apiKeysError } = await supabase
@@ -579,30 +594,30 @@ serve(async (req) => {
 
     if (apiKeysError) {
       console.error("Error fetching API keys:", apiKeysError);
-      return new Response(
-        JSON.stringify({ error: "Failed to retrieve API keys" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Failed to retrieve API keys" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!apiKeys?.gemini_api_key) {
-      return new Response(
-        JSON.stringify({ error: "Please add your Google Gemini API key in Settings" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Please add your Google Gemini API key in Settings" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const GEMINI_API_KEY = apiKeys.gemini_api_key;
     const REPLICATE_API_TOKEN = apiKeys.replicate_api_token;
-    
+
     // Replicate is REQUIRED for image generation (no fallback)
     if (!REPLICATE_API_TOKEN) {
       return new Response(
         JSON.stringify({ error: "Please add your Replicate API key in Settings to generate images." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    
+
     console.log(`[REPLICATE] Using API key: ${REPLICATE_API_TOKEN.substring(0, 12)}...`);
     console.log("Using Replicate (prunaai/z-image-turbo) for image generation");
 
@@ -613,7 +628,10 @@ serve(async (req) => {
     // Brief: min 150s (2.5 min), max 300s (5 min), target ~225s
     // Presentation: min 360s (6 min), max 600s (10 min), target ~480s
     // Using ~15-20s average per scene for dynamic pacing
-    const lengthConfig: Record<string, { count: number; minDuration: number; maxDuration: number; targetDuration: number; avgSceneDuration: number }> = {
+    const lengthConfig: Record<
+      string,
+      { count: number; minDuration: number; maxDuration: number; targetDuration: number; avgSceneDuration: number }
+    > = {
       short: { count: 6, minDuration: 60, maxDuration: 120, targetDuration: 90, avgSceneDuration: 15 },
       brief: { count: 12, minDuration: 150, maxDuration: 300, targetDuration: 225, avgSceneDuration: 18 },
       presentation: { count: 24, minDuration: 360, maxDuration: 600, targetDuration: 480, avgSceneDuration: 20 },
@@ -629,7 +647,7 @@ serve(async (req) => {
     const styleDescription = getStylePrompt(style, customStyle);
     const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
     const dimensions = getImageDimensions(format);
-    
+
     const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content that follows a compelling story arc.
 
 Content: ${content}
@@ -682,12 +700,16 @@ Distribute your ${sceneCount} scenes across this narrative framework:
 - Include rhetorical questions to create engagement pauses
 - Vary emotional energy - build up, then resolve
 
-${includeTextOverlay ? `
+${
+  includeTextOverlay
+    ? `
 === TEXT OVERLAY REQUIREMENTS ===
 - Provide a punchy scene title (2-5 words, like a headline)
 - Provide a subtitle (one impactful sentence - the key takeaway)
 These will be integrated directly into the illustration as PART OF THE COMPOSITION.
-` : ""}
+`
+    : ""
+}
 
 === EDITORIAL ILLUSTRATION DESIGN RULES (CRITICAL for visual prompts) ===
 Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES. Text MUST be part of the composition, not overlays.
@@ -742,9 +764,13 @@ Return ONLY valid JSON with this exact structure:
       "voiceover": "Hook opening that grabs attention... main content with varied pacing...",
       "visualPrompt": "[HOOK - Centered Mystery] Primary dynamic visual with action and movement... HEADLINE 'TEXT' placement... negative space description...",
       "subVisuals": ["[HOOK - Detail] Second visual with different angle...", "[HOOK - Reveal] Third visual showing result..."],
-      "duration": 18${includeTextOverlay ? `,
+      "duration": 18${
+        includeTextOverlay
+          ? `,
       "title": "Punchy Headline",
-      "subtitle": "Key takeaway in one impactful line"` : ""}
+      "subtitle": "Key takeaway in one impactful line"`
+          : ""
+      }
     }
   ]
 }
@@ -757,23 +783,25 @@ REMEMBER:
 - Semantic layouts: visual structure matches conceptual structure`;
 
     console.log("Step 1: Generating script...");
-    
+
     const scriptResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ 
-            parts: [{ text: scriptPrompt }] 
-          }],
+          contents: [
+            {
+              parts: [{ text: scriptPrompt }],
+            },
+          ],
           generationConfig: {
             temperature: 0.7,
             topP: 0.95,
             maxOutputTokens: 8192,
-          }
+          },
         }),
-      }
+      },
     );
 
     if (!scriptResponse.ok) {
@@ -784,7 +812,7 @@ REMEMBER:
 
     const scriptData = await scriptResponse.json();
     const scriptContent = scriptData.candidates?.[0]?.content?.parts?.[0]?.text;
-    
+
     if (!scriptContent) {
       throw new Error("No script content received from Gemini");
     }
@@ -858,15 +886,15 @@ REMEMBER:
 
     for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += AUDIO_BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + AUDIO_BATCH_SIZE, parsedScript.scenes.length);
-      
+
       console.log(`Audio batch: scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length}`);
-      
+
       // Determine which models to try for this batch
-      const enabledModels = { 
-        flash: !modelStatus.flashDisabled, 
-        pro: !modelStatus.proDisabled 
+      const enabledModels = {
+        flash: !modelStatus.flashDisabled,
+        pro: !modelStatus.proDisabled,
       };
-      
+
       // If both are disabled, re-enable flash and try with longer delays
       if (!enabledModels.flash && !enabledModels.pro) {
         console.log("Both models were rate-limited, waiting 3s and re-enabling flash...");
@@ -874,33 +902,38 @@ REMEMBER:
         enabledModels.flash = true;
         modelStatus.flashDisabled = false;
       }
-      
-      const batchPromises: Promise<{ index: number; result: { url: string | null; disableFlash: boolean; disablePro: boolean } }>[] = [];
+
+      const batchPromises: Promise<{
+        index: number;
+        result: { url: string | null; disableFlash: boolean; disablePro: boolean };
+      }>[] = [];
 
       for (let i = batchStart; i < batchEnd; i++) {
         const scene = parsedScript.scenes[i];
         batchPromises.push(
-          generateSceneAudio(scene, i, GEMINI_API_KEY, supabase, user.id, project.id, enabledModels)
-            .then(result => ({ index: i, result }))
+          generateSceneAudio(scene, i, GEMINI_API_KEY, supabase, user.id, project.id, enabledModels).then((result) => ({
+            index: i,
+            result,
+          })),
         );
       }
 
       const batchResults = await Promise.all(batchPromises);
-      
-      let batchSuccessCount = 0;
-       for (const { index, result } of batchResults) {
-         audioUrls[index] = result.url;
-         if (result.url) batchSuccessCount++;
 
-         if (result.disablePro) {
-           console.log("Pro TTS quota exhausted, disabling for remaining scenes");
-           modelStatus.proDisabled = true;
-         }
-         if (result.disableFlash) {
-           console.log("Flash TTS quota exhausted, disabling for remaining scenes");
-           modelStatus.flashDisabled = true;
-         }
-       }
+      let batchSuccessCount = 0;
+      for (const { index, result } of batchResults) {
+        audioUrls[index] = result.url;
+        if (result.url) batchSuccessCount++;
+
+        if (result.disablePro) {
+          console.log("Pro TTS quota exhausted, disabling for remaining scenes");
+          modelStatus.proDisabled = true;
+        }
+        if (result.disableFlash) {
+          console.log("Flash TTS quota exhausted, disabling for remaining scenes");
+          modelStatus.flashDisabled = true;
+        }
+      }
 
       console.log(`Audio batch complete: ${batchSuccessCount}/${batchEnd - batchStart} succeeded`);
 
@@ -913,58 +946,59 @@ REMEMBER:
         await sleep(INTER_BATCH_DELAY_MS);
       }
     }
-    
-     const successfulAudio = audioUrls.filter((u) => u !== null).length;
-     console.log(
-       `Audio generation complete: ${successfulAudio}/${parsedScript.scenes.length} scenes have audio`
-     );
 
-     // If we produced zero audio, fail fast with a clear, actionable message.
-     // (Otherwise the UI shows a "success" result but all scenes are silent.)
-     if (successfulAudio === 0) {
-       const msg =
-         "Audio generation failed: your Gemini text-to-speech quota appears exhausted (or your key doesn't have audio access). Update your Gemini API key/credits in Settings and try again.";
+    const successfulAudio = audioUrls.filter((u) => u !== null).length;
+    console.log(`Audio generation complete: ${successfulAudio}/${parsedScript.scenes.length} scenes have audio`);
 
-       await supabase
-         .from("generations")
-         .update({
-           status: "error",
-           error_message: msg,
-           progress: 100,
-           completed_at: new Date().toISOString(),
-         })
-         .eq("id", generation.id);
+    // If we produced zero audio, fail fast with a clear, actionable message.
+    // (Otherwise the UI shows a "success" result but all scenes are silent.)
+    if (successfulAudio === 0) {
+      const msg =
+        "Audio generation failed: your Gemini text-to-speech quota appears exhausted (or your key doesn't have audio access). Update your Gemini API key/credits in Settings and try again.";
 
-       await supabase.from("projects").update({ status: "error" }).eq("id", project.id);
+      await supabase
+        .from("generations")
+        .update({
+          status: "error",
+          error_message: msg,
+          progress: 100,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", generation.id);
 
-       return new Response(JSON.stringify({ error: msg }), {
-         status: 400,
-         headers: { ...corsHeaders, "Content-Type": "application/json" },
-       });
-     }
+      await supabase.from("projects").update({ status: "error" }).eq("id", project.id);
+
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // ===============================================
     // STEP 3: THE ILLUSTRATOR - Image Generation
     // Process images in parallel batches of 3 for speed
     // ===============================================
     console.log("Step 3: Generating images (with sub-visuals for longer scenes)...");
-    
+
     // Build image prompt helper function with editorial design rules
     const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number = 0): string => {
-      const orientationDesc = format === "portrait" 
-        ? "VERTICAL/PORTRAIT orientation (taller than wide, 9:16 aspect ratio)"
-        : format === "square" 
-        ? "SQUARE orientation (equal width and height, 1:1 aspect ratio)"
-        : "HORIZONTAL/LANDSCAPE orientation (wider than tall, 16:9 aspect ratio)";
-      
+      const orientationDesc =
+        format === "portrait"
+          ? "VERTICAL/PORTRAIT orientation (taller than wide, 9:16 aspect ratio)"
+          : format === "square"
+            ? "SQUARE orientation (equal width and height, 1:1 aspect ratio)"
+            : "HORIZONTAL/LANDSCAPE orientation (wider than tall, 16:9 aspect ratio)";
+
       // Narrative beat context for image generation
-      const beatContext = scene.narrativeBeat ? `
+      const beatContext = scene.narrativeBeat
+        ? `
 NARRATIVE CONTEXT: This is a "${scene.narrativeBeat.toUpperCase()}" scene in the story arc.
 ${scene.narrativeBeat === "hook" ? "Create intrigue and mystery - draw viewers in with something captivating." : ""}
 ${scene.narrativeBeat === "conflict" ? "Show TENSION through split/comparative composition - opposing forces clearly divided." : ""}
 ${scene.narrativeBeat === "choice" ? "Visualize DIVERGING paths or two distinct options - the fork in the road." : ""}
 ${scene.narrativeBeat === "solution" ? "Show PROGRESSION and growth - ascending elements, timeline, building upward." : ""}
-${scene.narrativeBeat === "formula" ? "Create a SUMMARY visual - equation layout showing Input + Action = Outcome." : ""}` : "";
+${scene.narrativeBeat === "formula" ? "Create a SUMMARY visual - equation layout showing Input + Action = Outcome." : ""}`
+        : "";
 
       // Editorial design rules
       const editorialRules = `
@@ -994,11 +1028,12 @@ TEXT INTEGRATION (Critical - text is part of the artwork):
 - Text placement: Upper third for headline, supporting elements anchor the composition below`;
       }
 
-      const subVisualNote = subIndex > 0 
-        ? `\n\nSEQUENCE NOTE: This is visual ${subIndex + 1} of ${(scene.subVisuals?.length || 0) + 1} for this scene.
+      const subVisualNote =
+        subIndex > 0
+          ? `\n\nSEQUENCE NOTE: This is visual ${subIndex + 1} of ${(scene.subVisuals?.length || 0) + 1} for this scene.
 Show PROGRESSION from the previous visual: different angle, next moment in time, or evolution of the concept.
-Maintain visual continuity with previous images in this scene.` 
-        : "";
+Maintain visual continuity with previous images in this scene.`
+          : "";
 
       return `Generate an EDITORIAL ILLUSTRATION in EXACTLY ${orientationDesc}.
 
@@ -1021,7 +1056,7 @@ The visual structure must SEMANTICALLY MATCH the concept:
 - If it's a comparison → use SPLIT composition
 - If it's progression → use ASCENDING layout
 - If it's a formula → use EQUATION layout with visual operators
-Create DYNAMIC composition with clear focal hierarchy. Reserve negative space for text.`
+Create DYNAMIC composition with clear focal hierarchy. Reserve negative space for text.`;
     };
 
     // Collect all image prompts (including sub-visuals for longer scenes)
@@ -1030,47 +1065,50 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       subIndex: number; // 0 = primary, 1+ = sub-visuals
       prompt: string;
     }
-    
+
     const imageTasks: ImageTask[] = [];
-    
+
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
-      
+
       // Primary visual (always)
       imageTasks.push({
         sceneIndex: i,
         subIndex: 0,
-        prompt: buildImagePrompt(scene.visualPrompt, scene, 0)
+        prompt: buildImagePrompt(scene.visualPrompt, scene, 0),
       });
-      
+
       // Sub-visuals based on scene duration
       if (scene.subVisuals && scene.subVisuals.length > 0 && scene.duration >= 12) {
         // Scenes 12-18s: 1 sub-visual, 19-25s: 2 sub-visuals
         const maxSubVisuals = scene.duration >= 19 ? 2 : 1;
         const subVisualsToUse = Math.min(scene.subVisuals.length, maxSubVisuals);
-        
+
         for (let j = 0; j < subVisualsToUse; j++) {
           imageTasks.push({
             sceneIndex: i,
             subIndex: j + 1,
-            prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1)
+            prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1),
           });
         }
       }
     }
-    
+
     console.log(`Total images to generate: ${imageTasks.length} for ${parsedScript.scenes.length} scenes`);
-    
+
     // Store image task count in generation record for frontend progress display
-    await supabase.from("generations").update({ 
-      progress: 40,
-      // Store metadata for frontend: totalImages field in scenes JSON
-      scenes: parsedScript.scenes.map((s, idx) => ({
-        ...s,
-        _meta: { totalImages: imageTasks.length, sceneIndex: idx }
-      }))
-    }).eq("id", generation.id);
-    
+    await supabase
+      .from("generations")
+      .update({
+        progress: 40,
+        // Store metadata for frontend: totalImages field in scenes JSON
+        scenes: parsedScript.scenes.map((s, idx) => ({
+          ...s,
+          _meta: { totalImages: imageTasks.length, sceneIndex: idx },
+        })),
+      })
+      .eq("id", generation.id);
+
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
@@ -1078,31 +1116,34 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     // NOTE: Some Replicate accounts get temporarily reduced to ~6 predictions/min (burst=1).
     const IMAGE_BATCH_SIZE = 1;
     const IMAGE_DELAY_MS = 11000; // ~5-6 predictions/min, avoids 429-induced "skipped" images
-    
+
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
       const progress = 40 + Math.floor((completedCount / imageTasks.length) * 50);
-      
+
       // Build partial scenes with current image URLs for recovery
       const partialScenes = parsedScript.scenes.map((scene, idx) => {
-        const allImages = sceneImageUrls[idx].filter(url => url !== null) as string[];
+        const allImages = sceneImageUrls[idx].filter((url) => url !== null) as string[];
         return {
           ...scene,
           imageUrl: allImages[0] || null,
           imageUrls: allImages.length > 0 ? allImages : undefined,
           audioUrl: audioUrls[idx] || null,
-          _meta: { 
-            totalImages: imageTasks.length, 
+          _meta: {
+            totalImages: imageTasks.length,
             completedImages: completedCount,
-            sceneIndex: idx 
-          }
+            sceneIndex: idx,
+          },
         };
       });
-      
-      await supabase.from("generations").update({ 
-        progress,
-        scenes: partialScenes
-      }).eq("id", generation.id);
+
+      await supabase
+        .from("generations")
+        .update({
+          progress,
+          scenes: partialScenes,
+        })
+        .eq("id", generation.id);
     };
 
     let completedImages = 0;
@@ -1113,7 +1154,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
 
       for (let t = batchStart; t < batchEnd; t++) {
         const task = imageTasks[t];
-        
+
         batchPromises.push(
           (async () => {
             try {
@@ -1124,15 +1165,16 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
 
               let lastError = "";
 
-              const logPrefix = task.subIndex > 0
-                ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}`
-                : `Scene ${task.sceneIndex + 1}`;
+              const logPrefix =
+                task.subIndex > 0
+                  ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}`
+                  : `Scene ${task.sceneIndex + 1}`;
 
               // Generate image with Replicate (required, no fallback) + retry on throttling
               const MAX_IMAGE_ATTEMPTS = 10;
               for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
                 console.log(
-                  `${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length}) attempt ${attempt}/${MAX_IMAGE_ATTEMPTS}...`
+                  `${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length}) attempt ${attempt}/${MAX_IMAGE_ATTEMPTS}...`,
                 );
 
                 const attemptResult = await generateImageWithReplicate(task.prompt, REPLICATE_API_TOKEN!, format);
@@ -1145,20 +1187,18 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
                 lastError = attemptResult.error;
                 console.error(`${logPrefix} image failed: ${attemptResult.error}`);
                 console.error(
-                  `[REPLICATE ERROR] Scene ${task.sceneIndex + 1}, sub ${task.subIndex}: ${attemptResult.error}`
+                  `[REPLICATE ERROR] Scene ${task.sceneIndex + 1}, sub ${task.subIndex}: ${attemptResult.error}`,
                 );
 
                 if (attempt === MAX_IMAGE_ATTEMPTS) {
                   throw new Error(
-                    `${logPrefix}: Image generation failed after ${MAX_IMAGE_ATTEMPTS} attempts: ${attemptResult.error}`
+                    `${logPrefix}: Image generation failed after ${MAX_IMAGE_ATTEMPTS} attempts: ${attemptResult.error}`,
                   );
                 }
 
                 // If throttled, honor retry_after when present; otherwise back off conservatively.
                 const retryAfterMs =
-                  attemptResult.status === 429
-                    ? Math.max(1000, (attemptResult.retryAfterSeconds ?? 8) * 1000)
-                    : 8000;
+                  attemptResult.status === 429 ? Math.max(1000, (attemptResult.retryAfterSeconds ?? 8) * 1000) : 8000;
 
                 const jitter = Math.floor(Math.random() * 400);
                 await sleep(retryAfterMs + jitter);
@@ -1174,21 +1214,19 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
               const imageSuffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
               const imagePath = `${user.id}/${project.id}/scene-${task.sceneIndex + 1}${imageSuffix}.png`;
 
-              const { error: uploadError } = await supabase.storage
-                .from("audio")
-                .upload(imagePath, imageBlob, {
-                  contentType: "image/png",
-                  upsert: true,
-                });
+              const { error: uploadError } = await supabase.storage.from("audio").upload(imagePath, imageBlob, {
+                contentType: "image/png",
+                upsert: true,
+              });
 
               if (uploadError) {
                 console.error(`${logPrefix} image upload failed:`, uploadError);
                 return { task, url: null };
               }
 
-              const { data: { publicUrl } } = supabase.storage
-                .from("audio")
-                .getPublicUrl(imagePath);
+              const {
+                data: { publicUrl },
+              } = supabase.storage.from("audio").getPublicUrl(imagePath);
 
               console.log(`${logPrefix} image generated successfully`);
               return { task, url: publicUrl };
@@ -1196,12 +1234,12 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
               console.error(`Scene ${task.sceneIndex + 1} image error:`, imgError);
               return { task, url: null };
             }
-          })()
+          })(),
         );
       }
 
       const batchResults = await Promise.all(batchPromises);
-      
+
       for (const { task, url } of batchResults) {
         // Ensure the array is long enough
         while (sceneImageUrls[task.sceneIndex].length <= task.subIndex) {
@@ -1214,27 +1252,29 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       // Persist progress after each batch for recovery
       await persistProgress(completedImages);
       console.log(`Image progress: ${completedImages}/${imageTasks.length} complete`);
-      
+
       // Rate limit delay between batches (critical for Replicate)
       if (batchEnd < imageTasks.length) {
         await sleep(IMAGE_DELAY_MS);
       }
     }
-    
-    const totalImagesGenerated = sceneImageUrls.flat().filter(u => u !== null).length;
-    console.log(`Image generation complete: ${totalImagesGenerated}/${imageTasks.length} images for ${parsedScript.scenes.length} scenes`);
+
+    const totalImagesGenerated = sceneImageUrls.flat().filter((u) => u !== null).length;
+    console.log(
+      `Image generation complete: ${totalImagesGenerated}/${imageTasks.length} images for ${parsedScript.scenes.length} scenes`,
+    );
 
     // ===============================================
     // STEP 4: FINALIZE - Compile results
     // ===============================================
     console.log("Step 4: Finalizing generation...");
-    
+
     const finalScenes = parsedScript.scenes.map((scene, idx) => {
-      const allImages = sceneImageUrls[idx].filter(url => url !== null) as string[];
+      const allImages = sceneImageUrls[idx].filter((url) => url !== null) as string[];
       return {
         ...scene,
-        imageUrl: allImages[0] || null,          // Primary image (backward compatible)
-        imageUrls: allImages.length > 0 ? allImages : undefined,  // All images for the scene
+        imageUrl: allImages[0] || null, // Primary image (backward compatible)
+        imageUrls: allImages.length > 0 ? allImages : undefined, // All images for the scene
         audioUrl: audioUrls[idx] || null,
       };
     });
@@ -1250,10 +1290,7 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       })
       .eq("id", generation.id);
 
-    await supabase
-      .from("projects")
-      .update({ status: "complete" })
-      .eq("id", project.id);
+    await supabase.from("projects").update({ status: "complete" }).eq("id", project.id);
 
     console.log("Generation complete!");
 
@@ -1265,13 +1302,13 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
         title: parsedScript.title,
         scenes: finalScenes,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Generation error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
