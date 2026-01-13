@@ -708,9 +708,32 @@ Distribute your ${sceneCount} scenes across this narrative framework:
    - Clear visual equation: Input + Action = Outcome
    - Triumphant, resolution imagery
 
+=== CLEAN AUDIO RULE (CRITICAL - TEXT-TO-SPEECH WILL READ THIS ALOUD) ===
+The 'voiceover' field is fed DIRECTLY into a Text-to-Speech engine that reads every word aloud.
+
+ABSOLUTELY FORBIDDEN in voiceover (TTS will read these as spoken words):
+- Labels like "Hook:", "Scene 1:", "Narrator:", "Solution:", "Point 1:"
+- Actions in brackets like "[pauses]", "[dramatic music]", "[cut to]"
+- Asterisks or markdown formatting like **bold** or *italic*
+- Meta-instructions like "In this scene we see..." or "The narrator says..."
+- ANY non-spoken formatting
+
+REQUIRED in voiceover:
+- ONLY the raw spoken words that the voice actor would say
+- Natural, conversational language as if speaking to a friend
+- No stage directions, no labels, no formatting
+
+GOOD voiceover example:
+"Did you know that 90% of startups fail in the first year? But here's what nobody tells you about the ones that succeed..."
+
+BAD voiceover (TTS will read these aloud - NEVER DO THIS):
+"Hook: Did you know that 90% of startups fail?"
+"[Narrator] Here is what we learned..."
+"**Point 1:** The first thing to understand is..."
+
 === VOICEOVER STYLE (Critical for engagement) ===
 - Use an ENERGETIC, conversational tone like a TED speaker
-- Start EACH scene with a HOOK: surprising fact, provocative question, or bold statement
+- Start EACH scene with a surprising fact, provocative question, or bold statement
 - Examples: "But here's what nobody tells you..." "What if I told you..." "The shocking truth is..."
 - Mix short punchy sentences (5-8 words) with longer explanations
 - Include rhetorical questions to create engagement pauses
