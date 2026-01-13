@@ -403,10 +403,10 @@ async function generateSceneAudioReplicate(
           version: "resemble-ai/chatterbox-pro",
           input: {
             prompt: scene.voiceover,
-            voice: "William (Whispering)",
+            voice: "Ember",
             pitch: "medium",
-            temperature: 0.8,
-            exaggeration: 0.5,
+            temperature: 1,
+            exaggeration: 1,
           },
         }),
       });
