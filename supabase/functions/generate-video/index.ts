@@ -694,46 +694,41 @@ These will be integrated directly into the illustration as PART OF THE COMPOSITI
 ` : ""}
 
 === EDITORIAL ILLUSTRATION DESIGN RULES (CRITICAL for visual prompts) ===
-Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES. Text MUST be part of the composition, not overlays.
+Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES with clear visual storytelling.
 
 SEMANTIC LAYOUT RULES (visual structure MUST match concept):
 - "Two Modes" or "Comparison" → composition MUST be visually SPLIT (left/right or top/bottom)
 - "Stacking Up" or "Growth" → visual elements MUST be vertical and ASCENDING
 - "Timeline" or "Journey" → HORIZONTAL progression with clear stages
-- "Formula" or "Equation" → equation-style layout with visual operators (+, =, →)
+- "Formula" or "Equation" → equation-style layout with visual operators (icons representing +, =, →)
 - "Choice" or "Fork" → clear DIVERGING paths
 
-TEXT HIERARCHY (Strictly follow in each visual prompt):
-1. HEADLINE: Big, bold, central or upper-third placement (e.g., "THE 90-DAY RULE")
-2. SUBTEXT: Smaller, supporting elements below or integrated
-3. LABELS: Minimal, integrated with visual elements
-
 COMPOSITION REQUIREMENTS:
-- Reserve "negative space" zones specifically for text placement
-- Describe WHERE text sits: "Title centered in upper third, illustration anchoring bottom"
-- Text must NEVER clash with busy artwork areas
-- Use gradient or solid zones behind text for legibility
+- Describe CONCRETE visual elements: objects, characters, settings, lighting
+- Specify layout arrangement: centered, split, diagonal, ascending, etc.
+- Include mood, colors, and atmosphere
+- Use visual metaphors, NOT text labels in the illustration
 
-=== VISUAL PROMPT FORMAT ===
-CRITICAL: Visual prompts describe WHAT TO ILLUSTRATE, not metadata!
-- DO NOT include style names, beat labels, or formatting instructions in the visual description
-- DO NOT write things like "Hook Urban Minimalist" - these are INSTRUCTIONS, not content
-- DESCRIBE the actual visual scene: objects, people, actions, composition, colors
-- Write prompts as if describing a photograph or painting to an artist
+=== VISUAL PROMPT FORMAT (CRITICAL - NO TEXT OR LABELS!) ===
+FORBIDDEN in visualPrompt:
+- ANY bracketed prefixes like [HOOK], [CONFLICT], [SOLUTION], etc.
+- Style names like "Urban Minimalist", "Doodle style", etc.
+- Scene numbers or beat labels
+- Instructions or metadata
+- Literal text that would appear in the image (like "THE FORMULA" or "STEP 1")
 
-Each visualPrompt MUST be a PURE SCENE DESCRIPTION containing:
-1. Concrete visual elements: objects, characters, settings
-2. Composition: how elements are arranged (split, centered, ascending)
-3. Mood and lighting: atmosphere, colors, contrast
-4. Action or state: what's happening in the scene
+REQUIRED in visualPrompt:
+- PURE visual description of objects, people, actions, compositions
+- Describe what an artist would DRAW, not conceptual labels
+- Use visual metaphors to represent concepts (e.g., "a door opening to reveal light" for opportunity)
 
 GOOD visualPrompt example:
-"A split composition showing contrast. LEFT SIDE: A chaotic desk with scattered papers, multiple browser tabs visible on a monitor, coffee cups piling up - visual chaos representing distraction. RIGHT SIDE: A clean, organized workspace with a single focused project, neat stacks, a plant - calm productivity. Warm lighting on the organized side, harsh fluorescent on the chaotic side. Muted earth tones with a pop of green on the success side."
+"A split composition showing contrast. LEFT SIDE: A chaotic desk with scattered papers, multiple browser tabs visible on a monitor, coffee cups piling up, harsh fluorescent lighting creating stress. RIGHT SIDE: A clean, organized workspace with a single focused project, neat stacks, a thriving plant, warm golden hour lighting streaming through a window. Muted earth tones overall with a pop of vibrant green on the organized side. An overhead camera angle showing both spaces."
 
-BAD visualPrompt example (DO NOT do this):
-"[HOOK - Urban Minimalist Doodle] Hook scene showing concept..." - This puts labels in the image!
-
-REMEMBER: The visualPrompt goes directly to an AI image generator. It must describe VISUALS, not concepts or labels.
+BAD visualPrompt example (NEVER do this):
+"[HOOK] Urban Minimalist Doodle style showing the concept of productivity..."
+"The title 'SUCCESS FORMULA' in bold letters above a diagram..."
+"STEP 1: First phase of the journey..."
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON with this exact structure:
@@ -744,8 +739,8 @@ Return ONLY valid JSON with this exact structure:
       "number": 1,
       "narrativeBeat": "hook",
       "voiceover": "Hook opening that grabs attention... main content with varied pacing...",
-      "visualPrompt": "[HOOK - Centered Mystery] Primary dynamic visual with action and movement... HEADLINE 'TEXT' placement... negative space description...",
-      "subVisuals": ["[HOOK - Detail] Second visual with different angle...", "[HOOK - Reveal] Third visual showing result..."],
+      "visualPrompt": "A glowing golden key floating in darkness, surrounded by swirling particles of light. The key hovers over a mysterious locked box with intricate engravings. Dramatic rim lighting highlights the key's edges. Dark navy background fading to deep purple at the edges. Sense of anticipation and hidden potential.",
+      "subVisuals": ["Close-up of fingers reaching toward the floating key, soft focus on the background", "The box beginning to open with rays of warm light spilling out"],
       "duration": 18${includeTextOverlay ? `,
       "title": "Punchy Headline",
       "subtitle": "Key takeaway in one impactful line"` : ""}
@@ -757,8 +752,8 @@ REMEMBER:
 - NO scene over 25 seconds
 - Exactly ${sceneCount} scenes
 - Map each scene to a narrativeBeat: hook, conflict, choice, solution, or formula
-- Visual prompts MUST include [BEAT - Layout] prefix and explicit text placement
-- Semantic layouts: visual structure matches conceptual structure`;
+- visualPrompt must contain ONLY visual descriptions - NO text labels, NO style names, NO beat prefixes
+- Semantic layouts: visual composition reflects the narrative concept through visual metaphor`;
 
     console.log("Step 1: Generating script...");
     
