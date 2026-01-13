@@ -342,200 +342,193 @@ async function generateImageWithReplicate(
 // REMOVED: Lovable AI fallback - now using Replicate only
 
 
-// Helpers to classify TTS failures
-function truncateForLogs(input: string, maxLen = 220) {
-  if (!input) return "";
-  return input.length > maxLen ? input.slice(0, maxLen) + "…" : input;
-}
-
-function isHardQuotaExhausted(status: number, errorText: string) {
-  if (status !== 429 && status !== 402) return false;
-  const t = (errorText || "").toLowerCase();
-  return (
-    t.includes("limit: 0") ||
-    t.includes("resource_exhausted") ||
-    t.includes("quota") ||
-    t.includes("exhaust") ||
-    t.includes("insufficient")
-  );
-}
-
- // Generate TTS for a single scene
-async function generateSceneAudio(
+// Generate TTS for a single scene using Replicate minimax/speech-02-turbo
+async function generateSceneAudioReplicate(
   scene: Scene,
   sceneIndex: number,
-  GEMINI_API_KEY: string,
+  replicateTtsApiKey: string,
   supabase: any,
   userId: string,
-  projectId: string,
-  enabledModels: { flash: boolean; pro: boolean }
-): Promise<{ url: string | null; disableFlash: boolean; disablePro: boolean }> {
-  const TTS_ATTEMPTS_PER_MODEL = 2;
-  const TTS_RETRY_BASE_DELAY_MS = 200;
+  projectId: string
+): Promise<{ url: string | null; error?: string }> {
+  const TTS_ATTEMPTS = 3;
+  const TTS_RETRY_BASE_DELAY_MS = 1000;
 
   let finalAudioUrl: string | null = null;
-  let lastTtsError: string | null = null;
-  let disableFlash = false;
-  let disablePro = false;
+  let lastError: string | null = null;
 
-  const modelCandidates = [
-    ...(enabledModels.flash ? ["gemini-2.5-flash-preview-tts"] : []),
-    ...(enabledModels.pro ? ["gemini-2.5-pro-preview-tts"] : []),
-  ];
+  for (let attempt = 1; attempt <= TTS_ATTEMPTS; attempt++) {
+    try {
+      console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate TTS`);
+      
+      // Create prediction with minimax/speech-02-turbo
+      const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateTtsApiKey}`,
+          "Content-Type": "application/json",
+          "Prefer": "wait", // Wait for completion (up to 60s)
+        },
+        body: JSON.stringify({
+          version: "minimax/speech-02-turbo",
+          input: {
+            text: scene.voiceover,
+            pitch: 0,
+            speed: 1,
+            volume: 1,
+            bitrate: 128000,
+            channel: "mono",
+            emotion: "auto",
+            voice_id: "Deep_Voice_Man",
+            sample_rate: 32000,
+            audio_format: "mp3",
+            language_boost: "English",
+            subtitle_enable: false,
+            english_normalization: true,
+          },
+        }),
+      });
 
-  for (const modelName of modelCandidates) {
-    for (let attempt = 1; attempt <= TTS_ATTEMPTS_PER_MODEL; attempt++) {
-      try {
-        const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: `Please read this text clearly and naturally:\n\n${scene.voiceover}`,
-                    },
-                  ],
-                },
-              ],
-              generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: {
-                      voiceName: "Aoede",
-                    },
-                  },
-                },
-              },
-            }),
-          }
-        );
-
-        if (!ttsResponse.ok) {
-          const errorText = await ttsResponse.text();
-          lastTtsError = `model=${modelName} status=${ttsResponse.status} attempt=${attempt}`;
-
-          console.warn(
-            `Scene ${sceneIndex + 1} TTS HTTP error (${modelName}) status=${ttsResponse.status} attempt=${attempt}: ${truncateForLogs(errorText)}`
-          );
-
-          // Permanent / configuration issues
-          if (ttsResponse.status === 400 && errorText.toLowerCase().includes("response modalities")) {
-            break;
-          }
-          if (ttsResponse.status === 404) {
-            break;
-          }
-
-          // Hard quota exhaustion (no point retrying this model)
-          const hardQuota = isHardQuotaExhausted(ttsResponse.status, errorText);
-          if (hardQuota) {
-            if (modelName.includes("flash-preview-tts")) disableFlash = true;
-            if (modelName.includes("-pro-")) disablePro = true;
-            break;
-          }
-
-          // Retriable (rate limit / transient)
-          const retriable = ttsResponse.status === 429 || ttsResponse.status >= 500;
-          if (retriable && attempt < TTS_ATTEMPTS_PER_MODEL) {
-            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-            continue;
-          }
-          continue;
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error(`[TTS] Scene ${sceneIndex + 1} HTTP error: ${createResponse.status} - ${errorText}`);
+        
+        if (createResponse.status === 401) {
+          return { url: null, error: "Invalid Replicate TTS API token" };
         }
-
-        const ttsData = await ttsResponse.json();
-
-        if (ttsData?.error) {
-          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-            continue;
-          }
-          continue;
+        if (createResponse.status === 402) {
+          return { url: null, error: "Replicate credits exhausted - add funds at replicate.com" };
         }
-
-        const inlineAudio = pickFirstInlineAudio(ttsData);
-
-        if (!inlineAudio?.data) {
-          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-            continue;
-          }
-          if (modelName.includes("flash-preview-tts")) disableFlash = true;
-          continue;
-        }
-
-        const mimeTypeRaw = inlineAudio.mimeType || "audio/wav";
-        const decoded = new Uint8Array(decodeInlineDataToBytes({ data: inlineAudio.data }));
-
-        let uploadBytes: Uint8Array = decoded;
-        let uploadMime = mimeTypeRaw;
-        let ext = "wav";
-
-        if (/audio\/L16/i.test(mimeTypeRaw) || /pcm/i.test(mimeTypeRaw)) {
-          const rate = parsePcmSampleRate(mimeTypeRaw) ?? 24000;
-          uploadBytes = pcm16ToWavAuto(decoded, rate, 1);
-          uploadMime = "audio/wav";
-          ext = "wav";
-        } else if (mimeTypeRaw.includes("mp3") || mimeTypeRaw.includes("mpeg")) {
-          uploadMime = "audio/mpeg";
-          ext = "mp3";
-        } else if (mimeTypeRaw.includes("wav")) {
-          uploadMime = "audio/wav";
-          ext = "wav";
-        } else {
-          uploadMime = "audio/wav";
-          ext = "wav";
-        }
-
-        if (!uploadBytes?.length || uploadBytes.length < 512) {
-          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-            continue;
-          }
-          continue;
-        }
-
-        const uploadCopy = new Uint8Array(uploadBytes.length);
-        uploadCopy.set(uploadBytes);
-
-        const audioBlob = new Blob([uploadCopy.buffer], { type: uploadMime });
-        const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
-          contentType: uploadMime,
-          upsert: true,
-        });
-
-        if (uploadError) {
-          console.error(`Scene ${sceneIndex + 1} audio upload failed:`, uploadError);
-          if (attempt < TTS_ATTEMPTS_PER_MODEL) {
-            await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-            continue;
-          }
-          continue;
-        }
-
-        const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
-        finalAudioUrl = publicUrl;
-        console.log(`Scene ${sceneIndex + 1} audio OK (${modelName})`);
-        break;
-      } catch (ttsError) {
-        if (attempt < TTS_ATTEMPTS_PER_MODEL) {
+        if (createResponse.status === 429 && attempt < TTS_ATTEMPTS) {
           await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
           continue;
         }
-        console.error(`Scene ${sceneIndex + 1} TTS error:`, ttsError);
+        
+        lastError = `Replicate TTS error ${createResponse.status}: ${errorText}`;
+        if (attempt < TTS_ATTEMPTS) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        continue;
+      }
+
+      let prediction = await createResponse.json();
+      console.log(`[TTS] Scene ${sceneIndex + 1} prediction status: ${prediction.status}, id: ${prediction.id}`);
+
+      // Poll for completion if not done
+      let pollAttempts = 0;
+      const maxPolls = 120; // 2 minutes max for TTS
+
+      while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
+        if (prediction.status === "canceled") {
+          console.error(`[TTS] Scene ${sceneIndex + 1} prediction was canceled`);
+          lastError = "TTS generation was canceled";
+          break;
+        }
+
+        await sleep(1000);
+        pollAttempts++;
+
+        const pollResponse = await fetch(prediction.urls.get, {
+          headers: { Authorization: `Bearer ${replicateTtsApiKey}` },
+        });
+
+        if (!pollResponse.ok) {
+          console.error(`[TTS] Scene ${sceneIndex + 1} poll failed: ${pollResponse.status}`);
+          lastError = `Failed to poll TTS status: ${pollResponse.status}`;
+          break;
+        }
+
+        prediction = await pollResponse.json();
+      }
+
+      if (prediction.status !== "succeeded") {
+        console.error(`[TTS] Scene ${sceneIndex + 1} generation failed: ${prediction.error || "timeout"}`);
+        lastError = prediction.error || "TTS generation timed out";
+        if (attempt < TTS_ATTEMPTS) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        continue;
+      }
+
+      // Get the output URL - minimax returns FileOutput with url() method or direct URL
+      const outputUrl = typeof prediction.output === "string"
+        ? prediction.output
+        : prediction.output?.url || prediction.output;
+
+      console.log(`[TTS] Scene ${sceneIndex + 1} output URL: ${outputUrl?.substring?.(0, 80) || outputUrl}...`);
+
+      if (!outputUrl) {
+        console.error(`[TTS] Scene ${sceneIndex + 1} no output URL. Full output: ${JSON.stringify(prediction.output)}`);
+        lastError = "No audio URL in TTS output";
+        if (attempt < TTS_ATTEMPTS) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        continue;
+      }
+
+      // Download the audio file
+      const audioResponse = await fetch(outputUrl);
+      if (!audioResponse.ok) {
+        console.error(`[TTS] Scene ${sceneIndex + 1} failed to download audio: ${audioResponse.status}`);
+        lastError = `Failed to download generated audio: ${audioResponse.status}`;
+        if (attempt < TTS_ATTEMPTS) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        continue;
+      }
+
+      const audioBuffer = await audioResponse.arrayBuffer();
+      const audioBytes = new Uint8Array(audioBuffer);
+
+      if (audioBytes.length < 512) {
+        console.error(`[TTS] Scene ${sceneIndex + 1} audio too small: ${audioBytes.length} bytes`);
+        lastError = "Generated audio is too small";
+        if (attempt < TTS_ATTEMPTS) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        continue;
+      }
+
+      // Upload to Supabase storage
+      const audioBlob = new Blob([audioBytes.buffer], { type: "audio/mpeg" });
+      const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.mp3`;
+
+      const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
+        contentType: "audio/mpeg",
+        upsert: true,
+      });
+
+      if (uploadError) {
+        console.error(`[TTS] Scene ${sceneIndex + 1} audio upload failed:`, uploadError);
+        lastError = `Audio upload failed: ${uploadError.message}`;
+        if (attempt < TTS_ATTEMPTS) {
+          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+          continue;
+        }
+        continue;
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
+      finalAudioUrl = publicUrl;
+      console.log(`[TTS] Scene ${sceneIndex + 1} audio OK - ${audioBytes.length} bytes`);
+      break;
+
+    } catch (ttsError) {
+      console.error(`[TTS] Scene ${sceneIndex + 1} exception:`, ttsError);
+      lastError = ttsError instanceof Error ? ttsError.message : "Unknown TTS error";
+      if (attempt < TTS_ATTEMPTS) {
+        await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+        continue;
       }
     }
-    if (finalAudioUrl) break;
   }
 
-  return { url: finalAudioUrl, disableFlash, disablePro };
+  return { url: finalAudioUrl, error: lastError || undefined };
 }
 
 serve(async (req) => {
@@ -569,7 +562,7 @@ serve(async (req) => {
 
     const { data: apiKeys, error: apiKeysError } = await supabase
       .from("user_api_keys")
-      .select("gemini_api_key, replicate_api_token")
+      .select("replicate_api_token")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -581,15 +574,7 @@ serve(async (req) => {
       );
     }
 
-    if (!apiKeys?.gemini_api_key) {
-      return new Response(
-        JSON.stringify({ error: "Please add your Google Gemini API key in Settings" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const GEMINI_API_KEY = apiKeys.gemini_api_key;
-    const REPLICATE_API_TOKEN = apiKeys.replicate_api_token;
+    const REPLICATE_API_TOKEN = apiKeys?.replicate_api_token;
     
     // Replicate is REQUIRED for image generation (no fallback)
     if (!REPLICATE_API_TOKEN) {
@@ -599,8 +584,18 @@ serve(async (req) => {
       );
     }
     
-    console.log(`[REPLICATE] Using API key: ${REPLICATE_API_TOKEN.substring(0, 12)}...`);
-    console.log("Using Replicate (prunaai/z-image-turbo) for image generation");
+    // TTS uses the system REPLICATE_TTS_API_KEY secret
+    const REPLICATE_TTS_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
+    if (!REPLICATE_TTS_API_KEY) {
+      console.error("REPLICATE_TTS_API_KEY not configured");
+      return new Response(
+        JSON.stringify({ error: "TTS service not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    console.log(`[REPLICATE] Using API key for images: ${REPLICATE_API_TOKEN.substring(0, 12)}...`);
+    console.log(`[REPLICATE TTS] Using minimax/speech-02-turbo for audio generation`);
 
     const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
 
@@ -861,56 +856,34 @@ REMEMBER:
     console.log("Step 2: Generating audio...");
 
     const audioUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
-    // Track disabled models but don't stop trying entirely
-    const modelStatus = { flashDisabled: false, proDisabled: false, lastSuccessModel: "" };
     const AUDIO_BATCH_SIZE = 2;
-    const INTER_BATCH_DELAY_MS = 1500; // Longer delay to avoid rate limits
+    const INTER_BATCH_DELAY_MS = 2000; // Delay between batches to avoid rate limits
 
     for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += AUDIO_BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + AUDIO_BATCH_SIZE, parsedScript.scenes.length);
       
       console.log(`Audio batch: scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length}`);
       
-      // Determine which models to try for this batch
-      const enabledModels = { 
-        flash: !modelStatus.flashDisabled, 
-        pro: !modelStatus.proDisabled 
-      };
-      
-      // If both are disabled, re-enable flash and try with longer delays
-      if (!enabledModels.flash && !enabledModels.pro) {
-        console.log("Both models were rate-limited, waiting 3s and re-enabling flash...");
-        await sleep(3000);
-        enabledModels.flash = true;
-        modelStatus.flashDisabled = false;
-      }
-      
-      const batchPromises: Promise<{ index: number; result: { url: string | null; disableFlash: boolean; disablePro: boolean } }>[] = [];
+      const batchPromises: Promise<{ index: number; result: { url: string | null; error?: string } }>[] = [];
 
       for (let i = batchStart; i < batchEnd; i++) {
         const scene = parsedScript.scenes[i];
         batchPromises.push(
-          generateSceneAudio(scene, i, GEMINI_API_KEY, supabase, user.id, project.id, enabledModels)
-            .then(result => ({ index: i, result }))
+          generateSceneAudioReplicate(scene, i, REPLICATE_TTS_API_KEY, supabase, user.id, project.id)
+            .then((result: { url: string | null; error?: string }) => ({ index: i, result }))
         );
       }
 
       const batchResults = await Promise.all(batchPromises);
       
       let batchSuccessCount = 0;
-       for (const { index, result } of batchResults) {
-         audioUrls[index] = result.url;
-         if (result.url) batchSuccessCount++;
-
-         if (result.disablePro) {
-           console.log("Pro TTS quota exhausted, disabling for remaining scenes");
-           modelStatus.proDisabled = true;
-         }
-         if (result.disableFlash) {
-           console.log("Flash TTS quota exhausted, disabling for remaining scenes");
-           modelStatus.flashDisabled = true;
-         }
-       }
+      for (const { index, result } of batchResults) {
+        audioUrls[index] = result.url;
+        if (result.url) batchSuccessCount++;
+        if (result.error) {
+          console.warn(`Scene ${index + 1} TTS failed: ${result.error}`);
+        }
+      }
 
       console.log(`Audio batch complete: ${batchSuccessCount}/${batchEnd - batchStart} succeeded`);
 
