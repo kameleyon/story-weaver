@@ -649,6 +649,13 @@ Distribute your ${sceneCount} scenes across this narrative framework:
 - Include rhetorical questions to create engagement pauses
 - Vary emotional energy - build up, then resolve
 
+**CRITICAL INSTRUCTION - AUDIO CLEANLINESS:**
+- The "voiceover" field must contain **ONLY the spoken words**.
+- **DO NOT** use labels like "Hook:", "Scene 1:", "Narrator:", "Solution:", or "Body:".
+- **DO NOT** include stage directions like "[pauses]" or "[upbeat music]".
+- **DO NOT** use markdown formatting (bold/italics) in the voiceover string.
+- Just write the raw text that the robot voice will speak.
+
 ${includeTextOverlay ? `
 === TEXT OVERLAY REQUIREMENTS ===
 - Provide a punchy scene title (2-5 words, like a headline)
