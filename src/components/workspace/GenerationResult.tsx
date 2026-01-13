@@ -32,6 +32,7 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
   const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sceneAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
@@ -95,6 +96,13 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
     };
   }, [isPlayingAll, currentSceneIndex, currentImages.length, currentScene?.duration]);
 
+  const stopSceneAudio = () => {
+    const el = sceneAudioRef.current;
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+  };
+
   const stopPlayAll = () => {
     const el = playAllAudioRef.current;
     setIsPlayingAll(false);
@@ -113,6 +121,8 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
   };
 
   const playSceneAudio = async (index: number) => {
+    stopSceneAudio();
+
     const el = playAllAudioRef.current;
     const scene = scenes[index];
     if (!el) return;
@@ -142,6 +152,7 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
   };
 
   const startPlayAll = async (startIndex: number) => {
+    stopSceneAudio();
     setIsPlayingAll(true);
     await playSceneAudio(startIndex);
   };
@@ -153,6 +164,8 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
   };
 
   const resumePlayAll = async () => {
+    stopSceneAudio();
+
     const el = playAllAudioRef.current;
     if (!el) return;
 
@@ -389,9 +402,13 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
             {currentScene?.audioUrl ? (
               <audio
                 key={currentScene.audioUrl}
+                ref={sceneAudioRef}
                 controls
                 preload="none"
                 src={currentScene.audioUrl}
+                onPlay={() => {
+                  if (isPlayingAll) stopPlayAll();
+                }}
                 className="w-full"
               />
             ) : null}
