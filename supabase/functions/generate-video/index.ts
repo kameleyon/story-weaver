@@ -214,6 +214,10 @@ async function generateImageWithReplicate(
         input: {
           prompt: prompt,
           aspect_ratio: aspectRatio,
+          num_inference_steps: 50,
+          guidance_scale: 0,
+          output_format: "webp",
+          output_quality: 100,
         },
       }),
     });
