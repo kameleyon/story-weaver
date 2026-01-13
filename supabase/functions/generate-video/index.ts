@@ -342,7 +342,7 @@ async function generateImageWithReplicate(
 // REMOVED: Lovable AI fallback - now using Replicate only
 
 
-// Generate TTS for a single scene using Replicate minimax/speech-02-turbo
+// Generate TTS for a single scene using Replicate resemble-ai/chatterbox-pro
 async function generateSceneAudioReplicate(
   scene: Scene,
   sceneIndex: number,
@@ -359,9 +359,9 @@ async function generateSceneAudioReplicate(
 
   for (let attempt = 1; attempt <= TTS_ATTEMPTS; attempt++) {
     try {
-      console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate TTS`);
+      console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate Chatterbox TTS`);
       
-      // Create prediction with minimax/speech-02-turbo
+      // Create prediction with resemble-ai/chatterbox-pro
       const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
         method: "POST",
         headers: {
@@ -370,21 +370,13 @@ async function generateSceneAudioReplicate(
           "Prefer": "wait", // Wait for completion (up to 60s)
         },
         body: JSON.stringify({
-          version: "minimax/speech-02-turbo",
+          version: "resemble-ai/chatterbox-pro",
           input: {
-            text: scene.voiceover,
-            pitch: 0,
-            speed: 1,
-            volume: 1,
-            bitrate: 128000,
-            channel: "mono",
-            emotion: "auto",
-            voice_id: "Deep_Voice_Man",
-            sample_rate: 32000,
-            audio_format: "mp3",
-            language_boost: "English",
-            subtitle_enable: false,
-            english_normalization: true,
+            prompt: scene.voiceover,
+            voice: "William (Whispering)",
+            pitch: "medium",
+            temperature: 0.8,
+            exaggeration: 0.5,
           },
         }),
       });
@@ -452,7 +444,7 @@ async function generateSceneAudioReplicate(
         continue;
       }
 
-      // Get the output URL - minimax returns FileOutput with url() method or direct URL
+      // chatterbox-pro returns a FileOutput - get the URL
       const outputUrl = typeof prediction.output === "string"
         ? prediction.output
         : prediction.output?.url || prediction.output;
@@ -469,7 +461,7 @@ async function generateSceneAudioReplicate(
         continue;
       }
 
-      // Download the audio file
+      // Download the audio file (chatterbox outputs WAV)
       const audioResponse = await fetch(outputUrl);
       if (!audioResponse.ok) {
         console.error(`[TTS] Scene ${sceneIndex + 1} failed to download audio: ${audioResponse.status}`);
@@ -494,12 +486,12 @@ async function generateSceneAudioReplicate(
         continue;
       }
 
-      // Upload to Supabase storage
-      const audioBlob = new Blob([audioBytes.buffer], { type: "audio/mpeg" });
-      const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.mp3`;
+      // Upload to Supabase storage (WAV format from chatterbox)
+      const audioBlob = new Blob([audioBytes.buffer], { type: "audio/wav" });
+      const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
 
       const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
-        contentType: "audio/mpeg",
+        contentType: "audio/wav",
         upsert: true,
       });
 
@@ -1040,10 +1032,10 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
-    // Process images sequentially with a conservative delay between each prediction.
-    // NOTE: Some Replicate accounts get temporarily reduced to ~6 predictions/min (burst=1).
-    const IMAGE_BATCH_SIZE = 1;
-    const IMAGE_DELAY_MS = 11000; // ~5-6 predictions/min, avoids 429-induced "skipped" images
+    // Process images in parallel batches for faster generation
+    // Increase batch size to reduce total time and avoid edge function timeout
+    const IMAGE_BATCH_SIZE = 4; // Process 4 images in parallel
+    const IMAGE_DELAY_MS = 2000; // Short delay between batches
     
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
