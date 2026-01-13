@@ -36,41 +36,11 @@ interface ScriptResponse {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Sanitize visual prompts to remove any text labels, beat prefixes, or style names
-// that the LLM might have included despite instructions
-function sanitizeVisualPrompt(prompt: string): string {
-  let cleaned = prompt;
-  
-  // Remove bracketed prefixes like [HOOK], [CONFLICT], [SOLUTION], [CHOICE], [FORMULA], etc.
-  cleaned = cleaned.replace(/\[(HOOK|CONFLICT|CHOICE|SOLUTION|FORMULA|BEAT|SCENE|STEP|INTRO|OUTRO|CTA|TITLE|SUBTITLE)\s*[-–—:]?\s*[^\]]*\]/gi, '');
-  
-  // Remove style name prefixes like "Urban Minimalist Doodle style:", "Minimalist style:", etc.
-  cleaned = cleaned.replace(/^(Urban\s+)?(Minimalist|Doodle|Stick|Realistic|Anime|3D[\s-]?Pixar|Claymation|Futuristic|Editorial)(\s+style)?\s*[:–—-]?\s*/gi, '');
-  
-  // Remove inline style mentions
-  cleaned = cleaned.replace(/\b(in\s+)?(Urban\s+)?(Minimalist|Doodle)\s+style\b/gi, '');
-  
-  // Remove text instruction phrases that might appear
-  cleaned = cleaned.replace(/\b(with\s+text|text\s+overlay|title\s+reading|text\s+saying|words|lettering|typography)\s*["']?[^,.]*["']?/gi, '');
-  
-  // Remove specific text that shouldn't appear as labels in images
-  cleaned = cleaned.replace(/\b(HOOK|CONFLICT|CHOICE|SOLUTION|FORMULA|EDITORIAL\s+REQUIREMENTS|VISUAL\s+CONTENT|EDITORIAL\s+ILLUSTRA?E?I?O?N?S?)\b/gi, '');
-  
-  // Remove quotes that might contain text instructions
-  cleaned = cleaned.replace(/"[A-Z][A-Z\s]{2,}"/g, '');
-  
-  // Clean up extra whitespace and punctuation
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
-  cleaned = cleaned.replace(/^[,.:;\s]+/, '').replace(/[,.:;\s]+$/, '');
-  
-  return cleaned || prompt; // Fallback to original if cleaning removed everything
-}
-
 // Style-specific prompts optimized for AI image generation
 const STYLE_PROMPTS: Record<string, string> = {
   "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
   
-  "doodle": `Urban Minimalist Doodle style. Line Work: Bold, consistent-weight black outlines (monoline) with slightly rounded terminals for a friendly, approachable feel. Color Palette: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background (recycled paper/newsprint texture). Character Design: 'Object-Head' surrealism—replace character heads with symbolic objects for an iconographic look. Texturing: Subtle lo-fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line (vintage screen-print quality). Composition: Centralized and floating—main subject grounded, surrounded by a halo of smaller floating icons (coins, arrows, charts). Art Style: Flat 2D Vector Illustration / Indie Comic Aesthetic. Vibe: Lo-fi, chill, entrepreneurial, whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
+  "doodle": `Flat 2D vector illustration with an indie comic aesthetic. Bold, monoline black outlines with slightly rounded terminals. Color palette of muted primary tones (dusty red, sage green, mustard yellow, slate blue) set against a warm, textured off-white recycled paper background. Use 'object-head' surrealism for characters. Apply lo-fi texturing, subtle paper grain, and intentional print misalignments. Composition should feel centralized with floating iconographic elements. Vibe: Chill, entrepreneurial, and whimsical.`,
   
   "stick": `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
   
@@ -207,7 +177,7 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Replicate prunaai/z-image-turbo
+// Generate image using Replicate prunaai/p-image
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
@@ -216,25 +186,22 @@ async function generateImageWithReplicate(
   | { ok: true; imageBase64: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // z-image-turbo constraints:
-  // - width and height must be divisible by 16
-  // - height must be <= 1440
-  // Portrait targets ~9:16, Square 1:1, Landscape ~16:9
-  const dimensions = format === "portrait" 
-    ? { width: 720, height: 1280 }  // 9:16 ratio (both divisible by 16, height<=1440)
+  // p-image uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
+  const aspectRatio = format === "portrait" 
+    ? "9:16"
     : format === "square" 
-    ? { width: 1024, height: 1024 } // 1:1 ratio (divisible by 16)
-    : { width: 1440, height: 816 }; // ~16:9 ratio (divisible by 16, height<=1440)
+    ? "1:1"
+    : "16:9";
   
-  console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
+  console.log(`[REPLICATE] Starting image generation with prunaai/p-image`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
-  console.log(`[REPLICATE] Format: ${format}, Dimensions: ${dimensions.width}x${dimensions.height}`);
+  console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
   
   try {
     const startTime = Date.now();
     
-    // Create prediction with prunaai/z-image-turbo model using width/height
+    // Create prediction with prunaai/p-image model using aspect_ratio
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -243,15 +210,10 @@ async function generateImageWithReplicate(
         "Prefer": "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
-        version: "prunaai/z-image-turbo",
+        version: "prunaai/p-image",
         input: {
           prompt: prompt,
-          width: dimensions.width,
-          height: dimensions.height,
-          num_inference_steps: 50,
-          guidance_scale: 0,
-          output_format: "webp",
-          output_quality: 100,
+          aspect_ratio: aspectRatio,
         },
       }),
     });
@@ -708,32 +670,9 @@ Distribute your ${sceneCount} scenes across this narrative framework:
    - Clear visual equation: Input + Action = Outcome
    - Triumphant, resolution imagery
 
-=== CLEAN AUDIO RULE (CRITICAL - TEXT-TO-SPEECH WILL READ THIS ALOUD) ===
-The 'voiceover' field is fed DIRECTLY into a Text-to-Speech engine that reads every word aloud.
-
-ABSOLUTELY FORBIDDEN in voiceover (TTS will read these as spoken words):
-- Labels like "Hook:", "Scene 1:", "Narrator:", "Solution:", "Point 1:"
-- Actions in brackets like "[pauses]", "[dramatic music]", "[cut to]"
-- Asterisks or markdown formatting like **bold** or *italic*
-- Meta-instructions like "In this scene we see..." or "The narrator says..."
-- ANY non-spoken formatting
-
-REQUIRED in voiceover:
-- ONLY the raw spoken words that the voice actor would say
-- Natural, conversational language as if speaking to a friend
-- No stage directions, no labels, no formatting
-
-GOOD voiceover example:
-"Did you know that 90% of startups fail in the first year? But here's what nobody tells you about the ones that succeed..."
-
-BAD voiceover (TTS will read these aloud - NEVER DO THIS):
-"Hook: Did you know that 90% of startups fail?"
-"[Narrator] Here is what we learned..."
-"**Point 1:** The first thing to understand is..."
-
 === VOICEOVER STYLE (Critical for engagement) ===
 - Use an ENERGETIC, conversational tone like a TED speaker
-- Start EACH scene with a surprising fact, provocative question, or bold statement
+- Start EACH scene with a HOOK: surprising fact, provocative question, or bold statement
 - Examples: "But here's what nobody tells you..." "What if I told you..." "The shocking truth is..."
 - Mix short punchy sentences (5-8 words) with longer explanations
 - Include rhetorical questions to create engagement pauses
@@ -747,48 +686,46 @@ These will be integrated directly into the illustration as PART OF THE COMPOSITI
 ` : ""}
 
 === EDITORIAL ILLUSTRATION DESIGN RULES (CRITICAL for visual prompts) ===
-Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES with clear visual storytelling.
+Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES. Text MUST be part of the composition, not overlays.
 
 SEMANTIC LAYOUT RULES (visual structure MUST match concept):
 - "Two Modes" or "Comparison" → composition MUST be visually SPLIT (left/right or top/bottom)
 - "Stacking Up" or "Growth" → visual elements MUST be vertical and ASCENDING
 - "Timeline" or "Journey" → HORIZONTAL progression with clear stages
-- "Formula" or "Equation" → equation-style layout with visual operators (icons representing +, =, →)
+- "Formula" or "Equation" → equation-style layout with visual operators (+, =, →)
 - "Choice" or "Fork" → clear DIVERGING paths
 
+TEXT HIERARCHY (Strictly follow in each visual prompt):
+1. HEADLINE: Big, bold, central or upper-third placement (e.g., "THE 90-DAY RULE")
+2. SUBTEXT: Smaller, supporting elements below or integrated
+3. LABELS: Minimal, integrated with visual elements
+
 COMPOSITION REQUIREMENTS:
-- Describe CONCRETE visual elements: objects, characters, settings, lighting
-- Specify layout arrangement: centered, split, diagonal, ascending, etc.
-- Include mood, colors, and atmosphere
-- Use visual metaphors, NOT text labels in the illustration
+- Reserve "negative space" zones specifically for text placement
+- Describe WHERE text sits: "Title centered in upper third, illustration anchoring bottom"
+- Text must NEVER clash with busy artwork areas
+- Use gradient or solid zones behind text for legibility
 
-=== VISUAL PROMPT FORMAT (ABSOLUTELY CRITICAL - ZERO TEXT IN IMAGES!) ===
+=== VISUAL PROMPT FORMAT ===
+CRITICAL: Visual prompts describe WHAT TO ILLUSTRATE, not metadata!
+- DO NOT include style names, beat labels, or formatting instructions in the visual description
+- DO NOT write things like "Hook Urban Minimalist" - these are INSTRUCTIONS, not content
+- DESCRIBE the actual visual scene: objects, people, actions, composition, colors
+- Write prompts as if describing a photograph or painting to an artist
 
-**THE IMAGE GENERATOR RENDERS ANY WORDS AS VISIBLE TEXT IN THE IMAGE**
-This means if you write "HOOK" or "FORMULA" anywhere in visualPrompt, it will appear as ugly, garbled text burned into the image. This RUINS the output.
-
-ABSOLUTELY FORBIDDEN in visualPrompt (will cause text to render in image):
-- ANY word in ALL CAPS (like HOOK, CONFLICT, SOLUTION, FORMULA, SUCCESS, STEP)
-- ANY bracketed prefixes like [HOOK], [CONFLICT], [SOLUTION], etc.
-- Style names like "Urban Minimalist", "Doodle style", etc.
-- Scene numbers, beat labels, or category names
-- Instructions or metadata
-- ANY word meant as a label or title
-
-REQUIRED in visualPrompt:
-- ONLY describe visual objects, people, actions, colors, lighting, composition
-- Describe what a camera would SEE, not concepts or labels
-- Use lowercase descriptive language
-- Use visual metaphors (e.g., "a glowing key above a locked chest" for opportunity)
+Each visualPrompt MUST be a PURE SCENE DESCRIPTION containing:
+1. Concrete visual elements: objects, characters, settings
+2. Composition: how elements are arranged (split, centered, ascending)
+3. Mood and lighting: atmosphere, colors, contrast
+4. Action or state: what's happening in the scene
 
 GOOD visualPrompt example:
-"A split composition showing contrast. On the left, a chaotic desk with scattered papers, cluttered screens, coffee cups, harsh fluorescent lighting. On the right, a clean organized workspace with a single project, neat stacks, a thriving plant, warm golden sunlight through a window. Muted earth tones with green accent on the organized side. Overhead camera angle."
+"A split composition showing contrast. LEFT SIDE: A chaotic desk with scattered papers, multiple browser tabs visible on a monitor, coffee cups piling up - visual chaos representing distraction. RIGHT SIDE: A clean, organized workspace with a single focused project, neat stacks, a plant - calm productivity. Warm lighting on the organized side, harsh fluorescent on the chaotic side. Muted earth tones with a pop of green on the success side."
 
-BAD visualPrompt (WILL RENDER AS TEXT IN IMAGE - NEVER DO THIS):
-"[HOOK] Urban Minimalist showing productivity..."
-"The word SUCCESS above a trophy..."
-"FORMULA: diagram showing steps..."
-"HOOK visual with editorial layout..."
+BAD visualPrompt example (DO NOT do this):
+"[HOOK - Urban Minimalist Doodle] Hook scene showing concept..." - This puts labels in the image!
+
+REMEMBER: The visualPrompt goes directly to an AI image generator. It must describe VISUALS, not concepts or labels.
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON with this exact structure:
@@ -799,8 +736,8 @@ Return ONLY valid JSON with this exact structure:
       "number": 1,
       "narrativeBeat": "hook",
       "voiceover": "Hook opening that grabs attention... main content with varied pacing...",
-      "visualPrompt": "A glowing golden key floating in darkness, surrounded by swirling particles of light. The key hovers over a mysterious locked box with intricate engravings. Dramatic rim lighting highlights the key's edges. Dark navy background fading to deep purple at the edges. Sense of anticipation and hidden potential.",
-      "subVisuals": ["Close-up of fingers reaching toward the floating key, soft focus on the background", "The box beginning to open with rays of warm light spilling out"],
+      "visualPrompt": "[HOOK - Centered Mystery] Primary dynamic visual with action and movement... HEADLINE 'TEXT' placement... negative space description...",
+      "subVisuals": ["[HOOK - Detail] Second visual with different angle...", "[HOOK - Reveal] Third visual showing result..."],
       "duration": 18${includeTextOverlay ? `,
       "title": "Punchy Headline",
       "subtitle": "Key takeaway in one impactful line"` : ""}
@@ -812,8 +749,8 @@ REMEMBER:
 - NO scene over 25 seconds
 - Exactly ${sceneCount} scenes
 - Map each scene to a narrativeBeat: hook, conflict, choice, solution, or formula
-- visualPrompt must contain ONLY visual descriptions - NO text labels, NO style names, NO beat prefixes
-- Semantic layouts: visual composition reflects the narrative concept through visual metaphor`;
+- Visual prompts MUST include [BEAT - Layout] prefix and explicit text placement
+- Semantic layouts: visual structure matches conceptual structure`;
 
     console.log("Step 1: Generating script...");
     
@@ -1095,12 +1032,11 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
       
-      // Primary visual (always) - sanitize the prompt before building
-      const sanitizedMainPrompt = sanitizeVisualPrompt(scene.visualPrompt);
+      // Primary visual (always)
       imageTasks.push({
         sceneIndex: i,
         subIndex: 0,
-        prompt: buildImagePrompt(sanitizedMainPrompt, scene, 0)
+        prompt: buildImagePrompt(scene.visualPrompt, scene, 0)
       });
       
       // Sub-visuals based on scene duration
@@ -1110,11 +1046,10 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
         const subVisualsToUse = Math.min(scene.subVisuals.length, maxSubVisuals);
         
         for (let j = 0; j < subVisualsToUse; j++) {
-          const sanitizedSubPrompt = sanitizeVisualPrompt(scene.subVisuals[j]);
           imageTasks.push({
             sceneIndex: i,
             subIndex: j + 1,
-            prompt: buildImagePrompt(sanitizedSubPrompt, scene, j + 1)
+            prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1)
           });
         }
       }
@@ -1135,10 +1070,10 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
-    // Process images in PARALLEL batches of 3 for speed
-    // Replicate handles concurrent requests well; we batch to avoid overwhelming and for progress updates
-    const IMAGE_BATCH_SIZE = 3;
-    const INTER_IMAGE_BATCH_DELAY_MS = 2000; // Small delay between batches
+    // Process images sequentially with a conservative delay between each prediction.
+    // NOTE: Some Replicate accounts get temporarily reduced to ~6 predictions/min (burst=1).
+    const IMAGE_BATCH_SIZE = 1;
+    const IMAGE_DELAY_MS = 11000; // ~5-6 predictions/min, avoids 429-induced "skipped" images
     
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
@@ -1276,9 +1211,9 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       await persistProgress(completedImages);
       console.log(`Image progress: ${completedImages}/${imageTasks.length} complete`);
       
-      // Small delay between batches to avoid overwhelming
+      // Rate limit delay between batches (critical for Replicate)
       if (batchEnd < imageTasks.length) {
-        await sleep(INTER_IMAGE_BATCH_DELAY_MS);
+        await sleep(IMAGE_DELAY_MS);
       }
     }
     
