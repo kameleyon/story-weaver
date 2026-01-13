@@ -280,7 +280,7 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
               <motion.img
                 key={displayedImageUrl}
                 src={displayedImageUrl}
-                alt={`Scene ${currentScene?.number}`}
+                alt={currentScene?.title ? `Visual: ${currentScene.title}` : "Generated visual"}
                 loading="lazy"
                 className="w-full h-full object-cover"
                 initial={{ opacity: 0, scale: 1 }}
@@ -291,11 +291,12 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
                 exit={{ opacity: 0 }}
                 transition={{
                   opacity: { duration: 0.35, ease: "easeOut" },
-                  scale: { 
-                    duration: currentImages.length > 1 
-                      ? (currentScene?.duration ?? 6) / currentImages.length 
-                      : Math.max(1, currentScene?.duration ?? 6), 
-                    ease: "linear" 
+                  scale: {
+                    duration:
+                      currentImages.length > 1
+                        ? (currentScene?.duration ?? 6) / currentImages.length
+                        : Math.max(1, currentScene?.duration ?? 6),
+                    ease: "linear",
                   },
                 }}
               />
@@ -309,7 +310,7 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
                 transition={{ duration: 0.2 }}
               >
                 <Play className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Scene {currentScene?.number} preview</p>
+                <p className="text-sm">Preview</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -411,12 +412,12 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
                 {scene.imageUrl ? (
                   <img
                     src={scene.imageUrl}
-                    alt={`Scene ${scene.number}`}
+                    alt={scene.title ? `Visual: ${scene.title}` : "Generated visual"}
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className="w-full h-full bg-muted/50 flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground">Scene {scene.number}</span>
+                    <span className="text-xs text-muted-foreground">Preview</span>
                   </div>
                 )}
                 <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-xs text-white">
