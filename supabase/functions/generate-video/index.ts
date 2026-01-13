@@ -36,6 +36,36 @@ interface ScriptResponse {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// Sanitize visual prompts to remove any text labels, beat prefixes, or style names
+// that the LLM might have included despite instructions
+function sanitizeVisualPrompt(prompt: string): string {
+  let cleaned = prompt;
+  
+  // Remove bracketed prefixes like [HOOK], [CONFLICT], [SOLUTION], [CHOICE], [FORMULA], etc.
+  cleaned = cleaned.replace(/\[(HOOK|CONFLICT|CHOICE|SOLUTION|FORMULA|BEAT|SCENE|STEP|INTRO|OUTRO|CTA|TITLE|SUBTITLE)\s*[-–—:]?\s*[^\]]*\]/gi, '');
+  
+  // Remove style name prefixes like "Urban Minimalist Doodle style:", "Minimalist style:", etc.
+  cleaned = cleaned.replace(/^(Urban\s+)?(Minimalist|Doodle|Stick|Realistic|Anime|3D[\s-]?Pixar|Claymation|Futuristic|Editorial)(\s+style)?\s*[:–—-]?\s*/gi, '');
+  
+  // Remove inline style mentions
+  cleaned = cleaned.replace(/\b(in\s+)?(Urban\s+)?(Minimalist|Doodle)\s+style\b/gi, '');
+  
+  // Remove text instruction phrases that might appear
+  cleaned = cleaned.replace(/\b(with\s+text|text\s+overlay|title\s+reading|text\s+saying|words|lettering|typography)\s*["']?[^,.]*["']?/gi, '');
+  
+  // Remove specific text that shouldn't appear as labels in images
+  cleaned = cleaned.replace(/\b(HOOK|CONFLICT|CHOICE|SOLUTION|FORMULA|EDITORIAL\s+REQUIREMENTS|VISUAL\s+CONTENT|EDITORIAL\s+ILLUSTRA?E?I?O?N?S?)\b/gi, '');
+  
+  // Remove quotes that might contain text instructions
+  cleaned = cleaned.replace(/"[A-Z][A-Z\s]{2,}"/g, '');
+  
+  // Clean up extra whitespace and punctuation
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  cleaned = cleaned.replace(/^[,.:;\s]+/, '').replace(/[,.:;\s]+$/, '');
+  
+  return cleaned || prompt; // Fallback to original if cleaning removed everything
+}
+
 // Style-specific prompts optimized for AI image generation
 const STYLE_PROMPTS: Record<string, string> = {
   "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
@@ -709,26 +739,33 @@ COMPOSITION REQUIREMENTS:
 - Include mood, colors, and atmosphere
 - Use visual metaphors, NOT text labels in the illustration
 
-=== VISUAL PROMPT FORMAT (CRITICAL - NO TEXT OR LABELS!) ===
-FORBIDDEN in visualPrompt:
+=== VISUAL PROMPT FORMAT (ABSOLUTELY CRITICAL - ZERO TEXT IN IMAGES!) ===
+
+**THE IMAGE GENERATOR RENDERS ANY WORDS AS VISIBLE TEXT IN THE IMAGE**
+This means if you write "HOOK" or "FORMULA" anywhere in visualPrompt, it will appear as ugly, garbled text burned into the image. This RUINS the output.
+
+ABSOLUTELY FORBIDDEN in visualPrompt (will cause text to render in image):
+- ANY word in ALL CAPS (like HOOK, CONFLICT, SOLUTION, FORMULA, SUCCESS, STEP)
 - ANY bracketed prefixes like [HOOK], [CONFLICT], [SOLUTION], etc.
 - Style names like "Urban Minimalist", "Doodle style", etc.
-- Scene numbers or beat labels
+- Scene numbers, beat labels, or category names
 - Instructions or metadata
-- Literal text that would appear in the image (like "THE FORMULA" or "STEP 1")
+- ANY word meant as a label or title
 
 REQUIRED in visualPrompt:
-- PURE visual description of objects, people, actions, compositions
-- Describe what an artist would DRAW, not conceptual labels
-- Use visual metaphors to represent concepts (e.g., "a door opening to reveal light" for opportunity)
+- ONLY describe visual objects, people, actions, colors, lighting, composition
+- Describe what a camera would SEE, not concepts or labels
+- Use lowercase descriptive language
+- Use visual metaphors (e.g., "a glowing key above a locked chest" for opportunity)
 
 GOOD visualPrompt example:
-"A split composition showing contrast. LEFT SIDE: A chaotic desk with scattered papers, multiple browser tabs visible on a monitor, coffee cups piling up, harsh fluorescent lighting creating stress. RIGHT SIDE: A clean, organized workspace with a single focused project, neat stacks, a thriving plant, warm golden hour lighting streaming through a window. Muted earth tones overall with a pop of vibrant green on the organized side. An overhead camera angle showing both spaces."
+"A split composition showing contrast. On the left, a chaotic desk with scattered papers, cluttered screens, coffee cups, harsh fluorescent lighting. On the right, a clean organized workspace with a single project, neat stacks, a thriving plant, warm golden sunlight through a window. Muted earth tones with green accent on the organized side. Overhead camera angle."
 
-BAD visualPrompt example (NEVER do this):
-"[HOOK] Urban Minimalist Doodle style showing the concept of productivity..."
-"The title 'SUCCESS FORMULA' in bold letters above a diagram..."
-"STEP 1: First phase of the journey..."
+BAD visualPrompt (WILL RENDER AS TEXT IN IMAGE - NEVER DO THIS):
+"[HOOK] Urban Minimalist showing productivity..."
+"The word SUCCESS above a trophy..."
+"FORMULA: diagram showing steps..."
+"HOOK visual with editorial layout..."
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON with this exact structure:
@@ -1035,11 +1072,12 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     for (let i = 0; i < parsedScript.scenes.length; i++) {
       const scene = parsedScript.scenes[i];
       
-      // Primary visual (always)
+      // Primary visual (always) - sanitize the prompt before building
+      const sanitizedMainPrompt = sanitizeVisualPrompt(scene.visualPrompt);
       imageTasks.push({
         sceneIndex: i,
         subIndex: 0,
-        prompt: buildImagePrompt(scene.visualPrompt, scene, 0)
+        prompt: buildImagePrompt(sanitizedMainPrompt, scene, 0)
       });
       
       // Sub-visuals based on scene duration
@@ -1049,10 +1087,11 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
         const subVisualsToUse = Math.min(scene.subVisuals.length, maxSubVisuals);
         
         for (let j = 0; j < subVisualsToUse; j++) {
+          const sanitizedSubPrompt = sanitizeVisualPrompt(scene.subVisuals[j]);
           imageTasks.push({
             sceneIndex: i,
             subIndex: j + 1,
-            prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1)
+            prompt: buildImagePrompt(sanitizedSubPrompt, scene, j + 1)
           });
         }
       }
