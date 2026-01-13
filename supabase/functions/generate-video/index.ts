@@ -196,8 +196,15 @@ async function generateImageWithReplicate(
 ): Promise<
   { ok: true; imageBase64: string } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // z-image-turbo uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  // Map format to aspect ratio - z-image-turbo uses aspect_ratio parameter
+  let aspectRatio: string;
+  if (format === "portrait") {
+    aspectRatio = "9:16";
+  } else if (format === "square") {
+    aspectRatio = "1:1";
+  } else {
+    aspectRatio = "16:9";
+  }
 
   console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
@@ -1020,7 +1027,6 @@ EDITORIAL ILLUSTRATION REQUIREMENTS:
         textOverlayInstructions = `
 
 TEXT INTEGRATION (Critical - text is part of the artwork):
-- Display scene number "${scene.number}" prominently (large, stylized, like a chapter number)
 - HEADLINE: "${scene.title}" - big, bold, positioned in upper third with clean background zone
 - SUBTITLE: "${scene.subtitle || ""}" - smaller text below headline, integrated into composition
 - Use ${styleDescription} style lettering that matches the illustration
