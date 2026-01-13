@@ -117,17 +117,24 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
     const scene = scenes[index];
     if (!el) return;
 
+    // CRITICAL: Stop any currently playing audio before starting new scene
+    el.pause();
+    el.currentTime = 0;
+
     setSceneProgress(0);
     setCurrentSceneIndex(index);
     setCurrentImageIndex(0);
 
     if (!scene?.audioUrl) {
-      handlePlayAllEnded(index);
+      // Small delay before moving to next scene to prevent rapid firing
+      setTimeout(() => handlePlayAllEnded(index), 100);
       return;
     }
 
     try {
+      // Reset and load new audio
       el.src = scene.audioUrl;
+      el.load(); // Force reload to ensure clean state
       await el.play();
     } catch {
       handlePlayAllEnded(index);
