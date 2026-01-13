@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { supabase } from "@/integrations/supabase/client";
 
 type AuthMode = "login" | "signup" | "reset" | "update";
 
@@ -25,12 +26,21 @@ export default function Auth() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // If the user opened /auth from a reset link, Supabase puts tokens in the URL hash.
+    // Listen for PASSWORD_RECOVERY event from Supabase Auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("update");
+      }
+    });
+
+    // Also check URL hash for recovery type (fallback)
     const hash = window.location.hash || "";
     const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
     if (hashParams.get("type") === "recovery") {
       setMode("update");
     }
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
