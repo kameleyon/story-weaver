@@ -230,7 +230,7 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
         </motion.div>
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <p className="text-muted-foreground mt-1">
-          Your video is ready to preview and export
+          {scenes.length} scenes • {totalImages} images generated
         </p>
 
         <div className="mt-4 flex items-center justify-center gap-2">
@@ -361,7 +361,12 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-foreground">
-              {currentScene?.title || "Scene Preview"}
+              Scene {currentScene?.number}
+              {currentImages.length > 1 && (
+                <span className="text-muted-foreground ml-2 text-sm font-normal">
+                  ({currentImages.length} visuals)
+                </span>
+              )}
             </h3>
             <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
           </div>
