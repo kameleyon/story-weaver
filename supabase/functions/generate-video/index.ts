@@ -1073,10 +1073,10 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
-    // Process images sequentially with a conservative delay between each prediction.
-    // NOTE: Some Replicate accounts get temporarily reduced to ~6 predictions/min (burst=1).
-    const IMAGE_BATCH_SIZE = 1;
-    const IMAGE_DELAY_MS = 11000; // ~5-6 predictions/min, avoids 429-induced "skipped" images
+    // Process images in PARALLEL batches of 3 for speed
+    // Replicate handles concurrent requests well; we batch to avoid overwhelming and for progress updates
+    const IMAGE_BATCH_SIZE = 3;
+    const INTER_IMAGE_BATCH_DELAY_MS = 2000; // Small delay between batches
     
     // Helper to update progress and persist partial results after each image
     const persistProgress = async (completedCount: number) => {
@@ -1214,9 +1214,9 @@ Create DYNAMIC composition with clear focal hierarchy. Reserve negative space fo
       await persistProgress(completedImages);
       console.log(`Image progress: ${completedImages}/${imageTasks.length} complete`);
       
-      // Rate limit delay between batches (critical for Replicate)
+      // Small delay between batches to avoid overwhelming
       if (batchEnd < imageTasks.length) {
-        await sleep(IMAGE_DELAY_MS);
+        await sleep(INTER_IMAGE_BATCH_DELAY_MS);
       }
     }
     
