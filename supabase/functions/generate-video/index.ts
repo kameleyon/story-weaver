@@ -177,7 +177,7 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Replicate bytedance/seedream-4.5
+// Generate image using Replicate prunaai/z-image-turbo
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
@@ -186,14 +186,14 @@ async function generateImageWithReplicate(
   | { ok: true; imageBase64: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // seedream-4.5 uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
+  // z-image-turbo uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
   const aspectRatio = format === "portrait" 
     ? "9:16"
     : format === "square" 
     ? "1:1"
     : "16:9";
   
-  console.log(`[REPLICATE] Starting image generation with bytedance/seedream-4.5`);
+  console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
   console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
@@ -201,7 +201,7 @@ async function generateImageWithReplicate(
   try {
     const startTime = Date.now();
     
-    // Create prediction with bytedance/seedream-4.5 model using aspect_ratio
+    // Create prediction with prunaai/z-image-turbo model
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -210,10 +210,14 @@ async function generateImageWithReplicate(
         "Prefer": "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
-        version: "bytedance/seedream-4.5",
+        version: "prunaai/z-image-turbo",
         input: {
           prompt: prompt,
           aspect_ratio: aspectRatio,
+          num_inference_steps: 35,
+          guidance_scale: 0,
+          output_format: "png",
+          output_quality: 100,
         },
       }),
     });
