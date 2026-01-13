@@ -186,13 +186,13 @@ async function generateImageWithReplicate(
   | { ok: true; imageBase64: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // z-image-turbo uses width/height parameters (max 1440)
+  // z-image-turbo requires width/height divisible by 16
   // Portrait: 9:16, Square: 1:1, Landscape: 16:9
   const dimensions = format === "portrait" 
-    ? { width: 810, height: 1440 }  // 9:16 ratio
+    ? { width: 816, height: 1456 }  // ~9:16 ratio (divisible by 16)
     : format === "square" 
-    ? { width: 1024, height: 1024 } // 1:1 ratio
-    : { width: 1440, height: 810 }; // 16:9 ratio
+    ? { width: 1024, height: 1024 } // 1:1 ratio (divisible by 16)
+    : { width: 1440, height: 816 }; // ~16:9 ratio (divisible by 16)
   
   console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
