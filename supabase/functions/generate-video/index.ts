@@ -752,37 +752,51 @@ REMEMBER:
 - Visual prompts MUST include [BEAT - Layout] prefix and explicit text placement
 - Semantic layouts: visual structure matches conceptual structure`;
 
-    console.log("Step 1: Generating script...");
+    console.log("Step 1: Generating script via OpenRouter (google/gemini-3-pro-preview)...");
+    
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      throw new Error("OPENROUTER_API_KEY is not configured");
+    }
     
     const scriptResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`,
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://audiomax.lovable.app",
+          "X-Title": "AudioMax Video Generator"
+        },
         body: JSON.stringify({
-          contents: [{ 
-            parts: [{ text: scriptPrompt }] 
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            topP: 0.95,
-            maxOutputTokens: 8192,
-          }
+          model: "google/gemini-3-pro-preview",
+          messages: [
+            { 
+              role: "user", 
+              content: scriptPrompt 
+            }
+          ],
+          temperature: 0.7,
+          top_p: 0.95,
+          max_tokens: 8192,
         }),
       }
     );
 
     if (!scriptResponse.ok) {
       const errorText = await scriptResponse.text();
-      console.error("Gemini script error:", scriptResponse.status, errorText);
+      console.error("OpenRouter script error:", scriptResponse.status, errorText);
       throw new Error(`Script generation failed: ${scriptResponse.status}`);
     }
 
     const scriptData = await scriptResponse.json();
-    const scriptContent = scriptData.candidates?.[0]?.content?.parts?.[0]?.text;
+    // OpenRouter uses OpenAI-compatible format: choices[0].message.content
+    const scriptContent = scriptData.choices?.[0]?.message?.content;
     
     if (!scriptContent) {
-      throw new Error("No script content received from Gemini");
+      console.error("No script content. Full response:", JSON.stringify(scriptData));
+      throw new Error("No script content received from OpenRouter");
     }
 
     let parsedScript: ScriptResponse;
