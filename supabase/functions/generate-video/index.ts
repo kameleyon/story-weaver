@@ -177,7 +177,7 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Replicate prunaai/p-image
+// Generate image using Replicate prunaai/z-image-turbo
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
@@ -193,7 +193,7 @@ async function generateImageWithReplicate(
     ? "1:1"
     : "16:9";
   
-  console.log(`[REPLICATE] Starting image generation with prunaai/p-image`);
+  console.log(`[REPLICATE] Starting image generation with prunaai/z-image-turbo`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
   console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
@@ -210,7 +210,7 @@ async function generateImageWithReplicate(
         "Prefer": "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
-        version: "prunaai/p-image",
+        version: "prunaai/z-image-turbo",
         input: {
           prompt: prompt,
           aspect_ratio: aspectRatio,
