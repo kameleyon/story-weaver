@@ -130,6 +130,8 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
     // CRITICAL: Stop any currently playing audio before starting new scene
     el.pause();
     el.currentTime = 0;
+    el.removeAttribute("src");
+    el.load(); // Reset element completely
 
     setSceneProgress(0);
     setCurrentSceneIndex(index);
@@ -142,9 +144,27 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
     }
 
     try {
-      // Reset and load new audio
+      // Create a promise that resolves when audio is ready to play
+      const audioReady = new Promise<void>((resolve, reject) => {
+        const onCanPlay = () => {
+          el.removeEventListener("canplaythrough", onCanPlay);
+          el.removeEventListener("error", onError);
+          resolve();
+        };
+        const onError = () => {
+          el.removeEventListener("canplaythrough", onCanPlay);
+          el.removeEventListener("error", onError);
+          reject(new Error("Audio load failed"));
+        };
+        el.addEventListener("canplaythrough", onCanPlay, { once: true });
+        el.addEventListener("error", onError, { once: true });
+      });
+
+      // Set source and wait for it to be ready
       el.src = scene.audioUrl;
-      el.load(); // Force reload to ensure clean state
+      el.load();
+      
+      await audioReady;
       await el.play();
     } catch {
       handlePlayAllEnded(index);
