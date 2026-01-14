@@ -145,39 +145,54 @@ export function useGenerationPipeline() {
     return { totalImages: scenes.length, completedImages: 0 };
   };
 
-  // Helper to call a phase
+  // Helper to call a phase with configurable timeout
   const callPhase = async (
     session: { access_token: string },
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    timeoutMs: number = 120000 // Default 2 minutes
   ): Promise<any> => {
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!response.ok) {
-      let errorMessage = "Phase failed";
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData?.error || errorMessage;
-      } catch {
-        // ignore
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let errorMessage = "Phase failed";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData?.error || errorMessage;
+        } catch {
+          // ignore
+        }
+
+        if (response.status === 429) {
+          throw new Error("Rate limit exceeded. Please wait and try again.");
+        }
+        if (response.status === 402) {
+          throw new Error("AI credits exhausted. Please add credits.");
+        }
+        throw new Error(errorMessage);
       }
 
-      if (response.status === 429) {
-        throw new Error("Rate limit exceeded. Please wait and try again.");
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${timeoutMs / 1000}s. Please try again.`);
       }
-      if (response.status === 402) {
-        throw new Error("AI credits exhausted. Please add credits.");
-      }
-      throw new Error(errorMessage);
+      throw error;
     }
-
-    return response.json();
   };
 
   const startGeneration = useCallback(
@@ -249,11 +264,12 @@ export function useGenerationPipeline() {
           statusMessage: "Generating voiceover audio..." 
         }));
 
+        // Audio phase gets longer timeout (5 min) due to potential TTS retries
         const audioResult = await callPhase(session, {
           phase: "audio",
           generationId,
           projectId,
-        });
+        }, 300000); // 5 minutes timeout for audio
 
         if (!audioResult.success) throw new Error(audioResult.error || "Audio generation failed");
 
