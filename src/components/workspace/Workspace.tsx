@@ -10,6 +10,7 @@ import { StyleSelector, type VisualStyle } from "./StyleSelector";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
+import { useGenerationStats } from "@/hooks/useGenerationStats";
 import { ThemedLogo } from "@/components/ThemedLogo";
 
 export interface WorkspaceHandle {
@@ -25,6 +26,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [customStyle, setCustomStyle] = useState("");
 
   const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+  const { totalGenerations, totalApiCost } = useGenerationStats();
 
   const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
 
@@ -205,7 +207,11 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-2xl mx-auto space-y-6"
               >
-                <GenerationProgress state={generationState} />
+                <GenerationProgress 
+                  state={generationState} 
+                  totalGenerations={totalGenerations}
+                  totalApiCost={totalApiCost}
+                />
               </motion.div>
             )}
           </AnimatePresence>
