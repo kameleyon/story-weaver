@@ -74,22 +74,6 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
     }
   };
 
-  // Format cost with proper decimal places
-  const formatCost = (cost: number): string => {
-    if (cost < 0.01) return `$${cost.toFixed(4)}`;
-    if (cost < 1) return `$${cost.toFixed(3)}`;
-    return `$${cost.toFixed(2)}`;
-  };
-
-  // Format time in human readable format
-  const formatTime = (ms: number): string => {
-    const seconds = Math.round(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}m ${remainingSeconds}s`;
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -178,40 +162,6 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
           </div>
         </div>
       )}
-
-      {/* Current Generation Cost & Time (show when complete or when we have data) */}
-      {(state.step === "complete" || state.costTracking || state.phaseTimings) && (
-        <div className="space-y-3 pt-2 border-t border-border/30">
-          <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-            This Generation
-          </h4>
-          <div className="grid grid-cols-2 gap-3">
-            {state.costTracking?.estimatedCostUsd !== undefined && (
-              <div className="flex items-center gap-2 rounded-lg bg-muted/10 px-3 py-2">
-                <DollarSign className="h-4 w-4 text-emerald-500" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {formatCost(state.costTracking.estimatedCostUsd)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">API Cost</p>
-                </div>
-              </div>
-            )}
-            {state.totalTimeMs !== undefined && (
-              <div className="flex items-center gap-2 rounded-lg bg-muted/10 px-3 py-2">
-                <Clock className="h-4 w-4 text-blue-500" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {formatTime(state.totalTimeMs)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total Time</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
     </motion.div>
   );
 }
