@@ -497,11 +497,14 @@ async function generateSceneAudio(
   if (googleApiKey && isHaitianCreole(voiceoverText)) {
     console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, trying Gemini 2.5 Flash TTS first`);
 
-    const MAX_RETRIES = 5;
+    // Haitian Creole: use Gemini ONLY with 10 retries (Replicate doesn't speak Creole)
+    const MAX_RETRIES = 10;
+    let lastError = "";
+    
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       if (retry > 0) {
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_RETRIES}`);
-        await sleep(2000 * retry);
+        await sleep(1500 * Math.min(retry, 4)); // Cap backoff at 6 seconds
       }
 
       const geminiResult = await generateSceneAudioGemini(
@@ -516,19 +519,15 @@ async function generateSceneAudio(
 
       if (geminiResult.url) return geminiResult;
 
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
+      lastError = geminiResult.error || "Unknown error";
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${lastError}`);
     }
 
-    console.warn(
-      `[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts; falling back to Replicate Chatterbox`
-    );
-
-    const replicateFallback = await generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
-    if (replicateFallback.url) return replicateFallback;
-
+    // No Replicate fallback for Creole - it doesn't speak Creole
+    console.error(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts for Haitian Creole`);
     return {
       url: null,
-      error: `Gemini TTS failed (${MAX_RETRIES} retries) and Replicate fallback failed: ${replicateFallback.error || "unknown error"}`,
+      error: `Gemini TTS failed after ${MAX_RETRIES} retries for Haitian Creole: ${lastError}`,
     };
   }
 
@@ -1050,24 +1049,19 @@ async function handleImagesPhase(
   const allImageTasks: ImageTask[] = [];
 
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
-    const orientationDesc = format === "portrait" 
-      ? "VERTICAL 9:16" : format === "square" ? "SQUARE 1:1" : "HORIZONTAL 16:9";
-
     let textInstructions = "";
     if (includeTextOverlay && scene.title && subIndex === 0) {
       textInstructions = `
-TEXT: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as subtitle.
+TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as subtitle.
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     }
 
-    return `Generate an EDITORIAL ILLUSTRATION in ${orientationDesc} (${dimensions.width}x${dimensions.height}).
-
-VISUAL: ${visualPrompt}
+    return `${visualPrompt}
 
 STYLE: ${styleDescription}
 ${textInstructions}
 
-COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
+Professional illustration with dynamic composition and clear visual hierarchy.`;
   };
 
   let taskIndex = 0;
