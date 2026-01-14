@@ -147,7 +147,7 @@ async function generateSceneAudioReplicate(
         body: JSON.stringify({
           input: {
             text: voiceoverText,
-            voice: "Laura",
+            voice: "Marisol",
             temperature: 1,
             top_p: 0.9,
             top_k: 1800,
@@ -347,6 +347,8 @@ Content: ${content}
 - Start each scene with a hook
 - NO labels, NO stage directions, NO markdown
 - Just raw spoken text
+- Include paralinguistic tags where appropriate for natural expression: [clear throat], [sigh], [sush], [cough], [groan], [sniff], [gasp], [chuckle], [laugh]
+- Example: "Oh, that's interesting! [chuckle] Let me explain why..."
 
 ${includeTextOverlay ? `
 === TEXT OVERLAY ===
@@ -385,7 +387,7 @@ Return ONLY valid JSON:
       "X-Title": "AudioMax Video Generator"
     },
     body: JSON.stringify({
-      model: "google/gemini-3-pro-preview",
+      model: "anthropic/claude-sonnet-4.5",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.7,
       max_tokens: 8192,
