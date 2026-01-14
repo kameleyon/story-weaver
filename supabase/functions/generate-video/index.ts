@@ -7,26 +7,42 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= TYPES =============
 interface GenerationRequest {
-  content: string;
-  format: string;
-  length: string;
-  style: string;
+  // For starting new generation
+  content?: string;
+  format?: string;
+  length?: string;
+  style?: string;
   customStyle?: string;
+  // For chunked phases
+  phase?: "script" | "audio" | "images" | "finalize";
+  generationId?: string;
+  projectId?: string;
 }
 
 interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
-  subVisuals?: string[];       // Additional visual prompts for longer scenes
+  subVisuals?: string[];
   duration: number;
-  narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula"; // Track story position
+  narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula";
   imageUrl?: string;
-  imageUrls?: string[];        // Multiple images per scene
+  imageUrls?: string[];
   audioUrl?: string;
   title?: string;
   subtitle?: string;
+  _meta?: {
+    statusMessage?: string;
+    totalImages?: number;
+    completedImages?: number;
+    sceneIndex?: number;
+    costTracking?: CostTracking;
+    phaseTimings?: Record<string, number>;
+    totalTimeMs?: number;
+    lastUpdate?: string;
+  };
 }
 
 interface ScriptResponse {
@@ -34,532 +50,793 @@ interface ScriptResponse {
   scenes: Scene[];
 }
 
+interface CostTracking {
+  scriptTokens: number;
+  audioSeconds: number;
+  imagesGenerated: number;
+  estimatedCostUsd: number;
+}
+
+// ============= CONSTANTS =============
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Style-specific prompts optimized for AI image generation
+// Pricing estimates (approximate)
+const PRICING = {
+  scriptPerToken: 0.000001, // ~$1 per 1M tokens
+  audioPerSecond: 0.002,    // ~$0.002 per second
+  imagePerImage: 0.02,      // ~$0.02 per image
+};
+
 const STYLE_PROMPTS: Record<string, string> = {
   "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
-  
   "doodle": `Urban Minimalist Doodle style. Flat 2D vector illustration with indie comic aesthetic. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled paper or newsprint. CHARACTER DESIGN: Object-Head surrealism where character heads are replaced with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line for a vintage screen-printed quality. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons (coins, arrows, charts) representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
-  
   "stick": `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
-  
   "realistic": `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
-  
   "anime": `High-quality Anime art style. Crisp cel-shaded coloring with dramatic lighting and lens flares. Vibrant, saturated color palette with emphasis on deep blue skies and lush greens. Detailed backgrounds in the style of Makoto Shinkai or Studio Ghibli. Clean fine line work. Expressive characters with large eyes. Atmospheric, emotional, and polished animation aesthetic. 2D animation look.`,
-  
   "3d-pixar": `3D animated feature film style (Pixar/Disney). Soft, subsurface scattering on materials to make them look soft and touchable. Warm, bounce lighting and global illumination. Stylized characters with exaggerated features but realistic textures (fabric, hair). Vibrant, friendly color palette. Rendered in Redshift or Octane. Cute, appealing, and high-budget animation look. Smooth shapes, no sharp edges.`,
-  
   "claymation": `Stop-motion claymation style. Textures of plasticine and modeling clay with visible fingerprints and imperfections. Handmade, tactile look. Soft, physical studio lighting with real shadows. Miniature photography aesthetic with tilt-shift depth of field. Vibrant, playful colors. Characters and objects look like physical toys. Imperfect, organic shapes. Aardman Animations vibe.`,
-  
   "futuristic": `Clean futuristic sci-fi aesthetic. Dark background with glowing neon accents (cyan, magenta, electric purple). Holographic interfaces (HUDs) and glass textures. Sleek, metallic surfaces (chrome, brushed aluminum, matte black). Cyberpunk but minimal and tidy. High-tech, digital atmosphere. Lens flares, bloom effects, and volumetric lighting. Smooth curves, floating UI elements, and data streams.`
 };
 
-// Helper to get style prompt - uses detailed prompt if available, falls back to style name or custom style
+const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
+
+// ============= HELPER FUNCTIONS =============
 function getStylePrompt(style: string, customStyle?: string): string {
-  if (style === "custom" && customStyle) {
-    return customStyle;
-  }
+  if (style === "custom" && customStyle) return customStyle;
   return STYLE_PROMPTS[style.toLowerCase()] || style;
 }
 
-function normalizeBase64(b64: string) {
-  return b64.replace(/-/g, "+").replace(/_/g, "/");
-}
-
-function decodeInlineDataToBytes(inlineData: { data: string }) {
-  return base64Decode(normalizeBase64(inlineData.data));
-}
-
-function pickFirstInlineAudio(ttsData: any): { data: string; mimeType?: string } | null {
-  const parts = ttsData?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return null;
-
-  for (const part of parts) {
-    const inline = part?.inlineData ?? part?.inline_data;
-    if (inline?.data) return inline;
+function getImageDimensions(format: string): { width: number; height: number } {
+  switch (format) {
+    case "portrait": return { width: 1080, height: 1920 };
+    case "square": return { width: 1080, height: 1080 };
+    default: return { width: 1920, height: 1080 };
   }
-  return null;
 }
-
-function parsePcmSampleRate(mimeType: string | undefined) {
-  if (!mimeType) return null;
-  const m = mimeType.match(/rate=(\d+)/i);
-  if (!m) return null;
-  const rate = Number(m[1]);
-  return Number.isFinite(rate) && rate > 0 ? rate : null;
-}
-
-function scorePcm16(pcmBytes: Uint8Array, littleEndian: boolean) {
-  const dv = new DataView(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength);
-  const sampleCount = Math.floor(pcmBytes.byteLength / 2);
-
-  let sumAbs = 0;
-  let clipCount = 0;
-  const CLIP_THRESHOLD = 32000;
-
-  for (let i = 0; i + 1 < pcmBytes.byteLength; i += 2) {
-    const s = dv.getInt16(i, littleEndian);
-    const a = Math.abs(s);
-    sumAbs += a;
-    if (a >= CLIP_THRESHOLD) clipCount++;
-  }
-
-  const meanAbs = sampleCount > 0 ? sumAbs / sampleCount : 0;
-  const clipFrac = sampleCount > 0 ? clipCount / sampleCount : 0;
-
-  return { meanAbs, clipFrac, sampleCount };
-}
-
-function swap16(pcm: Uint8Array) {
-  const out = new Uint8Array(pcm.length - (pcm.length % 2));
-  for (let i = 0; i + 1 < out.length; i += 2) {
-    out[i] = pcm[i + 1];
-    out[i + 1] = pcm[i];
-  }
-  return out;
-}
-
-function pcm16leToWav(pcm16le: Uint8Array, sampleRate: number, channels = 1) {
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * channels * (bitsPerSample / 8);
-  const blockAlign = channels * (bitsPerSample / 8);
-
-  const dataSize = pcm16le.length - (pcm16le.length % 2);
-  const header = new Uint8Array(44);
-  const dv = new DataView(header.buffer);
-
-  header[0] = 0x52; header[1] = 0x49; header[2] = 0x46; header[3] = 0x46;
-  dv.setUint32(4, 36 + dataSize, true);
-  header[8] = 0x57; header[9] = 0x41; header[10] = 0x56; header[11] = 0x45;
-  header[12] = 0x66; header[13] = 0x6d; header[14] = 0x74; header[15] = 0x20;
-  dv.setUint32(16, 16, true);
-  dv.setUint16(20, 1, true);
-  dv.setUint16(22, channels, true);
-  dv.setUint32(24, sampleRate, true);
-  dv.setUint32(28, byteRate, true);
-  dv.setUint16(32, blockAlign, true);
-  dv.setUint16(34, bitsPerSample, true);
-  header[36] = 0x64; header[37] = 0x61; header[38] = 0x74; header[39] = 0x61;
-  dv.setUint32(40, dataSize, true);
-
-  const wav = new Uint8Array(44 + dataSize);
-  wav.set(header, 0);
-  wav.set(pcm16le.subarray(0, dataSize), 44);
-  return wav;
-}
-
-function pcm16ToWavAuto(pcm: Uint8Array, sampleRate: number, channels = 1) {
-  const le = scorePcm16(pcm, true);
-  const be = scorePcm16(pcm, false);
-
-  const beClearlyBetter =
-    be.clipFrac + 0.01 < le.clipFrac ||
-    (be.clipFrac < le.clipFrac && be.meanAbs < le.meanAbs * 0.85);
-
-  const pcm16le = beClearlyBetter ? swap16(pcm) : pcm.subarray(0, pcm.length - (pcm.length % 2));
-  return pcm16leToWav(pcm16le, sampleRate, channels);
-}
-
-// Styles that should include text overlays
-const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
 
 function sanitizeVoiceover(input: unknown): string {
   const raw = typeof input === "string" ? input : "";
-
-  // Normalize whitespace + remove common script labels/stage directions that TTS would read aloud.
   const lines = raw
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
     .map((line) =>
       line
-        // Remove leading labels like "Hook:", "Scene 1:", "Narrator -", etc.
-        .replace(
-          /^\s*(?:hook|scene\s*\d+|narrator|body|solution|conflict|choice|formula)\s*[:\-–—]\s*/i,
-          ""
-        )
-        // Remove leading bracketed directions like "[pauses]"
+        .replace(/^\s*(?:hook|scene\s*\d+|narrator|body|solution|conflict|choice|formula)\s*[:\-–—]\s*/i, "")
         .replace(/^\s*\[[^\]]+\]\s*/g, "")
     );
-
   let out = lines.join(" ");
-
-  // Remove any remaining bracketed stage directions anywhere in the text
   out = out.replace(/\[[^\]]+\]/g, " ");
-
-  // Strip common markdown-ish formatting characters that can leak into speech
   out = out.replace(/[*_~`]+/g, "");
-
   return out.replace(/\s{2,}/g, " ").trim();
 }
 
-// Get image dimensions based on format
-function getImageDimensions(format: string): { width: number; height: number } {
-  switch (format) {
-    case "portrait":
-      return { width: 1080, height: 1920 };
-    case "square":
-      return { width: 1080, height: 1080 };
-    case "landscape":
-    default:
-      return { width: 1920, height: 1080 };
-  }
-}
-
-// Generate image using Replicate bytedance/seedream-4.5
-async function generateImageWithReplicate(
-  prompt: string,
-  replicateApiToken: string,
-  format: string
-): Promise<
-  | { ok: true; imageBase64: string }
-  | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
-> {
-  // seedream-4.5 uses aspect_ratio parameter (9:16, 1:1, 16:9)
-  const aspectRatio = format === "portrait" 
-    ? "9:16"
-    : format === "square" 
-    ? "1:1"
-    : "16:9";
-  
-  console.log(`[REPLICATE] Starting image generation with bytedance/seedream-4.5`);
-  console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
-  console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
-  console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
-  
-  try {
-    const startTime = Date.now();
-    
-    // Create prediction with bytedance/seedream-4.5 model
-    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${replicateApiToken}`,
-        "Content-Type": "application/json",
-        "Prefer": "wait", // Wait for completion (up to 60s)
-      },
-      body: JSON.stringify({
-        version: "bytedance/seedream-4.5",
-        input: {
-          prompt: prompt,
-          size: "4K",
-          aspect_ratio: aspectRatio,
-          sequential_image_generation: "disabled",
-        },
-      }),
-    });
-
-    console.log(`[REPLICATE] Response status: ${createResponse.status}`);
-    console.log(`[REPLICATE] Response headers: ${JSON.stringify(Object.fromEntries(createResponse.headers))}`);
-
-    if (!createResponse.ok) {
-      const errorText = await createResponse.text();
-      const retryAfterHeader = createResponse.headers.get("retry-after");
-      const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : undefined;
-
-      console.error(`[REPLICATE ERROR] Status: ${createResponse.status}`);
-      console.error(`[REPLICATE ERROR] Body: ${errorText}`);
-      console.error(`[REPLICATE ERROR] Time elapsed: ${Date.now() - startTime}ms`);
-
-      // Try to extract retry_after from JSON body too
-      let retryAfterFromBody: number | undefined;
-      try {
-        const parsed = JSON.parse(errorText);
-        if (typeof parsed?.retry_after === "number") retryAfterFromBody = parsed.retry_after;
-      } catch {
-        // ignore
-      }
-
-      const retryAfter = retryAfterFromBody ?? retryAfterSeconds;
-
-      if (createResponse.status === 401) {
-        return { ok: false, status: 401, error: "Invalid Replicate API token - please update in Settings" };
-      }
-      if (createResponse.status === 402) {
-        return { ok: false, status: 402, error: "Replicate credits exhausted - add funds at replicate.com" };
-      }
-      if (createResponse.status === 429) {
-        return {
-          ok: false,
-          status: 429,
-          retryAfterSeconds: retryAfter,
-          error: `Replicate throttled (429): ${errorText}`,
-        };
-      }
-      return { ok: false, status: createResponse.status, error: `Replicate API error ${createResponse.status}: ${errorText}` };
-    }
-
-    let prediction = await createResponse.json();
-    console.log(`[REPLICATE] Initial prediction status: ${prediction.status}, id: ${prediction.id}`);
-    
-    // Poll for completion if not done
-    let pollAttempts = 0;
-    const maxPolls = 120; // 120 seconds max (seedream-4.5 at 4K may take longer)
-    
-    while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
-      if (prediction.status === "canceled") {
-        console.error(`[REPLICATE ERROR] Prediction was canceled`);
-        return { ok: false, error: "Image generation was canceled" };
-      }
-      
-      await new Promise(r => setTimeout(r, 1000));
-      pollAttempts++;
-      
-      console.log(`[REPLICATE] Polling attempt ${pollAttempts}, status: ${prediction.status}`);
-      
-      const pollResponse = await fetch(prediction.urls.get, {
-        headers: { Authorization: `Bearer ${replicateApiToken}` },
-      });
-      
-      if (!pollResponse.ok) {
-        const pollErrorText = await pollResponse.text();
-        console.error(`[REPLICATE ERROR] Poll failed: ${pollResponse.status} - ${pollErrorText}`);
-        return { ok: false, error: `Failed to poll prediction status: ${pollResponse.status}` };
-      }
-      
-      prediction = await pollResponse.json();
-    }
-    
-    console.log(`[REPLICATE] Final status: ${prediction.status}, time: ${Date.now() - startTime}ms`);
-    
-    if (prediction.status !== "succeeded") {
-      console.error(`[REPLICATE ERROR] Generation failed: ${prediction.error || "timeout"}`);
-      console.error(`[REPLICATE ERROR] Full prediction: ${JSON.stringify(prediction)}`);
-      return { ok: false, error: prediction.error || "Image generation timed out" };
-    }
-    
-    // Get the output URL - seedream-4.5 returns array of FileOutput objects
-    let outputUrl: string | undefined;
-    if (Array.isArray(prediction.output) && prediction.output.length > 0) {
-      const firstOutput = prediction.output[0];
-      // FileOutput has a url() method or direct url property
-      outputUrl = typeof firstOutput === "string" 
-        ? firstOutput 
-        : firstOutput?.url || firstOutput;
-    } else if (typeof prediction.output === "string") {
-      outputUrl = prediction.output;
-    }
-    
-    console.log(`[REPLICATE] Output URL: ${outputUrl?.substring(0, 80)}...`);
-    
-    if (!outputUrl) {
-      console.error(`[REPLICATE ERROR] No output URL. Full output: ${JSON.stringify(prediction.output)}`);
-      return { ok: false, error: "No image URL in prediction output" };
-    }
-    
-    // Download the image and convert to base64 (chunked to avoid stack overflow)
-    const imageResponse = await fetch(outputUrl);
-    if (!imageResponse.ok) {
-      console.error(`[REPLICATE ERROR] Failed to download image: ${imageResponse.status}`);
-      return { ok: false, error: `Failed to download generated image: ${imageResponse.status}` };
-    }
-    
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const bytes = new Uint8Array(imageBuffer);
-    
-    // Convert to base64 in chunks to avoid stack overflow on large images
-    let base64 = "";
-    const chunkSize = 32768; // 32KB chunks
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-      base64 += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    base64 = btoa(base64);
-    
-    console.log(`[REPLICATE] Success! Image size: ${bytes.length} bytes, time: ${Date.now() - startTime}ms`);
-    
-    return { ok: true, imageBase64: base64 };
-  } catch (error) {
-    console.error(`[REPLICATE ERROR] Exception: ${error}`);
-    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
-  }
-}
-
-// REMOVED: Lovable AI fallback - now using Replicate only
-
-
-// Generate TTS for a single scene using Replicate resemble-ai/chatterbox-pro
+// ============= TTS GENERATION =============
 async function generateSceneAudioReplicate(
   scene: Scene,
   sceneIndex: number,
-  replicateTtsApiKey: string,
+  replicateApiKey: string,
   supabase: any,
   userId: string,
   projectId: string
-): Promise<{ url: string | null; error?: string }> {
+): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const TTS_ATTEMPTS = 3;
-  const TTS_RETRY_BASE_DELAY_MS = 1000;
+  const TTS_RETRY_BASE_DELAY_MS = 2000;
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
+  
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
 
   let finalAudioUrl: string | null = null;
   let lastError: string | null = null;
+  let durationSeconds = 0;
 
   for (let attempt = 1; attempt <= TTS_ATTEMPTS; attempt++) {
     try {
       console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate Chatterbox TTS`);
       
-      // Create prediction with resemble-ai/chatterbox-pro
       const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${replicateTtsApiKey}`,
+          "Authorization": `Bearer ${replicateApiKey}`,
           "Content-Type": "application/json",
-          "Prefer": "wait", // Wait for completion (up to 60s)
+          "Prefer": "wait"
         },
         body: JSON.stringify({
-          version: "resemble-ai/chatterbox-pro",
+          version: "140ed22e05f0c1e6bf23b016d0956a29f05e9ea74c414c1eb7ed6da1f0da72cc",
           input: {
-            prompt: scene.voiceover,
-            voice: "Aurora",
-            pitch: "high",
-            temperature: 1,
+            text: voiceoverText,
+            audio_prompt_path: "https://replicate.delivery/pbxt/MaU6sNNxMSU6RVbGHTCCNhfKtAqXRvkAFwcnLHrKPdUYjRZt/aurora.wav",
             exaggeration: 0.8,
-          },
-        }),
+            cfg_weight: 0.5,
+            temperature: 1,
+            chunk_size: 250,
+            seed: Math.floor(Math.random() * 1000000)
+          }
+        })
       });
 
       if (!createResponse.ok) {
-        const errorText = await createResponse.text();
-        console.error(`[TTS] Scene ${sceneIndex + 1} HTTP error: ${createResponse.status} - ${errorText}`);
-        
-        if (createResponse.status === 401) {
-          return { url: null, error: "Invalid Replicate TTS API token" };
-        }
-        if (createResponse.status === 402) {
-          return { url: null, error: "Replicate credits exhausted - add funds at replicate.com" };
-        }
-        if (createResponse.status === 429 && attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        
-        lastError = `Replicate TTS error ${createResponse.status}: ${errorText}`;
-        if (attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        continue;
+        const errText = await createResponse.text();
+        throw new Error(`Replicate TTS failed: ${createResponse.status} - ${errText}`);
       }
 
       let prediction = await createResponse.json();
       console.log(`[TTS] Scene ${sceneIndex + 1} prediction status: ${prediction.status}, id: ${prediction.id}`);
 
-      // Poll for completion if not done
-      let pollAttempts = 0;
-      const maxPolls = 120; // 2 minutes max for TTS
-
-      while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
-        if (prediction.status === "canceled") {
-          console.error(`[TTS] Scene ${sceneIndex + 1} prediction was canceled`);
-          lastError = "TTS generation was canceled";
-          break;
-        }
-
+      // Poll if not completed
+      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
         await sleep(1000);
-        pollAttempts++;
-
-        const pollResponse = await fetch(prediction.urls.get, {
-          headers: { Authorization: `Bearer ${replicateTtsApiKey}` },
+        const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+          headers: { "Authorization": `Bearer ${replicateApiKey}` }
         });
-
-        if (!pollResponse.ok) {
-          console.error(`[TTS] Scene ${sceneIndex + 1} poll failed: ${pollResponse.status}`);
-          lastError = `Failed to poll TTS status: ${pollResponse.status}`;
-          break;
-        }
-
         prediction = await pollResponse.json();
       }
 
-      if (prediction.status !== "succeeded") {
-        console.error(`[TTS] Scene ${sceneIndex + 1} generation failed: ${prediction.error || "timeout"}`);
-        lastError = prediction.error || "TTS generation timed out";
-        if (attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        continue;
+      if (prediction.status === "failed") {
+        throw new Error(prediction.error || "TTS prediction failed");
       }
 
-      // chatterbox-pro returns a FileOutput - get the URL
-      const outputUrl = typeof prediction.output === "string"
-        ? prediction.output
-        : prediction.output?.url || prediction.output;
+      const outputUrl = prediction.output;
+      if (!outputUrl) throw new Error("No output URL from TTS");
 
-      console.log(`[TTS] Scene ${sceneIndex + 1} output URL: ${outputUrl?.substring?.(0, 80) || outputUrl}...`);
+      console.log(`[TTS] Scene ${sceneIndex + 1} output URL: ${outputUrl.substring(0, 80)}...`);
 
-      if (!outputUrl) {
-        console.error(`[TTS] Scene ${sceneIndex + 1} no output URL. Full output: ${JSON.stringify(prediction.output)}`);
-        lastError = "No audio URL in TTS output";
-        if (attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        continue;
-      }
-
-      // Download the audio file (chatterbox outputs WAV)
+      // Download and upload to Supabase
       const audioResponse = await fetch(outputUrl);
-      if (!audioResponse.ok) {
-        console.error(`[TTS] Scene ${sceneIndex + 1} failed to download audio: ${audioResponse.status}`);
-        lastError = `Failed to download generated audio: ${audioResponse.status}`;
-        if (attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        continue;
-      }
+      if (!audioResponse.ok) throw new Error("Failed to download audio");
 
-      const audioBuffer = await audioResponse.arrayBuffer();
-      const audioBytes = new Uint8Array(audioBuffer);
+      const audioBytes = new Uint8Array(await audioResponse.arrayBuffer());
+      console.log(`[TTS] Scene ${sceneIndex + 1} audio OK - ${audioBytes.length} bytes`);
 
-      if (audioBytes.length < 512) {
-        console.error(`[TTS] Scene ${sceneIndex + 1} audio too small: ${audioBytes.length} bytes`);
-        lastError = "Generated audio is too small";
-        if (attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        continue;
-      }
+      // Estimate duration (~44100 samples/sec, 16-bit = 2 bytes/sample)
+      durationSeconds = Math.max(1, audioBytes.length / (44100 * 2));
 
-      // Upload to Supabase storage (WAV format from chatterbox)
-      const audioBlob = new Blob([audioBytes.buffer], { type: "audio/wav" });
       const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+      const { error: uploadError } = await supabase.storage
+        .from("audio")
+        .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
 
-      const { error: uploadError } = await supabase.storage.from("audio").upload(audioPath, audioBlob, {
-        contentType: "audio/wav",
-        upsert: true,
-      });
-
-      if (uploadError) {
-        console.error(`[TTS] Scene ${sceneIndex + 1} audio upload failed:`, uploadError);
-        lastError = `Audio upload failed: ${uploadError.message}`;
-        if (attempt < TTS_ATTEMPTS) {
-          await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-          continue;
-        }
-        continue;
-      }
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
       const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
       finalAudioUrl = publicUrl;
-      console.log(`[TTS] Scene ${sceneIndex + 1} audio OK - ${audioBytes.length} bytes`);
       break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Unknown TTS error";
+      console.error(`[TTS] Scene ${sceneIndex + 1} error:`, lastError);
+      if (attempt < TTS_ATTEMPTS) await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+    }
+  }
 
-    } catch (ttsError) {
-      console.error(`[TTS] Scene ${sceneIndex + 1} exception:`, ttsError);
-      lastError = ttsError instanceof Error ? ttsError.message : "Unknown TTS error";
-      if (attempt < TTS_ATTEMPTS) {
-        await sleep(TTS_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
-        continue;
+  return { url: finalAudioUrl, error: lastError || undefined, durationSeconds };
+}
+
+// ============= IMAGE GENERATION =============
+async function generateImageWithReplicate(
+  prompt: string,
+  replicateApiKey: string,
+  format: string
+): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }> {
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  try {
+    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        "Prefer": "wait"
+      },
+      body: JSON.stringify({
+        version: "2a437fef147c7eaa46e8e21d9be81c62a6c0f52490ad5753520254bc81ea041b",
+        input: {
+          prompt,
+          size: "4K",
+          aspect_ratio: aspectRatio,
+          guidance_scale: 3.5,
+          num_inference_steps: 30,
+          seed: Math.floor(Math.random() * 1000000)
+        }
+      })
+    });
+
+    if (!createResponse.ok) {
+      const status = createResponse.status;
+      const retryAfter = createResponse.headers.get("retry-after");
+      return { ok: false, error: `API error ${status}`, status, retryAfterSeconds: retryAfter ? parseInt(retryAfter) : undefined };
+    }
+
+    let prediction = await createResponse.json();
+
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await sleep(2000);
+      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { "Authorization": `Bearer ${replicateApiKey}` }
+      });
+      prediction = await pollResponse.json();
+    }
+
+    if (prediction.status === "failed") {
+      return { ok: false, error: prediction.error || "Image generation failed" };
+    }
+
+    const imageUrl = prediction.output?.[0] || prediction.output;
+    if (!imageUrl) return { ok: false, error: "No image URL returned" };
+
+    // Download image
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
+
+    const imgBytes = new Uint8Array(await imgResponse.arrayBuffer());
+    const base64 = btoa(String.fromCharCode(...imgBytes));
+    
+    return { ok: true, imageBase64: base64 };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// ============= PHASE HANDLERS =============
+
+async function handleScriptPhase(
+  supabase: any,
+  user: any,
+  content: string,
+  format: string,
+  length: string,
+  style: string,
+  customStyle?: string
+): Promise<Response> {
+  const phaseStart = Date.now();
+  
+  const lengthConfig: Record<string, { count: number; targetDuration: number; avgSceneDuration: number }> = {
+    short: { count: 6, targetDuration: 90, avgSceneDuration: 15 },
+    brief: { count: 12, targetDuration: 225, avgSceneDuration: 18 },
+    presentation: { count: 24, targetDuration: 480, avgSceneDuration: 20 },
+  };
+  const config = lengthConfig[length] || lengthConfig.brief;
+  const sceneCount = config.count;
+  const targetWords = Math.floor(config.avgSceneDuration * 2.5);
+
+  const styleDescription = getStylePrompt(style, customStyle);
+  const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
+  const dimensions = getImageDimensions(format);
+
+  const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
+
+Content: ${content}
+
+=== TIMING REQUIREMENTS ===
+- Target duration: ${config.targetDuration} seconds
+- Create exactly ${sceneCount} scenes
+- MAXIMUM 25 seconds per scene
+- Each voiceover: ~${targetWords} words
+
+=== FORMAT ===
+- Format: ${format} (${dimensions.width}x${dimensions.height})
+- Style: ${styleDescription}
+
+=== NARRATIVE ARC ===
+1. HOOK (Scenes 1-2): Create intrigue
+2. CONFLICT (Early-middle): Show tension
+3. CHOICE (Middle): Fork in the road
+4. SOLUTION (Later): Show method/progress
+5. FORMULA (Final): Summary visual
+
+=== VOICEOVER STYLE ===
+- ENERGETIC, conversational tone
+- Start each scene with a hook
+- NO labels, NO stage directions, NO markdown
+- Just raw spoken text
+
+${includeTextOverlay ? `
+=== TEXT OVERLAY ===
+- Provide title (2-5 words) and subtitle for each scene
+` : ""}
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON:
+{
+  "title": "Video Title",
+  "scenes": [
+    {
+      "number": 1,
+      "narrativeBeat": "hook",
+      "voiceover": "Spoken text...",
+      "visualPrompt": "Visual description...",
+      "subVisuals": ["Optional additional visual..."],
+      "duration": 18${includeTextOverlay ? `,
+      "title": "Headline",
+      "subtitle": "Takeaway"` : ""}
+    }
+  ]
+}`;
+
+  console.log("Phase: SCRIPT - Generating via OpenRouter...");
+
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
+
+  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://audiomax.lovable.app",
+      "X-Title": "AudioMax Video Generator"
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-pro-preview",
+      messages: [{ role: "user", content: scriptPrompt }],
+      temperature: 0.7,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!scriptResponse.ok) {
+    throw new Error(`Script generation failed: ${scriptResponse.status}`);
+  }
+
+  const scriptData = await scriptResponse.json();
+  const scriptContent = scriptData.choices?.[0]?.message?.content;
+  const tokensUsed = scriptData.usage?.total_tokens || 0;
+
+  if (!scriptContent) throw new Error("No script content received");
+
+  let parsedScript: ScriptResponse;
+  try {
+    const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found");
+    parsedScript = JSON.parse(jsonMatch[0]);
+  } catch {
+    throw new Error("Failed to parse script");
+  }
+
+  // Sanitize voiceovers
+  parsedScript.scenes = parsedScript.scenes.map((s) => ({
+    ...s,
+    voiceover: sanitizeVoiceover(s.voiceover),
+  }));
+
+  // Calculate total images needed
+  let totalImages = 0;
+  for (const scene of parsedScript.scenes) {
+    totalImages += 1; // Primary
+    if (scene.subVisuals && scene.duration >= 12) {
+      const maxSub = scene.duration >= 19 ? 2 : 1;
+      totalImages += Math.min(scene.subVisuals.length, maxSub);
+    }
+  }
+
+  // Create project
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .insert({
+      user_id: user.id,
+      title: parsedScript.title || "Untitled Video",
+      content,
+      format,
+      length,
+      style,
+      status: "generating",
+    })
+    .select()
+    .single();
+
+  if (projectError) throw new Error("Failed to create project");
+
+  const phaseTime = Date.now() - phaseStart;
+  const costTracking: CostTracking = {
+    scriptTokens: tokensUsed,
+    audioSeconds: 0,
+    imagesGenerated: 0,
+    estimatedCostUsd: tokensUsed * PRICING.scriptPerToken,
+  };
+
+  // Create generation record
+  const { data: generation, error: genError } = await supabase
+    .from("generations")
+    .insert({
+      project_id: project.id,
+      user_id: user.id,
+      status: "generating",
+      progress: 10,
+      script: scriptContent,
+      scenes: parsedScript.scenes.map((s, idx) => ({
+        ...s,
+        _meta: {
+          statusMessage: "Script complete. Ready for audio generation.",
+          totalImages,
+          completedImages: 0,
+          sceneIndex: idx,
+          costTracking,
+          phaseTimings: { script: phaseTime },
+        }
+      })),
+      started_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (genError) throw new Error("Failed to create generation");
+
+  console.log(`Phase: SCRIPT complete in ${phaseTime}ms - ${parsedScript.scenes.length} scenes, ${totalImages} images planned`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "script",
+      projectId: project.id,
+      generationId: generation.id,
+      title: parsedScript.title,
+      sceneCount: parsedScript.scenes.length,
+      totalImages,
+      progress: 10,
+      costTracking,
+      phaseTime,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+async function handleAudioPhase(
+  supabase: any,
+  user: any,
+  generationId: string,
+  projectId: string,
+  replicateApiKey: string
+): Promise<Response> {
+  const phaseStart = Date.now();
+
+  // Fetch generation
+  const { data: generation, error: genFetchError } = await supabase
+    .from("generations")
+    .select("*")
+    .eq("id", generationId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (genFetchError || !generation) {
+    throw new Error("Generation not found");
+  }
+
+  const scenes = generation.scenes as Scene[];
+  const meta = scenes[0]?._meta || {};
+  let costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
+  const phaseTimings = meta.phaseTimings || {};
+
+  console.log(`Phase: AUDIO - Processing ${scenes.length} scenes...`);
+
+  const audioUrls: (string | null)[] = new Array(scenes.length).fill(null);
+  let totalAudioSeconds = 0;
+
+  // Process audio in batches of 2
+  const BATCH_SIZE = 2;
+  for (let batchStart = 0; batchStart < scenes.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, scenes.length);
+    
+    const statusMsg = `Generating voiceover... (scenes ${batchStart + 1}-${batchEnd} of ${scenes.length})`;
+    const progress = 10 + Math.floor((batchStart / scenes.length) * 30);
+    
+    // Update progress
+    await supabase.from("generations").update({
+      progress,
+      scenes: scenes.map((s, idx) => ({
+        ...s,
+        audioUrl: audioUrls[idx],
+        _meta: { ...s._meta, statusMessage: statusMsg }
+      }))
+    }).eq("id", generationId);
+
+    const batchPromises = [];
+    for (let i = batchStart; i < batchEnd; i++) {
+      batchPromises.push(
+        generateSceneAudioReplicate(scenes[i], i, replicateApiKey, supabase, user.id, projectId)
+          .then((result) => ({ index: i, result }))
+      );
+    }
+
+    const results = await Promise.all(batchPromises);
+    for (const { index, result } of results) {
+      audioUrls[index] = result.url;
+      if (result.durationSeconds) totalAudioSeconds += result.durationSeconds;
+    }
+
+    if (batchEnd < scenes.length) await sleep(2000);
+  }
+
+  const successfulAudio = audioUrls.filter(Boolean).length;
+  if (successfulAudio === 0) {
+    throw new Error("Audio generation failed for all scenes");
+  }
+
+  costTracking.audioSeconds = totalAudioSeconds;
+  costTracking.estimatedCostUsd += totalAudioSeconds * PRICING.audioPerSecond;
+  phaseTimings.audio = Date.now() - phaseStart;
+
+  // Update generation with audio URLs
+  await supabase.from("generations").update({
+    progress: 40,
+    scenes: scenes.map((s, idx) => ({
+      ...s,
+      audioUrl: audioUrls[idx],
+      _meta: {
+        ...s._meta,
+        statusMessage: "Audio complete. Ready for image generation.",
+        costTracking,
+        phaseTimings,
+      }
+    }))
+  }).eq("id", generationId);
+
+  console.log(`Phase: AUDIO complete in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "audio",
+      progress: 40,
+      audioGenerated: successfulAudio,
+      audioSeconds: totalAudioSeconds,
+      costTracking,
+      phaseTime: phaseTimings.audio,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+async function handleImagesPhase(
+  supabase: any,
+  user: any,
+  generationId: string,
+  projectId: string,
+  replicateApiKey: string
+): Promise<Response> {
+  const phaseStart = Date.now();
+
+  // Fetch generation with project format
+  const { data: generation } = await supabase
+    .from("generations")
+    .select("*, projects!inner(format, style)")
+    .eq("id", generationId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!generation) throw new Error("Generation not found");
+
+  const scenes = generation.scenes as Scene[];
+  const format = generation.projects.format;
+  const style = generation.projects.style;
+  const styleDescription = getStylePrompt(style);
+  const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
+  const dimensions = getImageDimensions(format);
+  
+  const meta = scenes[0]?._meta || {};
+  let costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
+  const phaseTimings = meta.phaseTimings || {};
+
+  // Build image tasks
+  interface ImageTask { sceneIndex: number; subIndex: number; prompt: string; }
+  const imageTasks: ImageTask[] = [];
+
+  const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
+    const orientationDesc = format === "portrait" 
+      ? "VERTICAL 9:16" : format === "square" ? "SQUARE 1:1" : "HORIZONTAL 16:9";
+
+    let textInstructions = "";
+    if (includeTextOverlay && scene.title && subIndex === 0) {
+      textInstructions = `
+TEXT: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as subtitle.
+Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
+    }
+
+    return `Generate an EDITORIAL ILLUSTRATION in ${orientationDesc} (${dimensions.width}x${dimensions.height}).
+
+VISUAL: ${visualPrompt}
+
+STYLE: ${styleDescription}
+${textInstructions}
+
+COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
+  };
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    imageTasks.push({ sceneIndex: i, subIndex: 0, prompt: buildImagePrompt(scene.visualPrompt, scene, 0) });
+    
+    if (scene.subVisuals && scene.duration >= 12) {
+      const maxSub = scene.duration >= 19 ? 2 : 1;
+      for (let j = 0; j < Math.min(scene.subVisuals.length, maxSub); j++) {
+        imageTasks.push({ sceneIndex: i, subIndex: j + 1, prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1) });
       }
     }
   }
 
-  return { url: finalAudioUrl, error: lastError || undefined };
+  console.log(`Phase: IMAGES - Generating ${imageTasks.length} images...`);
+
+  const sceneImageUrls: (string | null)[][] = scenes.map(() => []);
+  let completedImages = 0;
+
+  // Process in batches of 4
+  const BATCH_SIZE = 4;
+  for (let batchStart = 0; batchStart < imageTasks.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, imageTasks.length);
+    
+    const statusMsg = `Generating images... (${completedImages}/${imageTasks.length} complete)`;
+    const progress = 40 + Math.floor((completedImages / imageTasks.length) * 50);
+
+    // Update progress
+    await supabase.from("generations").update({
+      progress,
+      scenes: scenes.map((s, idx) => {
+        const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
+        return {
+          ...s,
+          imageUrl: imgs[0] || null,
+          imageUrls: imgs.length > 0 ? imgs : undefined,
+          _meta: {
+            ...s._meta,
+            statusMessage: statusMsg,
+            totalImages: imageTasks.length,
+            completedImages,
+          }
+        };
+      })
+    }).eq("id", generationId);
+
+    const batchPromises = [];
+    for (let t = batchStart; t < batchEnd; t++) {
+      const task = imageTasks[t];
+      batchPromises.push(
+        (async () => {
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
+            if (result.ok) {
+              // Upload to storage
+              const imgBytes = new Uint8Array(atob(result.imageBase64).split("").map(c => c.charCodeAt(0)));
+              const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
+              const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
+              
+              await supabase.storage.from("audio").upload(path, imgBytes, { contentType: "image/png", upsert: true });
+              const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(path);
+              
+              return { task, url: publicUrl };
+            }
+            
+            if (attempt < 5) {
+              const delay = result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 8000;
+              await sleep(delay + Math.random() * 1000);
+            }
+          }
+          return { task, url: null };
+        })()
+      );
+    }
+
+    const results = await Promise.all(batchPromises);
+    for (const { task, url } of results) {
+      while (sceneImageUrls[task.sceneIndex].length <= task.subIndex) {
+        sceneImageUrls[task.sceneIndex].push(null);
+      }
+      sceneImageUrls[task.sceneIndex][task.subIndex] = url;
+      if (url) completedImages++;
+    }
+
+    if (batchEnd < imageTasks.length) await sleep(2000);
+  }
+
+  costTracking.imagesGenerated = completedImages;
+  costTracking.estimatedCostUsd += completedImages * PRICING.imagePerImage;
+  phaseTimings.images = Date.now() - phaseStart;
+
+  // Final update
+  await supabase.from("generations").update({
+    progress: 90,
+    scenes: scenes.map((s, idx) => {
+      const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
+      return {
+        ...s,
+        imageUrl: imgs[0] || null,
+        imageUrls: imgs.length > 0 ? imgs : undefined,
+        _meta: {
+          ...s._meta,
+          statusMessage: "Images complete. Finalizing...",
+          totalImages: imageTasks.length,
+          completedImages,
+          costTracking,
+          phaseTimings,
+        }
+      };
+    })
+  }).eq("id", generationId);
+
+  console.log(`Phase: IMAGES complete in ${phaseTimings.images}ms - ${completedImages}/${imageTasks.length} images`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "images",
+      progress: 90,
+      imagesGenerated: completedImages,
+      totalImages: imageTasks.length,
+      costTracking,
+      phaseTime: phaseTimings.images,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
 
+async function handleFinalizePhase(
+  supabase: any,
+  user: any,
+  generationId: string,
+  projectId: string
+): Promise<Response> {
+  const phaseStart = Date.now();
+
+  const { data: generation } = await supabase
+    .from("generations")
+    .select("*, projects!inner(title)")
+    .eq("id", generationId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!generation) throw new Error("Generation not found");
+
+  const scenes = generation.scenes as Scene[];
+  const meta = scenes[0]?._meta || {};
+  const costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
+  const phaseTimings = meta.phaseTimings || {};
+  phaseTimings.finalize = Date.now() - phaseStart;
+
+  const totalTime = (phaseTimings.script || 0) + (phaseTimings.audio || 0) + (phaseTimings.images || 0) + phaseTimings.finalize;
+
+  // Clean scenes (remove _meta from final output)
+  const finalScenes = scenes.map((s: any) => {
+    const { _meta, ...rest } = s;
+    return rest;
+  });
+
+  // Mark complete
+  await supabase.from("generations").update({
+    status: "complete",
+    progress: 100,
+    scenes: finalScenes.map((s: Scene, idx: number) => ({
+      ...s,
+      _meta: {
+        statusMessage: "Generation complete!",
+        costTracking,
+        phaseTimings,
+        totalTimeMs: totalTime,
+      }
+    })),
+    completed_at: new Date().toISOString(),
+  }).eq("id", generationId);
+
+  await supabase.from("projects").update({ status: "complete" }).eq("id", projectId);
+
+  console.log(`Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "finalize",
+      progress: 100,
+      projectId,
+      generationId,
+      title: generation.projects.title,
+      scenes: finalScenes,
+      costTracking,
+      phaseTimings,
+      totalTimeMs: totalTime,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// ============= MAIN HANDLER =============
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -571,773 +848,61 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "No authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
+
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
-    // Use system Replicate API key for both TTS and image generation
     const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
     if (!REPLICATE_API_KEY) {
-      console.error("REPLICATE_TTS_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ error: "Replicate service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    console.log(`[REPLICATE] Using system API key: ${REPLICATE_API_KEY.substring(0, 12)}...`);
-    console.log(`[REPLICATE] TTS: minimax/speech-02-turbo | Images: prunaai/p-image`);
-
-    const { content, format, length, style, customStyle }: GenerationRequest = await req.json();
-
-    // Scene count calculation based on minimum video duration requirements:
-    // Short: min 60s (1 min), max 120s (2 min), target ~90s
-    // Brief: min 150s (2.5 min), max 300s (5 min), target ~225s
-    // Presentation: min 360s (6 min), max 600s (10 min), target ~480s
-    // Using ~15-20s average per scene for dynamic pacing
-    const lengthConfig: Record<string, { count: number; minDuration: number; maxDuration: number; targetDuration: number; avgSceneDuration: number }> = {
-      short: { count: 6, minDuration: 60, maxDuration: 120, targetDuration: 90, avgSceneDuration: 15 },
-      brief: { count: 12, minDuration: 150, maxDuration: 300, targetDuration: 225, avgSceneDuration: 18 },
-      presentation: { count: 24, minDuration: 360, maxDuration: 600, targetDuration: 480, avgSceneDuration: 20 },
-    };
-    const config = lengthConfig[length] || lengthConfig.brief;
-    const sceneCount = config.count;
-    const avgSceneDuration = config.avgSceneDuration;
-    const targetWords = Math.floor(avgSceneDuration * 2.5); // ~150 words/min = 2.5 words/sec
-
-    // ===============================================
-    // STEP 1: THE DIRECTOR - Script Generation
-    // ===============================================
-    const styleDescription = getStylePrompt(style, customStyle);
-    const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
-    const dimensions = getImageDimensions(format);
-    
-    const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content that follows a compelling story arc.
-
-Content: ${content}
-
-=== TIMING REQUIREMENTS (CRITICAL) ===
-- Target video duration: ${config.targetDuration} seconds (${Math.floor(config.targetDuration / 60)} min ${config.targetDuration % 60}s)
-- Create exactly ${sceneCount} scenes
-- MAXIMUM 25 seconds per scene (HARD LIMIT - no exceptions)
-- Average scene duration: ${avgSceneDuration} seconds
-- Each scene's voiceover: approximately ${targetWords} words (at 150 words/minute pace)
-
-=== VIDEO SPECIFICATIONS ===
-- Format: ${format} (${format === "landscape" ? "16:9 horizontal" : format === "portrait" ? "9:16 vertical" : "1:1 square"})
-- Exact dimensions: ${dimensions.width}x${dimensions.height} pixels
-- Visual style: ${styleDescription}
-
-=== NARRATIVE ARC STRUCTURE (CRITICAL - Map scenes to these story beats) ===
-Distribute your ${sceneCount} scenes across this narrative framework:
-
-1. THE HOOK (Scenes 1-2, narrativeBeat: "hook"):
-   - Visual represents the "Secret Advantage" or core promise
-   - Create intrigue with a mysterious element that draws viewers in
-   - Example: A glowing key, hidden door, or unexplored opportunity
-
-2. THE CONFLICT (Early-middle scenes, narrativeBeat: "conflict"):
-   - Split-screen or comparative compositions showing TENSION
-   - Contrast: Success vs. Failure, Old Way vs. New Way, Patience vs. Chaos
-   - Visual must be DIVIDED to show opposing forces
-
-3. THE CHOICE (Middle scenes, narrativeBeat: "choice"):
-   - Visualize the fork in the road, the decision point
-   - Two modes: Power Mode (construction, progress, light) vs. Shadow Mode (doubt, stagnation, darkness)
-   - Show the viewer they have agency
-
-4. THE SOLUTION (Later scenes, narrativeBeat: "solution"):
-   - Visualization of the method, system, or game plan
-   - Show Time + Effort = Results as a visual progression
-   - Timeline or ascending structure showing growth
-
-5. THE FORMULA (Final scenes, narrativeBeat: "formula"):
-   - Summary visual showing the complete framework/equation
-   - Clear visual equation: Input + Action = Outcome
-   - Triumphant, resolution imagery
-
-=== VOICEOVER STYLE (Critical for engagement) ===
-- Use an ENERGETIC, conversational tone like a TED speaker
-- Start EACH scene with a hook — a surprising fact, provocative question, or bold statement
-- Examples: "But here's what nobody tells you..." "What if I told you..." "The shocking truth is..."
-- Mix short punchy sentences (5-8 words) with longer explanations
-- Include rhetorical questions to create engagement pauses
-- Vary emotional energy - build up, then resolve
-
-**CRITICAL INSTRUCTION - AUDIO CLEANLINESS:**
-- The "voiceover" field must contain **ONLY the spoken words**.
-- **DO NOT** use labels like "Hook:", "Scene 1:", "Narrator:", "Solution:", or "Body:".
-- **DO NOT** include stage directions like "[pauses]" or "[upbeat music]".
-- **DO NOT** use markdown formatting (bold/italics) in the voiceover string.
-- Just write the raw text that the robot voice will speak.
-
-${includeTextOverlay ? `
-=== TEXT OVERLAY REQUIREMENTS ===
-- Provide a punchy scene title (2-5 words, like a headline)
-- Provide a subtitle (one impactful sentence - the key takeaway)
-These will be integrated directly into the illustration as PART OF THE COMPOSITION.
-` : ""}
-
-=== EDITORIAL ILLUSTRATION DESIGN RULES (CRITICAL for visual prompts) ===
-Generate prompts for EDITORIAL ILLUSTRATIONS or INFOGRAPHIC SLIDES. Text MUST be part of the composition, not overlays.
-
-SEMANTIC LAYOUT RULES (visual structure MUST match concept):
-- "Two Modes" or "Comparison" → composition MUST be visually SPLIT (left/right or top/bottom)
-- "Stacking Up" or "Growth" → visual elements MUST be vertical and ASCENDING
-- "Timeline" or "Journey" → HORIZONTAL progression with clear stages
-- "Formula" or "Equation" → equation-style layout with visual operators (+, =, →)
-- "Choice" or "Fork" → clear DIVERGING paths
-
-TEXT HIERARCHY (Strictly follow in each visual prompt):
-1. HEADLINE: Big, bold, central or upper-third placement (e.g., "THE 90-DAY RULE")
-2. SUBTEXT: Smaller, supporting elements below or integrated
-3. LABELS: Minimal, integrated with visual elements
-
-COMPOSITION REQUIREMENTS:
-- Reserve "negative space" zones specifically for text placement
-- Describe WHERE text sits: "Title centered in upper third, illustration anchoring bottom"
-- Text must NEVER clash with busy artwork areas
-- Use gradient or solid zones behind text for legibility
-
-=== VISUAL PROMPT FORMAT ===
-CRITICAL: Visual prompts describe WHAT TO ILLUSTRATE, not metadata!
-- DO NOT include style names, beat labels, or formatting instructions in the visual description
-- DO NOT write things like "Hook Urban Minimalist" - these are INSTRUCTIONS, not content
-- DESCRIBE the actual visual scene: objects, people, actions, composition, colors
-- Write prompts as if describing a photograph or painting to an artist
-
-Each visualPrompt MUST be a PURE SCENE DESCRIPTION containing:
-1. Concrete visual elements: objects, characters, settings
-2. Composition: how elements are arranged (split, centered, ascending)
-3. Mood and lighting: atmosphere, colors, contrast
-4. Action or state: what's happening in the scene
-
-GOOD visualPrompt example:
-"A split composition showing contrast. LEFT SIDE: A chaotic desk with scattered papers, multiple browser tabs visible on a monitor, coffee cups piling up - visual chaos representing distraction. RIGHT SIDE: A clean, organized workspace with a single focused project, neat stacks, a plant - calm productivity. Warm lighting on the organized side, harsh fluorescent on the chaotic side. Muted earth tones with a pop of green on the success side."
-
-BAD visualPrompt example (DO NOT do this):
-"[HOOK - Urban Minimalist Doodle] Hook scene showing concept..." - This puts labels in the image!
-
-REMEMBER: The visualPrompt goes directly to an AI image generator. It must describe VISUALS, not concepts or labels.
-
-=== OUTPUT FORMAT ===
-Return ONLY valid JSON with this exact structure:
-{
-  "title": "Engaging Video Title",
-  "scenes": [
-    {
-      "number": 1,
-      "narrativeBeat": "hook",
-      "voiceover": "Hook opening that grabs attention... main content with varied pacing...",
-      "visualPrompt": "[HOOK - Centered Mystery] Primary dynamic visual with action and movement... HEADLINE 'TEXT' placement... negative space description...",
-      "subVisuals": ["[HOOK - Detail] Second visual with different angle...", "[HOOK - Reveal] Third visual showing result..."],
-      "duration": 18${includeTextOverlay ? `,
-      "title": "Punchy Headline",
-      "subtitle": "Key takeaway in one impactful line"` : ""}
-    }
-  ]
-}
-
-REMEMBER:
-- NO scene over 25 seconds
-- Exactly ${sceneCount} scenes
-- Map each scene to a narrativeBeat: hook, conflict, choice, solution, or formula
-- Visual prompts MUST include [BEAT - Layout] prefix and explicit text placement
-- Semantic layouts: visual structure matches conceptual structure`;
-
-    console.log("Step 1: Generating script via OpenRouter (google/gemini-3-pro-preview)...");
-    
-    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-    if (!OPENROUTER_API_KEY) {
-      throw new Error("OPENROUTER_API_KEY is not configured");
-    }
-    
-    const scriptResponse = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": "https://audiomax.lovable.app",
-          "X-Title": "AudioMax Video Generator"
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-preview",
-          messages: [
-            { 
-              role: "user", 
-              content: scriptPrompt 
-            }
-          ],
-          temperature: 0.7,
-          top_p: 0.95,
-          max_tokens: 8192,
-        }),
-      }
-    );
-
-    if (!scriptResponse.ok) {
-      const errorText = await scriptResponse.text();
-      console.error("OpenRouter script error:", scriptResponse.status, errorText);
-      throw new Error(`Script generation failed: ${scriptResponse.status}`);
-    }
-
-    const scriptData = await scriptResponse.json();
-    // OpenRouter uses OpenAI-compatible format: choices[0].message.content
-    const scriptContent = scriptData.choices?.[0]?.message?.content;
-    
-    if (!scriptContent) {
-      console.error("No script content. Full response:", JSON.stringify(scriptData));
-      throw new Error("No script content received from OpenRouter");
-    }
-
-    let parsedScript: ScriptResponse;
-    try {
-      const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsedScript = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("No JSON found in response");
-      }
-    } catch (parseError) {
-      console.error("Failed to parse script:", parseError, scriptContent);
-      throw new Error("Failed to parse generated script");
-    }
-
-    // Hard safety pass: strip any labels/stage directions the model may still include.
-    parsedScript = {
-      ...parsedScript,
-      scenes: Array.isArray(parsedScript.scenes)
-        ? parsedScript.scenes.map((s) => ({
-            ...s,
-            voiceover: sanitizeVoiceover((s as any)?.voiceover),
-          }))
-        : [],
-    };
-
-    console.log("Script generated:", parsedScript.title, `(${parsedScript.scenes.length} scenes)`);
-
-    // Create project in database
-    const { data: project, error: projectError } = await supabase
-      .from("projects")
-      .insert({
-        user_id: user.id,
-        title: parsedScript.title || "Untitled Video",
-        content: content,
-        format: format,
-        length: length,
-        style: style,
-        status: "generating",
-      })
-      .select()
-      .single();
-
-    if (projectError) {
-      console.error("Project creation error:", projectError);
-      throw new Error("Failed to create project");
-    }
-
-    // Helper to update generation with verbose status
-    const updateGenerationStatus = async (
-      genId: string,
-      progress: number,
-      statusMessage: string,
-      scenesData?: any[]
-    ) => {
-      const updatePayload: any = {
-        progress,
-        scenes: scenesData ? scenesData.map((s, idx) => ({
-          ...s,
-          _meta: { 
-            ...(s._meta || {}),
-            statusMessage,
-            lastUpdate: new Date().toISOString()
-          }
-        })) : undefined
-      };
-      
-      // Store status in first scene's _meta for frontend to read
-      if (scenesData && scenesData.length > 0) {
-        updatePayload.scenes[0]._meta.statusMessage = statusMessage;
-      }
-      
-      await supabase.from("generations").update(updatePayload).eq("id", genId);
-      console.log(`[STATUS] ${progress}% - ${statusMessage}`);
-    };
-
-    // Create generation record
-    const { data: generation, error: genError } = await supabase
-      .from("generations")
-      .insert({
-        project_id: project.id,
-        user_id: user.id,
-        status: "generating",
-        progress: 10,
-        script: scriptContent,
-        scenes: parsedScript.scenes.map((s, idx) => ({
-          ...s,
-          _meta: { 
-            statusMessage: "Script generated, starting audio...",
-            sceneIndex: idx 
-          }
-        })),
-        started_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (genError) {
-      console.error("Generation creation error:", genError);
-      throw new Error("Failed to create generation record");
-    }
-
-    // ===============================================
-    // STEP 2: THE NARRATOR - Audio Generation (TTS)
-    // Process scenes in parallel batches of 2
-    // ===============================================
-    console.log("Step 2: Generating audio...");
-    
-    await updateGenerationStatus(
-      generation.id, 
-      15, 
-      `Generating voiceover audio for ${parsedScript.scenes.length} scenes...`,
-      parsedScript.scenes
-    );
-
-    const audioUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
-    const AUDIO_BATCH_SIZE = 2;
-    const INTER_BATCH_DELAY_MS = 2000; // Delay between batches to avoid rate limits
-
-    for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += AUDIO_BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + AUDIO_BATCH_SIZE, parsedScript.scenes.length);
-      
-      // Update status for this batch
-      const statusMsg = `Generating voiceover audio... (scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length})`;
-      const progress = 15 + Math.floor((batchStart / parsedScript.scenes.length) * 25);
-      await updateGenerationStatus(generation.id, progress, statusMsg, parsedScript.scenes);
-      
-      console.log(`Audio batch: scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length}`);
-      
-      const batchPromises: Promise<{ index: number; result: { url: string | null; error?: string } }>[] = [];
-
-      for (let i = batchStart; i < batchEnd; i++) {
-        const scene = parsedScript.scenes[i];
-        batchPromises.push(
-          generateSceneAudioReplicate(scene, i, REPLICATE_API_KEY, supabase, user.id, project.id)
-            .then((result: { url: string | null; error?: string }) => ({ index: i, result }))
-        );
-      }
-
-      const batchResults = await Promise.all(batchPromises);
-      
-      let batchSuccessCount = 0;
-      for (const { index, result } of batchResults) {
-        audioUrls[index] = result.url;
-        if (result.url) batchSuccessCount++;
-        if (result.error) {
-          console.warn(`Scene ${index + 1} TTS failed: ${result.error}`);
-        }
-      }
-
-      console.log(`Audio batch complete: ${batchSuccessCount}/${batchEnd - batchStart} succeeded`);
-
-      // Update progress with completion status
-      const completionProgress = 15 + Math.floor((batchEnd / parsedScript.scenes.length) * 25);
-      await updateGenerationStatus(
-        generation.id, 
-        completionProgress, 
-        `Audio complete for ${batchEnd}/${parsedScript.scenes.length} scenes`,
-        parsedScript.scenes
-      );
-
-      // Delay between batches to avoid rate limits
-      if (batchEnd < parsedScript.scenes.length) {
-        await sleep(INTER_BATCH_DELAY_MS);
-      }
-    }
-    
-     const successfulAudio = audioUrls.filter((u) => u !== null).length;
-     console.log(
-       `Audio generation complete: ${successfulAudio}/${parsedScript.scenes.length} scenes have audio`
-     );
-
-     // If we produced zero audio, fail fast with a clear, actionable message.
-     // (Otherwise the UI shows a "success" result but all scenes are silent.)
-     if (successfulAudio === 0) {
-       const msg =
-         "Audio generation failed: your Gemini text-to-speech quota appears exhausted (or your key doesn't have audio access). Update your Gemini API key/credits in Settings and try again.";
-
-       await supabase
-         .from("generations")
-         .update({
-           status: "error",
-           error_message: msg,
-           progress: 100,
-           completed_at: new Date().toISOString(),
-         })
-         .eq("id", generation.id);
-
-       await supabase.from("projects").update({ status: "error" }).eq("id", project.id);
-
-       return new Response(JSON.stringify({ error: msg }), {
-         status: 400,
-         headers: { ...corsHeaders, "Content-Type": "application/json" },
-       });
-     }
-
-    // ===============================================
-    // STEP 3: THE ILLUSTRATOR - Image Generation
-    // Process images in parallel batches of 3 for speed
-    // ===============================================
-    console.log("Step 3: Generating images (with sub-visuals for longer scenes)...");
-    
-    // Build image prompt helper function with editorial design rules
-    const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number = 0): string => {
-      const orientationDesc = format === "portrait" 
-        ? "VERTICAL/PORTRAIT orientation (taller than wide, 9:16 aspect ratio)"
-        : format === "square" 
-        ? "SQUARE orientation (equal width and height, 1:1 aspect ratio)"
-        : "HORIZONTAL/LANDSCAPE orientation (wider than tall, 16:9 aspect ratio)";
-      
-      // Narrative beat context for image generation
-      const beatContext = scene.narrativeBeat ? `
-NARRATIVE CONTEXT: This is a "${scene.narrativeBeat.toUpperCase()}" scene in the story arc.
-${scene.narrativeBeat === "hook" ? "Create intrigue and mystery - draw viewers in with something captivating." : ""}
-${scene.narrativeBeat === "conflict" ? "Show TENSION through split/comparative composition - opposing forces clearly divided." : ""}
-${scene.narrativeBeat === "choice" ? "Visualize DIVERGING paths or two distinct options - the fork in the road." : ""}
-${scene.narrativeBeat === "solution" ? "Show PROGRESSION and growth - ascending elements, timeline, building upward." : ""}
-${scene.narrativeBeat === "formula" ? "Create a SUMMARY visual - equation layout showing Input + Action = Outcome." : ""}` : "";
-
-      // Editorial design rules
-      const editorialRules = `
-EDITORIAL ILLUSTRATION REQUIREMENTS:
-- This is an INFOGRAPHIC SLIDE, not just an illustration
-- Text is PART OF THE COMPOSITION, not a label stuck on top
-- Visual structure MUST match conceptual structure semantically:
-  * Comparisons → SPLIT composition (left/right or top/bottom)
-  * Growth/Progress → ASCENDING/vertical elements
-  * Timelines → HORIZONTAL progression
-  * Formulas → EQUATION layout with visual operators
-- Reserve clear NEGATIVE SPACE zones for all text elements
-- Background must have CONTRAST zones for text legibility
-- Text hierarchy: Headline (big/bold/upper-third), Subtext (smaller/integrated), Labels (minimal)`;
-
-      let textOverlayInstructions = "";
-      // Only include text overlay on the primary image (subIndex 0)
-      if (includeTextOverlay && scene.title && subIndex === 0) {
-        textOverlayInstructions = `
-
-TEXT INTEGRATION (Critical - text is part of the artwork):
-- Display scene number "${scene.number}" prominently (large, stylized, like a chapter number)
-- HEADLINE: "${scene.title}" - big, bold, positioned in upper third with clean background zone
-- SUBTITLE: "${scene.subtitle || ""}" - smaller text below headline, integrated into composition
-- Use ${styleDescription} style lettering that matches the illustration
-- Ensure dedicated NEGATIVE SPACE behind text - never place text over busy areas
-- Text placement: Upper third for headline, supporting elements anchor the composition below`;
-      }
-
-      const subVisualNote = subIndex > 0 
-        ? `\n\nSEQUENCE NOTE: This is visual ${subIndex + 1} of ${(scene.subVisuals?.length || 0) + 1} for this scene.
-Show PROGRESSION from the previous visual: different angle, next moment in time, or evolution of the concept.
-Maintain visual continuity with previous images in this scene.` 
-        : "";
-
-      return `Generate an EDITORIAL ILLUSTRATION in EXACTLY ${orientationDesc}.
-
-=== CRITICAL: TEXT ACCURACY ===
-If the prompt includes text, titles, labels, or captions to display:
-- Render ALL text EXACTLY as written - correct spelling, no substitutions
-- Every letter and number must be accurate and legible
-- DO NOT hallucinate, swap, or corrupt characters (no "R1" for "A", no symbol mixing)
-- Text must be clean, sharp, and readable against the background
-- Use appropriate fonts that match the style - hand-drawn for doodle, clean sans-serif for minimalist
-
-=== TECHNICAL REQUIREMENTS ===
-- Format: ${format.toUpperCase()}
-- Dimensions: ${dimensions.width}x${dimensions.height} pixels
-- Aspect ratio: ${format === "portrait" ? "9:16 (vertical)" : format === "square" ? "1:1 (square)" : "16:9 (horizontal)"}
-${beatContext}
-${editorialRules}
-
-=== VISUAL CONTENT ===
-${visualPrompt}
-
-=== STYLE ===
-${styleDescription} style editorial illustration. Professional, cohesive aesthetic.
-${textOverlayInstructions}${subVisualNote}
-
-=== COMPOSITION REMINDER ===
-The visual structure must SEMANTICALLY MATCH the concept:
-- If it's a comparison → use SPLIT composition
-- If it's progression → use ASCENDING layout  
-- If it's a formula → use EQUATION layout with visual operators
-Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED CORRECTLY AND LEGIBLE.`
-    };
-
-    // Collect all image prompts (including sub-visuals for longer scenes)
-    interface ImageTask {
-      sceneIndex: number;
-      subIndex: number; // 0 = primary, 1+ = sub-visuals
-      prompt: string;
-    }
-    
-    const imageTasks: ImageTask[] = [];
-    
-    for (let i = 0; i < parsedScript.scenes.length; i++) {
-      const scene = parsedScript.scenes[i];
-      
-      // Primary visual (always)
-      imageTasks.push({
-        sceneIndex: i,
-        subIndex: 0,
-        prompt: buildImagePrompt(scene.visualPrompt, scene, 0)
+      return new Response(JSON.stringify({ error: "Replicate not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
-      
-      // Sub-visuals based on scene duration
-      if (scene.subVisuals && scene.subVisuals.length > 0 && scene.duration >= 12) {
-        // Scenes 12-18s: 1 sub-visual, 19-25s: 2 sub-visuals
-        const maxSubVisuals = scene.duration >= 19 ? 2 : 1;
-        const subVisualsToUse = Math.min(scene.subVisuals.length, maxSubVisuals);
-        
-        for (let j = 0; j < subVisualsToUse; j++) {
-          imageTasks.push({
-            sceneIndex: i,
-            subIndex: j + 1,
-            prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1)
-          });
-        }
-      }
     }
-    
-    console.log(`Total images to generate: ${imageTasks.length} for ${parsedScript.scenes.length} scenes`);
-    
-    // Store image task count in generation record for frontend progress display
-    await updateGenerationStatus(
-      generation.id,
-      40,
-      `Starting image generation... (${imageTasks.length} images for ${parsedScript.scenes.length} scenes)`,
-      parsedScript.scenes.map((s, idx) => ({
-        ...s,
-        _meta: { totalImages: imageTasks.length, completedImages: 0, sceneIndex: idx }
-      }))
-    );
-    
-    // Storage for results: sceneIndex -> array of image URLs
-    const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
 
-    // Process images in parallel batches for faster generation
-    // Increase batch size to reduce total time and avoid edge function timeout
-    const IMAGE_BATCH_SIZE = 4; // Process 4 images in parallel
-    const IMAGE_DELAY_MS = 2000; // Short delay between batches
-    
-    // Helper to update progress and persist partial results after each image
-    const persistProgress = async (completedCount: number, statusMessage: string) => {
-      const progress = 40 + Math.floor((completedCount / imageTasks.length) * 50);
-      
-      // Build partial scenes with current image URLs for recovery
-      const partialScenes = parsedScript.scenes.map((scene, idx) => {
-        const allImages = sceneImageUrls[idx].filter(url => url !== null) as string[];
-        return {
-          ...scene,
-          imageUrl: allImages[0] || null,
-          imageUrls: allImages.length > 0 ? allImages : undefined,
-          audioUrl: audioUrls[idx] || null,
-          _meta: { 
-            totalImages: imageTasks.length, 
-            completedImages: completedCount,
-            statusMessage,
-            sceneIndex: idx,
-            lastUpdate: new Date().toISOString()
-          }
-        };
+    const body: GenerationRequest = await req.json();
+    const { phase, generationId, projectId, content, format, length, style, customStyle } = body;
+
+    console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}`);
+
+    // Route to appropriate phase handler
+    if (!phase || phase === "script") {
+      if (!content || !format || !length || !style) {
+        return new Response(JSON.stringify({ error: "Missing required fields for script phase" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle);
+    }
+
+    if (!generationId || !projectId) {
+      return new Response(JSON.stringify({ error: "Missing generationId/projectId for continuation" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
-      
-      await supabase.from("generations").update({ 
-        progress,
-        scenes: partialScenes
-      }).eq("id", generation.id);
-      
-      console.log(`[STATUS] ${progress}% - ${statusMessage}`);
-    };
-
-    let completedImages = 0;
-
-    for (let batchStart = 0; batchStart < imageTasks.length; batchStart += IMAGE_BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + IMAGE_BATCH_SIZE, imageTasks.length);
-      const batchPromises: Promise<{ task: ImageTask; url: string | null }>[] = [];
-
-      for (let t = batchStart; t < batchEnd; t++) {
-        const task = imageTasks[t];
-        
-        batchPromises.push(
-          (async () => {
-            try {
-              let result:
-                | { ok: true; imageBase64: string }
-                | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
-                | undefined;
-
-              let lastError = "";
-
-              const logPrefix = task.subIndex > 0
-                ? `Scene ${task.sceneIndex + 1} visual ${task.subIndex + 1}`
-                : `Scene ${task.sceneIndex + 1}`;
-
-              // Generate image with Replicate (required, no fallback) + retry on throttling
-              const MAX_IMAGE_ATTEMPTS = 10;
-              for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
-                console.log(
-                  `${logPrefix}: Generating with Replicate (image ${t + 1}/${imageTasks.length}) attempt ${attempt}/${MAX_IMAGE_ATTEMPTS}...`
-                );
-
-                const attemptResult = await generateImageWithReplicate(task.prompt, REPLICATE_API_KEY!, format);
-
-                if (attemptResult.ok) {
-                  result = attemptResult;
-                  break;
-                }
-
-                lastError = attemptResult.error;
-                console.error(`${logPrefix} image failed: ${attemptResult.error}`);
-                console.error(
-                  `[REPLICATE ERROR] Scene ${task.sceneIndex + 1}, sub ${task.subIndex}: ${attemptResult.error}`
-                );
-
-                if (attempt === MAX_IMAGE_ATTEMPTS) {
-                  throw new Error(
-                    `${logPrefix}: Image generation failed after ${MAX_IMAGE_ATTEMPTS} attempts: ${attemptResult.error}`
-                  );
-                }
-
-                // If throttled, honor retry_after when present; otherwise back off conservatively.
-                const retryAfterMs =
-                  attemptResult.status === 429
-                    ? Math.max(1000, (attemptResult.retryAfterSeconds ?? 8) * 1000)
-                    : 8000;
-
-                const jitter = Math.floor(Math.random() * 400);
-                await sleep(retryAfterMs + jitter);
-              }
-
-              if (!result || !result.ok) {
-                // Should be unreachable because we either break on success or throw on final failure.
-                throw new Error(`${logPrefix}: Image generation failed: ${lastError || "unknown error"}`);
-              }
-
-              const imageBytes = new Uint8Array(base64Decode(result.imageBase64));
-              const imageBlob = new Blob([imageBytes], { type: "image/png" });
-              const imageSuffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
-              const imagePath = `${user.id}/${project.id}/scene-${task.sceneIndex + 1}${imageSuffix}.png`;
-
-              const { error: uploadError } = await supabase.storage
-                .from("audio")
-                .upload(imagePath, imageBlob, {
-                  contentType: "image/png",
-                  upsert: true,
-                });
-
-              if (uploadError) {
-                console.error(`${logPrefix} image upload failed:`, uploadError);
-                return { task, url: null };
-              }
-
-              const { data: { publicUrl } } = supabase.storage
-                .from("audio")
-                .getPublicUrl(imagePath);
-
-              console.log(`${logPrefix} image generated successfully`);
-              return { task, url: publicUrl };
-            } catch (imgError) {
-              console.error(`Scene ${task.sceneIndex + 1} image error:`, imgError);
-              return { task, url: null };
-            }
-          })()
-        );
-      }
-
-      const batchResults = await Promise.all(batchPromises);
-      
-      for (const { task, url } of batchResults) {
-        // Ensure the array is long enough
-        while (sceneImageUrls[task.sceneIndex].length <= task.subIndex) {
-          sceneImageUrls[task.sceneIndex].push(null);
-        }
-        sceneImageUrls[task.sceneIndex][task.subIndex] = url;
-        completedImages++;
-      }
-
-      // Persist progress after each batch for recovery
-      const statusMsg = `Generating images... (${completedImages}/${imageTasks.length} complete)`;
-      await persistProgress(completedImages, statusMsg);
-      console.log(`Image progress: ${completedImages}/${imageTasks.length} complete`);
-      
-      // Rate limit delay between batches (critical for Replicate)
-      if (batchEnd < imageTasks.length) {
-        await sleep(IMAGE_DELAY_MS);
-      }
     }
-    
-    const totalImagesGenerated = sceneImageUrls.flat().filter(u => u !== null).length;
-    console.log(`Image generation complete: ${totalImagesGenerated}/${imageTasks.length} images for ${parsedScript.scenes.length} scenes`);
 
-    // ===============================================
-    // STEP 4: FINALIZE - Compile results
-    // ===============================================
-    console.log("Step 4: Finalizing generation...");
-    
-    const finalScenes = parsedScript.scenes.map((scene, idx) => {
-      const allImages = sceneImageUrls[idx].filter(url => url !== null) as string[];
-      return {
-        ...scene,
-        imageUrl: allImages[0] || null,          // Primary image (backward compatible)
-        imageUrls: allImages.length > 0 ? allImages : undefined,  // All images for the scene
-        audioUrl: audioUrls[idx] || null,
-      };
-    });
-
-    // Update generation as complete
-    await supabase
-      .from("generations")
-      .update({
-        status: "complete",
-        progress: 100,
-        scenes: finalScenes,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", generation.id);
-
-    await supabase
-      .from("projects")
-      .update({ status: "complete" })
-      .eq("id", project.id);
-
-    console.log("Generation complete!");
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        projectId: project.id,
-        generationId: generation.id,
-        title: parsedScript.title,
-        scenes: finalScenes,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    switch (phase) {
+      case "audio":
+        return await handleAudioPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY);
+      case "images":
+        return await handleImagesPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY);
+      case "finalize":
+        return await handleFinalizePhase(supabase, user, generationId, projectId);
+      default:
+        return new Response(JSON.stringify({ error: `Unknown phase: ${phase}` }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+    }
   } catch (error) {
     console.error("Generation error:", error);
     return new Response(
