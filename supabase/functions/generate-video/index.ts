@@ -852,6 +852,34 @@ REMEMBER:
       throw new Error("Failed to create project");
     }
 
+    // Helper to update generation with verbose status
+    const updateGenerationStatus = async (
+      genId: string,
+      progress: number,
+      statusMessage: string,
+      scenesData?: any[]
+    ) => {
+      const updatePayload: any = {
+        progress,
+        scenes: scenesData ? scenesData.map((s, idx) => ({
+          ...s,
+          _meta: { 
+            ...(s._meta || {}),
+            statusMessage,
+            lastUpdate: new Date().toISOString()
+          }
+        })) : undefined
+      };
+      
+      // Store status in first scene's _meta for frontend to read
+      if (scenesData && scenesData.length > 0) {
+        updatePayload.scenes[0]._meta.statusMessage = statusMessage;
+      }
+      
+      await supabase.from("generations").update(updatePayload).eq("id", genId);
+      console.log(`[STATUS] ${progress}% - ${statusMessage}`);
+    };
+
     // Create generation record
     const { data: generation, error: genError } = await supabase
       .from("generations")
@@ -861,7 +889,13 @@ REMEMBER:
         status: "generating",
         progress: 10,
         script: scriptContent,
-        scenes: parsedScript.scenes,
+        scenes: parsedScript.scenes.map((s, idx) => ({
+          ...s,
+          _meta: { 
+            statusMessage: "Script generated, starting audio...",
+            sceneIndex: idx 
+          }
+        })),
         started_at: new Date().toISOString(),
       })
       .select()
@@ -877,6 +911,13 @@ REMEMBER:
     // Process scenes in parallel batches of 2
     // ===============================================
     console.log("Step 2: Generating audio...");
+    
+    await updateGenerationStatus(
+      generation.id, 
+      15, 
+      `Generating voiceover audio for ${parsedScript.scenes.length} scenes...`,
+      parsedScript.scenes
+    );
 
     const audioUrls: (string | null)[] = new Array(parsedScript.scenes.length).fill(null);
     const AUDIO_BATCH_SIZE = 2;
@@ -884,6 +925,11 @@ REMEMBER:
 
     for (let batchStart = 0; batchStart < parsedScript.scenes.length; batchStart += AUDIO_BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + AUDIO_BATCH_SIZE, parsedScript.scenes.length);
+      
+      // Update status for this batch
+      const statusMsg = `Generating voiceover audio... (scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length})`;
+      const progress = 15 + Math.floor((batchStart / parsedScript.scenes.length) * 25);
+      await updateGenerationStatus(generation.id, progress, statusMsg, parsedScript.scenes);
       
       console.log(`Audio batch: scenes ${batchStart + 1}-${batchEnd} of ${parsedScript.scenes.length}`);
       
@@ -910,9 +956,14 @@ REMEMBER:
 
       console.log(`Audio batch complete: ${batchSuccessCount}/${batchEnd - batchStart} succeeded`);
 
-      // Update progress
-      const progress = 10 + Math.floor((batchEnd / parsedScript.scenes.length) * 30);
-      await supabase.from("generations").update({ progress }).eq("id", generation.id);
+      // Update progress with completion status
+      const completionProgress = 15 + Math.floor((batchEnd / parsedScript.scenes.length) * 25);
+      await updateGenerationStatus(
+        generation.id, 
+        completionProgress, 
+        `Audio complete for ${batchEnd}/${parsedScript.scenes.length} scenes`,
+        parsedScript.scenes
+      );
 
       // Delay between batches to avoid rate limits
       if (batchEnd < parsedScript.scenes.length) {
@@ -1076,14 +1127,15 @@ Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED 
     console.log(`Total images to generate: ${imageTasks.length} for ${parsedScript.scenes.length} scenes`);
     
     // Store image task count in generation record for frontend progress display
-    await supabase.from("generations").update({ 
-      progress: 40,
-      // Store metadata for frontend: totalImages field in scenes JSON
-      scenes: parsedScript.scenes.map((s, idx) => ({
+    await updateGenerationStatus(
+      generation.id,
+      40,
+      `Starting image generation... (${imageTasks.length} images for ${parsedScript.scenes.length} scenes)`,
+      parsedScript.scenes.map((s, idx) => ({
         ...s,
-        _meta: { totalImages: imageTasks.length, sceneIndex: idx }
+        _meta: { totalImages: imageTasks.length, completedImages: 0, sceneIndex: idx }
       }))
-    }).eq("id", generation.id);
+    );
     
     // Storage for results: sceneIndex -> array of image URLs
     const sceneImageUrls: (string | null)[][] = parsedScript.scenes.map(() => []);
@@ -1094,7 +1146,7 @@ Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED 
     const IMAGE_DELAY_MS = 2000; // Short delay between batches
     
     // Helper to update progress and persist partial results after each image
-    const persistProgress = async (completedCount: number) => {
+    const persistProgress = async (completedCount: number, statusMessage: string) => {
       const progress = 40 + Math.floor((completedCount / imageTasks.length) * 50);
       
       // Build partial scenes with current image URLs for recovery
@@ -1108,7 +1160,9 @@ Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED 
           _meta: { 
             totalImages: imageTasks.length, 
             completedImages: completedCount,
-            sceneIndex: idx 
+            statusMessage,
+            sceneIndex: idx,
+            lastUpdate: new Date().toISOString()
           }
         };
       });
@@ -1117,6 +1171,8 @@ Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED 
         progress,
         scenes: partialScenes
       }).eq("id", generation.id);
+      
+      console.log(`[STATUS] ${progress}% - ${statusMessage}`);
     };
 
     let completedImages = 0;
@@ -1226,7 +1282,8 @@ Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED 
       }
 
       // Persist progress after each batch for recovery
-      await persistProgress(completedImages);
+      const statusMsg = `Generating images... (${completedImages}/${imageTasks.length} complete)`;
+      await persistProgress(completedImages, statusMsg);
       console.log(`Image progress: ${completedImages}/${imageTasks.length} complete`);
       
       // Rate limit delay between batches (critical for Replicate)
