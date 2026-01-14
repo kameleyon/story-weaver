@@ -265,20 +265,41 @@ export function useGenerationPipeline() {
           phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
         }));
 
-        // ============= PHASE 3: IMAGES =============
+        // ============= PHASE 3: IMAGES (chunked) =============
         setState((prev) => ({ 
           ...prev, 
           progress: 45,
           statusMessage: "Generating images..." 
         }));
 
-        const imagesResult = await callPhase(session, {
-          phase: "images",
-          generationId,
-          projectId,
-        });
+        let imageStartIndex = 0;
+        let imagesResult: any;
+        
+        // Loop until all images are generated
+        do {
+          imagesResult = await callPhase(session, {
+            phase: "images",
+            generationId,
+            projectId,
+            imageStartIndex,
+          });
 
-        if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+          if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+
+          setState((prev) => ({
+            ...prev,
+            progress: imagesResult.progress,
+            completedImages: imagesResult.imagesGenerated,
+            totalImages: imagesResult.totalImages,
+            statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
+            costTracking: imagesResult.costTracking,
+            phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
+          }));
+
+          if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
+            imageStartIndex = imagesResult.nextStartIndex;
+          }
+        } while (imagesResult.hasMore);
 
         setState((prev) => ({
           ...prev,
@@ -287,7 +308,6 @@ export function useGenerationPipeline() {
           totalImages: imagesResult.totalImages,
           statusMessage: `Images complete (${imagesResult.imagesGenerated}/${imagesResult.totalImages}). Finalizing...`,
           costTracking: imagesResult.costTracking,
-          phaseTimings: { ...prev.phaseTimings, images: imagesResult.phaseTime },
         }));
 
         // ============= PHASE 4: FINALIZE =============
