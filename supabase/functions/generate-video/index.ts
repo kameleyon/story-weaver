@@ -1607,15 +1607,15 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
     throw new Error(imageResult.error || "Image regeneration failed");
   }
 
-  // Upload to storage
+  // Upload to storage (use "audio" bucket which is already configured for media storage)
   const imagePath = `${user.id}/${projectId}/scene-${sceneIndex + 1}-regenerated-${Date.now()}.png`;
   const { error: uploadError } = await supabase.storage
-    .from("images")
+    .from("audio")
     .upload(imagePath, imageResult.bytes, { contentType: "image/png", upsert: true });
 
   if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-  const { data: { publicUrl } } = supabase.storage.from("images").getPublicUrl(imagePath);
+  const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(imagePath);
 
   // Update scene with new image
   scenes[sceneIndex].imageUrl = publicUrl;
