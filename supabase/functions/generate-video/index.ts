@@ -207,7 +207,7 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
-// Generate image using Replicate prunaai/p-image
+// Generate image using Replicate bytedance/seedream-4.5
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiToken: string,
@@ -216,14 +216,14 @@ async function generateImageWithReplicate(
   | { ok: true; imageBase64: string }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // p-image uses aspect_ratio parameter directly (9:16, 1:1, 16:9)
+  // seedream-4.5 uses aspect_ratio parameter (9:16, 1:1, 16:9)
   const aspectRatio = format === "portrait" 
     ? "9:16"
     : format === "square" 
     ? "1:1"
     : "16:9";
   
-  console.log(`[REPLICATE] Starting image generation with prunaai/p-image`);
+  console.log(`[REPLICATE] Starting image generation with bytedance/seedream-4.5`);
   console.log(`[REPLICATE] Prompt (truncated): ${prompt.substring(0, 100)}...`);
   console.log(`[REPLICATE] Format: ${format}, Aspect Ratio: ${aspectRatio}`);
   console.log(`[REPLICATE] API Key prefix: ${replicateApiToken.substring(0, 12)}...`);
@@ -231,7 +231,7 @@ async function generateImageWithReplicate(
   try {
     const startTime = Date.now();
     
-    // Create prediction with prunaai/p-image model using aspect_ratio
+    // Create prediction with bytedance/seedream-4.5 model
     const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -240,10 +240,12 @@ async function generateImageWithReplicate(
         "Prefer": "wait", // Wait for completion (up to 60s)
       },
       body: JSON.stringify({
-        version: "prunaai/p-image",
+        version: "bytedance/seedream-4.5",
         input: {
           prompt: prompt,
+          size: "4K",
           aspect_ratio: aspectRatio,
+          sequential_image_generation: "disabled",
         },
       }),
     });
@@ -293,7 +295,7 @@ async function generateImageWithReplicate(
     
     // Poll for completion if not done
     let pollAttempts = 0;
-    const maxPolls = 60; // 60 seconds max
+    const maxPolls = 120; // 120 seconds max (seedream-4.5 at 4K may take longer)
     
     while (prediction.status !== "succeeded" && prediction.status !== "failed" && pollAttempts < maxPolls) {
       if (prediction.status === "canceled") {
@@ -327,12 +329,17 @@ async function generateImageWithReplicate(
       return { ok: false, error: prediction.error || "Image generation timed out" };
     }
     
-    // Get the output URL - z-image-turbo returns URL directly or in output
-    const outputUrl = typeof prediction.output === "string" 
-      ? prediction.output 
-      : Array.isArray(prediction.output) 
-        ? prediction.output[0] 
-        : prediction.output?.url;
+    // Get the output URL - seedream-4.5 returns array of FileOutput objects
+    let outputUrl: string | undefined;
+    if (Array.isArray(prediction.output) && prediction.output.length > 0) {
+      const firstOutput = prediction.output[0];
+      // FileOutput has a url() method or direct url property
+      outputUrl = typeof firstOutput === "string" 
+        ? firstOutput 
+        : firstOutput?.url || firstOutput;
+    } else if (typeof prediction.output === "string") {
+      outputUrl = prediction.output;
+    }
     
     console.log(`[REPLICATE] Output URL: ${outputUrl?.substring(0, 80)}...`);
     
