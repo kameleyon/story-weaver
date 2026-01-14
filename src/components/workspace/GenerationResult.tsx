@@ -16,17 +16,20 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import type { Scene } from "@/hooks/useGenerationPipeline";
+import type { Scene, CostTracking, PhaseTimings } from "@/hooks/useGenerationPipeline";
 import { useVideoExport } from "@/hooks/useVideoExport";
+import { Clock, DollarSign } from "lucide-react";
 
 interface GenerationResultProps {
   title: string;
   scenes: Scene[];
   format: "landscape" | "portrait" | "square";
   onNewProject: () => void;
+  totalTimeMs?: number;
+  costTracking?: CostTracking;
 }
 
-export function GenerationResult({ title, scenes, format, onNewProject }: GenerationResultProps) {
+export function GenerationResult({ title, scenes, format, onNewProject, totalTimeMs, costTracking }: GenerationResultProps) {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
@@ -268,6 +271,34 @@ export function GenerationResult({ title, scenes, format, onNewProject }: Genera
           <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
           <span className="text-sm font-medium text-primary">Generation Complete</span>
         </motion.div>
+
+        {/* Stats Panel */}
+        {(totalTimeMs || costTracking) && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex items-center justify-center gap-4 mb-4"
+          >
+            {totalTimeMs && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">
+                  {Math.floor(totalTimeMs / 60000)}m {Math.floor((totalTimeMs % 60000) / 1000)}s
+                </span>
+              </div>
+            )}
+            {costTracking && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">
+                  ${costTracking.estimatedCostUsd.toFixed(2)}
+                </span>
+              </div>
+            )}
+          </motion.div>
+        )}
+
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <p className="text-muted-foreground mt-1">
           {scenes.length} scenes • {totalImages} images generated
