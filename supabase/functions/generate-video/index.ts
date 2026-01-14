@@ -407,42 +407,33 @@ async function generateSceneAudio(
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
   
-  // Check if content is Haitian Creole and Google API key is available
+  // Check if content is Haitian Creole - use Gemini TTS exclusively (NO FALLBACK)
   if (googleApiKey && isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, trying Gemini TTS first`);
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini 2.5 Flash TTS (exclusive)`);
     
-    // Try Gemini TTS with retries
-    const MAX_GEMINI_RETRIES = 2;
-    for (let retry = 0; retry <= MAX_GEMINI_RETRIES; retry++) {
+    // Retry Gemini TTS up to 5 times for Haitian Creole - NO fallback
+    const MAX_RETRIES = 5;
+    for (let retry = 0; retry < MAX_RETRIES; retry++) {
+      if (retry > 0) {
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_RETRIES}`);
+        await sleep(2000 * retry); // Exponential backoff
+      }
+      
       const geminiResult = await generateSceneAudioGemini(scene, sceneIndex, googleApiKey, supabase, userId, projectId);
       
       if (geminiResult.url) {
         return geminiResult;
       }
       
-      // If error contains "No parts" or "OTHER", Gemini filtered/blocked content - retry or fallback
-      if (geminiResult.error?.includes("No parts") || geminiResult.error?.includes("OTHER")) {
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini filtered content (attempt ${retry + 1}/${MAX_GEMINI_RETRIES + 1})`);
-        if (retry < MAX_GEMINI_RETRIES) {
-          await sleep(1000 * (retry + 1)); // Exponential backoff
-          continue;
-        }
-        // All retries exhausted, fall back to Replicate
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after retries, falling back to Replicate`);
-        break;
-      }
-      
-      // For other errors (rate limit, etc.), also try falling back
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini error: ${geminiResult.error}, falling back to Replicate`);
-      break;
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
     }
     
-    // Fallback to Replicate for Haitian Creole when Gemini fails
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Using Replicate as fallback for Haitian Creole`);
-    return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
+    // All retries exhausted - return error, NO fallback
+    console.error(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts, no fallback`);
+    return { url: null, error: `Gemini TTS failed after ${MAX_RETRIES} retries for Haitian Creole` };
   }
   
-  // Default to Replicate Chatterbox for other languages
+  // Default to Replicate Chatterbox for other languages (English, etc.)
   return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
 }
 
