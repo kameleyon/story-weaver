@@ -147,8 +147,11 @@ async function generateSceneAudioReplicate(
         body: JSON.stringify({
           input: {
             text: voiceoverText,
-            exaggeration: 0.5,
-            cfg_weight: 0.5
+            voice: "Laura",
+            temperature: 1,
+            top_p: 0.9,
+            top_k: 1800,
+            repetition_penalty: 1.5
           }
         })
       });
