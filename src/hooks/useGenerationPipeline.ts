@@ -256,7 +256,7 @@ export function useGenerationPipeline() {
           phaseTimings: { script: scriptResult.phaseTime },
         }));
 
-        // ============= PHASE 2: AUDIO =============
+        // ============= PHASE 2: AUDIO (chunked) =============
         setState((prev) => ({ 
           ...prev, 
           step: "visuals", 
@@ -264,22 +264,39 @@ export function useGenerationPipeline() {
           statusMessage: "Generating voiceover audio..." 
         }));
 
-        // Audio phase gets longer timeout (5 min) due to potential TTS retries
-        const audioResult = await callPhase(session, {
-          phase: "audio",
-          generationId,
-          projectId,
-        }, 300000); // 5 minutes timeout for audio
+        // Audio is chunked in the backend to avoid long-running requests/timeouts.
+        // Each call generates up to a small batch of scene audios.
+        let audioStartIndex = 0;
+        let audioResult: any;
 
-        if (!audioResult.success) throw new Error(audioResult.error || "Audio generation failed");
+        do {
+          audioResult = await callPhase(
+            session,
+            {
+              phase: "audio",
+              generationId,
+              projectId,
+              audioStartIndex,
+            },
+            300000 // 5 minutes (safety buffer)
+          );
 
-        setState((prev) => ({
-          ...prev,
-          progress: 40,
-          statusMessage: `Audio complete (${audioResult.audioSeconds?.toFixed(1) || 0}s). Starting images...`,
-          costTracking: audioResult.costTracking,
-          phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
-        }));
+          if (!audioResult.success) throw new Error(audioResult.error || "Audio generation failed");
+
+          setState((prev) => ({
+            ...prev,
+            progress: typeof audioResult.progress === "number" ? audioResult.progress : prev.progress,
+            statusMessage: audioResult.hasMore
+              ? `Generating voiceover... (${audioResult.audioGenerated || 0}/${prev.sceneCount})`
+              : `Audio complete (${audioResult.audioSeconds?.toFixed(1) || 0}s). Starting images...`,
+            costTracking: audioResult.costTracking,
+            phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
+          }));
+
+          if (audioResult.hasMore && typeof audioResult.nextStartIndex === "number") {
+            audioStartIndex = audioResult.nextStartIndex;
+          }
+        } while (audioResult.hasMore);
 
         // ============= PHASE 3: IMAGES (chunked) =============
         setState((prev) => ({ 
