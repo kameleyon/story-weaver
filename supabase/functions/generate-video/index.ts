@@ -67,6 +67,51 @@ const PRICING = {
   imagePerImage: 0.02,      // ~$0.02 per image
 };
 
+// ============= PCM SILENCE TRIMMING =============
+// Trims leading and trailing silence from 16-bit PCM audio
+function trimPcmSilence(
+  pcmBytes: Uint8Array,
+  sampleRate: number,
+  options?: { threshold?: number; bufferMs?: number }
+): Uint8Array {
+  const SILENCE_THRESHOLD = options?.threshold ?? 500; // Higher threshold to catch quiet noise floor
+  const BUFFER_BYTES = Math.floor((options?.bufferMs ?? 80) * sampleRate * 2 / 1000); // 80ms buffer (2 bytes per sample)
+  
+  if (pcmBytes.length < 4) return pcmBytes;
+  
+  let trimStart = 0;
+  let trimEnd = pcmBytes.length;
+  
+  // Find where audio actually starts (trim leading silence)
+  for (let i = 0; i < pcmBytes.length - 1; i += 2) {
+    const sample = Math.abs((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16 >> 16);
+    if (sample > SILENCE_THRESHOLD) {
+      // Found audio, go back by buffer amount
+      trimStart = Math.max(0, i - BUFFER_BYTES);
+      break;
+    }
+  }
+  
+  // Find where audio actually ends (trim trailing silence)
+  for (let i = pcmBytes.length - 2; i >= 0; i -= 2) {
+    const sample = Math.abs((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16 >> 16);
+    if (sample > SILENCE_THRESHOLD) {
+      // Found audio, add buffer
+      trimEnd = Math.min(pcmBytes.length, i + BUFFER_BYTES);
+      break;
+    }
+  }
+  
+  // Ensure we have at least some audio
+  if (trimStart >= trimEnd) return pcmBytes;
+  
+  // Ensure byte alignment (must be even for 16-bit samples)
+  trimStart = trimStart - (trimStart % 2);
+  trimEnd = trimEnd + (trimEnd % 2);
+  
+  return pcmBytes.slice(trimStart, trimEnd);
+}
+
 const STYLE_PROMPTS: Record<string, string> = {
   "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
   "doodle": `Urban Minimalist Doodle style. Flat 2D vector illustration with indie comic aesthetic. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled paper or newsprint. CHARACTER DESIGN: Object-Head surrealism where character heads are replaced with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line for a vintage screen-printed quality. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons (coins, arrows, charts) representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
@@ -331,29 +376,12 @@ async function generateSceneAudioGemini(
     console.log(`[TTS-Gemini] Got audio data, mimeType: ${mimeType}, base64 length: ${audioData.length}`);
 
     // Decode base64 audio (raw PCM data)
-    let pcmBytes = base64Decode(audioData);
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} raw PCM bytes: ${pcmBytes.length}`);
+    const rawPcmBytes = base64Decode(audioData);
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} raw PCM bytes: ${rawPcmBytes.length}`);
     
-    // Trim trailing silence from PCM (16-bit samples, little-endian)
-    // Find the last sample above a low threshold to avoid long dead air
-    const SILENCE_THRESHOLD = 300; // Low amplitude threshold (out of 32768)
-    const SAMPLES_PER_CHECK = 480; // Check every 20ms at 24kHz
-    let trimEnd = pcmBytes.length;
-    
-    // Start from end and find where audio actually ends
-    for (let i = pcmBytes.length - 2; i >= 0; i -= 2) {
-      const sample = Math.abs((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16 >> 16);
-      if (sample > SILENCE_THRESHOLD) {
-        // Found audio content, add a small buffer (0.3s = 14400 bytes at 24kHz 16-bit)
-        trimEnd = Math.min(pcmBytes.length, i + 14400);
-        break;
-      }
-    }
-    
-    if (trimEnd < pcmBytes.length) {
-      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`);
-      pcmBytes = pcmBytes.slice(0, trimEnd);
-    }
+    // Trim leading AND trailing silence aggressively (24kHz sample rate)
+    const pcmBytes = trimPcmSilence(rawPcmBytes, 24000, { threshold: 500, bufferMs: 80 });
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} trimmed to ${pcmBytes.length} bytes (removed ${rawPcmBytes.length - pcmBytes.length} bytes of silence)`);
     
     // Convert PCM to WAV (Gemini returns 24kHz, 16-bit mono PCM)
     const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
@@ -454,11 +482,46 @@ async function generateSceneAudioReplicate(
       const audioResponse = await fetch(outputUrl);
       if (!audioResponse.ok) throw new Error("Failed to download audio");
 
-      const audioBytes = new Uint8Array(await audioResponse.arrayBuffer());
-      console.log(`[TTS] Scene ${sceneIndex + 1} audio OK - ${audioBytes.length} bytes`);
+      const rawAudioBytes = new Uint8Array(await audioResponse.arrayBuffer());
+      console.log(`[TTS] Scene ${sceneIndex + 1} raw audio - ${rawAudioBytes.length} bytes`);
+
+      // Replicate returns WAV format - extract PCM, trim silence, re-wrap as WAV
+      // WAV header is typically 44 bytes, PCM data follows
+      let audioBytes: Uint8Array = rawAudioBytes;
+      if (rawAudioBytes.length > 44) {
+        // Check for WAV header (RIFF....WAVEfmt )
+        const isWav = rawAudioBytes[0] === 0x52 && rawAudioBytes[1] === 0x49 && 
+                      rawAudioBytes[2] === 0x46 && rawAudioBytes[3] === 0x46;
+        
+        if (isWav) {
+          // Find 'data' chunk (marker: 0x64 0x61 0x74 0x61 = "data")
+          let dataStart = 44; // Default WAV header size
+          for (let i = 0; i < Math.min(200, rawAudioBytes.length - 4); i++) {
+            if (rawAudioBytes[i] === 0x64 && rawAudioBytes[i+1] === 0x61 && 
+                rawAudioBytes[i+2] === 0x74 && rawAudioBytes[i+3] === 0x61) {
+              dataStart = i + 8; // Skip "data" + 4 bytes size
+              break;
+            }
+          }
+          
+          // Copy to new ArrayBuffer to ensure proper types
+          const pcmBuffer = rawAudioBytes.buffer.slice(dataStart);
+          const rawPcm = new Uint8Array(pcmBuffer);
+          // Chatterbox outputs 44.1kHz audio
+          const trimmedPcm = trimPcmSilence(rawPcm, 44100, { threshold: 500, bufferMs: 80 });
+          console.log(`[TTS] Scene ${sceneIndex + 1} trimmed to ${trimmedPcm.length} bytes (removed ${rawPcm.length - trimmedPcm.length} bytes of silence)`);
+          
+          // Re-wrap as WAV - copy result to ensure type consistency
+          const wavResult = pcmToWav(trimmedPcm, 44100, 1, 16);
+          audioBytes = new Uint8Array(wavResult);
+        }
+      }
+      
+      console.log(`[TTS] Scene ${sceneIndex + 1} final audio - ${audioBytes.length} bytes`);
 
       // Estimate duration (~44100 samples/sec, 16-bit = 2 bytes/sample)
-      durationSeconds = Math.max(1, audioBytes.length / (44100 * 2));
+      const pcmSize = audioBytes.length - 44; // Subtract WAV header
+      durationSeconds = Math.max(1, pcmSize / (44100 * 2));
 
       const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
       const { error: uploadError } = await supabase.storage
