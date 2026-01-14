@@ -583,12 +583,17 @@ async function handleAudioPhase(
   );
 }
 
+// Images phase now processes in chunks to avoid timeout
+// Each call processes up to MAX_IMAGES_PER_CALL images and returns "continue" if more remain
+const MAX_IMAGES_PER_CALL = 8;
+
 async function handleImagesPhase(
   supabase: any,
   user: any,
   generationId: string,
   projectId: string,
-  replicateApiKey: string
+  replicateApiKey: string,
+  startIndex: number = 0
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -612,10 +617,13 @@ async function handleImagesPhase(
   const meta = scenes[0]?._meta || {};
   let costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
   const phaseTimings = meta.phaseTimings || {};
+  
+  // Get already completed images count from meta
+  let completedImagesSoFar = meta.completedImages || 0;
 
   // Build image tasks
-  interface ImageTask { sceneIndex: number; subIndex: number; prompt: string; }
-  const imageTasks: ImageTask[] = [];
+  interface ImageTask { sceneIndex: number; subIndex: number; prompt: string; taskIndex: number; }
+  const allImageTasks: ImageTask[] = [];
 
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
     const orientationDesc = format === "portrait" 
@@ -638,30 +646,47 @@ ${textInstructions}
 COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
   };
 
+  let taskIndex = 0;
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    imageTasks.push({ sceneIndex: i, subIndex: 0, prompt: buildImagePrompt(scene.visualPrompt, scene, 0) });
+    allImageTasks.push({ sceneIndex: i, subIndex: 0, prompt: buildImagePrompt(scene.visualPrompt, scene, 0), taskIndex: taskIndex++ });
     
     if (scene.subVisuals && scene.duration >= 12) {
       const maxSub = scene.duration >= 19 ? 2 : 1;
       for (let j = 0; j < Math.min(scene.subVisuals.length, maxSub); j++) {
-        imageTasks.push({ sceneIndex: i, subIndex: j + 1, prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1) });
+        allImageTasks.push({ sceneIndex: i, subIndex: j + 1, prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1), taskIndex: taskIndex++ });
       }
     }
   }
 
-  console.log(`Phase: IMAGES - Generating ${imageTasks.length} images...`);
+  const totalImages = allImageTasks.length;
+  
+  // Get tasks for this chunk
+  const endIndex = Math.min(startIndex + MAX_IMAGES_PER_CALL, totalImages);
+  const tasksThisChunk = allImageTasks.slice(startIndex, endIndex);
+  
+  console.log(`Phase: IMAGES - Chunk ${startIndex}-${endIndex} of ${totalImages} images...`);
 
-  const sceneImageUrls: (string | null)[][] = scenes.map(() => []);
-  let completedImages = 0;
+  // Load existing image URLs from scenes
+  const sceneImageUrls: (string | null)[][] = scenes.map((s) => {
+    if (s.imageUrls && Array.isArray(s.imageUrls)) {
+      return [...s.imageUrls];
+    } else if (s.imageUrl) {
+      return [s.imageUrl];
+    }
+    return [];
+  });
 
-  // Process in batches of 4
+  let completedThisChunk = 0;
+
+  // Process this chunk in batches of 4
   const BATCH_SIZE = 4;
-  for (let batchStart = 0; batchStart < imageTasks.length; batchStart += BATCH_SIZE) {
-    const batchEnd = Math.min(batchStart + BATCH_SIZE, imageTasks.length);
+  for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
     
-    const statusMsg = `Generating images... (${completedImages}/${imageTasks.length} complete)`;
-    const progress = 40 + Math.floor((completedImages / imageTasks.length) * 50);
+    const currentCompleted = completedImagesSoFar + completedThisChunk;
+    const statusMsg = `Generating images... (${currentCompleted}/${totalImages} complete)`;
+    const progress = 40 + Math.floor((currentCompleted / totalImages) * 50);
 
     // Update progress
     await supabase.from("generations").update({
@@ -670,13 +695,15 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
         const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
         return {
           ...s,
-          imageUrl: imgs[0] || null,
-          imageUrls: imgs.length > 0 ? imgs : undefined,
+          imageUrl: imgs[0] || s.imageUrl || null,
+          imageUrls: imgs.length > 0 ? imgs : s.imageUrls,
           _meta: {
             ...s._meta,
             statusMessage: statusMsg,
-            totalImages: imageTasks.length,
-            completedImages,
+            totalImages,
+            completedImages: currentCompleted,
+            costTracking,
+            phaseTimings,
           }
         };
       })
@@ -684,10 +711,10 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
 
     const batchPromises = [];
     for (let t = batchStart; t < batchEnd; t++) {
-      const task = imageTasks[t];
+      const task = tasksThisChunk[t];
       batchPromises.push(
         (async () => {
-          for (let attempt = 1; attempt <= 5; attempt++) {
+          for (let attempt = 1; attempt <= 3; attempt++) {
             const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
             if (result.ok) {
               // Upload to storage
@@ -701,8 +728,8 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
               return { task, url: publicUrl };
             }
             
-            if (attempt < 5) {
-              const delay = result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 8000;
+            if (attempt < 3) {
+              const delay = result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 5000;
               await sleep(delay + Math.random() * 1000);
             }
           }
@@ -717,30 +744,41 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
         sceneImageUrls[task.sceneIndex].push(null);
       }
       sceneImageUrls[task.sceneIndex][task.subIndex] = url;
-      if (url) completedImages++;
+      if (url) completedThisChunk++;
     }
 
-    if (batchEnd < imageTasks.length) await sleep(2000);
+    if (batchEnd < tasksThisChunk.length) await sleep(1000);
   }
 
-  costTracking.imagesGenerated = completedImages;
-  costTracking.estimatedCostUsd += completedImages * PRICING.imagePerImage;
-  phaseTimings.images = Date.now() - phaseStart;
+  const newCompletedTotal = completedImagesSoFar + completedThisChunk;
+  const hasMore = endIndex < totalImages;
+  
+  // Update cost tracking
+  costTracking.imagesGenerated = newCompletedTotal;
+  costTracking.estimatedCostUsd = (costTracking.scriptTokens * PRICING.scriptPerToken) + 
+                                   (costTracking.audioSeconds * PRICING.audioPerSecond) + 
+                                   (newCompletedTotal * PRICING.imagePerImage);
+  
+  if (!hasMore) {
+    phaseTimings.images = (phaseTimings.images || 0) + (Date.now() - phaseStart);
+  }
 
-  // Final update
+  const finalProgress = hasMore ? (40 + Math.floor((newCompletedTotal / totalImages) * 50)) : 90;
+
+  // Update generation
   await supabase.from("generations").update({
-    progress: 90,
+    progress: finalProgress,
     scenes: scenes.map((s, idx) => {
       const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
       return {
         ...s,
-        imageUrl: imgs[0] || null,
-        imageUrls: imgs.length > 0 ? imgs : undefined,
+        imageUrl: imgs[0] || s.imageUrl || null,
+        imageUrls: imgs.length > 0 ? imgs : s.imageUrls,
         _meta: {
           ...s._meta,
-          statusMessage: "Images complete. Finalizing...",
-          totalImages: imageTasks.length,
-          completedImages,
+          statusMessage: hasMore ? `Images ${newCompletedTotal}/${totalImages}...` : "Images complete. Finalizing...",
+          totalImages,
+          completedImages: newCompletedTotal,
           costTracking,
           phaseTimings,
         }
@@ -748,17 +786,19 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
     })
   }).eq("id", generationId);
 
-  console.log(`Phase: IMAGES complete in ${phaseTimings.images}ms - ${completedImages}/${imageTasks.length} images`);
+  console.log(`Phase: IMAGES chunk complete - ${completedThisChunk} this chunk, ${newCompletedTotal}/${totalImages} total, hasMore: ${hasMore}`);
 
   return new Response(
     JSON.stringify({
       success: true,
       phase: "images",
-      progress: 90,
-      imagesGenerated: completedImages,
-      totalImages: imageTasks.length,
+      progress: finalProgress,
+      imagesGenerated: newCompletedTotal,
+      totalImages,
+      hasMore,
+      nextStartIndex: hasMore ? endIndex : undefined,
       costTracking,
-      phaseTime: phaseTimings.images,
+      phaseTime: Date.now() - phaseStart,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
@@ -866,8 +906,8 @@ serve(async (req) => {
       });
     }
 
-    const body: GenerationRequest = await req.json();
-    const { phase, generationId, projectId, content, format, length, style, customStyle } = body;
+    const body: GenerationRequest & { imageStartIndex?: number } = await req.json();
+    const { phase, generationId, projectId, content, format, length, style, customStyle, imageStartIndex } = body;
 
     console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}`);
 
@@ -891,7 +931,7 @@ serve(async (req) => {
       case "audio":
         return await handleAudioPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY);
       case "images":
-        return await handleImagesPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY);
+        return await handleImagesPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY, imageStartIndex || 0);
       case "finalize":
         return await handleFinalizePhase(supabase, user, generationId, projectId);
       default:
