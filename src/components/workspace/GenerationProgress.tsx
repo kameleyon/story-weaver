@@ -1,10 +1,6 @@
 import { motion } from "framer-motion";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Clock, DollarSign } from "lucide-react";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
-
-interface GenerationProgressProps {
-  state: GenerationState;
-}
 
 export function GenerationProgress({ state }: GenerationProgressProps) {
   // Build verbose status message based on current step and progress

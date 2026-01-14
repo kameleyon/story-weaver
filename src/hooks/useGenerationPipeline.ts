@@ -15,14 +15,28 @@ export interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
-  subVisuals?: string[]; // Additional visual prompts for longer scenes
+  subVisuals?: string[];
   duration: number;
-  narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula"; // Track story position
+  narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula";
   imageUrl?: string;
-  imageUrls?: string[]; // Multiple images per scene
+  imageUrls?: string[];
   audioUrl?: string;
   title?: string;
   subtitle?: string;
+}
+
+export interface CostTracking {
+  scriptTokens: number;
+  audioSeconds: number;
+  imagesGenerated: number;
+  estimatedCostUsd: number;
+}
+
+export interface PhaseTimings {
+  script?: number;
+  audio?: number;
+  images?: number;
+  finalize?: number;
 }
 
 export interface GenerationState {
@@ -30,8 +44,8 @@ export interface GenerationState {
   progress: number;
   sceneCount: number;
   currentScene: number;
-  totalImages: number; // Total image tasks (may be > sceneCount with subVisuals)
-  completedImages: number; // How many images have been generated
+  totalImages: number;
+  completedImages: number;
   isGenerating: boolean;
   projectId?: string;
   generationId?: string;
@@ -39,7 +53,10 @@ export interface GenerationState {
   scenes?: Scene[];
   format?: "landscape" | "portrait" | "square";
   error?: string;
-  statusMessage?: string; // Verbose status from backend
+  statusMessage?: string;
+  costTracking?: CostTracking;
+  phaseTimings?: PhaseTimings;
+  totalTimeMs?: number;
 }
 
 interface GenerationParams {
@@ -103,147 +120,74 @@ export function useGenerationPipeline() {
     return Math.max(1, Math.min(sceneCount, Math.round(p * sceneCount)));
   };
 
-  // Extract image progress metadata and status message from scenes if available
-  const extractImageMeta = (scenes: any[]): { totalImages: number; completedImages: number; statusMessage?: string } => {
+  const extractMeta = (scenes: any[]): { 
+    totalImages: number; 
+    completedImages: number; 
+    statusMessage?: string;
+    costTracking?: CostTracking;
+    phaseTimings?: PhaseTimings;
+    totalTimeMs?: number;
+  } => {
     if (!Array.isArray(scenes) || scenes.length === 0) {
       return { totalImages: 0, completedImages: 0 };
     }
-    // Look for _meta in first scene (backend stores it there)
     const meta = scenes[0]?._meta;
     if (meta && typeof meta.totalImages === "number") {
       return {
         totalImages: meta.totalImages,
         completedImages: typeof meta.completedImages === "number" ? meta.completedImages : 0,
-        statusMessage: typeof meta.statusMessage === "string" ? meta.statusMessage : undefined,
+        statusMessage: meta.statusMessage,
+        costTracking: meta.costTracking,
+        phaseTimings: meta.phaseTimings,
+        totalTimeMs: meta.totalTimeMs,
       };
     }
     return { totalImages: scenes.length, completedImages: 0 };
   };
 
-  const recoverFromRecentGeneration = useCallback(
-    async ({
-      userId,
-      sinceIso,
-      format,
-    }: {
-      userId: string;
-      sinceIso: string;
-      format: "landscape" | "portrait" | "square";
-    }) => {
-      toast({
-        title: "Still generating…",
-        description: "Connection dropped, but generation may still complete. Checking status…",
-      });
+  // Helper to call a phase
+  const callPhase = async (
+    session: { access_token: string },
+    body: Record<string, unknown>
+  ): Promise<any> => {
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
 
-      setState((prev) => ({
-        ...prev,
-        step: prev.progress >= 40 ? "visuals" : "scripting",
-        progress: Math.max(prev.progress, 40),
-        isGenerating: true,
-        error: undefined,
-      }));
-
-      // Poll for up to ~20 minutes.
-      for (let i = 0; i < 600; i++) {
-        const { data: generation } = await supabase
-          .from("generations")
-          .select("id,status,progress,scenes,error_message,project_id")
-          .eq("user_id", userId)
-          .gte("created_at", sinceIso)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (generation?.project_id) {
-          const { data: project } = await supabase
-            .from("projects")
-            .select("id,title")
-            .eq("id", generation.project_id)
-            .maybeSingle();
-
-          if (generation.status === "complete") {
-            const scenes = normalizeScenes(generation.scenes);
-            const sceneLen = scenes?.length || 0;
-
-            setState({
-              step: "complete",
-              progress: 100,
-              sceneCount: sceneLen,
-              currentScene: sceneLen,
-              totalImages: sceneLen,
-              completedImages: sceneLen,
-              isGenerating: false,
-              projectId: generation.project_id,
-              generationId: generation.id,
-              title: project?.title ?? "Your video",
-              scenes,
-              format,
-            });
-
-            toast({
-              title: "Video Generated!",
-              description: `"${project?.title ?? "Your video"}" is ready with ${sceneLen} scenes.`,
-            });
-
-            return true;
-          }
-
-          if (generation.status === "error") {
-            throw new Error(generation.error_message || "Generation failed");
-          }
-
-          const dbProgress = typeof generation.progress === "number" ? generation.progress : 0;
-          const scenes = normalizeScenes(generation.scenes);
-          const imageMeta = extractImageMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
-
-          setState((prev) => {
-            const sceneCount = scenes?.length ?? prev.sceneCount;
-            const step = inferStepFromDb(generation.status, dbProgress);
-            return {
-              ...prev,
-              step,
-              progress: dbProgress,
-              sceneCount,
-              currentScene: inferCurrentSceneFromDb(dbProgress, sceneCount),
-              totalImages: imageMeta.totalImages || prev.totalImages,
-              completedImages: imageMeta.completedImages,
-              isGenerating: true,
-              projectId: generation.project_id,
-              generationId: generation.id,
-              title: project?.title ?? prev.title,
-              scenes,
-              format,
-              statusMessage: imageMeta.statusMessage,
-            };
-          });
-        }
-
-        await new Promise((r) => setTimeout(r, 2000));
+    if (!response.ok) {
+      let errorMessage = "Phase failed";
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData?.error || errorMessage;
+      } catch {
+        // ignore
       }
 
-      // Don’t hard-fail the UI; keep the progress screen visible.
-      toast({
-        title: "Still working",
-        description: "This is taking longer than usual. You can keep this tab open and we’ll keep checking.",
-      });
+      if (response.status === 429) {
+        throw new Error("Rate limit exceeded. Please wait and try again.");
+      }
+      if (response.status === 402) {
+        throw new Error("AI credits exhausted. Please add credits.");
+      }
+      throw new Error(errorMessage);
+    }
 
-      return false;
-    },
-    [toast],
-  );
+    return response.json();
+  };
 
   const startGeneration = useCallback(
     async (params: GenerationParams) => {
-      // Updated scene counts based on minimum duration requirements
-      // Short: min 60s, Brief: min 150s, Presentation: min 360s
       const sceneCounts: Record<string, number> = {
         short: 6,
         brief: 12,
         presentation: 24,
       };
       const expectedSceneCount = sceneCounts[params.length] || 12;
-
-      const startedAt = Date.now();
 
       setState({
         step: "analysis",
@@ -253,130 +197,143 @@ export function useGenerationPipeline() {
         totalImages: expectedSceneCount,
         completedImages: 0,
         isGenerating: true,
+        statusMessage: "Starting generation...",
+        costTracking: undefined,
+        phaseTimings: undefined,
       });
 
       try {
-        // Get the user's session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("You must be logged in to generate videos");
 
-        if (!session) {
-          throw new Error("You must be logged in to generate videos");
-        }
+        // ============= PHASE 1: SCRIPT =============
+        setState((prev) => ({ 
+          ...prev, 
+          step: "scripting", 
+          progress: 5,
+          statusMessage: "Generating script with AI..." 
+        }));
 
-        // Simulate analysis step while request is made
-        setState((prev) => ({ ...prev, step: "analysis", progress: 50 }));
-
-        // Call the backend function
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify(params),
+        const scriptResult = await callPhase(session, {
+          phase: "script",
+          content: params.content,
+          format: params.format,
+          length: params.length,
+          style: params.style,
+          customStyle: params.customStyle,
         });
 
-        if (!response.ok) {
-          let errorMessage = "Generation failed";
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData?.error || errorMessage;
-          } catch {
-            try {
-              const text = await response.text();
-              if (text) errorMessage = text.slice(0, 180);
-            } catch {
-              // ignore
-            }
-          }
+        if (!scriptResult.success) throw new Error(scriptResult.error || "Script generation failed");
 
-          if (response.status === 429) {
-            throw new Error("Rate limit exceeded. Please wait a moment and try again.");
-          }
-          if (response.status === 402) {
-            throw new Error("AI credits exhausted. Please add credits to continue.");
-          }
+        const { projectId, generationId, title, sceneCount, totalImages, costTracking } = scriptResult;
 
-          // 5xx responses often mean the request timed out while the backend kept working.
-          const err: any = new Error(errorMessage);
-          err.__recoverable = response.status >= 500;
-          err.__status = response.status;
-          throw err;
-        }
+        setState((prev) => ({
+          ...prev,
+          step: "scripting",
+          progress: 10,
+          projectId,
+          generationId,
+          title,
+          sceneCount,
+          totalImages,
+          statusMessage: "Script complete. Starting audio...",
+          costTracking,
+          phaseTimings: { script: scriptResult.phaseTime },
+        }));
 
-        const result = await response.json();
+        // ============= PHASE 2: AUDIO =============
+        setState((prev) => ({ 
+          ...prev, 
+          step: "visuals", 
+          progress: 15,
+          statusMessage: "Generating voiceover audio..." 
+        }));
 
-        if (!result.success) {
-          throw new Error(result.error || "Generation failed");
-        }
+        const audioResult = await callPhase(session, {
+          phase: "audio",
+          generationId,
+          projectId,
+        });
 
-        // Update state with results
-        const finalSceneCount = result.scenes?.length || expectedSceneCount;
+        if (!audioResult.success) throw new Error(audioResult.error || "Audio generation failed");
+
+        setState((prev) => ({
+          ...prev,
+          progress: 40,
+          statusMessage: `Audio complete (${audioResult.audioSeconds?.toFixed(1) || 0}s). Starting images...`,
+          costTracking: audioResult.costTracking,
+          phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
+        }));
+
+        // ============= PHASE 3: IMAGES =============
+        setState((prev) => ({ 
+          ...prev, 
+          progress: 45,
+          statusMessage: "Generating images..." 
+        }));
+
+        const imagesResult = await callPhase(session, {
+          phase: "images",
+          generationId,
+          projectId,
+        });
+
+        if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+
+        setState((prev) => ({
+          ...prev,
+          progress: 90,
+          completedImages: imagesResult.imagesGenerated,
+          totalImages: imagesResult.totalImages,
+          statusMessage: `Images complete (${imagesResult.imagesGenerated}/${imagesResult.totalImages}). Finalizing...`,
+          costTracking: imagesResult.costTracking,
+          phaseTimings: { ...prev.phaseTimings, images: imagesResult.phaseTime },
+        }));
+
+        // ============= PHASE 4: FINALIZE =============
+        const finalResult = await callPhase(session, {
+          phase: "finalize",
+          generationId,
+          projectId,
+        });
+
+        if (!finalResult.success) throw new Error(finalResult.error || "Finalization failed");
+
+        const finalScenes = normalizeScenes(finalResult.scenes);
+
         setState({
           step: "complete",
           progress: 100,
-          sceneCount: finalSceneCount,
-          currentScene: finalSceneCount,
-          totalImages: finalSceneCount,
-          completedImages: finalSceneCount,
+          sceneCount: finalScenes?.length || sceneCount,
+          currentScene: finalScenes?.length || sceneCount,
+          totalImages: imagesResult.totalImages,
+          completedImages: imagesResult.imagesGenerated,
           isGenerating: false,
-          projectId: result.projectId,
-          generationId: result.generationId,
-          title: result.title,
-          scenes: result.scenes,
+          projectId,
+          generationId,
+          title: finalResult.title,
+          scenes: finalScenes,
           format: params.format as "landscape" | "portrait" | "square",
+          statusMessage: "Generation complete!",
+          costTracking: finalResult.costTracking,
+          phaseTimings: finalResult.phaseTimings,
+          totalTimeMs: finalResult.totalTimeMs,
         });
 
         toast({
           title: "Video Generated!",
-          description: `"${result.title}" is ready with ${result.scenes?.length || 0} scenes.`,
+          description: `"${finalResult.title}" is ready with ${finalScenes?.length || 0} scenes.`,
         });
       } catch (error) {
         console.error("Generation error:", error);
-
         const errorMessage = error instanceof Error ? error.message : "Generation failed";
-
-        const isNetworkDrop =
-          typeof errorMessage === "string" &&
-          (errorMessage.toLowerCase().includes("failed to fetch") ||
-            errorMessage.toLowerCase().includes("networkerror") ||
-            errorMessage.toLowerCase().includes("load failed") ||
-            errorMessage.toLowerCase().includes("fetch") ||
-            errorMessage.toLowerCase().includes("timeout"));
-
-        const isRecoverable = isNetworkDrop || (error as any)?.__recoverable === true;
-
-        if (isRecoverable) {
-          try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-
-            const userId = session?.user?.id;
-            if (userId) {
-              const sinceIso = new Date(startedAt - 2 * 60 * 1000).toISOString();
-              const ok = await recoverFromRecentGeneration({
-                userId,
-                sinceIso,
-                format: params.format as "landscape" | "portrait" | "square",
-              });
-              if (ok) return;
-
-              // Keep progress UI alive even if we couldn't confirm completion yet.
-              return;
-            }
-          } catch (recoveryError) {
-            console.warn("Failed-fetch recovery failed:", recoveryError);
-          }
-        }
 
         setState((prev) => ({
           ...prev,
           step: "error",
           isGenerating: false,
           error: errorMessage,
+          statusMessage: errorMessage,
         }));
 
         toast({
@@ -386,22 +343,16 @@ export function useGenerationPipeline() {
         });
       }
     },
-    [recoverFromRecentGeneration, toast],
+    [toast],
   );
 
   const loadProject = useCallback(
     async (projectId: string): Promise<ProjectRow | null> => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+      const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
+      
       if (!userId) {
-        toast({
-          variant: "destructive",
-          title: "Not signed in",
-          description: "Please sign in to view your projects.",
-        });
+        toast({ variant: "destructive", title: "Not signed in", description: "Please sign in." });
         return null;
       }
 
@@ -421,18 +372,8 @@ export function useGenerationPipeline() {
         .eq("user_id", userId)
         .maybeSingle();
 
-      if (projectError) {
-        toast({
-          variant: "destructive",
-          title: "Could not load project",
-          description: projectError.message,
-        });
-        setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: projectError.message }));
-        return null;
-      }
-
-      if (!project) {
-        const msg = "Project not found.";
+      if (projectError || !project) {
+        const msg = projectError?.message || "Project not found.";
         toast({ variant: "destructive", title: "Could not load project", description: msg });
         setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
         return null;
@@ -448,20 +389,24 @@ export function useGenerationPipeline() {
 
       if (generation?.status === "complete") {
         const scenes = normalizeScenes(generation.scenes) ?? [];
-        const sceneLen = scenes.length;
+        const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
+        
         setState({
           step: "complete",
           progress: 100,
-          sceneCount: sceneLen,
-          currentScene: sceneLen,
-          totalImages: sceneLen,
-          completedImages: sceneLen,
+          sceneCount: scenes.length,
+          currentScene: scenes.length,
+          totalImages: meta.totalImages || scenes.length,
+          completedImages: meta.completedImages || scenes.length,
           isGenerating: false,
           projectId,
           generationId: generation.id,
           title: project.title,
           scenes,
           format: project.format as "landscape" | "portrait" | "square",
+          costTracking: meta.costTracking,
+          phaseTimings: meta.phaseTimings,
+          totalTimeMs: meta.totalTimeMs,
         });
       } else if (generation?.status === "error") {
         const msg = generation.error_message || "Generation failed";
@@ -478,7 +423,7 @@ export function useGenerationPipeline() {
       } else if (generation) {
         const dbProgress = typeof generation.progress === "number" ? generation.progress : 0;
         const scenes = normalizeScenes(generation.scenes);
-        const imageMeta = extractImageMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
+        const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
         const sceneCount = scenes?.length ?? state.sceneCount;
         const step = inferStepFromDb(generation.status, dbProgress);
 
@@ -487,41 +432,33 @@ export function useGenerationPipeline() {
           progress: dbProgress,
           sceneCount,
           currentScene: inferCurrentSceneFromDb(dbProgress, sceneCount),
-          totalImages: imageMeta.totalImages || sceneCount,
-          completedImages: imageMeta.completedImages,
+          totalImages: meta.totalImages || sceneCount,
+          completedImages: meta.completedImages,
           isGenerating: true,
           projectId,
           generationId: generation.id,
           title: project.title,
           scenes,
           format: project.format as "landscape" | "portrait" | "square",
-          statusMessage: imageMeta.statusMessage,
+          statusMessage: meta.statusMessage,
+          costTracking: meta.costTracking,
+          phaseTimings: meta.phaseTimings,
         });
       } else {
-        // No generation yet — show input UI.
         setState((prev) => ({
           ...prev,
           step: "idle",
           progress: 0,
           isGenerating: false,
           projectId,
-          generationId: undefined,
           title: project.title,
-          scenes: undefined,
           format: project.format as "landscape" | "portrait" | "square",
         }));
       }
 
-      toast({
-        title: "Project loaded",
-        description: project.title,
-      });
-
-      return project as ProjectRow;
+      return project;
     },
-    // Intentionally omit `state` so loading a project doesn't depend on transient generation UI.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [toast],
+    [toast, state.sceneCount],
   );
 
   const reset = useCallback(() => {
