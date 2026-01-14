@@ -1008,11 +1008,13 @@ Maintain visual continuity with previous images in this scene.`
 
       return `Generate an EDITORIAL ILLUSTRATION in EXACTLY ${orientationDesc}.
 
-=== CRITICAL: NO TEXT OR SYMBOLS ===
-DO NOT include ANY text, letters, numbers, words, labels, captions, titles, or written symbols in the image.
-DO NOT render any typography, handwriting, signs, logos, or alphanumeric characters.
-The image must be PURELY VISUAL with NO readable text elements whatsoever.
-If the prompt mentions text placement, IGNORE IT - create only visual/pictorial elements.
+=== CRITICAL: TEXT ACCURACY ===
+If the prompt includes text, titles, labels, or captions to display:
+- Render ALL text EXACTLY as written - correct spelling, no substitutions
+- Every letter and number must be accurate and legible
+- DO NOT hallucinate, swap, or corrupt characters (no "R1" for "A", no symbol mixing)
+- Text must be clean, sharp, and readable against the background
+- Use appropriate fonts that match the style - hand-drawn for doodle, clean sans-serif for minimalist
 
 === TECHNICAL REQUIREMENTS ===
 - Format: ${format.toUpperCase()}
@@ -1025,15 +1027,15 @@ ${editorialRules}
 ${visualPrompt}
 
 === STYLE ===
-${styleDescription} style editorial illustration. Professional, cohesive aesthetic. NO TEXT OR WRITING.
-${subVisualNote}
+${styleDescription} style editorial illustration. Professional, cohesive aesthetic.
+${textOverlayInstructions}${subVisualNote}
 
 === COMPOSITION REMINDER ===
 The visual structure must SEMANTICALLY MATCH the concept:
 - If it's a comparison → use SPLIT composition
-- If it's progression → use ASCENDING layout
+- If it's progression → use ASCENDING layout  
 - If it's a formula → use EQUATION layout with visual operators
-Create DYNAMIC composition with clear focal hierarchy. ABSOLUTELY NO TEXT, LETTERS, NUMBERS, OR SYMBOLS.`
+Create DYNAMIC composition with clear focal hierarchy. ALL TEXT MUST BE SPELLED CORRECTLY AND LEGIBLE.`
     };
 
     // Collect all image prompts (including sub-visuals for longer scenes)
