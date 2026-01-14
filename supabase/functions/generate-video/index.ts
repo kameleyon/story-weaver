@@ -1455,21 +1455,45 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Use service role for all DB operations (bypasses RLS, handles long-running tasks)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
     const token = authHeader.replace("Bearer ", "");
-    const { data, error: claimsError } = await supabase.auth.getClaims(token);
-
-    if (claimsError || !data?.claims) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
+    let user: { id: string; email?: string };
+    
+    try {
+      const { data, error: claimsError } = await supabase.auth.getClaims(token);
+      
+      if (claimsError) {
+        // Check if it's an expiration error - provide helpful message
+        if (claimsError.message?.includes("expired")) {
+          return new Response(JSON.stringify({ 
+            error: "Session expired. Please refresh the page and try again." 
+          }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw claimsError;
+      }
+      
+      if (!data?.claims?.sub) {
+        return new Response(JSON.stringify({ error: "Invalid token" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      user = { id: data.claims.sub, email: data.claims.email as string | undefined };
+    } catch (authError) {
+      console.error("Auth validation error:", authError);
+      return new Response(JSON.stringify({ 
+        error: "Authentication failed. Please refresh and try again." 
+      }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Extract user info from claims
-    const user = { id: data.claims.sub, email: data.claims.email };
 
     const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
     if (!REPLICATE_API_KEY) {
