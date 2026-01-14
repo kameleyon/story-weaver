@@ -197,6 +197,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                   onNewProject={handleNewProject}
                   totalTimeMs={generationState.totalTimeMs}
                   costTracking={generationState.costTracking}
+                  generationId={generationState.generationId}
+                  projectId={generationState.projectId}
                 />
               </motion.div>
             ) : (

@@ -16,9 +16,13 @@ interface GenerationRequest {
   style?: string;
   customStyle?: string;
   // For chunked phases
-  phase?: "script" | "audio" | "images" | "finalize";
+  phase?: "script" | "audio" | "images" | "finalize" | "regenerate-audio" | "regenerate-image";
   generationId?: string;
   projectId?: string;
+  // For regeneration
+  sceneIndex?: number;
+  newVoiceover?: string;
+  imageModification?: string;
 }
 
 interface Scene {
@@ -1483,6 +1487,160 @@ async function handleFinalizePhase(
   );
 }
 
+// ============= REGENERATE AUDIO PHASE =============
+async function handleRegenerateAudio(
+  supabase: any,
+  user: any,
+  generationId: string,
+  projectId: string,
+  sceneIndex: number,
+  newVoiceover: string,
+  replicateApiKey: string,
+  googleApiKey: string | undefined,
+): Promise<Response> {
+  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Starting audio regeneration...`);
+
+  // Fetch generation
+  const { data: generation } = await supabase
+    .from("generations")
+    .select("scenes")
+    .eq("id", generationId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!generation) throw new Error("Generation not found");
+
+  const scenes = generation.scenes as Scene[];
+  if (sceneIndex < 0 || sceneIndex >= scenes.length) {
+    throw new Error("Invalid scene index");
+  }
+
+  // Update the scene with new voiceover
+  scenes[sceneIndex].voiceover = newVoiceover;
+
+  // Generate new audio
+  const audioResult = await generateSceneAudio(
+    scenes[sceneIndex],
+    sceneIndex,
+    replicateApiKey,
+    googleApiKey,
+    supabase,
+    user.id,
+    projectId,
+  );
+
+  if (!audioResult.url) {
+    throw new Error(audioResult.error || "Audio regeneration failed");
+  }
+
+  // Update scene with new audio
+  scenes[sceneIndex].audioUrl = audioResult.url;
+  if (audioResult.durationSeconds) {
+    scenes[sceneIndex].duration = Math.round(audioResult.durationSeconds + 0.5);
+  }
+
+  // Save to database
+  await supabase
+    .from("generations")
+    .update({ scenes })
+    .eq("id", generationId);
+
+  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "regenerate-audio",
+      sceneIndex,
+      audioUrl: audioResult.url,
+      duration: scenes[sceneIndex].duration,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
+// ============= REGENERATE IMAGE PHASE =============
+async function handleRegenerateImage(
+  supabase: any,
+  user: any,
+  generationId: string,
+  projectId: string,
+  sceneIndex: number,
+  imageModification: string,
+  replicateApiKey: string,
+): Promise<Response> {
+  console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Starting image regeneration...`);
+
+  // Fetch generation with project format and style
+  const { data: generation } = await supabase
+    .from("generations")
+    .select("scenes, projects!inner(format, style)")
+    .eq("id", generationId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!generation) throw new Error("Generation not found");
+
+  const scenes = generation.scenes as Scene[];
+  if (sceneIndex < 0 || sceneIndex >= scenes.length) {
+    throw new Error("Invalid scene index");
+  }
+
+  const format = generation.projects.format;
+  const style = generation.projects.style;
+  const styleDescription = getStylePrompt(style);
+  const scene = scenes[sceneIndex];
+
+  // Build modified prompt incorporating user's modification request
+  const modifiedPrompt = `${scene.visualPrompt}
+
+USER MODIFICATION REQUEST: ${imageModification}
+
+STYLE: ${styleDescription}
+
+Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image.`;
+
+  // Generate new image
+  const imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
+
+  if (!imageResult.ok) {
+    throw new Error(imageResult.error || "Image regeneration failed");
+  }
+
+  // Upload to storage
+  const imagePath = `${user.id}/${projectId}/scene-${sceneIndex + 1}-regenerated-${Date.now()}.png`;
+  const { error: uploadError } = await supabase.storage
+    .from("images")
+    .upload(imagePath, imageResult.bytes, { contentType: "image/png", upsert: true });
+
+  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+  const { data: { publicUrl } } = supabase.storage.from("images").getPublicUrl(imagePath);
+
+  // Update scene with new image
+  scenes[sceneIndex].imageUrl = publicUrl;
+  scenes[sceneIndex].imageUrls = [publicUrl];
+
+  // Save to database
+  await supabase
+    .from("generations")
+    .update({ scenes })
+    .eq("id", generationId);
+
+  console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Image regenerated successfully`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "regenerate-image",
+      sceneIndex,
+      imageUrl: publicUrl,
+      imageUrls: [publicUrl],
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
 // ============= MAIN HANDLER =============
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -1563,6 +1721,9 @@ serve(async (req) => {
       customStyle,
       imageStartIndex,
       audioStartIndex,
+      sceneIndex,
+      newVoiceover,
+      imageModification,
     } = body;
 
     console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}`);
@@ -1607,6 +1768,39 @@ serve(async (req) => {
         );
       case "finalize":
         return await handleFinalizePhase(supabase, user, generationId, projectId);
+      case "regenerate-audio":
+        if (typeof sceneIndex !== "number" || !newVoiceover) {
+          return new Response(JSON.stringify({ error: "Missing sceneIndex or newVoiceover" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        return await handleRegenerateAudio(
+          supabase,
+          user,
+          generationId,
+          projectId,
+          sceneIndex,
+          newVoiceover,
+          REPLICATE_API_KEY,
+          GOOGLE_TTS_API_KEY,
+        );
+      case "regenerate-image":
+        if (typeof sceneIndex !== "number" || !imageModification) {
+          return new Response(JSON.stringify({ error: "Missing sceneIndex or imageModification" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        return await handleRegenerateImage(
+          supabase,
+          user,
+          generationId,
+          projectId,
+          sceneIndex,
+          imageModification,
+          REPLICATE_API_KEY,
+        );
       default:
         return new Response(JSON.stringify({ error: `Unknown phase: ${phase}` }), {
           status: 400,
