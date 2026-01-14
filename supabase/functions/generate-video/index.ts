@@ -136,7 +136,8 @@ async function generateSceneAudioReplicate(
     try {
       console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate Chatterbox TTS`);
       
-      const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+      // Use official model endpoint (no version hash needed for official models)
+      const createResponse = await fetch("https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${replicateApiKey}`,
@@ -144,15 +145,10 @@ async function generateSceneAudioReplicate(
           "Prefer": "wait"
         },
         body: JSON.stringify({
-          version: "140ed22e05f0c1e6bf23b016d0956a29f05e9ea74c414c1eb7ed6da1f0da72cc",
           input: {
             text: voiceoverText,
-            audio_prompt_path: "https://replicate.delivery/pbxt/MaU6sNNxMSU6RVbGHTCCNhfKtAqXRvkAFwcnLHrKPdUYjRZt/aurora.wav",
-            exaggeration: 0.8,
-            cfg_weight: 0.5,
-            temperature: 1,
-            chunk_size: 250,
-            seed: Math.floor(Math.random() * 1000000)
+            exaggeration: 0.5,
+            cfg_weight: 0.5
           }
         })
       });
