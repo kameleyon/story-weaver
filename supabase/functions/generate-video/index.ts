@@ -87,10 +87,11 @@ function getStylePrompt(style: string, customStyle?: string): string {
 }
 
 function getImageDimensions(format: string): { width: number; height: number } {
+  // z-image-turbo requires dimensions to be multiples of 16
   switch (format) {
-    case "portrait": return { width: 1080, height: 1920 };
-    case "square": return { width: 1080, height: 1080 };
-    default: return { width: 1920, height: 1080 };
+    case "portrait": return { width: 816, height: 1440 };   // 9:16
+    case "square": return { width: 1024, height: 1024 };    // 1:1
+    default: return { width: 1440, height: 816 };           // 16:9 landscape
   }
 }
 
@@ -531,13 +532,28 @@ async function generateImageWithReplicate(
   | { ok: true; bytes: Uint8Array }
   | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
+  // Get explicit dimensions for z-image-turbo (must be multiples of 16)
+  const dimensions = getImageDimensions(format);
+
+  /* ============= OLD SEEDREAM-4.5 SETTINGS (COMMENTED FOR LATER USE) =============
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  // Seedream model endpoint and input:
+  // URL: "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions"
+  // Input: {
+  //   prompt,
+  //   size: "4K",
+  //   aspect_ratio: aspectRatio,
+  //   sequential_image_generation: "disabled",
+  //   max_images: 1,
+  // }
+  ============================================================================= */
 
   try {
-    // Use the OFFICIAL model endpoint (no version hash).
-    // Docs: https://replicate.com/bytedance/seedream-4.5/api
+    // Using prunaai/z-image-turbo model
+    // Docs: https://replicate.com/prunaai/z-image-turbo/api
     const createResponse = await fetch(
-      "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions",
+      "https://api.replicate.com/v1/models/prunaai/z-image-turbo/predictions",
       {
         method: "POST",
         headers: {
@@ -548,11 +564,12 @@ async function generateImageWithReplicate(
         body: JSON.stringify({
           input: {
             prompt,
-            size: "4K",
-            aspect_ratio: aspectRatio,
-            // keep output deterministic (one image) and avoid surprise multi-image runs
-            sequential_image_generation: "disabled",
-            max_images: 1,
+            width: dimensions.width,
+            height: dimensions.height,
+            num_inference_steps: 50,
+            guidance_scale: 0,
+            output_format: "png",
+            output_quality: 100,
           },
         }),
       }
@@ -584,6 +601,8 @@ async function generateImageWithReplicate(
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
+    // z-image-turbo returns output as a FileOutput object with .url() method
+    // When accessed via REST API, it's typically a direct URL string or object with url property
     const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     const imageUrl =
       typeof first === "string"
