@@ -871,7 +871,11 @@ async function handleAudioPhase(
     const results = await Promise.all(batchPromises);
     for (const { index, result } of results) {
       audioUrls[index] = result.url;
-      if (result.durationSeconds) totalAudioSeconds += result.durationSeconds;
+      if (result.durationSeconds) {
+        totalAudioSeconds += result.durationSeconds;
+        // Update scene duration with actual audio length + small buffer
+        scenes[index].duration = Math.ceil(result.durationSeconds + 0.5);
+      }
     }
 
     if (batchEnd < scenes.length) await sleep(2000);

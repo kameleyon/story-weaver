@@ -116,10 +116,16 @@ export function useVideoExport() {
               progress: Math.round(((idx + 1) / scenes.length) * 20),
             }));
 
+            // Use actual audio duration if available (+ small buffer), 
+            // otherwise fall back to scene.duration
+            const actualDuration = audioBuffer 
+              ? audioBuffer.duration + 0.3 
+              : scene.duration;
+            
             return { 
               images: loadedImages, 
               audioBuffer, 
-              duration: scene.duration 
+              duration: actualDuration 
             };
           })
         );
