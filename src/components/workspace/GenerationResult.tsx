@@ -6,6 +6,7 @@ import {
   Download,
   Loader2,
   Pause,
+  Pencil,
   Play,
   Plus,
   Square,
@@ -18,6 +19,8 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { Scene, CostTracking, PhaseTimings } from "@/hooks/useGenerationPipeline";
 import { useVideoExport } from "@/hooks/useVideoExport";
+import { useSceneRegeneration } from "@/hooks/useSceneRegeneration";
+import { SceneEditModal } from "./SceneEditModal";
 import { Clock, DollarSign } from "lucide-react";
 
 interface GenerationResultProps {
@@ -27,13 +30,28 @@ interface GenerationResultProps {
   onNewProject: () => void;
   totalTimeMs?: number;
   costTracking?: CostTracking;
+  generationId?: string;
+  projectId?: string;
+  onScenesUpdate?: (scenes: Scene[]) => void;
 }
 
-export function GenerationResult({ title, scenes, format, onNewProject, totalTimeMs, costTracking }: GenerationResultProps) {
+export function GenerationResult({ 
+  title, 
+  scenes: initialScenes, 
+  format, 
+  onNewProject, 
+  totalTimeMs, 
+  costTracking,
+  generationId,
+  projectId,
+  onScenesUpdate,
+}: GenerationResultProps) {
+  const [scenes, setScenes] = useState(initialScenes);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
+  const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null);
   const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
   const sceneAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -41,6 +59,24 @@ export function GenerationResult({ title, scenes, format, onNewProject, totalTim
   const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
   const shouldAutoDownloadRef = useRef(false);
   const lastAutoDownloadedUrlRef = useRef<string | null>(null);
+
+  // Handle scenes update from regeneration
+  const handleScenesUpdate = (updatedScenes: Scene[]) => {
+    setScenes(updatedScenes);
+    onScenesUpdate?.(updatedScenes);
+  };
+
+  const {
+    isRegenerating,
+    regeneratingType,
+    regenerateAudio,
+    regenerateImage,
+  } = useSceneRegeneration(generationId, projectId, scenes, handleScenesUpdate);
+
+  // Keep scenes in sync with prop changes
+  useEffect(() => {
+    setScenes(initialScenes);
+  }, [initialScenes]);
 
   useEffect(() => {
     if (!shouldAutoDownloadRef.current) return;
@@ -439,7 +475,18 @@ export function GenerationResult({ title, scenes, format, onNewProject, totalTim
                 </span>
               )}
             </h3>
-            <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingSceneIndex(currentSceneIndex)}
+                className="gap-1.5"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </div>
           </div>
           
           <div className="space-y-3">
@@ -599,6 +646,20 @@ export function GenerationResult({ title, scenes, format, onNewProject, totalTim
           Create Another
         </Button>
       </div>
+
+      {/* Scene Edit Modal */}
+      {editingSceneIndex !== null && scenes[editingSceneIndex] && (
+        <SceneEditModal
+          scene={scenes[editingSceneIndex]}
+          sceneIndex={editingSceneIndex}
+          format={format}
+          onClose={() => setEditingSceneIndex(null)}
+          onRegenerateAudio={regenerateAudio}
+          onRegenerateImage={regenerateImage}
+          isRegenerating={isRegenerating}
+          regeneratingType={regeneratingType}
+        />
+      )}
     </div>
   );
 }
