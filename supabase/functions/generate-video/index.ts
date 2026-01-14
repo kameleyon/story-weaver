@@ -94,6 +94,12 @@ function getImageDimensions(format: string): { width: number; height: number } {
   }
 }
 
+// Paralinguistic tags to preserve for natural TTS expression
+const ALLOWED_PARALINGUISTIC_TAGS = [
+  "clear throat", "sigh", "sush", "cough", "groan", 
+  "sniff", "gasp", "chuckle", "laugh"
+];
+
 function sanitizeVoiceover(input: unknown): string {
   const raw = typeof input === "string" ? input : "";
   const lines = raw
@@ -106,7 +112,16 @@ function sanitizeVoiceover(input: unknown): string {
         .replace(/^\s*\[[^\]]+\]\s*/g, "")
     );
   let out = lines.join(" ");
-  out = out.replace(/\[[^\]]+\]/g, " ");
+  
+  // Remove bracketed content EXCEPT allowed paralinguistic tags
+  out = out.replace(/\[([^\]]+)\]/g, (match, content) => {
+    const normalized = content.toLowerCase().trim();
+    if (ALLOWED_PARALINGUISTIC_TAGS.includes(normalized)) {
+      return match; // Keep the tag
+    }
+    return " "; // Remove other bracketed content
+  });
+  
   out = out.replace(/[*_~`]+/g, "");
   return out.replace(/\s{2,}/g, " ").trim();
 }
@@ -193,8 +208,24 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000, numChannels: 
 function sanitizeForGeminiTTS(text: string): string {
   let sanitized = sanitizeVoiceover(text);
   
+  // Temporarily replace paralinguistic tags with placeholders
+  const tagPlaceholders: string[] = [];
+  sanitized = sanitized.replace(/\[([^\]]+)\]/g, (match, content) => {
+    const normalized = content.toLowerCase().trim();
+    if (ALLOWED_PARALINGUISTIC_TAGS.includes(normalized)) {
+      tagPlaceholders.push(match);
+      return `__PTAG${tagPlaceholders.length - 1}__`;
+    }
+    return " ";
+  });
+  
   // Remove any remaining special characters that might trigger filters
   sanitized = sanitized.replace(/[^\w\s\u00C0-\u024F\u1E00-\u1EFF.,!?;:'-]/g, ' ');
+  
+  // Restore paralinguistic tags
+  tagPlaceholders.forEach((tag, i) => {
+    sanitized = sanitized.replace(`__PTAG${i}__`, tag);
+  });
   
   // Collapse multiple spaces
   sanitized = sanitized.replace(/\s+/g, ' ').trim();
