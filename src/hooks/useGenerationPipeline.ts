@@ -145,90 +145,39 @@ export function useGenerationPipeline() {
     return { totalImages: scenes.length, completedImages: 0 };
   };
 
-  // Helper to call a phase with retry logic
+  // Helper to call a phase
   const callPhase = async (
     session: { access_token: string },
-    body: Record<string, unknown>,
-    maxRetries = 3
+    body: Record<string, unknown>
   ): Promise<any> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let errorMessage = "Phase failed";
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
-        
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          let errorMessage = "Phase failed";
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData?.error || errorMessage;
-          } catch {
-            // ignore
-          }
-
-          if (response.status === 429) {
-            throw new Error("Rate limit exceeded. Please wait and try again.");
-          }
-          if (response.status === 402) {
-            throw new Error("AI credits exhausted. Please add credits.");
-          }
-          throw new Error(errorMessage);
-        }
-
-        return response.json();
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        
-        // Don't retry on explicit API errors (non-network issues)
-        if (lastError.message.includes("Rate limit") || 
-            lastError.message.includes("credits exhausted") ||
-            lastError.message.includes("must be logged in")) {
-          throw lastError;
-        }
-        
-        // For network errors or timeouts, retry after delay
-        const isNetworkError = lastError.name === "AbortError" || 
-                               lastError.message.includes("Failed to fetch") ||
-                               lastError.message.includes("NetworkError");
-        
-        if (isNetworkError && attempt < maxRetries) {
-          console.log(`[callPhase] Attempt ${attempt} failed (${lastError.message}), retrying in ${attempt * 2}s...`);
-          await new Promise(r => setTimeout(r, attempt * 2000));
-          continue;
-        }
-        
-        throw lastError;
+        const errorData = await response.json();
+        errorMessage = errorData?.error || errorMessage;
+      } catch {
+        // ignore
       }
-    }
-    
-    throw lastError || new Error("Phase failed after retries");
-  };
 
-  // Poll generation status from database
-  const pollGenerationStatus = async (
-    generationId: string
-  ): Promise<{ status: string; progress: number; scenes: unknown; error_message: string | null }> => {
-    const { data, error } = await supabase
-      .from("generations")
-      .select("status, progress, scenes, error_message")
-      .eq("id", generationId)
-      .single();
-    
-    if (error) throw new Error("Failed to poll status");
-    return data;
+      if (response.status === 429) {
+        throw new Error("Rate limit exceeded. Please wait and try again.");
+      }
+      if (response.status === 402) {
+        throw new Error("AI credits exhausted. Please add credits.");
+      }
+      throw new Error(errorMessage);
+    }
+
+    return response.json();
   };
 
   const startGeneration = useCallback(
@@ -316,7 +265,7 @@ export function useGenerationPipeline() {
           phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
         }));
 
-        // ============= PHASE 3: IMAGES (chunked with recovery) =============
+        // ============= PHASE 3: IMAGES (chunked) =============
         setState((prev) => ({ 
           ...prev, 
           progress: 45,
@@ -325,95 +274,32 @@ export function useGenerationPipeline() {
 
         let imageStartIndex = 0;
         let imagesResult: any;
-        let consecutiveFailures = 0;
-        const maxConsecutiveFailures = 5;
         
         // Loop until all images are generated
-        while (true) {
-          try {
-            imagesResult = await callPhase(session, {
-              phase: "images",
-              generationId,
-              projectId,
-              imageStartIndex,
-            });
-            
-            consecutiveFailures = 0; // Reset on success
+        do {
+          imagesResult = await callPhase(session, {
+            phase: "images",
+            generationId,
+            projectId,
+            imageStartIndex,
+          });
 
-            if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+          if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
 
-            setState((prev) => ({
-              ...prev,
-              progress: imagesResult.progress,
-              completedImages: imagesResult.imagesGenerated,
-              totalImages: imagesResult.totalImages,
-              statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
-              costTracking: imagesResult.costTracking,
-              phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
-            }));
+          setState((prev) => ({
+            ...prev,
+            progress: imagesResult.progress,
+            completedImages: imagesResult.imagesGenerated,
+            totalImages: imagesResult.totalImages,
+            statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
+            costTracking: imagesResult.costTracking,
+            phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
+          }));
 
-            if (!imagesResult.hasMore) break;
-            
-            if (imagesResult.nextStartIndex !== undefined) {
-              imageStartIndex = imagesResult.nextStartIndex;
-            }
-          } catch (fetchError) {
-            consecutiveFailures++;
-            console.warn(`[Images] Fetch failed (${consecutiveFailures}/${maxConsecutiveFailures}):`, fetchError);
-            
-            if (consecutiveFailures >= maxConsecutiveFailures) {
-              throw new Error("Image generation failed after multiple retries. Please try again.");
-            }
-            
-            // Poll database to get current progress and determine where to resume
-            setState((prev) => ({
-              ...prev,
-              statusMessage: `Reconnecting... (attempt ${consecutiveFailures})`,
-            }));
-            
-            await new Promise(r => setTimeout(r, 3000)); // Wait before polling
-            
-            try {
-              const dbStatus = await pollGenerationStatus(generationId);
-              
-              if (dbStatus.status === "error") {
-                throw new Error(dbStatus.error_message || "Generation failed");
-              }
-              
-              if (dbStatus.status === "complete") {
-                // Images finished while we were disconnected
-                const scenes = Array.isArray(dbStatus.scenes) ? dbStatus.scenes : [];
-                const meta = extractMeta(scenes);
-                imagesResult = {
-                  hasMore: false,
-                  imagesGenerated: meta.completedImages || scenes.length,
-                  totalImages: meta.totalImages || scenes.length,
-                  progress: 90,
-                  costTracking: meta.costTracking,
-                };
-                break;
-              }
-              
-              // Get current image count from _meta in scenes
-              if (Array.isArray(dbStatus.scenes) && dbStatus.scenes.length > 0) {
-                const meta = extractMeta(dbStatus.scenes);
-                if (meta.completedImages > imageStartIndex) {
-                  imageStartIndex = meta.completedImages;
-                  setState((prev) => ({
-                    ...prev,
-                    completedImages: meta.completedImages,
-                    totalImages: meta.totalImages,
-                    progress: dbStatus.progress,
-                    statusMessage: `Resuming from image ${meta.completedImages}/${meta.totalImages}...`,
-                  }));
-                }
-              }
-            } catch (pollError) {
-              console.warn("[Images] Poll also failed:", pollError);
-              // Continue to next retry attempt
-            }
+          if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
+            imageStartIndex = imagesResult.nextStartIndex;
           }
-        }
+        } while (imagesResult.hasMore);
 
         setState((prev) => ({
           ...prev,
