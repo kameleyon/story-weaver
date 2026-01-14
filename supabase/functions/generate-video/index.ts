@@ -63,19 +63,19 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 // Pricing estimates (approximate)
 const PRICING = {
   scriptPerToken: 0.000001, // ~$1 per 1M tokens
-  audioPerSecond: 0.002,    // ~$0.002 per second
-  imagePerImage: 0.02,      // ~$0.02 per image
+  audioPerSecond: 0.002, // ~$0.002 per second
+  imagePerImage: 0.02, // ~$0.02 per image
 };
 
 const STYLE_PROMPTS: Record<string, string> = {
-  "minimalist": `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
-  "doodle": `Urban Minimalist Doodle style. Flat 2D vector illustration with indie comic aesthetic. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled paper or newsprint. CHARACTER DESIGN: Object-Head surrealism where character heads are replaced with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line for a vintage screen-printed quality. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons (coins, arrows, charts) representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
-  "stick": `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
-  "realistic": `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
-  "anime": `High-quality Anime art style. Crisp cel-shaded coloring with dramatic lighting and lens flares. Vibrant, saturated color palette with emphasis on deep blue skies and lush greens. Detailed backgrounds in the style of Makoto Shinkai or Studio Ghibli. Clean fine line work. Expressive characters with large eyes. Atmospheric, emotional, and polished animation aesthetic. 2D animation look.`,
+  minimalist: `Ultra-clean modern vector art. Flat 2D design with absolutely no gradients, shadows, or textures. Use sharp, geometric shapes and crisp, thin lines. Palette: Stark white background with jet black ink and a single vibrant accent color (electric blue or coral) for emphasis. High use of negative space. Professional, corporate, and sleek data-visualization aesthetic. Iconic and symbolic rather than literal. Heavily influenced by Swiss Design and Bauhaus.`,
+  doodle: `Urban Minimalist Doodle style. Flat 2D vector illustration with indie comic aesthetic. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled paper or newsprint. CHARACTER DESIGN: Object-Head surrealism where character heads are replaced with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line for a vintage screen-printed quality. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons (coins, arrows, charts) representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
+  stick: `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality.`,
+  realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
+  anime: `High-quality Anime art style. Crisp cel-shaded coloring with dramatic lighting and lens flares. Vibrant, saturated color palette with emphasis on deep blue skies and lush greens. Detailed backgrounds in the style of Makoto Shinkai or Studio Ghibli. Clean fine line work. Expressive characters with large eyes. Atmospheric, emotional, and polished animation aesthetic. 2D animation look.`,
   "3d-pixar": `3D animated feature film style (Pixar/Disney). Soft, subsurface scattering on materials to make them look soft and touchable. Warm, bounce lighting and global illumination. Stylized characters with exaggerated features but realistic textures (fabric, hair). Vibrant, friendly color palette. Rendered in Redshift or Octane. Cute, appealing, and high-budget animation look. Smooth shapes, no sharp edges.`,
-  "claymation": `Stop-motion claymation style. Textures of plasticine and modeling clay with visible fingerprints and imperfections. Handmade, tactile look. Soft, physical studio lighting with real shadows. Miniature photography aesthetic with tilt-shift depth of field. Vibrant, playful colors. Characters and objects look like physical toys. Imperfect, organic shapes. Aardman Animations vibe.`,
-  "futuristic": `Clean futuristic sci-fi aesthetic. Dark background with glowing neon accents (cyan, magenta, electric purple). Holographic interfaces (HUDs) and glass textures. Sleek, metallic surfaces (chrome, brushed aluminum, matte black). Cyberpunk but minimal and tidy. High-tech, digital atmosphere. Lens flares, bloom effects, and volumetric lighting. Smooth curves, floating UI elements, and data streams.`
+  claymation: `Stop-motion claymation style. Textures of plasticine and modeling clay with visible fingerprints and imperfections. Handmade, tactile look. Soft, physical studio lighting with real shadows. Miniature photography aesthetic with tilt-shift depth of field. Vibrant, playful colors. Characters and objects look like physical toys. Imperfect, organic shapes. Aardman Animations vibe.`,
+  futuristic: `Clean futuristic sci-fi aesthetic. Dark background with glowing neon accents (cyan, magenta, electric purple). Holographic interfaces (HUDs) and glass textures. Sleek, metallic surfaces (chrome, brushed aluminum, matte black). Cyberpunk but minimal and tidy. High-tech, digital atmosphere. Lens flares, bloom effects, and volumetric lighting. Smooth curves, floating UI elements, and data streams.`,
 };
 
 const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
@@ -89,16 +89,26 @@ function getStylePrompt(style: string, customStyle?: string): string {
 function getImageDimensions(format: string): { width: number; height: number } {
   // z-image-turbo requires dimensions to be multiples of 16
   switch (format) {
-    case "portrait": return { width: 816, height: 1440 };   // 9:16
-    case "square": return { width: 1024, height: 1024 };    // 1:1
-    default: return { width: 1440, height: 816 };           // 16:9 landscape
+    case "portrait":
+      return { width: 816, height: 1440 }; // 9:16
+    case "square":
+      return { width: 1024, height: 1024 }; // 1:1
+    default:
+      return { width: 1440, height: 816 }; // 16:9 landscape
   }
 }
 
 // Paralinguistic tags to preserve for natural TTS expression
 const ALLOWED_PARALINGUISTIC_TAGS = [
-  "clear throat", "sigh", "sush", "cough", "groan", 
-  "sniff", "gasp", "chuckle", "laugh"
+  "clear throat",
+  "sigh",
+  "sush",
+  "cough",
+  "groan",
+  "sniff",
+  "gasp",
+  "chuckle",
+  "laugh",
 ];
 
 function sanitizeVoiceover(input: unknown): string {
@@ -110,10 +120,10 @@ function sanitizeVoiceover(input: unknown): string {
     .map((line) =>
       line
         .replace(/^\s*(?:hook|scene\s*\d+|narrator|body|solution|conflict|choice|formula)\s*[:\-–—]\s*/i, "")
-        .replace(/^\s*\[[^\]]+\]\s*/g, "")
+        .replace(/^\s*\[[^\]]+\]\s*/g, ""),
     );
   let out = lines.join(" ");
-  
+
   // Remove bracketed content EXCEPT allowed paralinguistic tags
   out = out.replace(/\[([^\]]+)\]/g, (match, content) => {
     const normalized = content.toLowerCase().trim();
@@ -122,7 +132,7 @@ function sanitizeVoiceover(input: unknown): string {
     }
     return " "; // Remove other bracketed content
   });
-  
+
   out = out.replace(/[*_~`]+/g, "");
   return out.replace(/\s{2,}/g, " ").trim();
 }
@@ -130,57 +140,116 @@ function sanitizeVoiceover(input: unknown): string {
 // ============= LANGUAGE DETECTION =============
 function isHaitianCreole(text: string): boolean {
   const lowerText = text.toLowerCase();
-  
+
   // Common Haitian Creole words and patterns
   const creoleIndicators = [
     // Common words
-    "mwen", "ou", "li", "nou", "yo", "sa", "ki", "nan", "pou", "ak",
-    "pa", "se", "te", "ap", "gen", "fè", "di", "ale", "vin", "bay",
-    "konnen", "wè", "pran", "mete", "vle", "kapab", "dwe", "bezwen",
-    "tankou", "paske", "men", "lè", "si", "kote", "kouman", "poukisa",
-    "anpil", "tout", "chak", "yon", "de", "twa", "kat", "senk",
+    "mwen",
+    "ou",
+    "li",
+    "nou",
+    "yo",
+    "sa",
+    "ki",
+    "nan",
+    "pou",
+    "ak",
+    "pa",
+    "se",
+    "te",
+    "ap",
+    "gen",
+    "fè",
+    "di",
+    "ale",
+    "vin",
+    "bay",
+    "konnen",
+    "wè",
+    "pran",
+    "mete",
+    "vle",
+    "kapab",
+    "dwe",
+    "bezwen",
+    "tankou",
+    "paske",
+    "men",
+    "lè",
+    "si",
+    "kote",
+    "kouman",
+    "poukisa",
+    "anpil",
+    "tout",
+    "chak",
+    "yon",
+    "de",
+    "twa",
+    "kat",
+    "senk",
     // Haitian specific
-    "ayiti", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
-    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "apre",
+    "ayiti",
+    "kreyòl",
+    "kreyol",
+    "bondye",
+    "mèsi",
+    "bonjou",
+    "bonswa",
+    "kijan",
+    "eske",
+    "kounye",
+    "toujou",
+    "jamè",
+    "anvan",
+    "apre",
     // Verb markers
-    "t ap", "te", "pral", "ta"
+    "t ap",
+    "te",
+    "pral",
+    "ta",
   ];
-  
+
   let matchCount = 0;
   for (const indicator of creoleIndicators) {
     const regex = new RegExp(`\\b${indicator}\\b`, "gi");
     if (regex.test(lowerText)) matchCount++;
   }
-  
+
   // If 3+ Creole indicators found, likely Haitian Creole
   return matchCount >= 3;
 }
 
 // ============= PCM TO WAV CONVERSION =============
-function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000, numChannels: number = 1, bitsPerSample: number = 16): Uint8Array {
+function pcmToWav(
+  pcmData: Uint8Array,
+  sampleRate: number = 24000,
+  numChannels: number = 1,
+  bitsPerSample: number = 16,
+): Uint8Array {
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
   const blockAlign = numChannels * (bitsPerSample / 8);
   const dataSize = pcmData.length;
   const headerSize = 44;
   const totalSize = headerSize + dataSize;
-  
+
   const buffer = new ArrayBuffer(totalSize);
   const view = new DataView(buffer);
-  
+
   // RIFF header
   view.setUint8(0, 0x52); // R
   view.setUint8(1, 0x49); // I
   view.setUint8(2, 0x46); // F
   view.setUint8(3, 0x46); // F
   view.setUint32(4, totalSize - 8, true); // File size - 8
-  view.setUint8(8, 0x57);  // W
-  view.setUint8(9, 0x41);  // A
+  view.setUint8(8, 0x57); // W
+  view.setUint8(9, 0x41); // A
   view.setUint8(10, 0x56); // V
   view.setUint8(11, 0x45); // E
-  
+
   // fmt subchunk
   view.setUint8(12, 0x66); // f
-  view.setUint8(13, 0x6D); // m
+  view.setUint8(13, 0x6d); // m
   view.setUint8(14, 0x74); // t
   view.setUint8(15, 0x20); // (space)
   view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
@@ -190,25 +259,25 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000, numChannels: 
   view.setUint32(28, byteRate, true);
   view.setUint16(32, blockAlign, true);
   view.setUint16(34, bitsPerSample, true);
-  
+
   // data subchunk
   view.setUint8(36, 0x64); // d
   view.setUint8(37, 0x61); // a
   view.setUint8(38, 0x74); // t
   view.setUint8(39, 0x61); // a
   view.setUint32(40, dataSize, true);
-  
+
   // Copy PCM data
   const wavArray = new Uint8Array(buffer);
   wavArray.set(pcmData, headerSize);
-  
+
   return wavArray;
 }
 
 // Extra sanitization for Gemini TTS to avoid content filtering
 function sanitizeForGeminiTTS(text: string): string {
   let sanitized = sanitizeVoiceover(text);
-  
+
   // Temporarily replace paralinguistic tags with placeholders
   const tagPlaceholders: string[] = [];
   sanitized = sanitized.replace(/\[([^\]]+)\]/g, (match, content) => {
@@ -219,23 +288,23 @@ function sanitizeForGeminiTTS(text: string): string {
     }
     return " ";
   });
-  
+
   // Remove any remaining special characters that might trigger filters
-  sanitized = sanitized.replace(/[^\w\s\u00C0-\u024F\u1E00-\u1EFF.,!?;:'-]/g, ' ');
-  
+  sanitized = sanitized.replace(/[^\w\s\u00C0-\u024F\u1E00-\u1EFF.,!?;:'-]/g, " ");
+
   // Restore paralinguistic tags
   tagPlaceholders.forEach((tag, i) => {
     sanitized = sanitized.replace(`__PTAG${i}__`, tag);
   });
-  
+
   // Collapse multiple spaces
-  sanitized = sanitized.replace(/\s+/g, ' ').trim();
-  
+  sanitized = sanitized.replace(/\s+/g, " ").trim();
+
   // Ensure it ends with proper punctuation for natural speech
   if (sanitized && !/[.!?]$/.test(sanitized)) {
-    sanitized += '.';
+    sanitized += ".";
   }
-  
+
   return sanitized;
 }
 
@@ -247,29 +316,25 @@ async function generateSceneAudioGemini(
   supabase: any,
   userId: string,
   projectId: string,
-  retryAttempt: number = 0
+  retryAttempt: number = 0,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
-  
+
   if (!voiceoverText || voiceoverText.length < 2) {
     return { url: null, error: "No voiceover text" };
   }
-  
+
   // On retries, add slight text variation to bypass content filtering
   if (retryAttempt > 0) {
     // Add a soft breathing pause at the start to slightly vary the input
-    const variations = [
-      "... " + voiceoverText,
-      voiceoverText + " ...",
-      ". " + voiceoverText,
-    ];
+    const variations = ["... " + voiceoverText, voiceoverText + " ...", ". " + voiceoverText];
     voiceoverText = variations[retryAttempt % variations.length];
   }
 
   try {
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Using Gemini 2.5 Flash TTS for Haitian Creole`);
     console.log(`[TTS-Gemini] Text length: ${voiceoverText.length} chars, retry: ${retryAttempt}`);
-    
+
     // Use Gemini 2.5 Flash TTS model (dedicated TTS model)
     // Voice: Kore (Female) - natural, conversational, and enthusiastic
     const response = await fetch(
@@ -278,23 +343,27 @@ async function generateSceneAudioGemini(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{
-            parts: [{ 
-              text: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${voiceoverText}` 
-            }]
-          }],
+          contents: [
+            {
+              parts: [
+                {
+                  text: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${voiceoverText}`,
+                },
+              ],
+            },
+          ],
           generationConfig: {
             responseModalities: ["AUDIO"],
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: "Sadachbia"
-                }
-              }
-            }
-          }
-        })
-      }
+                  voiceName: "Enceladus",
+                },
+              },
+            },
+          },
+        }),
+      },
     );
 
     if (!response.ok) {
@@ -305,28 +374,28 @@ async function generateSceneAudioGemini(
 
     const data = await response.json();
     console.log(`[TTS-Gemini] Response structure:`, JSON.stringify(Object.keys(data)));
-    
+
     // Check for candidates
     if (!data.candidates || data.candidates.length === 0) {
       console.error(`[TTS-Gemini] No candidates in response:`, JSON.stringify(data));
       throw new Error("No candidates in Gemini response");
     }
-    
+
     const candidate = data.candidates[0];
     const content = candidate?.content;
     const parts = content?.parts;
-    
+
     if (!parts || parts.length === 0) {
       console.error(`[TTS-Gemini] No parts in candidate:`, JSON.stringify(candidate));
       throw new Error("No parts in Gemini response");
     }
-    
+
     const inlineData = parts[0]?.inlineData;
     if (!inlineData || !inlineData.data) {
       console.error(`[TTS-Gemini] No inlineData:`, JSON.stringify(parts[0]));
       throw new Error("No audio data in Gemini response");
     }
-    
+
     const audioData = inlineData.data;
     const mimeType = inlineData.mimeType || "audio/L16";
     console.log(`[TTS-Gemini] Got audio data, mimeType: ${mimeType}, base64 length: ${audioData.length}`);
@@ -334,28 +403,30 @@ async function generateSceneAudioGemini(
     // Decode base64 audio (raw PCM data)
     let pcmBytes = base64Decode(audioData);
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} raw PCM bytes: ${pcmBytes.length}`);
-    
+
     // Trim trailing silence from PCM (16-bit samples, little-endian)
     // Find the last sample above a low threshold to avoid long dead air
     const SILENCE_THRESHOLD = 300; // Low amplitude threshold (out of 32768)
     const SAMPLES_PER_CHECK = 480; // Check every 20ms at 24kHz
     let trimEnd = pcmBytes.length;
-    
+
     // Start from end and find where audio actually ends
     for (let i = pcmBytes.length - 2; i >= 0; i -= 2) {
-      const sample = Math.abs((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16 >> 16);
+      const sample = Math.abs(((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16) >> 16);
       if (sample > SILENCE_THRESHOLD) {
         // Found audio content, add a small buffer (0.3s = 14400 bytes at 24kHz 16-bit)
         trimEnd = Math.min(pcmBytes.length, i + 14400);
         break;
       }
     }
-    
+
     if (trimEnd < pcmBytes.length) {
-      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`);
+      console.log(
+        `[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`,
+      );
       pcmBytes = pcmBytes.slice(0, trimEnd);
     }
-    
+
     // Convert PCM to WAV (Gemini returns 24kHz, 16-bit mono PCM)
     const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} WAV bytes: ${wavBytes.length}`);
@@ -370,7 +441,9 @@ async function generateSceneAudioGemini(
 
     if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-    const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("audio").getPublicUrl(audioPath);
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} audio uploaded OK`);
     return { url: publicUrl, durationSeconds };
   } catch (err) {
@@ -387,12 +460,12 @@ async function generateSceneAudioReplicate(
   replicateApiKey: string,
   supabase: any,
   userId: string,
-  projectId: string
+  projectId: string,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const TTS_ATTEMPTS = 3;
   const TTS_RETRY_BASE_DELAY_MS = 2000;
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
-  
+
   if (!voiceoverText || voiceoverText.length < 2) {
     return { url: null, error: "No voiceover text" };
   }
@@ -404,26 +477,29 @@ async function generateSceneAudioReplicate(
   for (let attempt = 1; attempt <= TTS_ATTEMPTS; attempt++) {
     try {
       console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate Chatterbox TTS`);
-      
+
       // Use official model endpoint (no version hash needed for official models)
-      const createResponse = await fetch("https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${replicateApiKey}`,
-          "Content-Type": "application/json",
-          "Prefer": "wait"
+      const createResponse = await fetch(
+        "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${replicateApiKey}`,
+            "Content-Type": "application/json",
+            Prefer: "wait",
+          },
+          body: JSON.stringify({
+            input: {
+              text: voiceoverText,
+              voice: "Marisol",
+              temperature: 1,
+              top_p: 0.9,
+              top_k: 1800,
+              repetition_penalty: 1.5,
+            },
+          }),
         },
-        body: JSON.stringify({
-          input: {
-            text: voiceoverText,
-            voice: "Marisol",
-            temperature: 1,
-            top_p: 0.9,
-            top_k: 1800,
-            repetition_penalty: 1.5
-          }
-        })
-      });
+      );
 
       if (!createResponse.ok) {
         const errText = await createResponse.text();
@@ -437,7 +513,7 @@ async function generateSceneAudioReplicate(
       while (prediction.status !== "succeeded" && prediction.status !== "failed") {
         await sleep(1000);
         const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-          headers: { "Authorization": `Bearer ${replicateApiKey}` }
+          headers: { Authorization: `Bearer ${replicateApiKey}` },
         });
         prediction = await pollResponse.json();
       }
@@ -468,7 +544,9 @@ async function generateSceneAudioReplicate(
 
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-      const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("audio").getPublicUrl(audioPath);
       finalAudioUrl = publicUrl;
       break;
     } catch (err) {
@@ -489,7 +567,7 @@ async function generateSceneAudio(
   googleApiKey: string | undefined,
   supabase: any,
   userId: string,
-  projectId: string
+  projectId: string,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
 
@@ -500,7 +578,7 @@ async function generateSceneAudio(
     // Haitian Creole: use Gemini ONLY with 10 retries (Replicate doesn't speak Creole)
     const MAX_RETRIES = 10;
     let lastError = "";
-    
+
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       if (retry > 0) {
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_RETRIES}`);
@@ -514,7 +592,7 @@ async function generateSceneAudio(
         supabase,
         userId,
         projectId,
-        retry
+        retry,
       );
 
       if (geminiResult.url) return geminiResult;
@@ -539,10 +617,9 @@ async function generateSceneAudio(
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiKey: string,
-  format: string
+  format: string,
 ): Promise<
-  | { ok: true; bytes: Uint8Array }
-  | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
+  { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   // Get explicit dimensions for z-image-turbo (must be multiples of 16)
   const dimensions = getImageDimensions(format);
@@ -564,28 +641,25 @@ async function generateImageWithReplicate(
   try {
     // Using prunaai/z-image-turbo model
     // Docs: https://replicate.com/prunaai/z-image-turbo/api
-    const createResponse = await fetch(
-      "https://api.replicate.com/v1/models/prunaai/z-image-turbo/predictions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${replicateApiKey}`,
-          "Content-Type": "application/json",
-          "Prefer": "wait",
+    const createResponse = await fetch("https://api.replicate.com/v1/models/prunaai/z-image-turbo/predictions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          prompt,
+          width: dimensions.width,
+          height: dimensions.height,
+          num_inference_steps: 50,
+          guidance_scale: 0,
+          output_format: "png",
+          output_quality: 100,
         },
-        body: JSON.stringify({
-          input: {
-            prompt,
-            width: dimensions.width,
-            height: dimensions.height,
-            num_inference_steps: 50,
-            guidance_scale: 0,
-            output_format: "png",
-            output_quality: 100,
-          },
-        }),
-      }
-    );
+      }),
+    });
 
     if (!createResponse.ok) {
       const status = createResponse.status;
@@ -604,7 +678,7 @@ async function generateImageWithReplicate(
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await sleep(2000);
       const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { "Authorization": `Bearer ${replicateApiKey}` },
+        headers: { Authorization: `Bearer ${replicateApiKey}` },
       });
       prediction = await pollResponse.json();
     }
@@ -635,7 +709,6 @@ async function generateImageWithReplicate(
   }
 }
 
-
 // ============= PHASE HANDLERS =============
 
 async function handleScriptPhase(
@@ -645,10 +718,10 @@ async function handleScriptPhase(
   format: string,
   length: string,
   style: string,
-  customStyle?: string
+  customStyle?: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
-  
+
   const lengthConfig: Record<string, { count: number; targetDuration: number; avgSceneDuration: number }> = {
     short: { count: 6, targetDuration: 90, avgSceneDuration: 15 },
     brief: { count: 12, targetDuration: 225, avgSceneDuration: 18 },
@@ -691,10 +764,14 @@ Content: ${content}
 - Include paralinguistic tags where appropriate for natural expression: [clear throat], [sigh], [sush], [cough], [groan], [sniff], [gasp], [chuckle], [laugh]
 - Example: "Oh, that's interesting! [chuckle] Let me explain why..."
 
-${includeTextOverlay ? `
+${
+  includeTextOverlay
+    ? `
 === TEXT OVERLAY ===
 - Provide title (2-5 words) and subtitle for each scene
-` : ""}
+`
+    : ""
+}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
@@ -707,9 +784,13 @@ Return ONLY valid JSON:
       "voiceover": "Spoken text...",
       "visualPrompt": "Visual description...",
       "subVisuals": ["Optional additional visual..."],
-      "duration": 18${includeTextOverlay ? `,
+      "duration": 18${
+        includeTextOverlay
+          ? `,
       "title": "Headline",
-      "subtitle": "Takeaway"` : ""}
+      "subtitle": "Takeaway"`
+          : ""
+      }
     }
   ]
 }`;
@@ -723,9 +804,9 @@ Return ONLY valid JSON:
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       "HTTP-Referer": "https://audiomax.lovable.app",
-      "X-Title": "AudioMax Video Generator"
+      "X-Title": "AudioMax Video Generator",
     },
     body: JSON.stringify({
       model: "anthropic/claude-sonnet-4.5",
@@ -813,7 +894,7 @@ Return ONLY valid JSON:
           sceneIndex: idx,
           costTracking,
           phaseTimings: { script: phaseTime },
-        }
+        },
       })),
       started_at: new Date().toISOString(),
     })
@@ -822,7 +903,9 @@ Return ONLY valid JSON:
 
   if (genError) throw new Error("Failed to create generation");
 
-  console.log(`Phase: SCRIPT complete in ${phaseTime}ms - ${parsedScript.scenes.length} scenes, ${totalImages} images planned`);
+  console.log(
+    `Phase: SCRIPT complete in ${phaseTime}ms - ${parsedScript.scenes.length} scenes, ${totalImages} images planned`,
+  );
 
   return new Response(
     JSON.stringify({
@@ -837,7 +920,7 @@ Return ONLY valid JSON:
       costTracking,
       phaseTime,
     }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 }
 
@@ -848,7 +931,7 @@ async function handleAudioPhase(
   projectId: string,
   replicateApiKey: string,
   googleApiKey?: string,
-  startIndex: number = 0
+  startIndex: number = 0,
 ): Promise<Response> {
   const requestStart = Date.now();
 
@@ -910,7 +993,7 @@ async function handleAudioPhase(
       generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId).then((result) => ({
         index: i,
         result,
-      }))
+      })),
     );
   }
 
@@ -961,7 +1044,7 @@ async function handleAudioPhase(
         costTracking,
         phaseTime: phaseTimings.audio,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
@@ -988,7 +1071,7 @@ async function handleAudioPhase(
     .eq("id", generationId);
 
   console.log(
-    `Phase: AUDIO complete (chunked) in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`
+    `Phase: AUDIO complete (chunked) in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`,
   );
 
   return new Response(
@@ -1002,7 +1085,7 @@ async function handleAudioPhase(
       costTracking,
       phaseTime: phaseTimings.audio,
     }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 }
 
@@ -1016,7 +1099,7 @@ async function handleImagesPhase(
   generationId: string,
   projectId: string,
   replicateApiKey: string,
-  startIndex: number = 0
+  startIndex: number = 0,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -1036,16 +1119,26 @@ async function handleImagesPhase(
   const styleDescription = getStylePrompt(style);
   const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
   const dimensions = getImageDimensions(format);
-  
+
   const meta = scenes[0]?._meta || {};
-  let costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
+  let costTracking: CostTracking = meta.costTracking || {
+    scriptTokens: 0,
+    audioSeconds: 0,
+    imagesGenerated: 0,
+    estimatedCostUsd: 0,
+  };
   const phaseTimings = meta.phaseTimings || {};
-  
+
   // Get already completed images count from meta
   let completedImagesSoFar = meta.completedImages || 0;
 
   // Build image tasks
-  interface ImageTask { sceneIndex: number; subIndex: number; prompt: string; taskIndex: number; }
+  interface ImageTask {
+    sceneIndex: number;
+    subIndex: number;
+    prompt: string;
+    taskIndex: number;
+  }
   const allImageTasks: ImageTask[] = [];
 
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
@@ -1067,22 +1160,32 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
   let taskIndex = 0;
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    allImageTasks.push({ sceneIndex: i, subIndex: 0, prompt: buildImagePrompt(scene.visualPrompt, scene, 0), taskIndex: taskIndex++ });
-    
+    allImageTasks.push({
+      sceneIndex: i,
+      subIndex: 0,
+      prompt: buildImagePrompt(scene.visualPrompt, scene, 0),
+      taskIndex: taskIndex++,
+    });
+
     if (scene.subVisuals && scene.duration >= 12) {
       const maxSub = scene.duration >= 19 ? 2 : 1;
       for (let j = 0; j < Math.min(scene.subVisuals.length, maxSub); j++) {
-        allImageTasks.push({ sceneIndex: i, subIndex: j + 1, prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1), taskIndex: taskIndex++ });
+        allImageTasks.push({
+          sceneIndex: i,
+          subIndex: j + 1,
+          prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1),
+          taskIndex: taskIndex++,
+        });
       }
     }
   }
 
   const totalImages = allImageTasks.length;
-  
+
   // Get tasks for this chunk
   const endIndex = Math.min(startIndex + MAX_IMAGES_PER_CALL, totalImages);
   const tasksThisChunk = allImageTasks.slice(startIndex, endIndex);
-  
+
   console.log(`Phase: IMAGES - Chunk ${startIndex}-${endIndex} of ${totalImages} images...`);
 
   // Load existing image URLs from scenes
@@ -1101,31 +1204,34 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
   const BATCH_SIZE = 4;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
-    
+
     const currentCompleted = completedImagesSoFar + completedThisChunk;
     const statusMsg = `Generating images... (${currentCompleted}/${totalImages} complete)`;
     const progress = 40 + Math.floor((currentCompleted / totalImages) * 50);
 
     // Update progress
-    await supabase.from("generations").update({
-      progress,
-      scenes: scenes.map((s, idx) => {
-        const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
-        return {
-          ...s,
-          imageUrl: imgs[0] || s.imageUrl || null,
-          imageUrls: imgs.length > 0 ? imgs : s.imageUrls,
-          _meta: {
-            ...s._meta,
-            statusMessage: statusMsg,
-            totalImages,
-            completedImages: currentCompleted,
-            costTracking,
-            phaseTimings,
-          }
-        };
+    await supabase
+      .from("generations")
+      .update({
+        progress,
+        scenes: scenes.map((s, idx) => {
+          const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
+          return {
+            ...s,
+            imageUrl: imgs[0] || s.imageUrl || null,
+            imageUrls: imgs.length > 0 ? imgs : s.imageUrls,
+            _meta: {
+              ...s._meta,
+              statusMessage: statusMsg,
+              totalImages,
+              completedImages: currentCompleted,
+              costTracking,
+              phaseTimings,
+            },
+          };
+        }),
       })
-    }).eq("id", generationId);
+      .eq("id", generationId);
 
     const batchPromises = [];
     for (let t = batchStart; t < batchEnd; t++) {
@@ -1147,19 +1253,21 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
                 return { task, url: null };
               }
 
-              const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(path);
+              const {
+                data: { publicUrl },
+              } = supabase.storage.from("audio").getPublicUrl(path);
               return { task, url: publicUrl };
             }
 
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
-            
+
             if (attempt < 3) {
               const delay = result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 5000;
               await sleep(delay + Math.random() * 1000);
             }
           }
           return { task, url: null };
-        })()
+        })(),
       );
     }
 
@@ -1180,10 +1288,13 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
 
   // If we reached the end and still have 0 images, fail loudly (avoids "successful" runs with no visuals).
   if (!hasMore && newCompletedTotal === 0) {
-    await supabase.from("generations").update({
-      status: "error",
-      error_message: "Image generation failed for all images",
-    }).eq("id", generationId);
+    await supabase
+      .from("generations")
+      .update({
+        status: "error",
+        error_message: "Image generation failed for all images",
+      })
+      .eq("id", generationId);
 
     await supabase.from("projects").update({ status: "error" }).eq("id", projectId);
 
@@ -1192,38 +1303,44 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
 
   // Update cost tracking
   costTracking.imagesGenerated = newCompletedTotal;
-  costTracking.estimatedCostUsd = (costTracking.scriptTokens * PRICING.scriptPerToken) + 
-                                   (costTracking.audioSeconds * PRICING.audioPerSecond) + 
-                                   (newCompletedTotal * PRICING.imagePerImage);
+  costTracking.estimatedCostUsd =
+    costTracking.scriptTokens * PRICING.scriptPerToken +
+    costTracking.audioSeconds * PRICING.audioPerSecond +
+    newCompletedTotal * PRICING.imagePerImage;
 
   if (!hasMore) {
     phaseTimings.images = (phaseTimings.images || 0) + (Date.now() - phaseStart);
   }
 
-  const finalProgress = hasMore ? (40 + Math.floor((newCompletedTotal / totalImages) * 50)) : 90;
+  const finalProgress = hasMore ? 40 + Math.floor((newCompletedTotal / totalImages) * 50) : 90;
 
   // Update generation
-  await supabase.from("generations").update({
-    progress: finalProgress,
-    scenes: scenes.map((s, idx) => {
-      const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
-      return {
-        ...s,
-        imageUrl: imgs[0] || s.imageUrl || null,
-        imageUrls: imgs.length > 0 ? imgs : s.imageUrls,
-        _meta: {
-          ...s._meta,
-          statusMessage: hasMore ? `Images ${newCompletedTotal}/${totalImages}...` : "Images complete. Finalizing...",
-          totalImages,
-          completedImages: newCompletedTotal,
-          costTracking,
-          phaseTimings,
-        }
-      };
+  await supabase
+    .from("generations")
+    .update({
+      progress: finalProgress,
+      scenes: scenes.map((s, idx) => {
+        const imgs = sceneImageUrls[idx].filter(Boolean) as string[];
+        return {
+          ...s,
+          imageUrl: imgs[0] || s.imageUrl || null,
+          imageUrls: imgs.length > 0 ? imgs : s.imageUrls,
+          _meta: {
+            ...s._meta,
+            statusMessage: hasMore ? `Images ${newCompletedTotal}/${totalImages}...` : "Images complete. Finalizing...",
+            totalImages,
+            completedImages: newCompletedTotal,
+            costTracking,
+            phaseTimings,
+          },
+        };
+      }),
     })
-  }).eq("id", generationId);
+    .eq("id", generationId);
 
-  console.log(`Phase: IMAGES chunk complete - ${completedThisChunk} this chunk, ${newCompletedTotal}/${totalImages} total, hasMore: ${hasMore}`);
+  console.log(
+    `Phase: IMAGES chunk complete - ${completedThisChunk} this chunk, ${newCompletedTotal}/${totalImages} total, hasMore: ${hasMore}`,
+  );
 
   return new Response(
     JSON.stringify({
@@ -1237,7 +1354,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       costTracking,
       phaseTime: Date.now() - phaseStart,
     }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 }
 
@@ -1245,7 +1362,7 @@ async function handleFinalizePhase(
   supabase: any,
   user: any,
   generationId: string,
-  projectId: string
+  projectId: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -1260,11 +1377,17 @@ async function handleFinalizePhase(
 
   const scenes = generation.scenes as Scene[];
   const meta = scenes[0]?._meta || {};
-  const costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
+  const costTracking: CostTracking = meta.costTracking || {
+    scriptTokens: 0,
+    audioSeconds: 0,
+    imagesGenerated: 0,
+    estimatedCostUsd: 0,
+  };
   const phaseTimings = meta.phaseTimings || {};
   phaseTimings.finalize = Date.now() - phaseStart;
 
-  const totalTime = (phaseTimings.script || 0) + (phaseTimings.audio || 0) + (phaseTimings.images || 0) + phaseTimings.finalize;
+  const totalTime =
+    (phaseTimings.script || 0) + (phaseTimings.audio || 0) + (phaseTimings.images || 0) + phaseTimings.finalize;
 
   // Clean scenes (remove _meta from final output)
   const finalScenes = scenes.map((s: any) => {
@@ -1273,24 +1396,29 @@ async function handleFinalizePhase(
   });
 
   // Mark complete
-  await supabase.from("generations").update({
-    status: "complete",
-    progress: 100,
-    scenes: finalScenes.map((s: Scene, idx: number) => ({
-      ...s,
-      _meta: {
-        statusMessage: "Generation complete!",
-        costTracking,
-        phaseTimings,
-        totalTimeMs: totalTime,
-      }
-    })),
-    completed_at: new Date().toISOString(),
-  }).eq("id", generationId);
+  await supabase
+    .from("generations")
+    .update({
+      status: "complete",
+      progress: 100,
+      scenes: finalScenes.map((s: Scene, idx: number) => ({
+        ...s,
+        _meta: {
+          statusMessage: "Generation complete!",
+          costTracking,
+          phaseTimings,
+          totalTimeMs: totalTime,
+        },
+      })),
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", generationId);
 
   await supabase.from("projects").update({ status: "complete" }).eq("id", projectId);
 
-  console.log(`Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}`);
+  console.log(
+    `Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}`,
+  );
 
   return new Response(
     JSON.stringify({
@@ -1305,7 +1433,7 @@ async function handleFinalizePhase(
       phaseTimings,
       totalTimeMs: totalTime,
     }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 }
 
@@ -1322,19 +1450,21 @@ serve(async (req) => {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "No authorization header" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
     const token = authHeader.replace("Bearer ", "");
     const { data, error: claimsError } = await supabase.auth.getClaims(token);
 
     if (claimsError || !data?.claims) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -1344,7 +1474,8 @@ serve(async (req) => {
     const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
     if (!REPLICATE_API_KEY) {
       return new Response(JSON.stringify({ error: "Replicate not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -1370,7 +1501,8 @@ serve(async (req) => {
     if (!phase || phase === "script") {
       if (!content || !format || !length || !style) {
         return new Response(JSON.stringify({ error: "Missing required fields for script phase" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       return await handleScriptPhase(supabase, user, content, format, length, style, customStyle);
@@ -1378,7 +1510,8 @@ serve(async (req) => {
 
     if (!generationId || !projectId) {
       return new Response(JSON.stringify({ error: "Missing generationId/projectId for continuation" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -1391,22 +1524,30 @@ serve(async (req) => {
           projectId,
           REPLICATE_API_KEY,
           GOOGLE_TTS_API_KEY,
-          audioStartIndex || 0
+          audioStartIndex || 0,
         );
       case "images":
-        return await handleImagesPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY, imageStartIndex || 0);
+        return await handleImagesPhase(
+          supabase,
+          user,
+          generationId,
+          projectId,
+          REPLICATE_API_KEY,
+          imageStartIndex || 0,
+        );
       case "finalize":
         return await handleFinalizePhase(supabase, user, generationId, projectId);
       default:
         return new Response(JSON.stringify({ error: `Unknown phase: ${phase}` }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     }
   } catch (error) {
     console.error("Generation error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
