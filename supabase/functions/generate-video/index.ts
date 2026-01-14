@@ -410,10 +410,10 @@ async function generateSceneAudioReplicate(
           version: "resemble-ai/chatterbox-pro",
           input: {
             prompt: scene.voiceover,
-            voice: "Ember",
-            pitch: "medium",
+            voice: "Aurora",
+            pitch: "high",
             temperature: 1,
-            exaggeration: 1,
+            exaggeration: 0.8,
           },
         }),
       });
@@ -1008,6 +1008,12 @@ Maintain visual continuity with previous images in this scene.`
 
       return `Generate an EDITORIAL ILLUSTRATION in EXACTLY ${orientationDesc}.
 
+=== CRITICAL: NO TEXT OR SYMBOLS ===
+DO NOT include ANY text, letters, numbers, words, labels, captions, titles, or written symbols in the image.
+DO NOT render any typography, handwriting, signs, logos, or alphanumeric characters.
+The image must be PURELY VISUAL with NO readable text elements whatsoever.
+If the prompt mentions text placement, IGNORE IT - create only visual/pictorial elements.
+
 === TECHNICAL REQUIREMENTS ===
 - Format: ${format.toUpperCase()}
 - Dimensions: ${dimensions.width}x${dimensions.height} pixels
@@ -1019,15 +1025,15 @@ ${editorialRules}
 ${visualPrompt}
 
 === STYLE ===
-${styleDescription} style editorial illustration. Professional, cohesive aesthetic.
-${textOverlayInstructions}${subVisualNote}
+${styleDescription} style editorial illustration. Professional, cohesive aesthetic. NO TEXT OR WRITING.
+${subVisualNote}
 
 === COMPOSITION REMINDER ===
 The visual structure must SEMANTICALLY MATCH the concept:
 - If it's a comparison → use SPLIT composition
 - If it's progression → use ASCENDING layout
 - If it's a formula → use EQUATION layout with visual operators
-Create DYNAMIC composition with clear focal hierarchy. Reserve negative space for text.`
+Create DYNAMIC composition with clear focal hierarchy. ABSOLUTELY NO TEXT, LETTERS, NUMBERS, OR SYMBOLS.`
     };
 
     // Collect all image prompts (including sub-visuals for longer scenes)
