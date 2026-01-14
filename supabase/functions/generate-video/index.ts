@@ -492,34 +492,47 @@ async function generateSceneAudio(
   projectId: string
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
-  
-  // Check if content is Haitian Creole - use Gemini TTS exclusively (NO FALLBACK)
+
+  // Haitian Creole: prefer Gemini TTS, but fall back to Replicate if Gemini refuses (finishReason: OTHER)
   if (googleApiKey && isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini 2.5 Flash TTS (exclusive)`);
-    
-    // Retry Gemini TTS up to 5 times for Haitian Creole - NO fallback
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, trying Gemini 2.5 Flash TTS first`);
+
     const MAX_RETRIES = 5;
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       if (retry > 0) {
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_RETRIES}`);
-        await sleep(2000 * retry); // Exponential backoff
+        await sleep(2000 * retry);
       }
-      
-      const geminiResult = await generateSceneAudioGemini(scene, sceneIndex, googleApiKey, supabase, userId, projectId, retry);
-      
-      if (geminiResult.url) {
-        return geminiResult;
-      }
-      
+
+      const geminiResult = await generateSceneAudioGemini(
+        scene,
+        sceneIndex,
+        googleApiKey,
+        supabase,
+        userId,
+        projectId,
+        retry
+      );
+
+      if (geminiResult.url) return geminiResult;
+
       console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
     }
-    
-    // All retries exhausted - return error, NO fallback
-    console.error(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts, no fallback`);
-    return { url: null, error: `Gemini TTS failed after ${MAX_RETRIES} retries for Haitian Creole` };
+
+    console.warn(
+      `[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts; falling back to Replicate Chatterbox`
+    );
+
+    const replicateFallback = await generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
+    if (replicateFallback.url) return replicateFallback;
+
+    return {
+      url: null,
+      error: `Gemini TTS failed (${MAX_RETRIES} retries) and Replicate fallback failed: ${replicateFallback.error || "unknown error"}`,
+    };
   }
-  
-  // Default to Replicate Chatterbox for other languages (English, etc.)
+
+  // Default: Replicate Chatterbox
   return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
 }
 
@@ -835,9 +848,10 @@ async function handleAudioPhase(
   generationId: string,
   projectId: string,
   replicateApiKey: string,
-  googleApiKey?: string
+  googleApiKey?: string,
+  startIndex: number = 0
 ): Promise<Response> {
-  const phaseStart = Date.now();
+  const requestStart = Date.now();
 
   // Fetch generation
   const { data: generation, error: genFetchError } = await supabase
@@ -853,84 +867,137 @@ async function handleAudioPhase(
 
   const scenes = generation.scenes as Scene[];
   const meta = scenes[0]?._meta || {};
-  let costTracking: CostTracking = meta.costTracking || { scriptTokens: 0, audioSeconds: 0, imagesGenerated: 0, estimatedCostUsd: 0 };
+  let costTracking: CostTracking = meta.costTracking || {
+    scriptTokens: 0,
+    audioSeconds: 0,
+    imagesGenerated: 0,
+    estimatedCostUsd: 0,
+  };
   const phaseTimings = meta.phaseTimings || {};
 
-  console.log(`Phase: AUDIO - Processing ${scenes.length} scenes...`);
+  // Keep any audio already generated (chunked calls)
+  const audioUrls: (string | null)[] = scenes.map((s) => (s as any).audioUrl ?? null);
+  let totalAudioSeconds = typeof costTracking.audioSeconds === "number" ? costTracking.audioSeconds : 0;
 
-  const audioUrls: (string | null)[] = new Array(scenes.length).fill(null);
-  let totalAudioSeconds = 0;
-
-  // Process audio in batches of 2
   const BATCH_SIZE = 2;
-  for (let batchStart = 0; batchStart < scenes.length; batchStart += BATCH_SIZE) {
-    const batchEnd = Math.min(batchStart + BATCH_SIZE, scenes.length);
-    
-    const statusMsg = `Generating voiceover... (scenes ${batchStart + 1}-${batchEnd} of ${scenes.length})`;
-    const progress = 10 + Math.floor((batchStart / scenes.length) * 30);
-    
-    // Update progress
-    await supabase.from("generations").update({
+  const batchStart = Math.max(0, startIndex);
+  const batchEnd = Math.min(batchStart + BATCH_SIZE, scenes.length);
+
+  const statusMsg = `Generating voiceover... (scenes ${batchStart + 1}-${batchEnd} of ${scenes.length})`;
+  const progress = Math.min(39, 10 + Math.floor((batchEnd / scenes.length) * 30));
+
+  console.log(`Phase: AUDIO - Chunk ${batchStart}-${batchEnd - 1} of ${scenes.length}`);
+
+  // Update progress before doing work
+  await supabase
+    .from("generations")
+    .update({
       progress,
       scenes: scenes.map((s, idx) => ({
         ...s,
         audioUrl: audioUrls[idx],
-        _meta: { ...s._meta, statusMessage: statusMsg }
+        _meta: { ...s._meta, statusMessage: statusMsg },
+      })),
+    })
+    .eq("id", generationId);
+
+  const batchPromises: Promise<{ index: number; result: { url: string | null; durationSeconds?: number } }>[] = [];
+
+  for (let i = batchStart; i < batchEnd; i++) {
+    // Skip scenes that already have audio
+    if (audioUrls[i]) continue;
+
+    batchPromises.push(
+      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId).then((result) => ({
+        index: i,
+        result,
       }))
-    }).eq("id", generationId);
+    );
+  }
 
-    const batchPromises = [];
-    for (let i = batchStart; i < batchEnd; i++) {
-      batchPromises.push(
-        generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId)
-          .then((result) => ({ index: i, result }))
-      );
+  const results = await Promise.all(batchPromises);
+  for (const { index, result } of results) {
+    audioUrls[index] = result.url;
+    if (result.durationSeconds) {
+      totalAudioSeconds += result.durationSeconds;
+      // Update scene duration with actual audio length + small buffer
+      scenes[index].duration = Math.ceil(result.durationSeconds + 0.5);
     }
-
-    const results = await Promise.all(batchPromises);
-    for (const { index, result } of results) {
-      audioUrls[index] = result.url;
-      if (result.durationSeconds) {
-        totalAudioSeconds += result.durationSeconds;
-        // Update scene duration with actual audio length + small buffer
-        scenes[index].duration = Math.ceil(result.durationSeconds + 0.5);
-      }
-    }
-
-    if (batchEnd < scenes.length) await sleep(2000);
   }
 
   const successfulAudio = audioUrls.filter(Boolean).length;
+  const hasMore = batchEnd < scenes.length;
+
+  // Track cumulative phase time across chunked calls
+  const requestTimeMs = Date.now() - requestStart;
+  phaseTimings.audio = (typeof phaseTimings.audio === "number" ? phaseTimings.audio : 0) + requestTimeMs;
+
+  costTracking.audioSeconds = totalAudioSeconds;
+  costTracking.estimatedCostUsd =
+    (typeof costTracking.estimatedCostUsd === "number" ? costTracking.estimatedCostUsd : 0) +
+    (totalAudioSeconds - (meta.costTracking?.audioSeconds || 0)) * PRICING.audioPerSecond;
+
+  if (hasMore) {
+    await supabase
+      .from("generations")
+      .update({
+        progress,
+        scenes: scenes.map((s, idx) => ({
+          ...s,
+          audioUrl: audioUrls[idx],
+          _meta: { ...s._meta, statusMessage: statusMsg, costTracking, phaseTimings },
+        })),
+      })
+      .eq("id", generationId);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        phase: "audio",
+        progress,
+        hasMore: true,
+        nextStartIndex: batchEnd,
+        audioGenerated: successfulAudio,
+        audioSeconds: totalAudioSeconds,
+        costTracking,
+        phaseTime: phaseTimings.audio,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Final chunk: validate + finalize audio phase
   if (successfulAudio === 0) {
     throw new Error("Audio generation failed for all scenes");
   }
 
-  costTracking.audioSeconds = totalAudioSeconds;
-  costTracking.estimatedCostUsd += totalAudioSeconds * PRICING.audioPerSecond;
-  phaseTimings.audio = Date.now() - phaseStart;
+  await supabase
+    .from("generations")
+    .update({
+      progress: 40,
+      scenes: scenes.map((s, idx) => ({
+        ...s,
+        audioUrl: audioUrls[idx],
+        _meta: {
+          ...s._meta,
+          statusMessage: "Audio complete. Ready for image generation.",
+          costTracking,
+          phaseTimings,
+        },
+      })),
+    })
+    .eq("id", generationId);
 
-  // Update generation with audio URLs
-  await supabase.from("generations").update({
-    progress: 40,
-    scenes: scenes.map((s, idx) => ({
-      ...s,
-      audioUrl: audioUrls[idx],
-      _meta: {
-        ...s._meta,
-        statusMessage: "Audio complete. Ready for image generation.",
-        costTracking,
-        phaseTimings,
-      }
-    }))
-  }).eq("id", generationId);
-
-  console.log(`Phase: AUDIO complete in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`);
+  console.log(
+    `Phase: AUDIO complete (chunked) in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`
+  );
 
   return new Response(
     JSON.stringify({
       success: true,
       phase: "audio",
       progress: 40,
+      hasMore: false,
       audioGenerated: successfulAudio,
       audioSeconds: totalAudioSeconds,
       costTracking,
@@ -1287,11 +1354,21 @@ serve(async (req) => {
       });
     }
 
-    // Optional: Google API key for Haitian Creole TTS
     const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
 
-    const body: GenerationRequest & { imageStartIndex?: number } = await req.json();
-    const { phase, generationId, projectId, content, format, length, style, customStyle, imageStartIndex } = body;
+    const body: GenerationRequest & { imageStartIndex?: number; audioStartIndex?: number } = await req.json();
+    const {
+      phase,
+      generationId,
+      projectId,
+      content,
+      format,
+      length,
+      style,
+      customStyle,
+      imageStartIndex,
+      audioStartIndex,
+    } = body;
 
     console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}`);
 
@@ -1313,7 +1390,15 @@ serve(async (req) => {
 
     switch (phase) {
       case "audio":
-        return await handleAudioPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY, GOOGLE_TTS_API_KEY);
+        return await handleAudioPhase(
+          supabase,
+          user,
+          generationId,
+          projectId,
+          REPLICATE_API_KEY,
+          GOOGLE_TTS_API_KEY,
+          audioStartIndex || 0
+        );
       case "images":
         return await handleImagesPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY, imageStartIndex || 0);
       case "finalize":
