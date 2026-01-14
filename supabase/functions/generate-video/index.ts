@@ -504,16 +504,14 @@ async function generateSceneAudioReplicate(
             }
           }
           
-          // Copy to new ArrayBuffer to ensure proper types
-          const pcmBuffer = rawAudioBytes.buffer.slice(dataStart);
-          const rawPcm = new Uint8Array(pcmBuffer);
+          // Extract PCM data correctly using slice on Uint8Array (not buffer.slice)
+          const rawPcm = rawAudioBytes.slice(dataStart);
           // Chatterbox outputs 44.1kHz audio
           const trimmedPcm = trimPcmSilence(rawPcm, 44100, { threshold: 500, bufferMs: 80 });
           console.log(`[TTS] Scene ${sceneIndex + 1} trimmed to ${trimmedPcm.length} bytes (removed ${rawPcm.length - trimmedPcm.length} bytes of silence)`);
           
-          // Re-wrap as WAV - copy result to ensure type consistency
-          const wavResult = pcmToWav(trimmedPcm, 44100, 1, 16);
-          audioBytes = new Uint8Array(wavResult);
+          // Re-wrap as WAV
+          audioBytes = pcmToWav(trimmedPcm, 44100, 1, 16);
         }
       }
       
