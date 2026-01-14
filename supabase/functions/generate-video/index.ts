@@ -308,14 +308,23 @@ function sanitizeForGeminiTTS(text: string): string {
   return sanitized;
 }
 
-// ============= GEMINI TTS FOR HAITIAN CREOLE =============
-async function generateSceneAudioGemini(
+// ============= GEMINI TTS MODELS (with fallback chain) =============
+// Model priority: Flash Preview TTS -> Pro Preview TTS -> Flash TTS
+const GEMINI_TTS_MODELS = [
+  { name: "gemini-2.5-flash-preview-tts", label: "Flash Preview TTS" },
+  { name: "gemini-2.5-pro-preview-tts", label: "Pro Preview TTS" },
+  { name: "gemini-2.5-flash-tts", label: "Flash TTS" },
+];
+
+async function generateSceneAudioGeminiWithModel(
   scene: Scene,
   sceneIndex: number,
   googleApiKey: string,
   supabase: any,
   userId: string,
   projectId: string,
+  modelName: string,
+  modelLabel: string,
   retryAttempt: number = 0,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
@@ -332,13 +341,11 @@ async function generateSceneAudioGemini(
   }
 
   try {
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Using Gemini 2.5 Flash TTS for Haitian Creole`);
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Using ${modelLabel} for Haitian Creole`);
     console.log(`[TTS-Gemini] Text length: ${voiceoverText.length} chars, retry: ${retryAttempt}`);
 
-    // Use Gemini 2.5 Flash TTS model (dedicated TTS model)
-    // Voice: Kore (Female) - natural, conversational, and enthusiastic
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${googleApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${googleApiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -368,62 +375,63 @@ async function generateSceneAudioGemini(
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[TTS-Gemini] API error response:`, errText);
-      throw new Error(`Gemini TTS failed: ${response.status} - ${errText}`);
+      console.error(`[TTS-Gemini] ${modelLabel} API error response:`, errText);
+      throw new Error(`${modelLabel} failed: ${response.status} - ${errText}`);
     }
 
     const data = await response.json();
-    console.log(`[TTS-Gemini] Response structure:`, JSON.stringify(Object.keys(data)));
+    console.log(`[TTS-Gemini] ${modelLabel} response structure:`, JSON.stringify(Object.keys(data)));
 
     // Check for candidates
     if (!data.candidates || data.candidates.length === 0) {
-      console.error(`[TTS-Gemini] No candidates in response:`, JSON.stringify(data));
-      throw new Error("No candidates in Gemini response");
+      console.error(`[TTS-Gemini] ${modelLabel} no candidates in response:`, JSON.stringify(data));
+      throw new Error(`No candidates in ${modelLabel} response`);
     }
 
     const candidate = data.candidates[0];
+    
+    // Check for finishReason: OTHER which indicates content filtering
+    if (candidate.finishReason === "OTHER") {
+      console.warn(`[TTS-Gemini] ${modelLabel} returned finishReason: OTHER (content filter)`);
+      throw new Error(`${modelLabel} content filter triggered (finishReason: OTHER)`);
+    }
+    
     const content = candidate?.content;
     const parts = content?.parts;
 
     if (!parts || parts.length === 0) {
-      console.error(`[TTS-Gemini] No parts in candidate:`, JSON.stringify(candidate));
-      throw new Error("No parts in Gemini response");
+      console.error(`[TTS-Gemini] ${modelLabel} no parts in candidate:`, JSON.stringify(candidate));
+      throw new Error(`No parts in ${modelLabel} response`);
     }
 
     const inlineData = parts[0]?.inlineData;
     if (!inlineData || !inlineData.data) {
-      console.error(`[TTS-Gemini] No inlineData:`, JSON.stringify(parts[0]));
-      throw new Error("No audio data in Gemini response");
+      console.error(`[TTS-Gemini] ${modelLabel} no inlineData:`, JSON.stringify(parts[0]));
+      throw new Error(`No audio data in ${modelLabel} response`);
     }
 
     const audioData = inlineData.data;
     const mimeType = inlineData.mimeType || "audio/L16";
-    console.log(`[TTS-Gemini] Got audio data, mimeType: ${mimeType}, base64 length: ${audioData.length}`);
+    console.log(`[TTS-Gemini] ${modelLabel} got audio data, mimeType: ${mimeType}, base64 length: ${audioData.length}`);
 
     // Decode base64 audio (raw PCM data)
     let pcmBytes = base64Decode(audioData);
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} raw PCM bytes: ${pcmBytes.length}`);
 
     // Trim trailing silence from PCM (16-bit samples, little-endian)
-    // Find the last sample above a low threshold to avoid long dead air
-    const SILENCE_THRESHOLD = 300; // Low amplitude threshold (out of 32768)
-    const SAMPLES_PER_CHECK = 480; // Check every 20ms at 24kHz
+    const SILENCE_THRESHOLD = 300;
     let trimEnd = pcmBytes.length;
 
-    // Start from end and find where audio actually ends
     for (let i = pcmBytes.length - 2; i >= 0; i -= 2) {
       const sample = Math.abs(((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16) >> 16);
       if (sample > SILENCE_THRESHOLD) {
-        // Found audio content, add a small buffer (0.3s = 14400 bytes at 24kHz 16-bit)
         trimEnd = Math.min(pcmBytes.length, i + 14400);
         break;
       }
     }
 
     if (trimEnd < pcmBytes.length) {
-      console.log(
-        `[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`,
-      );
+      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`);
       pcmBytes = pcmBytes.slice(0, trimEnd);
     }
 
@@ -431,7 +439,7 @@ async function generateSceneAudioGemini(
     const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} WAV bytes: ${wavBytes.length}`);
 
-    // Calculate accurate duration (24kHz, 16-bit mono = 48000 bytes per second)
+    // Calculate accurate duration
     const durationSeconds = Math.max(1, pcmBytes.length / (24000 * 2));
 
     const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
@@ -444,13 +452,51 @@ async function generateSceneAudioGemini(
     const {
       data: { publicUrl },
     } = supabase.storage.from("audio").getPublicUrl(audioPath);
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} audio uploaded OK`);
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} audio uploaded OK using ${modelLabel}`);
     return { url: publicUrl, durationSeconds };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown Gemini TTS error";
-    console.error(`[TTS-Gemini] Scene ${sceneIndex + 1} error:`, errorMsg);
+    console.error(`[TTS-Gemini] Scene ${sceneIndex + 1} ${modelLabel} error:`, errorMsg);
     return { url: null, error: errorMsg };
   }
+}
+
+// Main Gemini TTS function with model fallback chain
+async function generateSceneAudioGemini(
+  scene: Scene,
+  sceneIndex: number,
+  googleApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  retryAttempt: number = 0,
+): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
+  // Try each Gemini TTS model in order
+  for (const model of GEMINI_TTS_MODELS) {
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Trying ${model.label}...`);
+    
+    const result = await generateSceneAudioGeminiWithModel(
+      scene,
+      sceneIndex,
+      googleApiKey,
+      supabase,
+      userId,
+      projectId,
+      model.name,
+      model.label,
+      retryAttempt,
+    );
+    
+    if (result.url) {
+      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - SUCCESS with ${model.label}`);
+      return result;
+    }
+    
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - ${model.label} failed: ${result.error}, trying next model...`);
+  }
+  
+  // All models failed
+  return { url: null, error: "All Gemini TTS models failed" };
 }
 
 // ============= TTS GENERATION (Replicate Chatterbox) =============
