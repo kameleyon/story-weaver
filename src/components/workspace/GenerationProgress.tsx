@@ -1,14 +1,12 @@
 import { motion } from "framer-motion";
-import { Loader2, Sparkles, Clock, DollarSign, Hash } from "lucide-react";
+import { Loader2, Sparkles, Clock, DollarSign } from "lucide-react";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
   state: GenerationState;
-  totalGenerations?: number;
-  totalApiCost?: number;
 }
 
-export function GenerationProgress({ state, totalGenerations, totalApiCost }: GenerationProgressProps) {
+export function GenerationProgress({ state }: GenerationProgressProps) {
   // Build verbose status message based on current step and progress
   const getStatusMessage = (): string => {
     // If we have a custom status message from the backend, use it
@@ -214,38 +212,6 @@ export function GenerationProgress({ state, totalGenerations, totalApiCost }: Ge
         </div>
       )}
 
-      {/* Total Generations & Cumulative Cost (always show if data is available) */}
-      {(totalGenerations !== undefined || totalApiCost !== undefined) && (
-        <div className="space-y-3 pt-2 border-t border-border/30">
-          <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-            All-Time Stats
-          </h4>
-          <div className="grid grid-cols-2 gap-3">
-            {totalGenerations !== undefined && (
-              <div className="flex items-center gap-2 rounded-lg bg-muted/10 px-3 py-2">
-                <Hash className="h-4 w-4 text-purple-500" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {totalGenerations}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total Generations</p>
-                </div>
-              </div>
-            )}
-            {totalApiCost !== undefined && (
-              <div className="flex items-center gap-2 rounded-lg bg-muted/10 px-3 py-2">
-                <DollarSign className="h-4 w-4 text-amber-500" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {formatCost(totalApiCost)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total API Cost</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 }
