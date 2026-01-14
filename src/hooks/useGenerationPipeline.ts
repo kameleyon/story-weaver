@@ -39,6 +39,7 @@ export interface GenerationState {
   scenes?: Scene[];
   format?: "landscape" | "portrait" | "square";
   error?: string;
+  statusMessage?: string; // Verbose status from backend
 }
 
 interface GenerationParams {
@@ -84,6 +85,7 @@ export function useGenerationPipeline() {
     totalImages: 6,
     completedImages: 0,
     isGenerating: false,
+    statusMessage: undefined,
   });
 
   const inferStepFromDb = (dbStatus: string | null | undefined, dbProgress: number): GenerationStep => {
@@ -101,8 +103,8 @@ export function useGenerationPipeline() {
     return Math.max(1, Math.min(sceneCount, Math.round(p * sceneCount)));
   };
 
-  // Extract image progress metadata from scenes if available
-  const extractImageMeta = (scenes: any[]): { totalImages: number; completedImages: number } => {
+  // Extract image progress metadata and status message from scenes if available
+  const extractImageMeta = (scenes: any[]): { totalImages: number; completedImages: number; statusMessage?: string } => {
     if (!Array.isArray(scenes) || scenes.length === 0) {
       return { totalImages: 0, completedImages: 0 };
     }
@@ -112,6 +114,7 @@ export function useGenerationPipeline() {
       return {
         totalImages: meta.totalImages,
         completedImages: typeof meta.completedImages === "number" ? meta.completedImages : 0,
+        statusMessage: typeof meta.statusMessage === "string" ? meta.statusMessage : undefined,
       };
     }
     return { totalImages: scenes.length, completedImages: 0 };
@@ -210,6 +213,7 @@ export function useGenerationPipeline() {
               title: project?.title ?? prev.title,
               scenes,
               format,
+              statusMessage: imageMeta.statusMessage,
             };
           });
         }
@@ -491,6 +495,7 @@ export function useGenerationPipeline() {
           title: project.title,
           scenes,
           format: project.format as "landscape" | "portrait" | "square",
+          statusMessage: imageMeta.statusMessage,
         });
       } else {
         // No generation yet — show input UI.
