@@ -1265,20 +1265,15 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
-    const { data, error: claimsError } = await supabase.auth.getClaims(token);
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
-    if (claimsError || !data?.claims) {
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-
-    // Extract user info from claims
-    const user = { id: data.claims.sub, email: data.claims.email };
 
     const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
     if (!REPLICATE_API_KEY) {
