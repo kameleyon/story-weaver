@@ -214,34 +214,47 @@ async function generateImageWithReplicate(
   prompt: string,
   replicateApiKey: string,
   format: string
-): Promise<{ ok: true; imageBase64: string } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }> {
+): Promise<
+  | { ok: true; bytes: Uint8Array }
+  | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
+> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
+
   try {
-    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${replicateApiKey}`,
-        "Content-Type": "application/json",
-        "Prefer": "wait"
-      },
-      body: JSON.stringify({
-        version: "2a437fef147c7eaa46e8e21d9be81c62a6c0f52490ad5753520254bc81ea041b",
-        input: {
-          prompt,
-          size: "4K",
-          aspect_ratio: aspectRatio,
-          guidance_scale: 3.5,
-          num_inference_steps: 30,
-          seed: Math.floor(Math.random() * 1000000)
-        }
-      })
-    });
+    // Use the OFFICIAL model endpoint (no version hash).
+    // Docs: https://replicate.com/bytedance/seedream-4.5/api
+    const createResponse = await fetch(
+      "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${replicateApiKey}`,
+          "Content-Type": "application/json",
+          "Prefer": "wait",
+        },
+        body: JSON.stringify({
+          input: {
+            prompt,
+            size: "4K",
+            aspect_ratio: aspectRatio,
+            // keep output deterministic (one image) and avoid surprise multi-image runs
+            sequential_image_generation: "disabled",
+            max_images: 1,
+          },
+        }),
+      }
+    );
 
     if (!createResponse.ok) {
       const status = createResponse.status;
       const retryAfter = createResponse.headers.get("retry-after");
-      return { ok: false, error: `API error ${status}`, status, retryAfterSeconds: retryAfter ? parseInt(retryAfter) : undefined };
+      const errText = await createResponse.text().catch(() => "");
+      return {
+        ok: false,
+        error: `Replicate image create failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        status,
+        retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
+      };
     }
 
     let prediction = await createResponse.json();
@@ -249,7 +262,7 @@ async function generateImageWithReplicate(
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await sleep(2000);
       const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { "Authorization": `Bearer ${replicateApiKey}` }
+        headers: { "Authorization": `Bearer ${replicateApiKey}` },
       });
       prediction = await pollResponse.json();
     }
@@ -258,21 +271,26 @@ async function generateImageWithReplicate(
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
-    const imageUrl = prediction.output?.[0] || prediction.output;
+    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    const imageUrl =
+      typeof first === "string"
+        ? first
+        : first && typeof first === "object" && typeof first.url === "string"
+          ? first.url
+          : null;
+
     if (!imageUrl) return { ok: false, error: "No image URL returned" };
 
-    // Download image
     const imgResponse = await fetch(imageUrl);
     if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
 
-    const imgBytes = new Uint8Array(await imgResponse.arrayBuffer());
-    const base64 = btoa(String.fromCharCode(...imgBytes));
-    
-    return { ok: true, imageBase64: base64 };
+    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+    return { ok: true, bytes };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
+
 
 // ============= PHASE HANDLERS =============
 
@@ -717,16 +735,23 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
           for (let attempt = 1; attempt <= 3; attempt++) {
             const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
             if (result.ok) {
-              // Upload to storage
-              const imgBytes = new Uint8Array(atob(result.imageBase64).split("").map(c => c.charCodeAt(0)));
               const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
               const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
-              
-              await supabase.storage.from("audio").upload(path, imgBytes, { contentType: "image/png", upsert: true });
+
+              const { error: uploadError } = await supabase.storage
+                .from("audio")
+                .upload(path, result.bytes, { contentType: "image/png", upsert: true });
+
+              if (uploadError) {
+                console.error(`[IMG] Upload failed for ${path}: ${uploadError.message}`);
+                return { task, url: null };
+              }
+
               const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(path);
-              
               return { task, url: publicUrl };
             }
+
+            console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
             
             if (attempt < 3) {
               const delay = result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 5000;
@@ -752,13 +777,25 @@ COMPOSITION: Dynamic, clear hierarchy. Professional editorial illustration.`;
 
   const newCompletedTotal = completedImagesSoFar + completedThisChunk;
   const hasMore = endIndex < totalImages;
-  
+
+  // If we reached the end and still have 0 images, fail loudly (avoids "successful" runs with no visuals).
+  if (!hasMore && newCompletedTotal === 0) {
+    await supabase.from("generations").update({
+      status: "error",
+      error_message: "Image generation failed for all images",
+    }).eq("id", generationId);
+
+    await supabase.from("projects").update({ status: "error" }).eq("id", projectId);
+
+    throw new Error("Image generation failed for all images");
+  }
+
   // Update cost tracking
   costTracking.imagesGenerated = newCompletedTotal;
   costTracking.estimatedCostUsd = (costTracking.scriptTokens * PRICING.scriptPerToken) + 
                                    (costTracking.audioSeconds * PRICING.audioPerSecond) + 
                                    (newCompletedTotal * PRICING.imagePerImage);
-  
+
   if (!hasMore) {
     phaseTimings.images = (phaseTimings.images || 0) + (Date.now() - phaseStart);
   }
