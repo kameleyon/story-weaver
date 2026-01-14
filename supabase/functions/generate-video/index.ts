@@ -288,7 +288,7 @@ async function generateSceneAudioGemini(
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: "Kore"
+                  voiceName: "Sadachbia"
                 }
               }
             }
