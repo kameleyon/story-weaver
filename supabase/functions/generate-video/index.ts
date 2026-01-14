@@ -111,7 +111,113 @@ function sanitizeVoiceover(input: unknown): string {
   return out.replace(/\s{2,}/g, " ").trim();
 }
 
-// ============= TTS GENERATION =============
+// ============= LANGUAGE DETECTION =============
+function isHaitianCreole(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  
+  // Common Haitian Creole words and patterns
+  const creoleIndicators = [
+    // Common words
+    "mwen", "ou", "li", "nou", "yo", "sa", "ki", "nan", "pou", "ak",
+    "pa", "se", "te", "ap", "gen", "fè", "di", "ale", "vin", "bay",
+    "konnen", "wè", "pran", "mete", "vle", "kapab", "dwe", "bezwen",
+    "tankou", "paske", "men", "lè", "si", "kote", "kouman", "poukisa",
+    "anpil", "tout", "chak", "yon", "de", "twa", "kat", "senk",
+    // Haitian specific
+    "ayiti", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
+    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "apre",
+    // Verb markers
+    "t ap", "te", "pral", "ta"
+  ];
+  
+  let matchCount = 0;
+  for (const indicator of creoleIndicators) {
+    const regex = new RegExp(`\\b${indicator}\\b`, "gi");
+    if (regex.test(lowerText)) matchCount++;
+  }
+  
+  // If 3+ Creole indicators found, likely Haitian Creole
+  return matchCount >= 3;
+}
+
+// ============= GEMINI TTS FOR HAITIAN CREOLE =============
+async function generateSceneAudioGemini(
+  scene: Scene,
+  sceneIndex: number,
+  googleApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string
+): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
+  
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  try {
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Using Gemini 2.5 Pro TTS for Haitian Creole`);
+    
+    // Use Gemini 2.5 Pro with TTS capability
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${googleApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: voiceoverText }]
+          }],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: "Aoede"  // Natural sounding voice
+                }
+              }
+            }
+          }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini TTS failed: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    const audioData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    
+    if (!audioData) {
+      throw new Error("No audio data in Gemini response");
+    }
+
+    // Decode base64 audio
+    const audioBytes = base64Decode(audioData);
+    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} audio OK - ${audioBytes.length} bytes`);
+
+    // Estimate duration (24kHz, 16-bit mono for Gemini TTS)
+    const durationSeconds = Math.max(1, audioBytes.length / (24000 * 2));
+
+    const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+    const { error: uploadError } = await supabase.storage
+      .from("audio")
+      .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+    const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(audioPath);
+    return { url: publicUrl, durationSeconds };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown Gemini TTS error";
+    console.error(`[TTS-Gemini] Scene ${sceneIndex + 1} error:`, errorMsg);
+    return { url: null, error: errorMsg };
+  }
+}
+
+// ============= TTS GENERATION (Replicate Chatterbox) =============
 async function generateSceneAudioReplicate(
   scene: Scene,
   sceneIndex: number,
@@ -210,6 +316,28 @@ async function generateSceneAudioReplicate(
   }
 
   return { url: finalAudioUrl, error: lastError || undefined, durationSeconds };
+}
+
+// ============= UNIFIED TTS HANDLER =============
+async function generateSceneAudio(
+  scene: Scene,
+  sceneIndex: number,
+  replicateApiKey: string,
+  googleApiKey: string | undefined,
+  supabase: any,
+  userId: string,
+  projectId: string
+): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
+  
+  // Check if content is Haitian Creole and Google API key is available
+  if (googleApiKey && isHaitianCreole(voiceoverText)) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS`);
+    return generateSceneAudioGemini(scene, sceneIndex, googleApiKey, supabase, userId, projectId);
+  }
+  
+  // Default to Replicate Chatterbox for other languages
+  return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
 }
 
 // ============= IMAGE GENERATION =============
@@ -505,7 +633,8 @@ async function handleAudioPhase(
   user: any,
   generationId: string,
   projectId: string,
-  replicateApiKey: string
+  replicateApiKey: string,
+  googleApiKey?: string
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -552,7 +681,7 @@ async function handleAudioPhase(
     const batchPromises = [];
     for (let i = batchStart; i < batchEnd; i++) {
       batchPromises.push(
-        generateSceneAudioReplicate(scenes[i], i, replicateApiKey, supabase, user.id, projectId)
+        generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId)
           .then((result) => ({ index: i, result }))
       );
     }
@@ -948,6 +1077,9 @@ serve(async (req) => {
       });
     }
 
+    // Optional: Google API key for Haitian Creole TTS
+    const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
+
     const body: GenerationRequest & { imageStartIndex?: number } = await req.json();
     const { phase, generationId, projectId, content, format, length, style, customStyle, imageStartIndex } = body;
 
@@ -971,7 +1103,7 @@ serve(async (req) => {
 
     switch (phase) {
       case "audio":
-        return await handleAudioPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY);
+        return await handleAudioPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY, GOOGLE_TTS_API_KEY);
       case "images":
         return await handleImagesPhase(supabase, user, generationId, projectId, REPLICATE_API_KEY, imageStartIndex || 0);
       case "finalize":
