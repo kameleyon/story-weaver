@@ -124,14 +124,6 @@ export function SceneEditModal({
                       </div>
                     )}
                   </div>
-
-                  {/* Visual Prompt (read-only for reference) */}
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">Visual Prompt (reference)</Label>
-                    <p className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg line-clamp-4">
-                      {scene.visualPrompt}
-                    </p>
-                  </div>
                 </div>
 
                 {/* Right Column - Edit Options */}
@@ -223,6 +215,14 @@ export function SceneEditModal({
                         </>
                       )}
                     </Button>
+                  </div>
+
+                  {/* Visual Prompt (read-only for reference) */}
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Visual Prompt (reference)</Label>
+                    <p className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg line-clamp-4">
+                      {scene.visualPrompt}
+                    </p>
                   </div>
                 </div>
               </div>
