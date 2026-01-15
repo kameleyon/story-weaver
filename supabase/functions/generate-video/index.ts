@@ -1406,12 +1406,16 @@ Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
       }
     }
 
-    // Add brand mark signature if provided
+    // Add brand mark signature if provided - centered at bottom
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-SIGNATURE: Add a small, elegant signature text "${brandMark}" in the bottom-left corner of the image. 
-The signature should be subtle but legible, styled like a trademark or ownership mark. Use a clean sans-serif font.`;
+BRAND SIGNATURE: Render "${brandMark.toUpperCase()}" as a text overlay at the BOTTOM CENTER of the image.
+- Position: horizontally centered, near the bottom edge
+- Style: clean, elegant sans-serif font (like the example "HAUS OF ORACLE")
+- Size: small but clearly legible
+- Color: subtle, complementary to the image (typically dark gray or muted tone)
+- Must appear consistently in the same position on every scene`;
     }
 
     return `${visualPrompt}
