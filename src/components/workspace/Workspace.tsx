@@ -180,7 +180,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 <div className="space-y-3">
                   {/* Character Description - Collapsible */}
                   <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-lg hover:bg-muted/30 transition-colors">
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
                       <span className="text-sm font-medium flex items-center gap-2">
                         <Users className="h-4 w-4" />
                         Character Appearance
@@ -188,7 +188,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                       <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg -mt-2">
+                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-sm -mt-2">
                         <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
                       </div>
                     </CollapsibleContent>
@@ -196,7 +196,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
 
                   {/* Presenter Focus - Collapsible */}
                   <Collapsible open={presenterFocusOpen} onOpenChange={setPresenterFocusOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-lg hover:bg-muted/30 transition-colors">
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
                       <span className="text-sm font-medium flex items-center gap-2">
                         <Lightbulb className="h-4 w-4" />
                         Presenter Focus
@@ -204,14 +204,14 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                       <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg -mt-2">
+                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-sm -mt-2">
                         <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
 
                   {/* Disable Expressions Toggle */}
-                  <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-lg">
+                  <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-sm">
                     <Checkbox
                       id="disable-expressions"
                       checked={disableExpressions}
@@ -229,7 +229,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 </div>
 
                 {/* Configuration */}
-                <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
+                <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-sm">
                   <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
                   <div className="h-px bg-border/30" />
                   
