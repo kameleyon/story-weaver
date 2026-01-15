@@ -18,6 +18,7 @@ interface GenerationRequest {
   brandMark?: string;
   presenterFocus?: string;
   characterDescription?: string;
+  disableExpressions?: boolean;
   // For chunked phases
   phase?: "script" | "audio" | "images" | "finalize" | "regenerate-audio" | "regenerate-image";
   generationId?: string;
@@ -883,6 +884,7 @@ async function handleScriptPhase(
   brandMark?: string,
   presenterFocus?: string,
   characterDescription?: string,
+  disableExpressions?: boolean,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -942,8 +944,13 @@ ${presenterGuidance}${characterGuidance}
 - Start each scene with a hook
 - NO labels, NO stage directions, NO markdown
 - Just raw spoken text
-- Include paralinguistic tags where appropriate for natural expression: [clear throat], [sigh], [sush], [cough], [groan], [sniff], [gasp], [chuckle], [laugh]
-- Example: "Oh, that's interesting! [chuckle] Let me explain why..."
+${
+  disableExpressions
+    ? `- Do NOT include any paralinguistic tags or expressions like [chuckle], [sigh], [laugh], etc.
+- Write clean, natural speech without bracketed expressions`
+    : `- Include paralinguistic tags where appropriate for natural expression: [clear throat], [sigh], [sush], [cough], [groan], [sniff], [gasp], [chuckle], [laugh]
+- Example: "Oh, that's interesting! [chuckle] Let me explain why..."`
+}
 
 ${
   includeTextOverlay
@@ -1901,7 +1908,7 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription);
+      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription, body.disableExpressions);
     }
 
     if (!generationId || !projectId) {

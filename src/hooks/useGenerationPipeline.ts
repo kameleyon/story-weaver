@@ -68,6 +68,7 @@ interface GenerationParams {
   brandMark?: string;
   presenterFocus?: string;
   characterDescription?: string;
+  disableExpressions?: boolean;
 }
 
 type ProjectRow = {
@@ -242,6 +243,7 @@ export function useGenerationPipeline() {
           brandMark: params.brandMark,
           presenterFocus: params.presenterFocus,
           characterDescription: params.characterDescription,
+          disableExpressions: params.disableExpressions,
         });
 
         if (!scriptResult.success) throw new Error(scriptResult.error || "Script generation failed");

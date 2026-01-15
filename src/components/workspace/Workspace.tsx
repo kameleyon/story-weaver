@@ -1,8 +1,9 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ContentInput } from "./ContentInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
@@ -34,6 +35,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [characterDescOpen, setCharacterDescOpen] = useState(false);
   const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
   const [brandMarkText, setBrandMarkText] = useState("");
+  const [disableExpressions, setDisableExpressions] = useState(false);
 
   const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
@@ -60,6 +62,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
         brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
         presenterFocus: presenterFocus.trim() || undefined,
         characterDescription: characterDescription.trim() || undefined,
+        disableExpressions,
       });
     }
   };
@@ -78,6 +81,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
     setCharacterDescOpen(false);
     setBrandMarkEnabled(false);
     setBrandMarkText("");
+    setDisableExpressions(false);
   };
 
   const handleOpenProject = async (projectId: string) => {
@@ -205,6 +209,23 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
+
+                  {/* Disable Expressions Toggle */}
+                  <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-lg">
+                    <Checkbox
+                      id="disable-expressions"
+                      checked={disableExpressions}
+                      onCheckedChange={(checked) => setDisableExpressions(checked === true)}
+                    />
+                    <label
+                      htmlFor="disable-expressions"
+                      className="flex items-center gap-2 text-sm font-medium cursor-pointer"
+                    >
+                      <MessageSquareOff className="h-4 w-4 text-muted-foreground" />
+                      <span>Disable voice expressions</span>
+                      <span className="text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Configuration */}
