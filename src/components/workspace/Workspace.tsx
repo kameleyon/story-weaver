@@ -7,6 +7,8 @@ import { ContentInput } from "./ContentInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { LengthSelector, type VideoLength } from "./LengthSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
+import { VoiceSelector, type VoiceGender } from "./VoiceSelector";
+import { PresenterFocusInput } from "./PresenterFocusInput";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
@@ -23,6 +25,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [length, setLength] = useState<VideoLength>("brief");
   const [style, setStyle] = useState<VisualStyle>("minimalist");
   const [customStyle, setCustomStyle] = useState("");
+  const [voice, setVoice] = useState<VoiceGender>("female");
+  const [presenterFocus, setPresenterFocus] = useState("");
 
   const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
@@ -47,6 +51,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
     setLength("brief");
     setStyle("minimalist");
     setCustomStyle("");
+    setVoice("female");
+    setPresenterFocus("");
   };
 
   const handleOpenProject = async (projectId: string) => {
@@ -139,7 +145,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 <ContentInput content={content} onContentChange={setContent} />
 
                 {/* Configuration */}
-                <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm">
+                <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
                   <FormatSelector selected={format} onSelect={setFormat} />
                   <div className="h-px bg-border/30" />
                   <LengthSelector selected={length} onSelect={setLength} />
@@ -150,6 +156,13 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                     onSelect={setStyle}
                     onCustomStyleChange={setCustomStyle}
                   />
+                  <div className="h-px bg-border/30" />
+                  <VoiceSelector selected={voice} onSelect={setVoice} />
+                </div>
+
+                {/* Presenter Focus */}
+                <div className="rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
+                  <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
                 </div>
 
                 {/* Generate Button */}
