@@ -1,4 +1,4 @@
-import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wand2, ChevronLeft, ChevronRight, Palette } from "lucide-react";
+import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wand2, ChevronLeft, ChevronRight, Palette, Baby } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,9 @@ import sketchPreview from "@/assets/styles/sketch-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
 import painterlyPreview from "@/assets/styles/painterly-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
+import crayonPreview from "@/assets/styles/crayon-preview.png";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "painterly" | "custom";
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "painterly" | "crayon" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
@@ -37,6 +38,7 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
   { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
+  { id: "crayon", label: "Crayon", icon: Baby, preview: crayonPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
 
