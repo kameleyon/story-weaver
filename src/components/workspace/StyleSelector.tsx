@@ -101,7 +101,7 @@ export function StyleSelector({
         <button
           onClick={() => scroll("left")}
           className={cn(
-            "absolute left-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 border border-border/50 shadow-lg backdrop-blur-sm transition-all",
+            "absolute left-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 border border-border/50 shadow-sm backdrop-blur-sm transition-all",
             canScrollLeft 
               ? "opacity-100 hover:bg-muted" 
               : "opacity-0 pointer-events-none"
@@ -115,7 +115,7 @@ export function StyleSelector({
         <button
           onClick={() => scroll("right")}
           className={cn(
-            "absolute right-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 border border-border/50 shadow-lg backdrop-blur-sm transition-all",
+            "absolute right-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 border border-border/50 shadow-sm backdrop-blur-sm transition-all",
             canScrollRight 
               ? "opacity-100 hover:bg-muted" 
               : "opacity-0 pointer-events-none"
@@ -138,7 +138,7 @@ export function StyleSelector({
               className={cn(
                 "group relative flex-shrink-0 w-[120px] overflow-hidden rounded-xl border-2 transition-all",
                 selected === style.id
-                  ? "border-primary shadow-lg shadow-primary/20"
+                  ? "border-primary shadow-sm shadow-primary/20"
                   : "border-transparent hover:border-muted-foreground/30"
               )}
               whileHover={{ scale: 1.02 }}
