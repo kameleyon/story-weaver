@@ -93,15 +93,15 @@ function getStylePrompt(style: string, customStyle?: string): string {
   return STYLE_PROMPTS[style.toLowerCase()] || style;
 }
 
-function getImageDimensions(format: string): { width: number; height: number } {
-  // z-image-turbo requires dimensions to be multiples of 16
+function getImageDimensions(format: string): { width: number; height: number; aspectRatio: string } {
+  // p-image supports aspect_ratio or custom dimensions (multiples of 16, max 1440)
   switch (format) {
     case "portrait":
-      return { width: 816, height: 1440 }; // 9:16
+      return { width: 816, height: 1440, aspectRatio: "9:16" };
     case "square":
-      return { width: 1024, height: 1024 }; // 1:1
+      return { width: 1024, height: 1024, aspectRatio: "1:1" };
     default:
-      return { width: 1440, height: 816 }; // 16:9 landscape
+      return { width: 1440, height: 816, aspectRatio: "16:9" }; // landscape
   }
 }
 
@@ -702,9 +702,9 @@ async function generateImageWithReplicate(
   ============================================================================= */
 
   try {
-    // Using prunaai/z-image-turbo model
-    // Docs: https://replicate.com/prunaai/z-image-turbo/api
-    const createResponse = await fetch("https://api.replicate.com/v1/models/prunaai/z-image-turbo/predictions", {
+    // Using prunaai/p-image model
+    // Docs: https://replicate.com/prunaai/p-image/api
+    const createResponse = await fetch("https://api.replicate.com/v1/models/prunaai/p-image/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -714,12 +714,9 @@ async function generateImageWithReplicate(
       body: JSON.stringify({
         input: {
           prompt,
-          width: dimensions.width,
-          height: dimensions.height,
-          num_inference_steps: 50,
-          guidance_scale: 0,
-          output_format: "png",
-          output_quality: 100,
+          aspect_ratio: dimensions.aspectRatio,
+          prompt_upsampling: false,
+          disable_safety_checker: true,
         },
       }),
     });
@@ -750,8 +747,7 @@ async function generateImageWithReplicate(
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
-    // z-image-turbo returns output as a FileOutput object with .url() method
-    // When accessed via REST API, it's typically a direct URL string or object with url property
+    // p-image returns output as a FileOutput - direct URL string or object with url property
     const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     const imageUrl =
       typeof first === "string"
