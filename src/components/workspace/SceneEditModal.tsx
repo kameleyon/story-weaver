@@ -70,9 +70,13 @@ export function SceneEditModal({
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+          className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-brand-accent hover:scrollbar-thumb-brand-primary"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'hsl(var(--brand-accent)) transparent',
+          }}
         >
-          <Card className="bg-card border-border overflow-hidden">
+          <Card className="bg-card border-border overflow-hidden rounded-xl">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-lg font-semibold text-foreground">
@@ -185,8 +189,12 @@ export function SceneEditModal({
                 <Button
                   onClick={handleSaveScript}
                   disabled={!hasScriptChanges || isRegenerating}
-                  className="w-full gap-2"
-                  variant={hasScriptChanges ? "default" : "secondary"}
+                  className={cn(
+                    "w-full gap-2",
+                    hasScriptChanges 
+                      ? "bg-primary hover:bg-primary/90 text-primary-foreground" 
+                      : "bg-primary/60 text-primary-foreground"
+                  )}
                 >
                   {isRegenerating && regeneratingType === "audio" ? (
                     <>
