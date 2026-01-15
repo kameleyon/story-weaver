@@ -1,9 +1,22 @@
-import { Sparkles, Pencil, Users, Cherry, Camera, Wand2, Box, Hand, PenTool } from "lucide-react";
+import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useRef, useState, useEffect } from "react";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "custom";
+// Import style preview images
+import minimalistPreview from "@/assets/styles/minimalist-preview.png";
+import doodlePreview from "@/assets/styles/doodle-preview.png";
+import stickPreview from "@/assets/styles/stick-preview.png";
+import animePreview from "@/assets/styles/anime-preview.png";
+import realisticPreview from "@/assets/styles/realistic-preview.png";
+import pixarPreview from "@/assets/styles/3d-pixar-preview.png";
+import claymationPreview from "@/assets/styles/claymation-preview.png";
+import sketchPreview from "@/assets/styles/sketch-preview.png";
+import caricaturePreview from "@/assets/styles/caricature-preview.png";
+import customPreview from "@/assets/styles/custom-preview.png";
+
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
@@ -12,49 +25,162 @@ interface StyleSelectorProps {
   onCustomStyleChange: (value: string) => void;
 }
 
-const styles: { id: VisualStyle; label: string; icon: React.ElementType }[] = [
-  { id: "minimalist", label: "Minimalist", icon: Sparkles },
-  { id: "doodle", label: "Urban Doodle", icon: Pencil },
-  { id: "stick", label: "Stick Figure", icon: Users },
-  { id: "anime", label: "Anime", icon: Cherry },
-  { id: "realistic", label: "Realistic", icon: Camera },
-  { id: "3d-pixar", label: "3D Pixar", icon: Box },
-  { id: "claymation", label: "Claymation", icon: Hand },
-  { id: "sketch", label: "Sketch", icon: PenTool },
-  { id: "custom", label: "Custom", icon: Wand2 },
+const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview: string }[] = [
+  { id: "minimalist", label: "Minimalist", icon: Sparkles, preview: minimalistPreview },
+  { id: "doodle", label: "Urban Doodle", icon: Pencil, preview: doodlePreview },
+  { id: "stick", label: "Stick Figure", icon: Users, preview: stickPreview },
+  { id: "anime", label: "Anime", icon: Cherry, preview: animePreview },
+  { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
+  { id: "3d-pixar", label: "3D Pixar", icon: Box, preview: pixarPreview },
+  { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
+  { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
+  { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
+  { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
 
 export function StyleSelector({ selected, customStyle, onSelect, onCustomStyleChange }: StyleSelectorProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScrollPosition = () => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      setCanScrollLeft(container.scrollLeft > 0);
+      setCanScrollRight(
+        container.scrollLeft < container.scrollWidth - container.clientWidth - 10
+      );
+    }
+  };
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      checkScrollPosition();
+      container.addEventListener("scroll", checkScrollPosition);
+      return () => container.removeEventListener("scroll", checkScrollPosition);
+    }
+  }, []);
+
+  const scroll = (direction: "left" | "right") => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      const scrollAmount = 200;
+      container.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth",
+      });
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Visual Style</h3>
-      <div className="grid grid-cols-3 gap-2">
-        {styles.map((style) => {
-          const IconComponent = style.icon;
-          return (
+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Choose visual style</h3>
+      
+      <div className="relative">
+        {/* Left Arrow */}
+        <button
+          onClick={() => scroll("left")}
+          className={cn(
+            "absolute left-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 border border-border/50 shadow-lg backdrop-blur-sm transition-all",
+            canScrollLeft 
+              ? "opacity-100 hover:bg-muted" 
+              : "opacity-0 pointer-events-none"
+          )}
+          aria-label="Scroll left"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {/* Right Arrow */}
+        <button
+          onClick={() => scroll("right")}
+          className={cn(
+            "absolute right-0 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 border border-border/50 shadow-lg backdrop-blur-sm transition-all",
+            canScrollRight 
+              ? "opacity-100 hover:bg-muted" 
+              : "opacity-0 pointer-events-none"
+          )}
+          aria-label="Scroll right"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+
+        {/* Carousel Container */}
+        <div
+          ref={scrollContainerRef}
+          className="flex gap-3 overflow-x-auto scrollbar-hide px-1 py-1"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {styles.map((style) => (
             <motion.button
               key={style.id}
               onClick={() => onSelect(style.id)}
               className={cn(
-                "flex items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-all",
+                "group relative flex-shrink-0 w-[120px] overflow-hidden rounded-xl border-2 transition-all",
                 selected === style.id
-                  ? "border-primary/50 bg-primary/5 shadow-sm"
-                  : "border-transparent bg-muted/30 hover:bg-muted/50"
+                  ? "border-primary shadow-lg shadow-primary/20"
+                  : "border-transparent hover:border-muted-foreground/30"
               )}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <IconComponent className={cn(
-                "h-4 w-4",
-                selected === style.id ? "text-primary" : "text-muted-foreground"
-              )} />
-              <span className={cn(
-                "text-sm font-medium",
-                selected === style.id ? "text-foreground" : "text-muted-foreground"
-              )}>{style.label}</span>
+              {/* Preview Image */}
+              <div className="aspect-[4/3] overflow-hidden bg-muted">
+                <img
+                  src={style.preview}
+                  alt={style.label}
+                  className={cn(
+                    "h-full w-full object-cover transition-transform duration-300",
+                    "group-hover:scale-105"
+                  )}
+                />
+              </div>
+              
+              {/* Label */}
+              <div className={cn(
+                "px-2 py-2 text-center transition-colors",
+                selected === style.id 
+                  ? "bg-primary/10" 
+                  : "bg-muted/50"
+              )}>
+                <span className={cn(
+                  "text-xs font-medium",
+                  selected === style.id ? "text-primary" : "text-muted-foreground"
+                )}>
+                  {style.label}
+                </span>
+              </div>
+
+              {/* Selection Indicator */}
+              {selected === style.id && (
+                <motion.div
+                  layoutId="style-indicator"
+                  className="absolute inset-0 rounded-xl ring-2 ring-primary ring-offset-2 ring-offset-background"
+                  initial={false}
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
             </motion.button>
-          );
-        })}
+          ))}
+        </div>
+
+        {/* Scroll Indicator Dots */}
+        <div className="flex justify-center gap-1 mt-3">
+          {Array.from({ length: Math.ceil(styles.length / 4) }).map((_, index) => (
+            <div
+              key={index}
+              className={cn(
+                "h-1 rounded-full transition-all",
+                index === 0 && !canScrollLeft
+                  ? "w-4 bg-primary"
+                  : index === Math.ceil(styles.length / 4) - 1 && !canScrollRight
+                  ? "w-4 bg-primary"
+                  : "w-1 bg-muted-foreground/30"
+              )}
+            />
+          ))}
+        </div>
       </div>
       
       {selected === "custom" && (
