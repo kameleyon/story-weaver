@@ -141,25 +141,45 @@ export function SceneEditModal({
                       className="min-h-[100px] resize-none"
                       disabled={isRegenerating}
                     />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleModifyImage}
+                        disabled={!imageModification.trim() || isRegenerating}
+                        className={cn(
+                          "flex-1 gap-2",
+                          imageModification.trim()
+                            ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                            : "bg-primary/60 text-primary-foreground"
+                        )}
+                      >
+                        {isRegenerating && regeneratingType === "image" && imageModification.trim() ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Editing...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-4 w-4" />
+                            Apply Edit
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     <Button
-                      onClick={handleModifyImage}
-                      disabled={!imageModification.trim() || isRegenerating}
-                      className={cn(
-                        "w-full gap-2",
-                        imageModification.trim()
-                          ? "bg-primary hover:bg-primary/90 text-primary-foreground"
-                          : "bg-primary/60 text-primary-foreground"
-                      )}
+                      onClick={() => onRegenerateImage(sceneIndex, "")}
+                      disabled={isRegenerating}
+                      variant="outline"
+                      className="w-full gap-2"
                     >
-                      {isRegenerating && regeneratingType === "image" ? (
+                      {isRegenerating && regeneratingType === "image" && !imageModification.trim() ? (
                         <>
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Editing...
+                          Regenerating...
                         </>
                       ) : (
                         <>
-                          <Wand2 className="h-4 w-4" />
-                          Apply Edit
+                          <RefreshCw className="h-4 w-4" />
+                          Regenerate New Image
                         </>
                       )}
                     </Button>
