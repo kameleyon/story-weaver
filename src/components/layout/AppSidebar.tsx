@@ -12,6 +12,7 @@ import {
   History,
   Trash2,
   MoreVertical,
+  FolderOpen,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
@@ -230,6 +231,19 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 )}
               </SidebarMenu>
             </SidebarGroupContent>
+            {recentProjects.length > 0 && (
+              <div className="mt-2 px-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => navigate("/projects")}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  View All Projects
+                </Button>
+              </div>
+            )}
           </SidebarGroup>
         )}
       </SidebarContent>
