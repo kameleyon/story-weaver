@@ -27,6 +27,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [customStyle, setCustomStyle] = useState("");
   const [voice, setVoice] = useState<VoiceGender>("female");
   const [presenterFocus, setPresenterFocus] = useState("");
+  const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
+  const [brandMarkText, setBrandMarkText] = useState("");
 
   const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
@@ -63,6 +65,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
     setCustomStyle("");
     setVoice("female");
     setPresenterFocus("");
+    setBrandMarkEnabled(false);
+    setBrandMarkText("");
   };
 
   const handleOpenProject = async (projectId: string) => {
@@ -181,6 +185,10 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                     customStyle={customStyle}
                     onSelect={setStyle}
                     onCustomStyleChange={setCustomStyle}
+                    brandMarkEnabled={brandMarkEnabled}
+                    brandMarkText={brandMarkText}
+                    onBrandMarkEnabledChange={setBrandMarkEnabled}
+                    onBrandMarkTextChange={setBrandMarkText}
                   />
                 </div>
 

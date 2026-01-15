@@ -2,6 +2,8 @@ import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wan
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { useRef, useState, useEffect } from "react";
 
 // Import style preview images
@@ -25,6 +27,10 @@ interface StyleSelectorProps {
   customStyle: string;
   onSelect: (style: VisualStyle) => void;
   onCustomStyleChange: (value: string) => void;
+  brandMarkEnabled?: boolean;
+  brandMarkText?: string;
+  onBrandMarkEnabledChange?: (enabled: boolean) => void;
+  onBrandMarkTextChange?: (text: string) => void;
 }
 
 const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview: string }[] = [
@@ -42,7 +48,16 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
 
-export function StyleSelector({ selected, customStyle, onSelect, onCustomStyleChange }: StyleSelectorProps) {
+export function StyleSelector({ 
+  selected, 
+  customStyle, 
+  onSelect, 
+  onCustomStyleChange,
+  brandMarkEnabled = false,
+  brandMarkText = "",
+  onBrandMarkEnabledChange,
+  onBrandMarkTextChange
+}: StyleSelectorProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -204,6 +219,45 @@ export function StyleSelector({ selected, customStyle, onSelect, onCustomStyleCh
           </div>
         </motion.div>
       )}
+
+      {/* Brand Mark Option */}
+      <div className="pt-4 border-t border-border/30">
+        <div className="flex items-center gap-3">
+          <Checkbox 
+            id="brand-mark" 
+            checked={brandMarkEnabled}
+            onCheckedChange={(checked) => onBrandMarkEnabledChange?.(checked === true)}
+          />
+          <Label 
+            htmlFor="brand-mark" 
+            className="text-sm font-medium text-muted-foreground cursor-pointer"
+          >
+            Your brand mark
+          </Label>
+        </div>
+        
+        {brandMarkEnabled && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3">
+              <Input
+                placeholder="Company name or copyright text..."
+                value={brandMarkText}
+                onChange={(e) => onBrandMarkTextChange?.(e.target.value)}
+                className="rounded-xl border-border/50 bg-muted/30 focus:bg-background text-sm"
+                maxLength={50}
+              />
+              <p className="text-xs text-muted-foreground/60 mt-1.5">
+                Appears bottom-right on all generated images
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 }
