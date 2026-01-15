@@ -16,11 +16,11 @@ import pixarPreview from "@/assets/styles/3d-pixar-preview.png";
 import claymationPreview from "@/assets/styles/claymation-preview.png";
 import sketchPreview from "@/assets/styles/sketch-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
-import painterlyPreview from "@/assets/styles/painterly-preview.png";
+import storybookPreview from "@/assets/styles/painterly-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "painterly" | "crayon" | "custom";
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "storybook" | "crayon" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
@@ -37,7 +37,7 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview
   { id: "minimalist", label: "Minimalist", icon: Sparkles, preview: minimalistPreview },
   { id: "doodle", label: "Urban Doodle", icon: Pencil, preview: doodlePreview },
   { id: "3d-pixar", label: "3D Pixar", icon: Box, preview: pixarPreview },
-  { id: "painterly", label: "Painterly", icon: Palette, preview: painterlyPreview },
+  { id: "storybook", label: "Storybook", icon: Palette, preview: storybookPreview },
   { id: "stick", label: "Stick Figure", icon: Users, preview: stickPreview },
   { id: "anime", label: "Anime", icon: Cherry, preview: animePreview },
   { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },

@@ -92,6 +92,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       savedStyle === "claymation" ||
       savedStyle === "sketch" ||
       savedStyle === "caricature" ||
+      savedStyle === "storybook" ||
+      savedStyle === "crayon" ||
       savedStyle === "custom"
     ) {
       setStyle(savedStyle);
