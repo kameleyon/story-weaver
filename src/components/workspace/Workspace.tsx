@@ -77,6 +77,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       savedStyle === "3d-pixar" ||
       savedStyle === "claymation" ||
       savedStyle === "sketch" ||
+      savedStyle === "caricature" ||
       savedStyle === "custom"
     ) {
       setStyle(savedStyle);
