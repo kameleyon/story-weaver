@@ -28,13 +28,13 @@ interface StyleSelectorProps {
 const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview: string }[] = [
   { id: "minimalist", label: "Minimalist", icon: Sparkles, preview: minimalistPreview },
   { id: "doodle", label: "Urban Doodle", icon: Pencil, preview: doodlePreview },
+  { id: "3d-pixar", label: "3D Pixar", icon: Box, preview: pixarPreview },
   { id: "stick", label: "Stick Figure", icon: Users, preview: stickPreview },
   { id: "anime", label: "Anime", icon: Cherry, preview: animePreview },
   { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
-  { id: "3d-pixar", label: "3D Pixar", icon: Box, preview: pixarPreview },
+  { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
   { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
-  { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
 
