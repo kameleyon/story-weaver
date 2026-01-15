@@ -1,5 +1,6 @@
 import { User, UserRound } from "lucide-react";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export type VoiceGender = "male" | "female";
 
@@ -16,10 +17,8 @@ const voices: { id: VoiceGender; label: string; icon: typeof User }[] = [
 export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
   return (
     <div className="space-y-3">
-      <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Voice
-      </label>
-      <div className="flex gap-3">
+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Voice</h3>
+      <div className="flex gap-2">
         {voices.map((voice) => {
           const Icon = voice.icon;
           const isSelected = selected === voice.id;
@@ -28,16 +27,20 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
             <motion.button
               key={voice.id}
               onClick={() => onSelect(voice.id)}
-              className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 transition-all ${
+              className={cn(
+                "flex items-center gap-2 rounded-xl border px-4 py-2.5 transition-all",
                 isSelected
-                  ? "border-primary bg-primary/5 text-foreground"
-                  : "border-border/50 bg-transparent text-muted-foreground hover:border-border hover:bg-muted/30"
-              }`}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+                  ? "border-primary/50 bg-primary/5 shadow-sm"
+                  : "border-transparent bg-muted/30 hover:bg-muted/50"
+              )}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
             >
-              <Icon className="h-4 w-4" />
-              <span className="text-sm font-medium">{voice.label}</span>
+              <Icon className={cn("h-4 w-4", isSelected ? "text-primary" : "text-muted-foreground")} />
+              <span className={cn(
+                "text-sm font-medium",
+                isSelected ? "text-foreground" : "text-muted-foreground"
+              )}>{voice.label}</span>
             </motion.button>
           );
         })}

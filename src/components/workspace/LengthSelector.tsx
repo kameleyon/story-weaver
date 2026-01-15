@@ -24,7 +24,7 @@ export function LengthSelector({ selected, onSelect }: LengthSelectorProps) {
             key={length.id}
             onClick={() => onSelect(length.id)}
             className={cn(
-              "flex-1 rounded-xl border px-4 py-3 transition-all",
+              "rounded-xl border px-4 py-2.5 transition-all",
               selected === length.id
                 ? "border-primary/50 bg-primary/5 shadow-sm"
                 : "border-transparent bg-muted/30 hover:bg-muted/50"
