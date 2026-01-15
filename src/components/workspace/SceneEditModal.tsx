@@ -70,15 +70,11 @@ export function SceneEditModal({
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-brand-accent hover:scrollbar-thumb-brand-primary"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'hsl(var(--brand-accent)) transparent',
-          }}
+          className="w-full max-w-4xl max-h-[90vh] flex flex-col"
         >
-          <Card className="bg-card border-border overflow-hidden rounded-xl">
+          <Card className="bg-card border-border overflow-hidden rounded-xl flex flex-col max-h-[90vh]">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-lg font-semibold text-foreground">
                 Edit Scene {scene.number}
               </h2>
@@ -92,7 +88,13 @@ export function SceneEditModal({
               </Button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div 
+              className="p-6 space-y-6 overflow-y-auto scrollbar-thin"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'hsl(var(--brand-accent)) transparent',
+              }}
+            >
               {/* Image Preview & Modification */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -139,7 +141,12 @@ export function SceneEditModal({
                     <Button
                       onClick={handleModifyImage}
                       disabled={!imageModification.trim() || isRegenerating}
-                      className="w-full gap-2"
+                      className={cn(
+                        "w-full gap-2",
+                        imageModification.trim()
+                          ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                          : "bg-primary/60 text-primary-foreground"
+                      )}
                     >
                       {isRegenerating && regeneratingType === "image" ? (
                         <>
