@@ -1335,6 +1335,11 @@ async function handleImagesPhase(
   }
   const allImageTasks: ImageTask[] = [];
 
+  // Determine format description for prompt reinforcement
+  const formatDescription = format === "portrait" ? "VERTICAL 9:16 portrait orientation (tall, phone-sized)" 
+    : format === "square" ? "SQUARE 1:1 orientation" 
+    : "HORIZONTAL 16:9 landscape orientation (wide, widescreen)";
+
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
     let textInstructions = "";
     
@@ -1344,20 +1349,22 @@ TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as 
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     }
 
-    // Add brand mark signature if provided - centered at bottom
+    // Add brand mark signature if provided - STRICTLY STANDARDIZED
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-BRAND SIGNATURE: Render "${brandMark.toUpperCase()}" as a text overlay at the BOTTOM CENTER of the image.
-- Position: horizontally centered, near the bottom edge
-- Style: clean, elegant sans-serif font (like the example "HAUS OF ORACLE")
-- Size: small but clearly legible
-- Color: subtle, complementary to the image (typically dark gray or muted tone)
-- Must appear consistently in the same position on every scene`;
+BRAND MARK (CRITICAL - MUST BE IDENTICAL ON EVERY IMAGE):
+- Text: "${brandMark.toUpperCase()}"
+- Position: BOTTOM CENTER, exactly 5% from bottom edge, horizontally centered
+- Font: Clean sans-serif (Helvetica/Arial style), ALL CAPS
+- Size: EXACTLY 2.5% of image height (small but readable)
+- Color: Choose contrasting color for visibility (dark on light backgrounds, light on dark backgrounds)
+- DO NOT vary the font, size, or position between images - ONLY color may adapt for visibility`;
     }
 
     return `${visualPrompt}
 
+FORMAT: ${formatDescription} - compose the image to fit this exact aspect ratio.
 STYLE: ${styleDescription}
 ${textInstructions}
 ${brandMarkInstructions}
