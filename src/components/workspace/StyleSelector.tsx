@@ -1,4 +1,4 @@
-import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wand2, ChevronLeft, ChevronRight, Palette } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,10 @@ import pixarPreview from "@/assets/styles/3d-pixar-preview.png";
 import claymationPreview from "@/assets/styles/claymation-preview.png";
 import sketchPreview from "@/assets/styles/sketch-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
+import painterlyPreview from "@/assets/styles/painterly-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "custom";
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "painterly" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
@@ -33,6 +34,7 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview
   { id: "anime", label: "Anime", icon: Cherry, preview: animePreview },
   { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
+  { id: "painterly", label: "Painterly", icon: Palette, preview: painterlyPreview },
   { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
   { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
@@ -156,7 +158,7 @@ export function StyleSelector({ selected, customStyle, onSelect, onCustomStyleCh
               {selected === style.id && (
                 <motion.div
                   layoutId="style-indicator"
-                  className="absolute inset-0 rounded-xl ring-2 ring-primary ring-offset-2 ring-offset-background"
+                  className="absolute inset-0 rounded-xl ring-2 ring-primary ring-offset-4 ring-offset-background shadow-sm"
                   initial={false}
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
