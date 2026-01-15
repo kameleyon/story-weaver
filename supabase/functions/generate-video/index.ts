@@ -330,6 +330,7 @@ async function generateSceneAudioGeminiWithModel(
   modelName: string,
   modelLabel: string,
   retryAttempt: number = 0,
+  isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
 
@@ -446,7 +447,9 @@ async function generateSceneAudioGeminiWithModel(
     // Calculate accurate duration
     const durationSeconds = Math.max(1, pcmBytes.length / (24000 * 2));
 
-    const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+    const audioPath = isRegeneration 
+      ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+      : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
     const { error: uploadError } = await supabase.storage
       .from("audio")
       .upload(audioPath, wavBytes, { contentType: "audio/wav", upsert: true });
@@ -474,6 +477,7 @@ async function generateSceneAudioGemini(
   userId: string,
   projectId: string,
   retryAttempt: number = 0,
+  isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   // Try each Gemini TTS model in order
   for (const model of GEMINI_TTS_MODELS) {
@@ -489,6 +493,7 @@ async function generateSceneAudioGemini(
       model.name,
       model.label,
       retryAttempt,
+      isRegeneration,
     );
     
     if (result.url) {
@@ -511,6 +516,7 @@ async function generateSceneAudioReplicate(
   supabase: any,
   userId: string,
   projectId: string,
+  isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const TTS_ATTEMPTS = 3;
   const TTS_RETRY_BASE_DELAY_MS = 2000;
@@ -587,7 +593,9 @@ async function generateSceneAudioReplicate(
       // Estimate duration (~44100 samples/sec, 16-bit = 2 bytes/sample)
       durationSeconds = Math.max(1, audioBytes.length / (44100 * 2));
 
-      const audioPath = `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+      const audioPath = isRegeneration
+        ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+        : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
       const { error: uploadError } = await supabase.storage
         .from("audio")
         .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
@@ -618,6 +626,7 @@ async function generateSceneAudio(
   supabase: any,
   userId: string,
   projectId: string,
+  isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
 
@@ -643,6 +652,7 @@ async function generateSceneAudio(
         userId,
         projectId,
         retry,
+        isRegeneration,
       );
 
       if (geminiResult.url) return geminiResult;
@@ -660,7 +670,7 @@ async function generateSceneAudio(
   }
 
   // Default: Replicate Chatterbox
-  return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId);
+  return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
 }
 
 // ============= IMAGE GENERATION =============
@@ -1518,7 +1528,7 @@ async function handleRegenerateAudio(
   // Update the scene with new voiceover
   scenes[sceneIndex].voiceover = newVoiceover;
 
-  // Generate new audio
+  // Generate new audio (with isRegeneration=true to create unique filename and bypass cache)
   const audioResult = await generateSceneAudio(
     scenes[sceneIndex],
     sceneIndex,
@@ -1527,6 +1537,7 @@ async function handleRegenerateAudio(
     supabase,
     user.id,
     projectId,
+    true, // isRegeneration - creates unique filename to bypass browser cache
   );
 
   if (!audioResult.url) {
