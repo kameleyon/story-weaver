@@ -728,7 +728,7 @@ async function generateImageWithReplicate(
           prompt,
           aspect_ratio: aspectRatio,
           output_format: "png",
-          safety_filter_level: "block_none",
+          safety_filter_level: "block_only_high",
         },
       }),
     });
