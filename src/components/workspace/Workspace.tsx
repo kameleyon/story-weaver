@@ -1,4 +1,4 @@
-import { useState, forwardRef, useImperativeHandle } from "react";
+import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import { Play, Menu, AlertCircle, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -21,7 +21,7 @@ export interface WorkspaceHandle {
 
 export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) {
   const [content, setContent] = useState("");
-  const [format, setFormat] = useState<VideoFormat>("landscape");
+  const [format, setFormat] = useState<VideoFormat>("portrait");
   const [length, setLength] = useState<VideoLength>("brief");
   const [style, setStyle] = useState<VisualStyle>("minimalist");
   const [customStyle, setCustomStyle] = useState("");
@@ -31,6 +31,16 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
   const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
+
+  // When "short" is selected, force portrait format and disable landscape/square
+  const disabledFormats: VideoFormat[] = length === "short" ? ["landscape", "square"] : [];
+  
+  // Auto-switch to portrait when short is selected and current format is disabled
+  useEffect(() => {
+    if (length === "short" && (format === "landscape" || format === "square")) {
+      setFormat("portrait");
+    }
+  }, [length, format]);
 
   const handleGenerate = () => {
     if (canGenerate) {
@@ -47,7 +57,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const handleNewProject = () => {
     reset();
     setContent("");
-    setFormat("landscape");
+    setFormat("portrait");
     setLength("brief");
     setStyle("minimalist");
     setCustomStyle("");
@@ -61,8 +71,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
 
     setContent(project.content ?? "");
 
-    const nextFormat = (project.format as VideoFormat) ?? "landscape";
-    setFormat(["landscape", "portrait", "square"].includes(nextFormat) ? nextFormat : "landscape");
+    const nextFormat = (project.format as VideoFormat) ?? "portrait";
+    setFormat(["landscape", "portrait", "square"].includes(nextFormat) ? nextFormat : "portrait");
 
     const nextLength = (project.length as VideoLength) ?? "brief";
     setLength(["short", "brief", "presentation"].includes(nextLength) ? nextLength : "brief");
@@ -145,11 +155,26 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 {/* Content Input */}
                 <ContentInput content={content} onContentChange={setContent} />
 
+                {/* Presenter Focus - Right after source */}
+                <div className="rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
+                  <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
+                </div>
+
                 {/* Configuration */}
                 <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
-                  <FormatSelector selected={format} onSelect={setFormat} />
+                  <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
                   <div className="h-px bg-border/30" />
-                  <LengthSelector selected={length} onSelect={setLength} />
+                  
+                  {/* Length and Voice side by side */}
+                  <div className="flex gap-6">
+                    <div className="flex-1">
+                      <LengthSelector selected={length} onSelect={setLength} />
+                    </div>
+                    <div className="flex-shrink-0">
+                      <VoiceSelector selected={voice} onSelect={setVoice} />
+                    </div>
+                  </div>
+                  
                   <div className="h-px bg-border/30" />
                   <StyleSelector
                     selected={style}
@@ -157,13 +182,6 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                     onSelect={setStyle}
                     onCustomStyleChange={setCustomStyle}
                   />
-                  <div className="h-px bg-border/30" />
-                  <VoiceSelector selected={voice} onSelect={setVoice} />
-                </div>
-
-                {/* Presenter Focus */}
-                <div className="rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
-                  <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
                 </div>
 
                 {/* Generate Button */}
