@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Upload, FileText, Image } from "lucide-react";
+import { Upload, FileText, Image, FileUp } from "lucide-react";
 import { motion } from "framer-motion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 interface ContentInputProps {
@@ -10,24 +9,40 @@ interface ContentInputProps {
 }
 
 export function ContentInput({ content, onContentChange }: ContentInputProps) {
-  const [isDragging, setIsDragging] = useState(false);
+  // Upload functionality commented out for now
+  // const [isDragging, setIsDragging] = useState(false);
+  // const handleDragOver = (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   setIsDragging(true);
+  // };
+  // const handleDragLeave = () => setIsDragging(false);
+  // const handleDrop = (e: React.DragEvent) => {
+  //   e.preventDefault();
+  //   setIsDragging(false);
+  //   const files = Array.from(e.dataTransfer.files);
+  //   if (files.length > 0) {
+  //     onContentChange(`[Uploaded: ${files.map((f) => f.name).join(", ")}]`);
+  //   }
+  // };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+  return (
+    <div className="space-y-3">
+      <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+        <FileUp className="h-3.5 w-3.5" />
+        Add your source
+      </label>
+      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-lg">
+        <Textarea
+          placeholder="Please add all your sources and documentations."
+          className="min-h-[180px] resize-none rounded-2xl border-0 bg-transparent p-6 text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
+          value={content}
+          onChange={(e) => onContentChange(e.target.value)}
+        />
+      </div>
+    </div>
+  );
 
-  const handleDragLeave = () => setIsDragging(false);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      onContentChange(`[Uploaded: ${files.map((f) => f.name).join(", ")}]`);
-    }
-  };
-
+  /* Upload tab commented out
   return (
     <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm">
       <Tabs defaultValue="text" className="w-full">
@@ -37,7 +52,7 @@ export function ContentInput({ content, onContentChange }: ContentInputProps) {
             className="gap-2 rounded-lg px-4 py-2 text-muted-foreground data-[state=active]:bg-muted/50 data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             <FileText className="h-4 w-4" />
-            <span className="text-sm">Text</span>
+            <span className="text-sm">Add your source</span>
           </TabsTrigger>
           <TabsTrigger
             value="upload"
@@ -50,8 +65,8 @@ export function ContentInput({ content, onContentChange }: ContentInputProps) {
 
         <TabsContent value="text" className="m-0">
           <Textarea
-            placeholder="Paste your content here..."
-            className="min-h-[180px] resize-none rounded-none border-0 bg-transparent p-5 text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
+            placeholder="Please add all your sources and documentations."
+            className="min-h-[180px] resize-none rounded-none border-0 bg-transparent p-6 text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
             value={content}
             onChange={(e) => onContentChange(e.target.value)}
           />
@@ -92,4 +107,5 @@ export function ContentInput({ content, onContentChange }: ContentInputProps) {
       </Tabs>
     </div>
   );
+  */
 }
