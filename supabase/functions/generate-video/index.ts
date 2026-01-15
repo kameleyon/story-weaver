@@ -1705,8 +1705,19 @@ async function handleRegenerateImage(
 
   let imageResult: { ok: true; bytes: Uint8Array } | { ok: false; error: string };
 
-  // Check if scene has an existing image URL for true image editing
-  if (scene.imageUrl) {
+  // Check if we should do a full regeneration (empty imageModification) or edit
+  if (!imageModification) {
+    // Full regeneration from original visual prompt
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Full regeneration from original prompt`);
+    const fullPrompt = `${scene.visualPrompt}
+
+STYLE: ${styleDescription}
+
+Professional illustration with dynamic composition and clear visual hierarchy.`;
+
+    imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
+  } else if (scene.imageUrl) {
+    // True image editing with Qwen model
     console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Qwen model`);
     imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey);
   } else {
@@ -1906,8 +1917,8 @@ serve(async (req) => {
           GOOGLE_TTS_API_KEY,
         );
       case "regenerate-image":
-        if (typeof sceneIndex !== "number" || !imageModification) {
-          return new Response(JSON.stringify({ error: "Missing sceneIndex or imageModification" }), {
+        if (typeof sceneIndex !== "number") {
+          return new Response(JSON.stringify({ error: "Missing sceneIndex" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -1918,7 +1929,7 @@ serve(async (req) => {
           generationId,
           projectId,
           sceneIndex,
-          imageModification,
+          imageModification || "", // Empty string means full regeneration from original prompt
           REPLICATE_API_KEY,
         );
       default:
