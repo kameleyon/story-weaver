@@ -99,6 +99,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          brand_mark: string | null
           content: string
           created_at: string
           description: string | null
@@ -113,6 +114,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          brand_mark?: string | null
           content: string
           created_at?: string
           description?: string | null
@@ -127,6 +129,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          brand_mark?: string | null
           content?: string
           created_at?: string
           description?: string | null
