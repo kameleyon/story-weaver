@@ -29,12 +29,6 @@ interface GenerationRequest {
   imageModification?: string;
 }
 
-interface InfographicSection {
-  heading: string;
-  caption: string;
-  iconHint?: string;
-}
-
 interface Scene {
   number: number;
   voiceover: string;
@@ -47,8 +41,6 @@ interface Scene {
   audioUrl?: string;
   title?: string;
   subtitle?: string;
-  infographicSections?: InfographicSection[];
-  floatingIcons?: string[];
   _meta?: {
     statusMessage?: string;
     totalImages?: number;
@@ -98,14 +90,8 @@ const STYLE_PROMPTS: Record<string, string> = {
   crayon: `Illustration with rough, scribbly strokes and visible wax texture. Naive kindergarten drawing style: simple rounded shapes, uneven lines, imperfect perspective, big friendly smiley face. Flat white background like drawing paper. Bright primary colors with a limited palette (orange, blue, peach/skin tone, a little black). Loose, messy coloring that goes outside the lines, with grainy crayon speckles. Minimal detail, playful, wholesome, hand-drawn kids-book vibe. No clean vector lines, no smooth shading, no realism, no 3D, no gradients, keep it messy and textured like real crayon. No vector, no flat icon, no digital painting, no photorealistic, no anime, no 3d render, no glossy, no smooth lines, no airbrush, no ultra-detailed.`,
 };
 
-// Basic headline + subtitle only
-const TEXT_OVERLAY_STYLES_MINIMAL = ["minimalist", "moody", "storybook"];
-
-// Rich infographic with multiple sections
-const TEXT_OVERLAY_STYLES_FULL = ["anime", "caricature", "crayon", "doodle", "stick"];
-
-// Combined for backward compatibility
-const TEXT_OVERLAY_STYLES = [...TEXT_OVERLAY_STYLES_MINIMAL, ...TEXT_OVERLAY_STYLES_FULL];
+// Styles that get basic headline + subtitle text overlay
+const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick", "moody", "storybook", "anime", "caricature", "crayon"];
 
 // ============= HELPER FUNCTIONS =============
 function getStylePrompt(style: string, customStyle?: string): string {
@@ -970,20 +956,8 @@ ${
 
 ${
   includeTextOverlay
-    ? TEXT_OVERLAY_STYLES_FULL.includes(style.toLowerCase())
-      ? `
-=== INFOGRAPHIC TEXT OVERLAY (FULL) ===
-For each scene, provide rich infographic data:
-- title: 2-5 word bold headline
-- subtitle: single line takeaway
-- infographicSections: 2-3 labeled content blocks, each with:
-  - heading: short section title (e.g., "The Creative Multiplier", "Scaling Impact")
-  - caption: 1 sentence description
-  - iconHint: suggested icon symbol (e.g., "podcast microphone", "chess king", "lightbulb")
-- floatingIcons: 2-4 small icon/symbol suggestions to surround the subject (e.g., ["music note", "dollar sign", "globe", "star"])
-`
-      : `
-=== TEXT OVERLAY (MINIMAL) ===
+    ? `
+=== TEXT OVERLAY ===
 - Provide title (2-5 words) and subtitle for each scene
 `
     : ""
@@ -1002,15 +976,7 @@ Return ONLY valid JSON:
       "subVisuals": ["Optional additional visual..."],
       "duration": 18${
         includeTextOverlay
-          ? TEXT_OVERLAY_STYLES_FULL.includes(style.toLowerCase())
-            ? `,
-      "title": "Headline",
-      "subtitle": "Takeaway",
-      "infographicSections": [
-        {"heading": "Section Title", "caption": "Brief description", "iconHint": "icon name"}
-      ],
-      "floatingIcons": ["icon1", "icon2"]`
-            : `,
+          ? `,
       "title": "Headline",
       "subtitle": "Takeaway"`
           : ""
@@ -1373,37 +1339,9 @@ async function handleImagesPhase(
     let textInstructions = "";
     
     if (includeTextOverlay && scene.title && subIndex === 0) {
-      const isFullInfographic = TEXT_OVERLAY_STYLES_FULL.includes(style.toLowerCase());
-      
-      if (isFullInfographic && scene.infographicSections && scene.infographicSections.length > 0) {
-        // Full infographic layout with labeled sections
-        const sectionsText = scene.infographicSections
-          .map((section, idx) => `${idx + 1}. "${section.heading}"${section.iconHint ? ` with ${section.iconHint} icon` : ""} - ${section.caption}`)
-          .join("\n");
-        
-        const iconsText = scene.floatingIcons && scene.floatingIcons.length > 0
-          ? `FLOATING ICONS: ${scene.floatingIcons.join(", ")} arranged around the main subject`
-          : "";
-        
-        textInstructions = `
-INFOGRAPHIC LAYOUT:
-- HEADLINE: "${scene.title}" (bold, prominent, top or center)
-- SUBTITLE: "${scene.subtitle || ""}" (smaller, below headline)
-
-LABELED SECTIONS (arrange around subject in editorial magazine layout):
-${sectionsText}
-
-${iconsText}
-
-Typography: Bold sans-serif headings, clean body text, consistent hierarchy.
-All text must be LEGIBLE, correctly spelled, magazine-style editorial layout.
-Include visual icons/symbols for each section heading.`;
-      } else {
-        // Minimal text overlay - just headline and subtitle
-        textInstructions = `
+      textInstructions = `
 TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as subtitle.
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
-      }
     }
 
     // Add brand mark signature if provided - centered at bottom
