@@ -90,7 +90,14 @@ const STYLE_PROMPTS: Record<string, string> = {
   crayon: `Illustration with rough, scribbly strokes and visible wax texture. Naive kindergarten drawing style: simple rounded shapes, uneven lines, imperfect perspective, big friendly smiley face. Flat white background like drawing paper. Bright primary colors with a limited palette (orange, blue, peach/skin tone, a little black). Loose, messy coloring that goes outside the lines, with grainy crayon speckles. Minimal detail, playful, wholesome, hand-drawn kids-book vibe. No clean vector lines, no smooth shading, no realism, no 3D, no gradients, keep it messy and textured like real crayon. No vector, no flat icon, no digital painting, no photorealistic, no anime, no 3d render, no glossy, no smooth lines, no airbrush, no ultra-detailed.`,
 };
 
-const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
+// Basic headline + subtitle only
+const TEXT_OVERLAY_STYLES_MINIMAL = ["minimalist", "moody", "storybook"];
+
+// Rich infographic with multiple sections
+const TEXT_OVERLAY_STYLES_FULL = ["anime", "caricature", "crayon", "doodle", "stick"];
+
+// Combined for backward compatibility
+const TEXT_OVERLAY_STYLES = [...TEXT_OVERLAY_STYLES_MINIMAL, ...TEXT_OVERLAY_STYLES_FULL];
 
 // ============= HELPER FUNCTIONS =============
 function getStylePrompt(style: string, customStyle?: string): string {
