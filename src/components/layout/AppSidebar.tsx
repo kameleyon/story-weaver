@@ -10,10 +10,12 @@ import {
   PanelLeftClose,
   PanelLeft,
   History,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -37,9 +39,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { ProjectSearch } from "@/components/layout/ProjectSearch";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface AppSidebarProps {
   onNewProject: () => void;
@@ -52,6 +66,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null);
 
   const { data: recentProjects = [], isLoading } = useQuery({
     queryKey: ["recent-projects", user?.id],
@@ -69,12 +86,42 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
     enabled: !!user?.id,
   });
 
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const { error } = await supabase.from("projects").delete().eq("id", projectId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recent-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects-search"] });
+      toast.success("Project deleted successfully");
+    },
+    onError: (error) => {
+      toast.error("Failed to delete project: " + error.message);
+    },
+  });
+
+  const handleDeleteProject = (project: { id: string; title: string }, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (projectToDelete) {
+      deleteProjectMutation.mutate(projectToDelete.id);
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
 
   return (
+    <>
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-3">
         {/* Search bar - only when expanded */}
@@ -144,10 +191,10 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   <div className="px-3 py-2 text-sm text-muted-foreground/70">No projects yet</div>
                 ) : (
                   recentProjects.map((project) => (
-                    <SidebarMenuItem key={project.id}>
+                    <SidebarMenuItem key={project.id} className="group relative">
                       <SidebarMenuButton
                         onClick={() => onOpenProject(project.id)}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-sidebar-accent/50"
+                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 pr-8 transition-colors hover:bg-sidebar-accent/50"
                       >
                         <Video className="h-4 w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
@@ -157,6 +204,27 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           </span>
                         </div>
                       </SidebarMenuButton>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive cursor-pointer"
+                            onClick={(e) => handleDeleteProject(project, e as unknown as React.MouseEvent)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </SidebarMenuItem>
                   ))
                 )}
@@ -224,5 +292,26 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{projectToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
