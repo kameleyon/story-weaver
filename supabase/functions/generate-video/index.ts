@@ -806,6 +806,7 @@ async function editImageWithReplicate(
           prompt: editPrompt,
           aspect_ratio: "match_input_image",
           output_format: "png",
+          quality: "medium",
         },
       }),
     });
