@@ -769,6 +769,94 @@ async function generateImageWithReplicate(
   }
 }
 
+// ============= TRUE IMAGE EDITING =============
+async function editImageWithReplicate(
+  sourceImageUrl: string,
+  editPrompt: string,
+  replicateApiKey: string,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  try {
+    console.log(`[editImage] Starting true image edit with Qwen model...`);
+    console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
+    console.log(`[editImage] Edit prompt: ${editPrompt}`);
+
+    // Using Qwen's image edit model
+    // Docs: https://replicate.com/qwen/qwen-image-edit/api
+    const createResponse = await fetch("https://api.replicate.com/v1/models/qwen/qwen-image-edit/predictions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          image: sourceImageUrl,
+          prompt: editPrompt,
+          aspect_ratio: "match_input_image",
+          output_format: "png",
+          disable_safety_checker: true,
+        },
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const status = createResponse.status;
+      const errText = await createResponse.text().catch(() => "");
+      console.error(`[editImage] Replicate API error: ${status} - ${errText}`);
+      return {
+        ok: false,
+        error: `Qwen image edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+      };
+    }
+
+    let prediction = await createResponse.json();
+    console.log(`[editImage] Prediction created: ${prediction.id}, status: ${prediction.status}`);
+
+    // Poll for completion
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await sleep(2000);
+      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${replicateApiKey}` },
+      });
+      prediction = await pollResponse.json();
+      console.log(`[editImage] Polling prediction ${prediction.id}: ${prediction.status}`);
+    }
+
+    if (prediction.status === "failed") {
+      console.error(`[editImage] Prediction failed: ${prediction.error}`);
+      return { ok: false, error: prediction.error || "Image edit failed" };
+    }
+
+    // Qwen returns output as URL(s)
+    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    const imageUrl =
+      typeof first === "string"
+        ? first
+        : first && typeof first === "object" && typeof first.url === "string"
+          ? first.url
+          : null;
+
+    if (!imageUrl) {
+      console.error(`[editImage] No image URL in response:`, prediction.output);
+      return { ok: false, error: "No image URL returned from Qwen" };
+    }
+
+    console.log(`[editImage] Downloading edited image from: ${imageUrl.substring(0, 80)}...`);
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) {
+      return { ok: false, error: "Failed to download edited image" };
+    }
+
+    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+    console.log(`[editImage] Success! Downloaded ${bytes.length} bytes`);
+    return { ok: true, bytes };
+  } catch (err) {
+    console.error(`[editImage] Error:`, err);
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 // ============= PHASE HANDLERS =============
 
 async function handleScriptPhase(
@@ -1615,8 +1703,16 @@ async function handleRegenerateImage(
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
 
-  // Build modified prompt incorporating user's modification request
-  const modifiedPrompt = `${scene.visualPrompt}
+  let imageResult: { ok: true; bytes: Uint8Array } | { ok: false; error: string };
+
+  // Check if scene has an existing image URL for true image editing
+  if (scene.imageUrl) {
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Qwen model`);
+    imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey);
+  } else {
+    // Fallback to prompt-based generation if no source image
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - No source image, falling back to prompt-based generation`);
+    const modifiedPrompt = `${scene.visualPrompt}
 
 USER MODIFICATION REQUEST: ${imageModification}
 
@@ -1624,8 +1720,8 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image.`;
 
-  // Generate new image
-  const imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
+    imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
+  }
 
   if (!imageResult.ok) {
     throw new Error(imageResult.error || "Image regeneration failed");
