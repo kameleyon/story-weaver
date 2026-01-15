@@ -15,6 +15,7 @@ interface GenerationRequest {
   length?: string;
   style?: string;
   customStyle?: string;
+  brandMark?: string;
   // For chunked phases
   phase?: "script" | "audio" | "images" | "finalize" | "regenerate-audio" | "regenerate-image";
   generationId?: string;
@@ -778,6 +779,7 @@ async function handleScriptPhase(
   length: string,
   style: string,
   customStyle?: string,
+  brandMark?: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -920,6 +922,7 @@ Return ONLY valid JSON:
       format,
       length,
       style,
+      brand_mark: brandMark || null,
       status: "generating",
     })
     .select()
@@ -1165,7 +1168,7 @@ async function handleImagesPhase(
   // Fetch generation with project format
   const { data: generation } = await supabase
     .from("generations")
-    .select("*, projects!inner(format, style)")
+    .select("*, projects!inner(format, style, brand_mark)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
@@ -1175,6 +1178,7 @@ async function handleImagesPhase(
   const scenes = generation.scenes as Scene[];
   const format = generation.projects.format;
   const style = generation.projects.style;
+  const brandMark = generation.projects.brand_mark;
   const styleDescription = getStylePrompt(style);
   const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
   const dimensions = getImageDimensions(format);
@@ -1208,10 +1212,19 @@ TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as 
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     }
 
+    // Add brand mark signature if provided
+    let brandMarkInstructions = "";
+    if (brandMark && brandMark.trim()) {
+      brandMarkInstructions = `
+SIGNATURE: Add a small, elegant signature text "${brandMark}" in the bottom-left corner of the image. 
+The signature should be subtle but legible, styled like a trademark or ownership mark. Use a clean sans-serif font.`;
+    }
+
     return `${visualPrompt}
 
 STYLE: ${styleDescription}
 ${textInstructions}
+${brandMarkInstructions}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
   };
@@ -1747,7 +1760,7 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle);
+      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark);
     }
 
     if (!generationId || !projectId) {

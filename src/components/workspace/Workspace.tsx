@@ -52,6 +52,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
         length,
         style,
         customStyle: style === "custom" ? customStyle : undefined,
+        brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
       });
     }
   };

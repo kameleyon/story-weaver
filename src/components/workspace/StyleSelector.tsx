@@ -252,7 +252,7 @@ export function StyleSelector({
                 maxLength={50}
               />
               <p className="text-xs text-muted-foreground/60 mt-1.5">
-                Appears bottom-right on all generated images
+                Appears bottom-left on all generated images as a signature
               </p>
             </div>
           </motion.div>
