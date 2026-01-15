@@ -104,6 +104,7 @@ export type Database = {
           description: string | null
           format: string
           id: string
+          is_favorite: boolean
           length: string
           status: string
           style: string
@@ -117,6 +118,7 @@ export type Database = {
           description?: string | null
           format?: string
           id?: string
+          is_favorite?: boolean
           length?: string
           status?: string
           style?: string
@@ -130,6 +132,7 @@ export type Database = {
           description?: string | null
           format?: string
           id?: string
+          is_favorite?: boolean
           length?: string
           status?: string
           style?: string

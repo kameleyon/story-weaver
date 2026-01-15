@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import Settings from "./pages/Settings";
 import Usage from "./pages/Usage";
+import Projects from "./pages/Projects";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Usage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/projects"
+              element={
+                <ProtectedRoute>
+                  <Projects />
                 </ProtectedRoute>
               }
             />
