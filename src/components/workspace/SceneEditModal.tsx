@@ -52,7 +52,7 @@ export function SceneEditModal({
   const handleModifyImage = async () => {
     if (!imageModification.trim()) return;
     await onRegenerateImage(sceneIndex, imageModification);
-    setImageModification("");
+    // Keep the text so user can make iterative edits
   };
 
   return (
