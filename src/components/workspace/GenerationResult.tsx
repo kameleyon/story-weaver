@@ -478,10 +478,9 @@ export function GenerationResult({
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
               <Button
-                variant="ghost"
                 size="sm"
                 onClick={() => setEditingSceneIndex(currentSceneIndex)}
-                className="gap-1.5"
+                className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Edit
