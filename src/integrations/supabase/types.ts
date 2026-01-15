@@ -100,6 +100,7 @@ export type Database = {
       projects: {
         Row: {
           brand_mark: string | null
+          character_description: string | null
           content: string
           created_at: string
           description: string | null
@@ -107,6 +108,7 @@ export type Database = {
           id: string
           is_favorite: boolean
           length: string
+          presenter_focus: string | null
           status: string
           style: string
           title: string
@@ -115,6 +117,7 @@ export type Database = {
         }
         Insert: {
           brand_mark?: string | null
+          character_description?: string | null
           content: string
           created_at?: string
           description?: string | null
@@ -122,6 +125,7 @@ export type Database = {
           id?: string
           is_favorite?: boolean
           length?: string
+          presenter_focus?: string | null
           status?: string
           style?: string
           title: string
@@ -130,6 +134,7 @@ export type Database = {
         }
         Update: {
           brand_mark?: string | null
+          character_description?: string | null
           content?: string
           created_at?: string
           description?: string | null
@@ -137,6 +142,7 @@ export type Database = {
           id?: string
           is_favorite?: boolean
           length?: string
+          presenter_focus?: string | null
           status?: string
           style?: string
           title?: string
