@@ -16,6 +16,8 @@ interface GenerationRequest {
   style?: string;
   customStyle?: string;
   brandMark?: string;
+  presenterFocus?: string;
+  characterDescription?: string;
   // For chunked phases
   phase?: "script" | "audio" | "images" | "finalize" | "regenerate-audio" | "regenerate-image";
   generationId?: string;
@@ -879,6 +881,8 @@ async function handleScriptPhase(
   style: string,
   customStyle?: string,
   brandMark?: string,
+  presenterFocus?: string,
+  characterDescription?: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -895,10 +899,27 @@ async function handleScriptPhase(
   const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
   const dimensions = getImageDimensions(format);
 
+  // Build optional guidance sections
+  const presenterGuidance = presenterFocus
+    ? `
+=== PRESENTER GUIDANCE ===
+${presenterFocus}
+`
+    : "";
+
+  const characterGuidance = characterDescription
+    ? `
+=== CHARACTER APPEARANCE ===
+All human characters in visual prompts MUST match this description:
+${characterDescription}
+Include these character details in EVERY visualPrompt that features people.
+`
+    : "";
+
   const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
 
 Content: ${content}
-
+${presenterGuidance}${characterGuidance}
 === TIMING REQUIREMENTS ===
 - Target duration: ${config.targetDuration} seconds
 - Create exactly ${sceneCount} scenes
@@ -1022,6 +1043,8 @@ Return ONLY valid JSON:
       length,
       style,
       brand_mark: brandMark || null,
+      presenter_focus: presenterFocus || null,
+      character_description: characterDescription || null,
       status: "generating",
     })
     .select()
@@ -1878,7 +1901,7 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark);
+      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription);
     }
 
     if (!generationId || !projectId) {
