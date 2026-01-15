@@ -31,7 +31,7 @@ export function ContentInput({ content, onContentChange }: ContentInputProps) {
         <FileUp className="h-3.5 w-3.5" />
         Add your source
       </label>
-      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-lg">
+      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm">
         <Textarea
           placeholder="Please add all your sources and documentations."
           className="min-h-[180px] resize-none rounded-2xl border-0 bg-transparent p-6 text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
