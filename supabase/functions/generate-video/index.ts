@@ -1545,7 +1545,7 @@ async function handleRegenerateAudio(
     .update({ scenes })
     .eq("id", generationId);
 
-  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully`);
+  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully with voiceover: "${newVoiceover.substring(0, 50)}..."`);
 
   return new Response(
     JSON.stringify({
@@ -1554,6 +1554,7 @@ async function handleRegenerateAudio(
       sceneIndex,
       audioUrl: audioResult.url,
       duration: scenes[sceneIndex].duration,
+      voiceover: scenes[sceneIndex].voiceover, // Return the updated voiceover for confirmation
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
