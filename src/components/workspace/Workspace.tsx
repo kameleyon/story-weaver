@@ -1,14 +1,16 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
-import { Play, Menu, AlertCircle, RotateCcw } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ContentInput } from "./ContentInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { LengthSelector, type VideoLength } from "./LengthSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
 import { VoiceSelector, type VoiceGender } from "./VoiceSelector";
 import { PresenterFocusInput } from "./PresenterFocusInput";
+import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
@@ -27,6 +29,9 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [customStyle, setCustomStyle] = useState("");
   const [voice, setVoice] = useState<VoiceGender>("female");
   const [presenterFocus, setPresenterFocus] = useState("");
+  const [characterDescription, setCharacterDescription] = useState("");
+  const [presenterFocusOpen, setPresenterFocusOpen] = useState(false);
+  const [characterDescOpen, setCharacterDescOpen] = useState(false);
   const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
   const [brandMarkText, setBrandMarkText] = useState("");
 
@@ -53,6 +58,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
         style,
         customStyle: style === "custom" ? customStyle : undefined,
         brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+        presenterFocus: presenterFocus.trim() || undefined,
+        characterDescription: characterDescription.trim() || undefined,
       });
     }
   };
@@ -66,6 +73,9 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
     setCustomStyle("");
     setVoice("female");
     setPresenterFocus("");
+    setCharacterDescription("");
+    setPresenterFocusOpen(false);
+    setCharacterDescOpen(false);
     setBrandMarkEnabled(false);
     setBrandMarkText("");
   };
@@ -162,9 +172,39 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 {/* Content Input */}
                 <ContentInput content={content} onContentChange={setContent} />
 
-                {/* Presenter Focus - Right after source */}
-                <div className="rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg">
-                  <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
+                {/* Collapsible Advanced Options */}
+                <div className="space-y-3">
+                  {/* Character Description - Collapsible */}
+                  <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-lg hover:bg-muted/30 transition-colors">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Character Appearance
+                      </span>
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg -mt-2">
+                        <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {/* Presenter Focus - Collapsible */}
+                  <Collapsible open={presenterFocusOpen} onOpenChange={setPresenterFocusOpen}>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-lg hover:bg-muted/30 transition-colors">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Lightbulb className="h-4 w-4" />
+                        Presenter Focus
+                      </span>
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-lg -mt-2">
+                        <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
 
                 {/* Configuration */}
