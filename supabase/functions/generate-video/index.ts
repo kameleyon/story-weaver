@@ -685,12 +685,23 @@ async function generateImageWithReplicate(
 ): Promise<
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // Get explicit dimensions for z-image-turbo (must be multiples of 16)
+  // Get aspect ratio for Imagen 4
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
+  /* ============= OLD P-IMAGE SETTINGS (COMMENTED FOR LATER USE) =============
   const dimensions = getImageDimensions(format);
+  
+  // p-image model endpoint and input:
+  // URL: "https://api.replicate.com/v1/models/prunaai/p-image/predictions"
+  // Input: {
+  //   prompt,
+  //   aspect_ratio: dimensions.aspectRatio,
+  //   prompt_upsampling: false,
+  //   disable_safety_checker: true,
+  // }
+  ============================================================================= */
 
   /* ============= OLD SEEDREAM-4.5 SETTINGS (COMMENTED FOR LATER USE) =============
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
   // Seedream model endpoint and input:
   // URL: "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions"
   // Input: {
@@ -703,9 +714,9 @@ async function generateImageWithReplicate(
   ============================================================================= */
 
   try {
-    // Using prunaai/p-image model
-    // Docs: https://replicate.com/prunaai/p-image/api
-    const createResponse = await fetch("https://api.replicate.com/v1/models/prunaai/p-image/predictions", {
+    // Using Google Imagen 4 Fast model
+    // Docs: https://replicate.com/google/imagen-4-fast
+    const createResponse = await fetch("https://api.replicate.com/v1/models/google/imagen-4-fast/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -715,9 +726,9 @@ async function generateImageWithReplicate(
       body: JSON.stringify({
         input: {
           prompt,
-          aspect_ratio: dimensions.aspectRatio,
-          prompt_upsampling: false,
-          disable_safety_checker: true,
+          aspect_ratio: aspectRatio,
+          output_format: "png",
+          safety_filter_level: "block_none",
         },
       }),
     });
@@ -748,7 +759,7 @@ async function generateImageWithReplicate(
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
-    // p-image returns output as a FileOutput - direct URL string or object with url property
+    // Imagen 4 returns output as URL string or array of URLs
     const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     const imageUrl =
       typeof first === "string"
