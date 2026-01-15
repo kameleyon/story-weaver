@@ -787,13 +787,13 @@ async function editImageWithReplicate(
   replicateApiKey: string,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   try {
-    console.log(`[editImage] Starting true image edit with Qwen model...`);
+    console.log(`[editImage] Starting image edit with GPT-Image 1.5...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
     console.log(`[editImage] Edit prompt: ${editPrompt}`);
 
-    // Using Qwen's image edit model
-    // Docs: https://replicate.com/qwen/qwen-image-edit/api
-    const createResponse = await fetch("https://api.replicate.com/v1/models/qwen/qwen-image-edit/predictions", {
+    // Using OpenAI's GPT-Image 1.5 model via Replicate
+    // Docs: https://replicate.com/openai/gpt-image-1.5
+    const createResponse = await fetch("https://api.replicate.com/v1/models/openai/gpt-image-1.5/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -806,7 +806,6 @@ async function editImageWithReplicate(
           prompt: editPrompt,
           aspect_ratio: "match_input_image",
           output_format: "png",
-          disable_safety_checker: true,
         },
       }),
     });
@@ -817,7 +816,7 @@ async function editImageWithReplicate(
       console.error(`[editImage] Replicate API error: ${status} - ${errText}`);
       return {
         ok: false,
-        error: `Qwen image edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `GPT-Image 1.5 edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
       };
     }
 
@@ -839,7 +838,7 @@ async function editImageWithReplicate(
       return { ok: false, error: prediction.error || "Image edit failed" };
     }
 
-    // Qwen returns output as URL(s)
+    // GPT-Image 1.5 returns output as URL(s)
     const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     const imageUrl =
       typeof first === "string"
@@ -850,7 +849,7 @@ async function editImageWithReplicate(
 
     if (!imageUrl) {
       console.error(`[editImage] No image URL in response:`, prediction.output);
-      return { ok: false, error: "No image URL returned from Qwen" };
+      return { ok: false, error: "No image URL returned from GPT-Image 1.5" };
     }
 
     console.log(`[editImage] Downloading edited image from: ${imageUrl.substring(0, 80)}...`);
