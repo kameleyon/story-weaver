@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  FolderArchive,
   Loader2,
   Pause,
   Pencil,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import type { Scene, CostTracking, PhaseTimings } from "@/hooks/useGenerationPipeline";
 import { useVideoExport } from "@/hooks/useVideoExport";
 import { useSceneRegeneration } from "@/hooks/useSceneRegeneration";
+import { useImagesZipDownload } from "@/hooks/useImagesZipDownload";
 import { SceneEditModal } from "./SceneEditModal";
 import { Clock, DollarSign } from "lucide-react";
 
@@ -57,6 +59,7 @@ export function GenerationResult({
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
+  const { state: zipState, downloadImagesAsZip } = useImagesZipDownload();
   const shouldAutoDownloadRef = useRef(false);
   const lastAutoDownloadedUrlRef = useRef<string | null>(null);
 
@@ -640,6 +643,28 @@ export function GenerationResult({
             )}
           </Button>
         )}
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => downloadImagesAsZip(scenes, title)}
+          disabled={
+            zipState.status === "downloading" ||
+            zipState.status === "zipping" ||
+            !scenes.some((s) => !!s.imageUrl || (s.imageUrls && s.imageUrls.length > 0))
+          }
+        >
+          {zipState.status === "downloading" || zipState.status === "zipping" ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {zipState.status === "downloading" ? `${zipState.progress}%` : "Zipping..."}
+            </>
+          ) : (
+            <>
+              <FolderArchive className="h-4 w-4" />
+              Download Images
+            </>
+          )}
+        </Button>
         <Button variant="outline" onClick={onNewProject} className="gap-2">
           <Plus className="h-4 w-4" />
           Create Another
