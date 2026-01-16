@@ -1765,8 +1765,10 @@ async function handleRegenerateImage(
   sceneIndex: number,
   imageModification: string,
   replicateApiKey: string,
+  imageIndex?: number, // Optional index for multi-image scenes
 ): Promise<Response> {
-  console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Starting image regeneration...`);
+  const targetImageIndex = imageIndex ?? 0;
+  console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Starting image regeneration...`);
 
   // Fetch generation with project format and style
   const { data: generation } = await supabase
@@ -1788,12 +1790,22 @@ async function handleRegenerateImage(
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
 
+  // Get existing imageUrls or create from single imageUrl
+  const existingImageUrls = scene.imageUrls?.length 
+    ? [...scene.imageUrls] 
+    : scene.imageUrl 
+      ? [scene.imageUrl] 
+      : [];
+
+  // Determine the source image URL for editing
+  const sourceImageUrl = existingImageUrls[targetImageIndex] || scene.imageUrl;
+
   let imageResult: { ok: true; bytes: Uint8Array } | { ok: false; error: string };
 
   // Check if we should do a full regeneration (empty imageModification) or edit
   if (!imageModification) {
     // Full regeneration from original visual prompt
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Full regeneration from original prompt`);
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Full regeneration from original prompt`);
     const fullPrompt = `${scene.visualPrompt}
 
 STYLE: ${styleDescription}
@@ -1801,18 +1813,18 @@ STYLE: ${styleDescription}
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
     imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
-  } else if (scene.imageUrl) {
+  } else if (sourceImageUrl) {
     // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Nano Banana`);
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using true image editing with Nano Banana`);
     imageResult = await editImageWithNanoBanana(
-      scene.imageUrl,
+      sourceImageUrl,
       imageModification,
       styleDescription,
       { title: scene.title, subtitle: scene.subtitle }
     );
   } else {
     // Fallback to prompt-based generation if no source image
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - No source image, falling back to prompt-based generation`);
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - No source image, falling back to prompt-based generation`);
     const modifiedPrompt = `${scene.visualPrompt}
 
 USER MODIFICATION REQUEST: ${imageModification}
@@ -1829,7 +1841,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
   }
 
   // Upload to storage (use "audio" bucket which is already configured for media storage)
-  const imagePath = `${user.id}/${projectId}/scene-${sceneIndex + 1}-regenerated-${Date.now()}.png`;
+  const imagePath = `${user.id}/${projectId}/scene-${sceneIndex + 1}-img-${targetImageIndex + 1}-regenerated-${Date.now()}.png`;
   const { error: uploadError } = await supabase.storage
     .from("audio")
     .upload(imagePath, imageResult.bytes, { contentType: "image/png", upsert: true });
@@ -1838,9 +1850,19 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
 
   const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(imagePath);
 
-  // Update scene with new image
-  scenes[sceneIndex].imageUrl = publicUrl;
-  scenes[sceneIndex].imageUrls = [publicUrl];
+  // Update the specific image in the imageUrls array
+  if (existingImageUrls.length > 0) {
+    existingImageUrls[targetImageIndex] = publicUrl;
+    scenes[sceneIndex].imageUrls = existingImageUrls;
+    // Also update imageUrl if we're editing the first image
+    if (targetImageIndex === 0) {
+      scenes[sceneIndex].imageUrl = publicUrl;
+    }
+  } else {
+    // Single image scene - replace both
+    scenes[sceneIndex].imageUrl = publicUrl;
+    scenes[sceneIndex].imageUrls = [publicUrl];
+  }
 
   // Save to database
   await supabase
@@ -1848,15 +1870,16 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
     .update({ scenes })
     .eq("id", generationId);
 
-  console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Image regenerated successfully`);
+  console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Image regenerated successfully`);
 
   return new Response(
     JSON.stringify({
       success: true,
       phase: "regenerate-image",
       sceneIndex,
+      imageIndex: targetImageIndex,
       imageUrl: publicUrl,
-      imageUrls: [publicUrl],
+      imageUrls: scenes[sceneIndex].imageUrls,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
@@ -1930,7 +1953,7 @@ serve(async (req) => {
 
     const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
 
-    const body: GenerationRequest & { imageStartIndex?: number; audioStartIndex?: number } = await req.json();
+    const body: GenerationRequest & { imageStartIndex?: number; audioStartIndex?: number; imageIndex?: number } = await req.json();
     const {
       phase,
       generationId,
@@ -1945,6 +1968,7 @@ serve(async (req) => {
       sceneIndex,
       newVoiceover,
       imageModification,
+      imageIndex, // Index of specific image within a multi-image scene
     } = body;
 
     console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}`);
@@ -2021,6 +2045,7 @@ serve(async (req) => {
           sceneIndex,
           imageModification || "", // Empty string means full regeneration from original prompt
           REPLICATE_API_KEY,
+          imageIndex, // Pass the specific image index
         );
       default:
         return new Response(JSON.stringify({ error: `Unknown phase: ${phase}` }), {
