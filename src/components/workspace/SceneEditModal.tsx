@@ -112,7 +112,7 @@ export function SceneEditModal({
               {/* Two Column Layout: Image Left, Edit Options Right */}
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Left Column - Image Preview with Selector */}
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ImageIcon className="h-5 w-5 text-muted-foreground" />
@@ -123,6 +123,32 @@ export function SceneEditModal({
                       </Label>
                     </div>
                   </div>
+
+                  {/* Image Thumbnails for Multiple Images - NOW ON TOP */}
+                  {hasMultipleImages && (
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {currentImages.map((imgUrl, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedImageIndex(idx)}
+                          disabled={isRegenerating}
+                          className={cn(
+                            "flex-shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-all",
+                            selectedImageIndex === idx 
+                              ? "border-primary ring-2 ring-primary/30" 
+                              : "border-transparent hover:border-muted-foreground/30",
+                            isRegenerating && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Thumbnail ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Main Image Preview with Navigation */}
                   <div className={cn("relative rounded-lg overflow-hidden bg-muted/50", aspectClass)}>
@@ -171,32 +197,6 @@ export function SceneEditModal({
                       </div>
                     )}
                   </div>
-
-                  {/* Image Thumbnails for Multiple Images */}
-                  {hasMultipleImages && (
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                      {currentImages.map((imgUrl, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedImageIndex(idx)}
-                          disabled={isRegenerating}
-                          className={cn(
-                            "flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 transition-all",
-                            selectedImageIndex === idx 
-                              ? "border-primary ring-2 ring-primary/30" 
-                              : "border-transparent hover:border-muted-foreground/30",
-                            isRegenerating && "opacity-50 cursor-not-allowed"
-                          )}
-                        >
-                          <img
-                            src={imgUrl}
-                            alt={`Thumbnail ${idx + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 {/* Right Column - Edit Options */}
