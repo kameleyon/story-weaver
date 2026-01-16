@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import Settings from "./pages/Settings";
 import Usage from "./pages/Usage";
+import Pricing from "./pages/Pricing";
 import Projects from "./pages/Projects";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/pricing" element={<Pricing />} />
             <Route
               path="/projects"
               element={
