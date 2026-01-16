@@ -127,7 +127,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
       <SidebarHeader className="p-3">
         {/* Search bar - only when expanded */}
         {!isCollapsed && (
-          <div className="mb-4">
+          <div className="mb-3 sm:mb-4">
             <ProjectSearch onSelectProject={onOpenProject} />
           </div>
         )}
@@ -140,7 +140,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 variant="ghost"
                 size="icon"
                 onClick={toggleSidebar}
-                className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/50"
+                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/50"
               >
                 {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </Button>
@@ -150,7 +150,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         </div>
 
         {/* New Project Button */}
-        <div className={`mt-4 ${isCollapsed ? "flex justify-center" : ""}`}>
+        <div className={`mt-3 sm:mt-4 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Tooltip>
             <TooltipTrigger asChild>
               {isCollapsed ? (
@@ -163,7 +163,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               ) : (
                 <Button
                   onClick={onNewProject}
-                  className="w-full justify-start gap-2.5 rounded-full bg-primary/40 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="w-full justify-start gap-2 sm:gap-2.5 rounded-full bg-primary/40 text-sm text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
                   <Plus className="h-4 w-4" />
                   <span className="font-medium">New Project</span>
@@ -178,29 +178,29 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
       <SidebarContent className="px-2">
         {!isCollapsed && (
           <SidebarGroup>
-            <div className="flex items-center gap-2 px-3 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-              <History className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-2 px-3 py-2 text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </div>
             <SidebarGroupContent className="mt-1">
-              <SidebarMenu className="space-y-1">
+              <SidebarMenu className="space-y-0.5 sm:space-y-1">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 ) : recentProjects.length === 0 ? (
-                  <div className="px-3 py-2 text-sm text-muted-foreground/70">No projects yet</div>
+                  <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground/70">No projects yet</div>
                 ) : (
                   recentProjects.map((project) => (
                     <SidebarMenuItem key={project.id} className="group relative">
                       <SidebarMenuButton
                         onClick={() => onOpenProject(project.id)}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2.5 pr-8 transition-colors hover:bg-sidebar-accent/50"
+                        className="w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 pr-8 transition-colors hover:bg-sidebar-accent/50"
                       >
-                        <Video className="h-4 w-4 text-muted-foreground" />
+                        <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                         <div className="flex flex-col items-start overflow-hidden">
-                          <span className="truncate text-sm font-medium">{project.title}</span>
-                          <span className="text-[11px] text-muted-foreground/70">
+                          <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
+                          <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">
                             {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
                           </span>
                         </div>
@@ -210,15 +210,15 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                            <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem
-                            className="text-destructive focus:text-destructive cursor-pointer"
+                            className="text-destructive focus:text-destructive cursor-pointer text-sm"
                             onClick={(e) => handleDeleteProject(project, e as unknown as React.MouseEvent)}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
@@ -236,10 +236,10 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+                  className="w-full justify-start gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground"
                   onClick={() => navigate("/projects")}
                 >
-                  <FolderOpen className="h-4 w-4" />
+                  <FolderOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   View All Projects
                 </Button>
               </div>
@@ -248,7 +248,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-3">
+      <SidebarFooter className="p-2 sm:p-3">
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -256,19 +256,19 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 <Button
                   variant="ghost"
                   className={`w-full rounded-lg hover:bg-sidebar-accent/50 ${
-                    isCollapsed ? "justify-center px-0" : "justify-start gap-3 px-3"
-                  } py-2.5`}
+                    isCollapsed ? "justify-center px-0" : "justify-start gap-2 sm:gap-3 px-2 sm:px-3"
+                  } py-2 sm:py-2.5`}
                   size={isCollapsed ? "icon" : "default"}
                 >
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                     <AvatarFallback className="bg-muted text-muted-foreground">
-                      <User className="h-4 w-4" />
+                      <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </AvatarFallback>
                   </Avatar>
                   {!isCollapsed && (
                     <div className="flex flex-col items-start overflow-hidden">
-                      <span className="truncate text-sm font-medium">{user?.email?.split("@")[0] || "User"}</span>
-                      <span className="text-[11px] text-muted-foreground/70">Free Plan</span>
+                      <span className="truncate text-xs sm:text-sm font-medium">{user?.email?.split("@")[0] || "User"}</span>
+                      <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">Free Plan</span>
                     </div>
                   )}
                 </Button>
