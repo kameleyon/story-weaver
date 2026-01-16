@@ -127,8 +127,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Top Bar */}
-      <header className="flex h-16 items-center justify-between border-b border-border/30 bg-background/80 px-6 backdrop-blur-sm">
-        <div className="flex items-center gap-4">
+      <header className="flex h-14 sm:h-16 items-center justify-between border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
+        <div className="flex items-center gap-3 sm:gap-4">
           <SidebarTrigger className="lg:hidden">
             <Menu className="h-5 w-5 text-muted-foreground" />
           </SidebarTrigger>
@@ -140,12 +140,12 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
         <div className="flex items-center gap-3">
           {generationState.step !== "idle" && generationState.step !== "complete" && generationState.step !== "error" && (
             <motion.div
-              className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5"
+              className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
             >
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-              <span className="text-sm font-medium text-primary">Generating...</span>
+              <span className="text-xs sm:text-sm font-medium text-primary">Generating...</span>
             </motion.div>
           )}
         </div>
@@ -153,7 +153,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-4xl px-6 py-12">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-12">
           <AnimatePresence mode="wait">
             {generationState.step === "idle" ? (
               <motion.div
@@ -161,14 +161,14 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="max-w-2xl mx-auto space-y-8"
+                className="max-w-2xl mx-auto space-y-6 sm:space-y-8"
               >
                 {/* Hero */}
                 <div className="text-center">
-                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                  <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                     What would you like to create?
                   </h1>
-                  <p className="mt-2 text-muted-foreground/70">
+                  <p className="mt-1.5 sm:mt-2 text-sm text-muted-foreground/70">
                     Paste your content or describe your video idea
                   </p>
                 </div>
@@ -177,18 +177,18 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 <ContentInput content={content} onContentChange={setContent} />
 
                 {/* Collapsible Advanced Options */}
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {/* Character Description - Collapsible */}
                   <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
-                      <span className="text-sm font-medium flex items-center gap-2">
-                        <Users className="h-4 w-4" />
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
+                      <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                        <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         Character Appearance
                       </span>
-                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
+                      <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-sm -mt-2">
+                      <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
                         <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
                       </div>
                     </CollapsibleContent>
@@ -196,22 +196,22 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
 
                   {/* Presenter Focus - Collapsible */}
                   <Collapsible open={presenterFocusOpen} onOpenChange={setPresenterFocusOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
-                      <span className="text-sm font-medium flex items-center gap-2">
-                        <Lightbulb className="h-4 w-4" />
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
+                      <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                        <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         Presenter Focus
                       </span>
-                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
+                      <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-sm -mt-2">
+                      <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
                         <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
 
                   {/* Disable Expressions Toggle */}
-                  <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm shadow-sm">
+                  <div className="flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm">
                     <Checkbox
                       id="disable-expressions"
                       checked={disableExpressions}
@@ -219,26 +219,26 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                     />
                     <label
                       htmlFor="disable-expressions"
-                      className="flex items-center gap-2 text-sm font-medium cursor-pointer"
+                      className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium cursor-pointer flex-wrap"
                     >
-                      <MessageSquareOff className="h-4 w-4 text-muted-foreground" />
+                      <MessageSquareOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       <span>Disable voice expressions</span>
-                      <span className="text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
+                      <span className="text-[10px] sm:text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
                     </label>
                   </div>
                 </div>
 
                 {/* Configuration */}
-                <div className="space-y-6 rounded-2xl border border-border/50 bg-card/50 p-6 backdrop-blur-sm shadow-sm">
+                <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm">
                   <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
                   <div className="h-px bg-border/30" />
                   
-                  {/* Length and Voice side by side */}
-                  <div className="flex gap-6">
+                  {/* Length and Voice side by side on desktop, stacked on mobile */}
+                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
                     <div className="flex-1">
                       <LengthSelector selected={length} onSelect={setLength} />
                     </div>
-                    <div className="flex-shrink-0">
+                    <div className="sm:flex-shrink-0">
                       <VoiceSelector selected={voice} onSelect={setVoice} />
                     </div>
                   </div>
@@ -261,7 +261,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                   <Button
                     onClick={handleGenerate}
                     disabled={!canGenerate}
-                    className="w-full gap-2.5 rounded-full bg-primary py-6 text-base font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-40"
+                    className="w-full gap-2 sm:gap-2.5 rounded-full bg-primary py-5 sm:py-6 text-sm sm:text-base font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-40"
                   >
                     <Play className="h-4 w-4" />
                     Generate Video

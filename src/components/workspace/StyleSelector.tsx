@@ -128,7 +128,7 @@ export function StyleSelector({
         {/* Carousel Container */}
         <div
           ref={scrollContainerRef}
-          className="flex gap-3 overflow-x-auto scrollbar-hide px-1 py-1"
+          className="flex gap-2 sm:gap-3 overflow-x-auto scrollbar-hide px-1 py-1"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {styles.map((style) => (
@@ -136,7 +136,7 @@ export function StyleSelector({
               key={style.id}
               onClick={() => onSelect(style.id)}
               className={cn(
-                "group relative flex-shrink-0 w-[120px] overflow-hidden rounded-xl border-2 transition-all",
+                "group relative flex-shrink-0 w-[100px] sm:w-[120px] overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all",
                 selected === style.id
                   ? "border-primary shadow-sm shadow-primary/20"
                   : "border-transparent hover:border-muted-foreground/30"
@@ -158,13 +158,13 @@ export function StyleSelector({
               
               {/* Label */}
               <div className={cn(
-                "px-2 py-2 text-center transition-colors",
+                "px-1.5 sm:px-2 py-1.5 sm:py-2 text-center transition-colors",
                 selected === style.id 
                   ? "bg-primary/10" 
                   : "bg-muted/50"
               )}>
                 <span className={cn(
-                  "text-xs font-medium",
+                  "text-[10px] sm:text-xs font-medium",
                   selected === style.id ? "text-primary" : "text-muted-foreground"
                 )}>
                   {style.label}

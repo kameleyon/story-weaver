@@ -26,15 +26,15 @@ export function ContentInput({ content, onContentChange }: ContentInputProps) {
   // };
 
   return (
-    <div className="space-y-3">
-      <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-        <FileUp className="h-3.5 w-3.5" />
+    <div className="space-y-2 sm:space-y-3">
+      <label className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+        <FileUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         Add your source
       </label>
-      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl sm:rounded-2xl border border-border/50 bg-card shadow-sm">
         <Textarea
           placeholder="Please add all your sources and documentations."
-          className="min-h-[180px] resize-none rounded-2xl border-0 bg-transparent p-6 text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
+          className="min-h-[140px] sm:min-h-[180px] resize-none rounded-xl sm:rounded-2xl border-0 bg-transparent p-4 sm:p-6 text-sm sm:text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
           value={content}
           onChange={(e) => onContentChange(e.target.value)}
         />

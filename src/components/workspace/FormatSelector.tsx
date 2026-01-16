@@ -20,7 +20,7 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
   return (
     <div className="space-y-3">
       <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Format</h3>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {formats.map((format) => {
           const IconComponent = format.icon;
           const isDisabled = disabledFormats.includes(format.id);
@@ -30,7 +30,7 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
               onClick={() => !isDisabled && onSelect(format.id)}
               disabled={isDisabled}
               className={cn(
-                "relative flex flex-col items-center gap-3 rounded-xl border p-4 transition-all",
+                "relative flex flex-col items-center gap-2 sm:gap-3 rounded-xl border p-3 sm:p-4 transition-all",
                 isDisabled
                   ? "cursor-not-allowed opacity-40 border-transparent bg-muted/20"
                   : selected === format.id
@@ -41,13 +41,13 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
               whileTap={isDisabled ? {} : { scale: 0.99 }}
             >
               {format.badge && !isDisabled && (
-                <span className="absolute -top-2 right-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
+                <span className="absolute -top-2 right-1 sm:right-2 rounded-full bg-primary px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium text-primary-foreground">
                   {format.badge}
                 </span>
               )}
               <div
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
+                  "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl transition-colors",
                   isDisabled
                     ? "bg-muted/30 text-muted-foreground/50"
                     : selected === format.id 
@@ -55,18 +55,18 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
                     : "bg-muted/50 text-muted-foreground"
                 )}
               >
-                <IconComponent className="h-5 w-5" />
+                <IconComponent className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div className="text-center">
                 <p className={cn(
-                  "text-sm font-medium",
+                  "text-xs sm:text-sm font-medium",
                   isDisabled
                     ? "text-muted-foreground/50"
                     : selected === format.id 
                     ? "text-foreground" 
                     : "text-muted-foreground"
                 )}>{format.label}</p>
-                <p className="text-xs text-muted-foreground/70">{format.ratio}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground/70">{format.ratio}</p>
               </div>
             </motion.button>
           );
