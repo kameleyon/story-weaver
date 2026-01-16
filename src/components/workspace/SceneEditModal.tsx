@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Save, RefreshCw, Loader2, Wand2, Volume2, Image as ImageIcon } from "lucide-react";
+import { X, Save, RefreshCw, Loader2, Wand2, Volume2, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,7 @@ interface SceneEditModalProps {
   format: "landscape" | "portrait" | "square";
   onClose: () => void;
   onRegenerateAudio: (sceneIndex: number, newVoiceover: string) => Promise<void>;
-  onRegenerateImage: (sceneIndex: number, imageModification: string) => Promise<void>;
+  onRegenerateImage: (sceneIndex: number, imageModification: string, imageIndex?: number) => Promise<void>;
   isRegenerating: boolean;
   regeneratingType: "audio" | "image" | null;
 }
@@ -32,11 +32,13 @@ export function SceneEditModal({
   const [voiceover, setVoiceover] = useState(scene.voiceover);
   const [imageModification, setImageModification] = useState("");
   const [hasScriptChanges, setHasScriptChanges] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const aspectClass =
     format === "portrait" ? "aspect-[9/16]" : format === "square" ? "aspect-square" : "aspect-video";
 
   const currentImages = scene.imageUrls?.length ? scene.imageUrls : scene.imageUrl ? [scene.imageUrl] : [];
+  const hasMultipleImages = currentImages.length > 1;
 
   const handleVoiceoverChange = (value: string) => {
     setVoiceover(value);
@@ -51,8 +53,20 @@ export function SceneEditModal({
 
   const handleModifyImage = async () => {
     if (!imageModification.trim()) return;
-    await onRegenerateImage(sceneIndex, imageModification);
+    await onRegenerateImage(sceneIndex, imageModification, selectedImageIndex);
     // Keep the text so user can make iterative edits
+  };
+
+  const handleRegenerateNewImage = async () => {
+    await onRegenerateImage(sceneIndex, "", selectedImageIndex);
+  };
+
+  const goToPrevImage = () => {
+    setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : currentImages.length - 1));
+  };
+
+  const goToNextImage = () => {
+    setSelectedImageIndex((prev) => (prev < currentImages.length - 1 ? prev + 1 : 0));
   };
 
   return (
@@ -97,17 +111,25 @@ export function SceneEditModal({
             >
               {/* Two Column Layout: Image Left, Edit Options Right */}
               <div className="grid md:grid-cols-2 gap-6">
-                {/* Left Column - Image Preview */}
+                {/* Left Column - Image Preview with Selector */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                    <Label className="text-base font-medium">Current Image</Label>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      <Label className="text-base font-medium">
+                        {hasMultipleImages 
+                          ? `Image ${selectedImageIndex + 1} of ${currentImages.length}` 
+                          : "Current Image"}
+                      </Label>
+                    </div>
                   </div>
+
+                  {/* Main Image Preview with Navigation */}
                   <div className={cn("relative rounded-lg overflow-hidden bg-muted/50", aspectClass)}>
-                    {currentImages[0] ? (
+                    {currentImages[selectedImageIndex] ? (
                       <img
-                        src={currentImages[0]}
-                        alt={`Scene ${scene.number}`}
+                        src={currentImages[selectedImageIndex]}
+                        alt={`Scene ${scene.number} - Image ${selectedImageIndex + 1}`}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -115,6 +137,31 @@ export function SceneEditModal({
                         No image
                       </div>
                     )}
+
+                    {/* Navigation Arrows for Multiple Images */}
+                    {hasMultipleImages && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={goToPrevImage}
+                          disabled={isRegenerating}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white h-8 w-8 rounded-full"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={goToNextImage}
+                          disabled={isRegenerating}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white h-8 w-8 rounded-full"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </Button>
+                      </>
+                    )}
+
                     {isRegenerating && regeneratingType === "image" && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                         <div className="text-center">
@@ -124,6 +171,32 @@ export function SceneEditModal({
                       </div>
                     )}
                   </div>
+
+                  {/* Image Thumbnails for Multiple Images */}
+                  {hasMultipleImages && (
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {currentImages.map((imgUrl, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedImageIndex(idx)}
+                          disabled={isRegenerating}
+                          className={cn(
+                            "flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 transition-all",
+                            selectedImageIndex === idx 
+                              ? "border-primary ring-2 ring-primary/30" 
+                              : "border-transparent hover:border-muted-foreground/30",
+                            isRegenerating && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Thumbnail ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Column - Edit Options */}
@@ -132,7 +205,9 @@ export function SceneEditModal({
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <Wand2 className="h-5 w-5 text-muted-foreground" />
-                      <Label className="text-base font-medium">Edit Image</Label>
+                      <Label className="text-base font-medium">
+                        Edit {hasMultipleImages ? `Image ${selectedImageIndex + 1}` : "Image"}
+                      </Label>
                     </div>
                     <Textarea
                       value={imageModification}
@@ -166,7 +241,7 @@ export function SceneEditModal({
                       </Button>
                     </div>
                     <Button
-                      onClick={() => onRegenerateImage(sceneIndex, "")}
+                      onClick={handleRegenerateNewImage}
                       disabled={isRegenerating}
                       variant="outline"
                       className="w-full gap-2"

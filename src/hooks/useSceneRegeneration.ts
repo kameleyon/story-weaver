@@ -98,7 +98,7 @@ export function useSceneRegeneration(
   );
 
   const regenerateImage = useCallback(
-    async (sceneIndex: number, imageModification: string) => {
+    async (sceneIndex: number, imageModification: string, imageIndex?: number) => {
       if (!generationId || !projectId || !scenes) {
         toast({
           variant: "destructive",
@@ -128,6 +128,7 @@ export function useSceneRegeneration(
               projectId,
               sceneIndex,
               imageModification,
+              imageIndex: imageIndex ?? 0, // Default to first image if not specified
             }),
           }
         );
@@ -145,17 +146,30 @@ export function useSceneRegeneration(
 
         // Update local scenes with new image(s)
         const updatedScenes = [...scenes];
-        updatedScenes[sceneIndex] = {
-          ...updatedScenes[sceneIndex],
-          imageUrl: result.imageUrl,
-          imageUrls: result.imageUrls || [result.imageUrl],
-        };
+        
+        // If we have imageUrls and a specific imageIndex, update just that image
+        if (result.imageUrl && typeof imageIndex === 'number' && updatedScenes[sceneIndex].imageUrls?.length) {
+          const newImageUrls = [...updatedScenes[sceneIndex].imageUrls!];
+          newImageUrls[imageIndex] = result.imageUrl;
+          updatedScenes[sceneIndex] = {
+            ...updatedScenes[sceneIndex],
+            imageUrls: newImageUrls,
+            imageUrl: imageIndex === 0 ? result.imageUrl : updatedScenes[sceneIndex].imageUrl,
+          };
+        } else {
+          // Fallback: replace all images (for full regeneration or single-image scenes)
+          updatedScenes[sceneIndex] = {
+            ...updatedScenes[sceneIndex],
+            imageUrl: result.imageUrl,
+            imageUrls: result.imageUrls || [result.imageUrl],
+          };
+        }
 
         onScenesUpdate(updatedScenes);
 
         toast({
           title: "Image Regenerated",
-          description: `Scene ${sceneIndex + 1} image has been updated.`,
+          description: `Scene ${sceneIndex + 1}${typeof imageIndex === 'number' ? ` image ${imageIndex + 1}` : ''} has been updated.`,
         });
       } catch (error) {
         console.error("Image regeneration error:", error);
