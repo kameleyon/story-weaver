@@ -62,8 +62,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
+  const { state, openMobile, isMobile, toggleSidebar } = useSidebar();
+  const isCollapsed = state === "collapsed" && !isMobile;
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
