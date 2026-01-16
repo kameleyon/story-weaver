@@ -15,10 +15,10 @@ const Index = () => {
   };
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <div className="flex min-h-screen w-full">
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex min-h-screen w-full overflow-hidden">
         <AppSidebar onNewProject={handleNewProject} onOpenProject={handleOpenProject} />
-        <main className="flex-1">
+        <main className="flex-1 min-w-0 overflow-hidden">
           <Workspace ref={workspaceRef} />
         </main>
       </div>

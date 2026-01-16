@@ -125,7 +125,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   }));
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-background overflow-hidden">
       {/* Top Bar */}
       <header className="flex h-14 sm:h-16 items-center justify-between border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -152,14 +152,14 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-12">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-4xl px-3 sm:px-6 py-4 sm:py-12">
           <AnimatePresence mode="wait">
             {generationState.step === "idle" ? (
               <motion.div
                 key="input"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-2xl mx-auto space-y-6 sm:space-y-8"
               >
@@ -229,7 +229,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 </div>
 
                 {/* Configuration */}
-                <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm">
+                <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-6 backdrop-blur-sm shadow-sm overflow-hidden">
                   <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
                   <div className="h-px bg-border/30" />
                   
