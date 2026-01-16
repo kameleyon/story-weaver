@@ -786,15 +786,30 @@ async function generateImageWithReplicate(
 }
 
 // ============= TRUE IMAGE EDITING =============
+// GPT-Image 1.5 only supports: "1:1", "3:2", "2:3"
+function getEditAspectRatio(format: string): string {
+  switch (format) {
+    case "portrait":
+      return "2:3"; // Closest to 9:16 vertical
+    case "square":
+      return "1:1";
+    default:
+      return "3:2"; // Closest to 16:9 landscape
+  }
+}
+
 async function editImageWithReplicate(
   sourceImageUrl: string,
   editPrompt: string,
   replicateApiKey: string,
+  format: string = "landscape",
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   try {
+    const aspectRatio = getEditAspectRatio(format);
     console.log(`[editImage] Starting image edit with GPT-Image 1.5...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
     console.log(`[editImage] Edit prompt: ${editPrompt}`);
+    console.log(`[editImage] Format: ${format}, Aspect ratio: ${aspectRatio}`);
 
     // Using OpenAI's GPT-Image 1.5 model via Replicate
     // Docs: https://replicate.com/openai/gpt-image-1.5
@@ -809,7 +824,7 @@ async function editImageWithReplicate(
         input: {
           image: sourceImageUrl,
           prompt: editPrompt,
-          aspect_ratio: "match_input_image",
+          aspect_ratio: aspectRatio,
           output_format: "png",
           quality: "medium",
         },
@@ -1774,7 +1789,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
   } else if (scene.imageUrl) {
     // True image editing with Qwen model
     console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Qwen model`);
-    imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey);
+    imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey, format);
   } else {
     // Fallback to prompt-based generation if no source image
     console.log(`[regenerate-image] Scene ${sceneIndex + 1} - No source image, falling back to prompt-based generation`);
