@@ -225,11 +225,13 @@ export function useVideoExport() {
           if (abortRef.current) throw new Error("Export cancelled");
 
           const remaining = Math.min(audioChunkSize, totalAudioSamples - i);
-          const interleavedData = new Float32Array(remaining * 2);
-
+          
+          // Create properly formatted planar audio data
+          // For f32-planar: left channel samples followed by right channel samples
+          const planarData = new Float32Array(remaining * 2);
           for (let j = 0; j < remaining; j++) {
-            interleavedData[j * 2] = leftChannel[i + j];
-            interleavedData[j * 2 + 1] = rightChannel[i + j];
+            planarData[j] = leftChannel[i + j]; // Left channel first
+            planarData[remaining + j] = rightChannel[i + j]; // Right channel after
           }
 
           const audioData = new AudioData({
@@ -238,10 +240,7 @@ export function useVideoExport() {
             numberOfFrames: remaining,
             numberOfChannels: 2,
             timestamp: Math.round((i / 48000) * 1_000_000), // microseconds
-            data: new Float32Array([
-              ...leftChannel.slice(i, i + remaining),
-              ...rightChannel.slice(i, i + remaining),
-            ]),
+            data: planarData,
           });
 
           audioEncoder.encode(audioData);
