@@ -80,7 +80,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         .select("id, title, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(5);
+        .limit(15);
       if (error) throw error;
       return data || [];
     },
