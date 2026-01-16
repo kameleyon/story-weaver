@@ -320,11 +320,12 @@ function sanitizeForGeminiTTS(text: string): string {
 }
 
 // ============= GEMINI TTS MODELS (with fallback chain) =============
-// Model priority: Flash Preview TTS -> Pro Preview TTS -> 2.0 Flash (for audio output)
+// Model priority: Flash Preview TTS -> Pro Preview TTS -> Flash TTS -> Pro TTS
 const GEMINI_TTS_MODELS = [
   { name: "gemini-2.5-flash-preview-tts", label: "Flash Preview TTS" },
   { name: "gemini-2.5-pro-preview-tts", label: "Pro Preview TTS" },
-  { name: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { name: "gemini-2.5-flash-tts", label: "Flash TTS" },
+  { name: "gemini-2.5-pro-tts", label: "Pro TTS" },
 ];
 
 async function generateSceneAudioGeminiWithModel(
