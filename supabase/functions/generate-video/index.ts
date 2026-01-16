@@ -783,88 +783,132 @@ async function generateImageWithReplicate(
   }
 }
 
-// ============= TRUE IMAGE EDITING =============
-async function editImageWithReplicate(
+// ============= TRUE IMAGE EDITING WITH NANO BANANA =============
+async function editImageWithNanoBanana(
   sourceImageUrl: string,
   editPrompt: string,
-  replicateApiKey: string,
+  styleDescription: string,
+  overlayText?: { title?: string; subtitle?: string },
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    return { ok: false, error: "LOVABLE_API_KEY not configured" };
+  }
+
   try {
-    console.log(`[editImage] Starting image edit with GPT-Image 1.5...`);
+    console.log(`[editImage] Starting image edit with Nano Banana...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
     console.log(`[editImage] Edit prompt: ${editPrompt}`);
 
-    // Using OpenAI's GPT-Image 1.5 model via Replicate
-    // Docs: https://replicate.com/openai/gpt-image-1.5
-    const createResponse = await fetch("https://api.replicate.com/v1/models/openai/gpt-image-1.5/predictions", {
+    // Build the modification prompt with overlay text consideration
+    let fullPrompt = `Analyze this image and apply the following modification: ${editPrompt}
+
+IMPORTANT REQUIREMENTS:
+- Preserve the overall composition, lighting, and style of the original image
+- Apply ONLY the requested modification while keeping everything else intact
+- Maintain the same artistic style and color palette`;
+
+    // Add overlay text preservation if present
+    if (overlayText?.title || overlayText?.subtitle) {
+      fullPrompt += `
+      
+TEXT OVERLAY TO PRESERVE:
+${overlayText.title ? `- Title: "${overlayText.title}"` : ""}
+${overlayText.subtitle ? `- Subtitle: "${overlayText.subtitle}"` : ""}
+Ensure these text elements remain visible and properly positioned in the modified image.`;
+    }
+
+    // Add style context
+    if (styleDescription) {
+      fullPrompt += `
+
+STYLE CONTEXT: ${styleDescription}`;
+    }
+
+    // Call Nano Banana via Lovable AI Gateway for image editing
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${replicateApiKey}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
-        Prefer: "wait",
       },
       body: JSON.stringify({
-        input: {
-          image: sourceImageUrl,
-          prompt: editPrompt,
-          aspect_ratio: "match_input_image",
-          output_format: "png",
-          quality: "medium",
-        },
+        model: "google/gemini-2.5-flash-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: fullPrompt,
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: sourceImageUrl,
+                },
+              },
+            ],
+          },
+        ],
+        modalities: ["image", "text"],
       }),
     });
 
-    if (!createResponse.ok) {
-      const status = createResponse.status;
-      const errText = await createResponse.text().catch(() => "");
-      console.error(`[editImage] Replicate API error: ${status} - ${errText}`);
+    if (!response.ok) {
+      const status = response.status;
+      const errText = await response.text().catch(() => "");
+      console.error(`[editImage] Nano Banana API error: ${status} - ${errText}`);
+      
+      if (status === 429) {
+        return { ok: false, error: "Rate limit exceeded. Please try again later." };
+      }
+      if (status === 402) {
+        return { ok: false, error: "Payment required. Please add credits to your workspace." };
+      }
+      
       return {
         ok: false,
-        error: `GPT-Image 1.5 edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `Nano Banana edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
       };
     }
 
-    let prediction = await createResponse.json();
-    console.log(`[editImage] Prediction created: ${prediction.id}, status: ${prediction.status}`);
+    const data = await response.json();
+    console.log(`[editImage] Nano Banana response received`);
 
-    // Poll for completion
-    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-      await sleep(2000);
-      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { Authorization: `Bearer ${replicateApiKey}` },
-      });
-      prediction = await pollResponse.json();
-      console.log(`[editImage] Polling prediction ${prediction.id}: ${prediction.status}`);
+    // Extract the generated image from the response
+    const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    
+    if (!imageData) {
+      console.error(`[editImage] No image in response:`, JSON.stringify(data).substring(0, 500));
+      return { ok: false, error: "No image returned from Nano Banana" };
     }
 
-    if (prediction.status === "failed") {
-      console.error(`[editImage] Prediction failed: ${prediction.error}`);
-      return { ok: false, error: prediction.error || "Image edit failed" };
+    // Check if it's a base64 data URL
+    if (imageData.startsWith("data:image/")) {
+      // Extract base64 data after the comma
+      const base64Data = imageData.split(",")[1];
+      if (!base64Data) {
+        return { ok: false, error: "Invalid base64 image data" };
+      }
+      
+      const bytes = base64Decode(base64Data);
+      console.log(`[editImage] Success! Decoded ${bytes.length} bytes from base64`);
+      return { ok: true, bytes };
+    } else if (imageData.startsWith("http")) {
+      // It's a URL, download it
+      console.log(`[editImage] Downloading edited image from URL...`);
+      const imgResponse = await fetch(imageData);
+      if (!imgResponse.ok) {
+        return { ok: false, error: "Failed to download edited image" };
+      }
+      
+      const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+      console.log(`[editImage] Success! Downloaded ${bytes.length} bytes`);
+      return { ok: true, bytes };
     }
 
-    // GPT-Image 1.5 returns output as URL(s)
-    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-    const imageUrl =
-      typeof first === "string"
-        ? first
-        : first && typeof first === "object" && typeof first.url === "string"
-          ? first.url
-          : null;
-
-    if (!imageUrl) {
-      console.error(`[editImage] No image URL in response:`, prediction.output);
-      return { ok: false, error: "No image URL returned from GPT-Image 1.5" };
-    }
-
-    console.log(`[editImage] Downloading edited image from: ${imageUrl.substring(0, 80)}...`);
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) {
-      return { ok: false, error: "Failed to download edited image" };
-    }
-
-    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[editImage] Success! Downloaded ${bytes.length} bytes`);
-    return { ok: true, bytes };
+    return { ok: false, error: "Unknown image format in response" };
   } catch (err) {
     console.error(`[editImage] Error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -1758,9 +1802,14 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
 
     imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
   } else if (scene.imageUrl) {
-    // True image editing with Qwen model
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Qwen model`);
-    imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey);
+    // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
+    console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Nano Banana`);
+    imageResult = await editImageWithNanoBanana(
+      scene.imageUrl,
+      imageModification,
+      styleDescription,
+      { title: scene.title, subtitle: scene.subtitle }
+    );
   } else {
     // Fallback to prompt-based generation if no source image
     console.log(`[regenerate-image] Scene ${sceneIndex + 1} - No source image, falling back to prompt-based generation`);
