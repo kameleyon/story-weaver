@@ -271,7 +271,7 @@ export default function Auth() {
             {/* Toggle */}
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground">
-                {mode === "login" && (
+{mode === "login" && (
                   <>
                     Don&apos;t have an account?{" "}
                     <button
@@ -280,6 +280,17 @@ export default function Auth() {
                       className="font-medium text-primary hover:underline"
                     >
                       Sign up
+                    </button>
+                    <span className="mx-2">·</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("reset");
+                        setPassword("");
+                      }}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Forgot password?
                     </button>
                   </>
                 )}
