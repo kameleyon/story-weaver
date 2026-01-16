@@ -76,22 +76,20 @@ const PRICING = {
 };
 
 const STYLE_PROMPTS: Record<string, string> = {
-  minimalist: `Minimalist illustration using thin monoline black line art and simple geometric shapes. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Use a muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Shapes should be simplified (e.g., mountains as triangles, sun as a circle, tree as a single-line sketch). Add only one small detail (like a tiny bird) for charm. Centered composition, crisp edges, airy spacing, high resolution.`,
+  minimalist: `Minimalist illustration using thin monoline black line art and simple geometric shapes. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Shapes simplified (e.g., mountains as triangles, sun as a circle, tree as a single-line sketch). Add only one small detail (like a tiny bird) for charm. Centered composition, crisp edges, airy spacing, high resolution. No realism, no 3D, no heavy texture, no shading, no complex background, no thick outlines.`,
   doodle: `Urban Minimalist Doodle style. Flat 2D vector illustration with indie comic aesthetic. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled paper or newsprint. CHARACTER DESIGN: Object-Head surrealism where character heads are replaced with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line for a vintage screen-printed quality. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons (coins, arrows, charts) representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
-  stick: `Minimalist stick figure illustration on clean white/off-white background. True stick figures only: circle heads, dot eyes, simple smile, single straight lines for arms, legs, and body—no anatomy, no hands, no detailed features. Bold black monoline ink (like a whiteboard marker). Extremely minimal: maximum negative space, no clutter, no complex backgrounds. One or two small accent color pops (yellow, red, teal) for props only. Simple icon-like objects (speech bubbles, arrows, lightbulbs). Clean explainer/whiteboard doodle aesthetic. No realistic proportions, no shading, no gradients, no complex scenes. Think: the simplest possible stick figure drawing a child would make, but with clean professional linework.`,
-  realistic: `Photorealistic DSLR look, Canon EOS 5D Mark III aesthetic. Natural skin/material texture (no smoothing), true-to-life color, realistic micro-contrast. Shallow depth of field when appropriate, clean lens rendering, subtle film-like grain, high dynamic range (HDR), crisp focus without oversharpening. Cinematic but natural lighting, soft falloff, accurate shadows, realistic reflections. UHD 4K. No airbrushed skin, no CGI, no 3D render, no plastic skin, no cartoon, no anime, no painterly, no overly smooth textures.`,
-  anime: `Clean modern anime illustration with thin precise lineart, simple shapes, flat colors with minimal soft 2-3 tone shading. Warm neutral background, high readability, crisp facial features, large expressive eyes, subtle blush and freckles optional. Smooth edges, no heavy texture, minimal detail. Flat background, minimal shading, clean lineart, 2D anime style. No realistic portrait, no 3D render, no painterly brush texture, no noisy grain, no heavy hatching.`,
-  "3d-pixar": `High-end 3D animated feature film look. Cute stylized character design: large expressive eyes, small nose/mouth, soft rounded facial proportions, slightly oversized head. Subsurface scattering in skin with gentle peachy blush and soft freckles. Ultra-detailed groomed hair (individual curls/strands, soft flyaways), knitted fabric with visible yarn fibers, cozy textures. Cinematic lighting: warm key light, soft rim light, global illumination, shallow depth of field with creamy bokeh. Clean color grading, warm wholesome mood, crisp focus on subject, background softly blurred. Physically based rendering, polished, family-friendly. 3D render, stylized proportions, no realism, no anime, no flat vector, no claymation. No photorealistic, no realistic human, no uncanny valley, no anime, no manga, no 2D illustration, no clay, no stop-motion, no lowpoly, no harsh shadows, no noisy grain, no oversharpened, no distorted face.`,
-  claymation: `Stop-motion claymation cinematic still frame. Handmade clay characters with visible fingerprints and slight imperfections, soft felt/clay clothing textures, stitched fabric look. Warm tungsten practical lighting with a cozy orange glow, shallow depth of field and creamy bokeh in the background. Miniature diorama set (tiny props, desk clutter), subtle dust particles in the air. Stylized human character with an elongated nose and simple facial features, slightly sad/tired expression. High-detail macro feel, realistic miniature materials, filmic contrast, gentle grain, Pixar/LAIKA-inspired but clearly physical clay model, not CGI. Practical stop-motion look, physical materials, fingerprints, seams, tiny set scale, handmade props, not glossy. No CGI, no 3D render, no plastic shiny, no photoreal human skin, no anime, no vector, no flat illustration, no unreal engine, no hyper-clean surfaces.`,
-  moody: `Moody monochrome indie comic illustration in black, white, and grays. Thick clean outlines with hand-inked crosshatching and scratchy pen texture for shading. Slightly uneven line quality like traditional ink on paper. Cute-but-unsettling character design: oversized round head, huge simple eyes, tiny mouth, minimal nose; small body with simplified hands. Cinematic centered framing, quiet tension, lots of flat mid-gray tones. Subtle paper grain and faint smudges. Background is minimal but grounded with simple interior props drawn in the same inked style. Overall vibe: melancholic, eerie, storybook graphic novel panel, high contrast, no color. 2D ink drawing, grayscale only, no color accents, no realism, no 3D, no anime, no glossy rendering. No photorealistic, no full color, no 3D render, no anime/manga, no painterly brushstrokes, no vibrant palette, no smooth airbrush, no vector flat icon, no glossy lighting, no ultra-detailed textures.`,
-  sketch: `Cinematic noir graphite pencil sketch on textured drawing paper. Strong chiaroscuro lighting with a single hard key light and deep shadows, high contrast value range. Graphite rendering with visible pencil grain, smudged blends, rough tonal blocks, and layered crosshatching for shadow shapes. Loose construction lines and hand-drawn imperfections remain visible. Subtle film-grain feel, moody atmosphere, quiet tension. Minimal color (graphite only; optional faint warm paper tone). Background elements suggested with simplified lines and tone, not fully rendered. Composition feels like a film still: shallow depth-of-field implied through softer line detail in the distance, foreground sharpest. Dramatic, cinematic framing, negative space used intentionally, editorial illustration quality. Rainy night mood, light haze, window-light or streetlight beam, long shadows, noir ambience. No photorealistic, no digital painting, no smooth airbrush, no glossy, no 3D render, no vector, no flat cartoon, no anime, no cel shading, no neon cyberpunk, no full color, no ultra-clean lineart.`,
-  caricature: `Illustration with ink linework + watercolor wash. Exaggerated facial features (big noses, heavy brows, expressive mouths), slightly distorted proportions, humorous political-cartoon vibe. Loose pen outlines with sketchy hatching and imperfect edges. Soft watercolor textures with visible blooms and paper grain; muted palette (dusty blues, warm skin tones, gray-browns) with selective brighter accents. Minimal background: mostly white/very light wash with a few splatter marks, lots of negative space. Painterly shading but not realistic—clearly illustrated. High-resolution magazine/op-ed cartoon style. 2D illustration, caricature proportions, ink drawing, watercolor wash, paper texture, minimal background. No photorealistic, no anime, no manga, no 3D render, no vector flat icon, no glossy, no neon, no ultra-detailed skin pores, no cinematic lighting, no clean digital airbrush.`,
-  storybook: `Whimsical storybook cartoon illustration with loose ink sketch lines + painterly color. Characters have exaggerated proportions (big eyes, long noses, thin limbs), slightly quirky/awkward silhouettes, expressive faces. Visible rough linework and scribbly hatching overlaid on top of color. Textured digital gouache / watercolor fills with brushy strokes and imperfect edges. Warm cozy interior lighting (lamps), soft shadows, homey scene styling. Muted-but-rich palette (purples, blues, warm amber highlights). Illustration feels like a children's book / indie animated film concept art frame—hand-drawn, lively, not clean vector. 2D illustration, ink outlines, sketchy hatching, painterly gouache texture, big eyes cartoon style, not realistic, not 3D. No photorealistic, no anime, no manga, no 3D render, no vector flat, no clean lineart, no cel shading, no ultra-smooth gradients, no glossy lighting.`,
-  crayon: `Illustration with rough, scribbly strokes and visible wax texture. Naive kindergarten drawing style: simple rounded shapes, uneven lines, imperfect perspective, big friendly smiley face. Flat white background like drawing paper. Bright primary colors with a limited palette (orange, blue, peach/skin tone, a little black). Loose, messy coloring that goes outside the lines, with grainy crayon speckles. Minimal detail, playful, wholesome, hand-drawn kids-book vibe. No clean vector lines, no smooth shading, no realism, no 3D, no gradients, keep it messy and textured like real crayon. No vector, no flat icon, no digital painting, no photorealistic, no anime, no 3d render, no glossy, no smooth lines, no airbrush, no ultra-detailed.`,
+  stick: `Hand-drawn stick figure comic style. Crude, expressive black marker lines on pure white or notebook paper background. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. NO SKIN COLOR, NO FLESH TONES. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize handmade napkin-sketch quality. High resolution.`,
+  realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
+  anime: `Expressive Modern Manga-Style Sketchbook. An expressive modern manga-style sketchbook illustration. Anatomy: Large-eye expressive anime/manga influence focusing on high emotional impact and kawaii but relatable proportions. Line Work: Very loose, visible rough sketch lines—looks like a final drawing made over a messy pencil draft. Coloring: Warm peachy tones with focus on skin-glow and soft environmental lighting, painterly approach with visible thick brush strokes. Vibe: Cozy, chaotic, and sentimental slice-of-life moments. Features loose sketchy digital pencil lines and painterly slice-of-life aesthetic. High-detail facial expressions with large emotive eyes. Warm muted palette with visible brush strokes and soft lighting bloom. Set in detailed, slightly messy environment that feels lived-in. Cozy, relatable, and artistically sophisticated.`,
+  "3d-pixar": `Cinematic 3D Animation. A stunning 3D cinematic animation-style render in the aesthetic of modern Disney-Pixar films. Surface Geometry: Squash and Stretch—appealing rounded shapes with soft exaggerated features, avoiding sharp angles unless part of mechanical design. Material Science: Subsurface Scattering—that Disney glow where light slightly penetrates the surface like real skin or wax, textures are stylized realism with soft fur, knit fabrics, or polished plastic. Lighting Design: Three-Point Cinematic—strong key light, soft fill light to eliminate harsh shadows, bright rim light (backlight) creating glowing silhouette separating from background. Eyes: The Soul Focal Point—large, highly detailed eyes with realistic specular highlights and deep iris colors making character feel sentient and emotive. Atmosphere: Volumetric Depth—light fog, dust motes, or god rays creating sense of physical space, background has soft bokeh blur keeping focus on subject. High-detail textures, expressive large eyes, soft rounded features. Vibrant saturated colors with high-end subsurface scattering on all surfaces. Rendered in 8k using Octane, shallow depth of field, whimsical softly blurred background. Masterpiece quality, charming, tactile, and highly emotive.`,
+  claymation: `Handcrafted Digital Clay. A high-detail 3D claymation-style render. Material Texture: Matte & Tactile—surfaces must show subtle, realistic imperfections like tiny thumbprints, slight molding creases, and a soft matte finish that mimics polymer clay (like Sculpey or Fimo). Lighting: Miniature Macro Lighting—soft, high-contrast studio lighting that makes the subject look like a small physical object, includes Rim Lighting to make the edges glow and deep, soft-edge shadows. Proportions: Chunky & Appealing—thick, rounded limbs and exaggerated squashy features, avoid any sharp digital edges, everything should look like it was rolled between two palms. Atmosphere: Depth of Field—heavy background blur (bokeh) essential to sell the small toy scale, making the subject pop as the central focus. Color Palette: Saturated & Playful—bold, solid primary colors that look like they came straight out of a clay pack, avoiding complex gradients. 8k resolution, Octane Render, masterpiece quality.`,
+  sketch: `Black-and-white indie comic panel with thick clean ink outlines and soft gray shading. Crosshatching and vertical scratchy strokes for texture on clothing, furniture, and walls. Characters are cute but unsettling: oversized round head, big circular eyes, tiny nose/mouth, simple expression (sad/blank/anxious). Minimal but detailed environment with sketchy line texture (simple room, chair, small props). Hand-drawn panel border around the image. Lighting is flat and moody with gentle gradients, no color, no glossy effects. Style feels like an indie graphic novel / webcomic, minimal dialogue, quiet atmosphere, high detail linework, UHD. Slight vignette, paper grain, subtle smudges like scanned ink. Background lines lightly wobble, imperfect hand-drawn feel. No color, no 3D, no anime/manga screentones, no clean vector, no painterly watercolor.`,
+  caricature: `Editorial political caricature illustration in hand-painted watercolor + ink style. Characters have exaggerated facial features (big heads, expressive eyes, prominent noses, strong jawlines), with clean confident linework and subtle crosshatching. Soft watercolor washes and light gouache-like shading for volume—muted, natural tones (cool grays, desaturated blues, warm skin tones). Minimal airy background with lots of white negative space, few key props (chalkboard with handwritten notes, simple desk and chair) rendered loosely. Soft neutral lighting with gentle shadows on floor. Newspaper / magazine editorial cartoon feel, witty, polished, slightly satirical, high detail, UHD. No 3D, no anime, no vector flat design, no photorealism, no neon, no heavy texture overload.`,
+  storybook: `Whimsical storybook ink-and-wash style. Hand-drawn black ink outlines with visible rough sketch construction lines, slightly uneven strokes, and occasional line overlap (imperfect but intentional). Crosshatching and scribbly pen shading for depth and texture, especially in shadows and on fabric folds. Watercolor + gouache-like washes: layered, semi-opaque paint with soft gradients, subtle bloom, and paper texture showing through. Edges slightly loose (not crisp), with gentle paint bleed and dry-brush texture in places. Warm and cozy lighting with soft ambient bounce light and mild vignette. Cartoon-proportioned character design: slightly exaggerated features (large eyes, long limbs, expressive faces), but grounded in believable anatomy and posture. Background detailed but painterly: textured walls, props with sketchy detail, and atmospheric depth. Muted warm palette with complementary cool shadows. Subtle grain + ink flecks for a handmade print feel. Cinematic framing, shallow depth cues, soft focus in far background. Editorial illustration / indie animation concept art aesthetic. Charming, cozy, slightly messy, richly textured, high detail, UHD. No 3D render, no clean vector, no flat icon style, no anime/manga linework, no glossy neon gradients, no photorealism.`,
+  crayon: `Cute childlike crayon illustration on clean white paper background. Waxy crayon / oil pastel scribble texture with visible stroke marks and uneven fill (messy on purpose). Simple rounded shapes, thick hand-drawn outlines, minimal details, playful proportions (big head, small body). Bright limited palette like orange + blue + yellow, rough shading and light smudges like real crayons on paper. Simple cheerful scene, lots of white space, friendly smiley faces. Looks like kindergarten drawing scanned into computer. High resolution. No vector, no clean digital painting, no 3D, no realism, no gradients, no sharp edges.`,
 };
 
-// Styles that get basic headline + subtitle text overlay
-const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick", "moody", "storybook", "anime", "caricature", "crayon"];
+const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
 
 // ============= HELPER FUNCTIONS =============
 function getStylePrompt(style: string, customStyle?: string): string {
@@ -786,30 +784,15 @@ async function generateImageWithReplicate(
 }
 
 // ============= TRUE IMAGE EDITING =============
-// GPT-Image 1.5 only supports: "1:1", "3:2", "2:3"
-function getEditAspectRatio(format: string): string {
-  switch (format) {
-    case "portrait":
-      return "2:3"; // Closest to 9:16 vertical
-    case "square":
-      return "1:1";
-    default:
-      return "3:2"; // Closest to 16:9 landscape
-  }
-}
-
 async function editImageWithReplicate(
   sourceImageUrl: string,
   editPrompt: string,
   replicateApiKey: string,
-  format: string = "landscape",
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   try {
-    const aspectRatio = getEditAspectRatio(format);
     console.log(`[editImage] Starting image edit with GPT-Image 1.5...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
     console.log(`[editImage] Edit prompt: ${editPrompt}`);
-    console.log(`[editImage] Format: ${format}, Aspect ratio: ${aspectRatio}`);
 
     // Using OpenAI's GPT-Image 1.5 model via Replicate
     // Docs: https://replicate.com/openai/gpt-image-1.5
@@ -824,7 +807,7 @@ async function editImageWithReplicate(
         input: {
           image: sourceImageUrl,
           prompt: editPrompt,
-          aspect_ratio: aspectRatio,
+          aspect_ratio: "match_input_image",
           output_format: "png",
           quality: "medium",
         },
@@ -1350,36 +1333,24 @@ async function handleImagesPhase(
   }
   const allImageTasks: ImageTask[] = [];
 
-  // Determine format description for prompt reinforcement
-  const formatDescription = format === "portrait" ? "VERTICAL 9:16 portrait orientation (tall, phone-sized)" 
-    : format === "square" ? "SQUARE 1:1 orientation" 
-    : "HORIZONTAL 16:9 landscape orientation (wide, widescreen)";
-
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
     let textInstructions = "";
-    
     if (includeTextOverlay && scene.title && subIndex === 0) {
       textInstructions = `
 TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as subtitle.
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     }
 
-    // Add brand mark signature if provided - STRICTLY STANDARDIZED
+    // Add brand mark signature if provided
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-BRAND MARK (CRITICAL - MUST BE IDENTICAL ON EVERY IMAGE):
-- Text: "${brandMark.toUpperCase()}"
-- Position: BOTTOM CENTER, exactly 5% from bottom edge, horizontally centered
-- Font: Clean sans-serif (Helvetica/Arial style), ALL CAPS
-- Size: EXACTLY 2.5% of image height (small but readable)
-- Color: Choose contrasting color for visibility (dark on light backgrounds, light on dark backgrounds)
-- DO NOT vary the font, size, or position between images - ONLY color may adapt for visibility`;
+SIGNATURE: Add a small, elegant signature text "${brandMark}" in the bottom-left corner of the image. 
+The signature should be subtle but legible, styled like a trademark or ownership mark. Use a clean sans-serif font.`;
     }
 
     return `${visualPrompt}
 
-FORMAT: ${formatDescription} - compose the image to fit this exact aspect ratio.
 STYLE: ${styleDescription}
 ${textInstructions}
 ${brandMarkInstructions}
@@ -1789,7 +1760,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
   } else if (scene.imageUrl) {
     // True image editing with Qwen model
     console.log(`[regenerate-image] Scene ${sceneIndex + 1} - Using true image editing with Qwen model`);
-    imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey, format);
+    imageResult = await editImageWithReplicate(scene.imageUrl, imageModification, replicateApiKey);
   } else {
     // Fallback to prompt-based generation if no source image
     console.log(`[regenerate-image] Scene ${sceneIndex + 1} - No source image, falling back to prompt-based generation`);
