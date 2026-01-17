@@ -27,7 +27,7 @@ export function LengthSelector({ selected, onSelect }: LengthSelectorProps) {
               "rounded-lg sm:rounded-xl border px-3 sm:px-4 py-2 sm:py-2.5 transition-all",
               selected === length.id
                 ? "border-primary/50 bg-primary/5 shadow-sm"
-                : "border-border/40 bg-muted/40 hover:bg-muted/60 hover:border-border/60"
+                : "border-border/50 bg-muted/60 hover:bg-muted/70 hover:border-border/70"
             )}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
