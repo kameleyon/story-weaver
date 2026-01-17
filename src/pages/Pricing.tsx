@@ -10,7 +10,8 @@ import {
   Building2,
   Sparkles,
   Plus,
-  Loader2
+  Loader2,
+  Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,16 @@ import { cn } from "@/lib/utils";
 import { useSubscription, STRIPE_PLANS, CREDIT_PACKS } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const plans = [
   {
@@ -144,6 +155,23 @@ export default function Pricing() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [loadingCredits, setLoadingCredits] = useState<number | null>(null);
+  const [showDowngradeDialog, setShowDowngradeDialog] = useState(false);
+
+  const handleDowngrade = async () => {
+    try {
+      setLoadingPlan("free");
+      setShowDowngradeDialog(false);
+      await openCustomerPortal();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to open billing portal",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   const handleSubscribe = async (planId: string, priceId: string | null) => {
     if (!priceId) return;
@@ -363,23 +391,12 @@ export default function Pricing() {
                               : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
                         )}
                         disabled={isDisabled || isLoading}
-                        onClick={async () => {
+                        onClick={() => {
                           if (plan.id === "enterprise") {
                             window.open("mailto:sales@audiomax.com?subject=Enterprise%20Inquiry", "_blank");
                           } else if (plan.id === "free" && currentPlan !== "free") {
-                            // Downgrade to free = cancel via Customer Portal
-                            try {
-                              setLoadingPlan("free");
-                              await openCustomerPortal();
-                            } catch (error) {
-                              toast({
-                                title: "Error",
-                                description: error instanceof Error ? error.message : "Failed to open billing portal",
-                                variant: "destructive",
-                              });
-                            } finally {
-                              setLoadingPlan(null);
-                            }
+                            // Show confirmation dialog before downgrade
+                            setShowDowngradeDialog(true);
                           } else if (plan.priceId) {
                             handleSubscribe(plan.id, plan.priceId);
                           }
@@ -394,6 +411,15 @@ export default function Pricing() {
                           getPlanCta(plan)
                         )}
                       </Button>
+                      {/* Downgrade policy note - show only on Freemium card when user is on paid plan */}
+                      {plan.id === "free" && currentPlan !== "free" && (
+                        <div className="flex items-start gap-1.5 mt-2 p-2 rounded-md bg-muted/50">
+                          <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                          <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">
+                            When downgrading, you keep your remaining credits until your billing period ends or credits run out, whichever comes first. No refunds.
+                          </p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -474,6 +500,42 @@ export default function Pricing() {
           </motion.div>
         </motion.div>
       </main>
+
+      {/* Downgrade Confirmation Dialog */}
+      <AlertDialog open={showDowngradeDialog} onOpenChange={setShowDowngradeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Downgrade to Freemium?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                Are you sure you want to downgrade to the free plan? Here's what will happen:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Your current plan benefits will remain active until your billing period ends</li>
+                <li>You'll keep your remaining credits until your billing period ends or credits run out, whichever comes first</li>
+                <li>No refunds will be issued for the unused portion of your subscription</li>
+                <li>After downgrade, you'll have access to 5 video generations per month with watermarks</li>
+              </ul>
+              <p className="text-sm font-medium">
+                You'll be redirected to the billing portal to complete the cancellation.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep My Plan</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDowngrade} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {loadingPlan === "free" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Processing...
+                </>
+              ) : (
+                "Downgrade"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
