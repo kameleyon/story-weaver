@@ -67,7 +67,8 @@ serve(async (req) => {
 
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      // In Deno/WebCrypto environments, Stripe requires the async variant.
+      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       logStep("ERROR", { message: `Signature verification failed: ${errorMessage}` });
