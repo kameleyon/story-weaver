@@ -464,11 +464,16 @@ async function generateSceneAudioGeminiWithModel(
 
     if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("audio").getPublicUrl(audioPath);
+    // Use signed URL for secure access (7 days expiration)
+    const { data: signedData, error: signError } = await supabase.storage
+      .from("audio")
+      .createSignedUrl(audioPath, 604800); // 7 days in seconds
+    
+    if (signError || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+    }
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} audio uploaded OK using ${modelLabel}`);
-    return { url: publicUrl, durationSeconds };
+    return { url: signedData.signedUrl, durationSeconds };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown Gemini TTS error";
     console.error(`[TTS-Gemini] Scene ${sceneIndex + 1} ${modelLabel} error:`, errorMsg);
@@ -610,10 +615,15 @@ async function generateSceneAudioReplicate(
 
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("audio").getPublicUrl(audioPath);
-      finalAudioUrl = publicUrl;
+      // Use signed URL for secure access (7 days expiration)
+      const { data: signedData, error: signError } = await supabase.storage
+        .from("audio")
+        .createSignedUrl(audioPath, 604800); // 7 days in seconds
+      
+      if (signError || !signedData?.signedUrl) {
+        throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+      }
+      finalAudioUrl = signedData.signedUrl;
       break;
     } catch (err) {
       lastError = err instanceof Error ? err.message : "Unknown TTS error";
@@ -1499,10 +1509,16 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
                 return { task, url: null };
               }
 
-              const {
-                data: { publicUrl },
-              } = supabase.storage.from("audio").getPublicUrl(path);
-              return { task, url: publicUrl };
+              // Use signed URL for secure access (7 days expiration)
+              const { data: signedData, error: signError } = await supabase.storage
+                .from("audio")
+                .createSignedUrl(path, 604800); // 7 days in seconds
+              
+              if (signError || !signedData?.signedUrl) {
+                console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
+                return { task, url: null };
+              }
+              return { task, url: signedData.signedUrl };
             }
 
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
@@ -1849,20 +1865,28 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
 
   if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-  const { data: { publicUrl } } = supabase.storage.from("audio").getPublicUrl(imagePath);
+  // Use signed URL for secure access (7 days expiration)
+  const { data: signedData, error: signError } = await supabase.storage
+    .from("audio")
+    .createSignedUrl(imagePath, 604800); // 7 days in seconds
+  
+  if (signError || !signedData?.signedUrl) {
+    throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+  }
+  const signedUrl = signedData.signedUrl;
 
   // Update the specific image in the imageUrls array
   if (existingImageUrls.length > 0) {
-    existingImageUrls[targetImageIndex] = publicUrl;
+    existingImageUrls[targetImageIndex] = signedUrl;
     scenes[sceneIndex].imageUrls = existingImageUrls;
     // Also update imageUrl if we're editing the first image
     if (targetImageIndex === 0) {
-      scenes[sceneIndex].imageUrl = publicUrl;
+      scenes[sceneIndex].imageUrl = signedUrl;
     }
   } else {
     // Single image scene - replace both
-    scenes[sceneIndex].imageUrl = publicUrl;
-    scenes[sceneIndex].imageUrls = [publicUrl];
+    scenes[sceneIndex].imageUrl = signedUrl;
+    scenes[sceneIndex].imageUrls = [signedUrl];
   }
 
   // Save to database
@@ -1879,7 +1903,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
       phase: "regenerate-image",
       sceneIndex,
       imageIndex: targetImageIndex,
-      imageUrl: publicUrl,
+      imageUrl: signedUrl,
       imageUrls: scenes[sceneIndex].imageUrls,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
