@@ -128,18 +128,18 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-14 sm:pt-16">
         {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/3 to-transparent" />
         
         {/* Floating elements */}
         <div className="absolute inset-0 overflow-hidden">
           <motion.div
-            className="absolute -top-20 -right-20 h-64 sm:h-96 w-64 sm:w-96 rounded-full bg-primary/5 blur-3xl"
-            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+            className="absolute -top-20 -right-20 h-64 sm:h-96 w-64 sm:w-96 rounded-full bg-primary/10 blur-3xl"
+            animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.6, 0.4] }}
             transition={{ duration: 8, repeat: Infinity }}
           />
           <motion.div
-            className="absolute -bottom-20 -left-20 h-64 sm:h-96 w-64 sm:w-96 rounded-full bg-accent/5 blur-3xl"
-            animate={{ scale: [1.2, 1, 1.2], opacity: [0.3, 0.5, 0.3] }}
+            className="absolute -bottom-20 -left-20 h-64 sm:h-96 w-64 sm:w-96 rounded-full bg-accent/10 blur-3xl"
+            animate={{ scale: [1.2, 1, 1.2], opacity: [0.4, 0.6, 0.4] }}
             transition={{ duration: 8, repeat: Infinity, delay: 2 }}
           />
         </div>
