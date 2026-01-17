@@ -28,16 +28,18 @@
     --popover: 0 0% 100%;
     --popover-foreground: 180 7% 15%;
 
-    --primary: 186 76% 21%;
+    /* Unified teal green */
+    --primary: 173 58% 32%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 170 36% 48%;
+    --secondary: 173 45% 42%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 180 10% 95%;
     --muted-foreground: 180 7% 45%;
 
-    --accent: 170 36% 48%;
+    /* Lighter teal for hover states */
+    --accent: 173 50% 45%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -45,19 +47,19 @@
 
     --border: 180 10% 90%;
     --input: 180 10% 92%;
-    --ring: 186 76% 21%;
+    --ring: 173 58% 32%;
 
     --radius: 0.75rem;
 
-    /* Sidebar Tokens - Light */
-    --sidebar-background: 0 0% 100%;
+    /* Sidebar Tokens - Light - Slightly different from main bg */
+    --sidebar-background: 180 10% 97%;
     --sidebar-foreground: 180 7% 15%;
-    --sidebar-primary: 186 76% 21%;
+    --sidebar-primary: 173 58% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 180 10% 96%;
+    --sidebar-accent: 180 10% 93%;
     --sidebar-accent-foreground: 180 7% 15%;
-    --sidebar-border: 180 10% 92%;
-    --sidebar-ring: 186 76% 21%;
+    --sidebar-border: 180 10% 90%;
+    --sidebar-ring: 173 58% 32%;
   }
 
   .dark {
@@ -71,16 +73,18 @@
     --popover: 200 8% 10%;
     --popover-foreground: 0 0% 96%;
 
-    --primary: 170 50% 55%;
-    --primary-foreground: 200 9% 6%;
+    /* Unified teal green - matches Shorts badge */
+    --primary: 173 58% 39%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 178 35% 35%;
+    --secondary: 173 45% 32%;
     --secondary-foreground: 0 0% 96%;
 
     --muted: 200 8% 14%;
     --muted-foreground: 200 8% 60%;
 
-    --accent: 170 45% 60%;
+    /* Lighter teal for hover states */
+    --accent: 173 50% 50%;
     --accent-foreground: 200 9% 6%;
 
     --destructive: 0 72% 55%;
@@ -88,17 +92,17 @@
 
     --border: 200 8% 18%;
     --input: 200 8% 14%;
-    --ring: 170 50% 55%;
+    --ring: 173 58% 39%;
 
-    /* Sidebar Tokens - Dark */
-    --sidebar-background: 200 9% 6%;
+    /* Sidebar Tokens - Dark - Slightly lighter than main bg for contrast */
+    --sidebar-background: 200 8% 10%;
     --sidebar-foreground: 0 0% 96%;
-    --sidebar-primary: 170 50% 55%;
-    --sidebar-primary-foreground: 200 9% 6%;
-    --sidebar-accent: 200 8% 12%;
+    --sidebar-primary: 173 58% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 200 8% 14%;
     --sidebar-accent-foreground: 0 0% 96%;
-    --sidebar-border: 200 8% 14%;
-    --sidebar-ring: 170 50% 55%;
+    --sidebar-border: 200 8% 16%;
+    --sidebar-ring: 173 58% 39%;
   }
 }
 

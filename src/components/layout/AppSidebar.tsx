@@ -236,7 +236,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground"
+                  className="w-full justify-start gap-2 text-xs sm:text-sm text-muted-foreground hover:text-accent hover:bg-sidebar-accent"
                   onClick={() => navigate("/projects")}
                 >
                   <FolderOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -255,7 +255,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className={`w-full rounded-lg hover:bg-sidebar-accent/50 ${
+                  className={`w-full rounded-lg hover:bg-sidebar-accent hover:text-accent ${
                     isCollapsed ? "justify-center px-0" : "justify-start gap-2 sm:gap-3 px-2 sm:px-3"
                   } py-2 sm:py-2.5`}
                   size={isCollapsed ? "icon" : "default"}

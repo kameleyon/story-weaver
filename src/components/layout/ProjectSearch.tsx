@@ -65,7 +65,7 @@ export function ProjectSearch({ onSelectProject }: ProjectSearchProps) {
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="w-full justify-start gap-2 rounded-xl bg-background/60"
+        className="w-full justify-start gap-2 rounded-xl bg-background/60 hover:bg-sidebar-accent hover:text-accent hover:border-accent/30"
       >
         <Search className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">Search projects…</span>
