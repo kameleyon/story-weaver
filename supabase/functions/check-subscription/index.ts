@@ -79,18 +79,34 @@ serve(async (req) => {
     if (subscriptions.data.length > 0) {
       const subscription = subscriptions.data[0];
       
-      // Handle current_period_end - may be at subscription level or item level
-      const periodEnd = subscription.current_period_end || 
-        subscription.items?.data?.[0]?.current_period_end;
-      
-      if (periodEnd && typeof periodEnd === 'number') {
-        subscriptionEnd = new Date(periodEnd * 1000).toISOString();
-      }
+      // Handle current_period_end - Stripe usually returns seconds, but be defensive
+      // because some nested shapes can surface millisecond-like values.
+      const periodEndRaw =
+        subscription.current_period_end ?? subscription.items?.data?.[0]?.current_period_end;
+
+      const parseStripePeriodEndToIso = (value: unknown): string | null => {
+        const n =
+          typeof value === "number"
+            ? value
+            : typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))
+              ? Number(value)
+              : null;
+
+        if (n === null) return null;
+
+        // Heuristic: seconds are ~1e9, milliseconds are ~1e12
+        const ms = n > 100_000_000_000 ? n : n * 1000;
+        const d = new Date(ms);
+        if (Number.isNaN(d.getTime())) return null;
+        return d.toISOString();
+      };
+
+      subscriptionEnd = parseStripePeriodEndToIso(periodEndRaw);
       
       cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
       
       const productId = subscription.items.data[0].price.product as string;
-      logStep("Active subscription found", { subscriptionId: subscription.id, productId, periodEnd });
+      logStep("Active subscription found", { subscriptionId: subscription.id, productId, periodEnd: periodEndRaw });
 
       // Map product IDs to plans
       const productToPlan: Record<string, string> = {
