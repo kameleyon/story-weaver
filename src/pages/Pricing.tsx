@@ -140,7 +140,7 @@ export default function Pricing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { plan: currentPlan, createCheckout, isLoading: isLoadingSub } = useSubscription();
+  const { plan: currentPlan, createCheckout, openCustomerPortal, isLoading: isLoadingSub } = useSubscription();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [loadingCredits, setLoadingCredits] = useState<number | null>(null);
@@ -201,12 +201,19 @@ export default function Pricing() {
     if (plan.id === currentPlan) {
       return "Current Plan";
     }
+    // Downgrade to free (cancel subscription)
+    if (plan.id === "free" && currentPlan !== "free") {
+      return "Downgrade to Free";
+    }
     return plan.cta;
   };
 
   const isPlanDisabled = (plan: typeof plans[0]) => {
-    if (plan.id === "free") return true;
+    // Free plan: disabled only if already on free
+    if (plan.id === "free") return currentPlan === "free";
+    // Current plan is always disabled (already subscribed)
     if (plan.id === currentPlan) return true;
+    // Enterprise is never disabled (contact sales)
     if (plan.id === "enterprise") return false;
     return false;
   };
@@ -356,9 +363,23 @@ export default function Pricing() {
                               : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
                         )}
                         disabled={isDisabled || isLoading}
-                        onClick={() => {
+                        onClick={async () => {
                           if (plan.id === "enterprise") {
                             window.open("mailto:sales@audiomax.com?subject=Enterprise%20Inquiry", "_blank");
+                          } else if (plan.id === "free" && currentPlan !== "free") {
+                            // Downgrade to free = cancel via Customer Portal
+                            try {
+                              setLoadingPlan("free");
+                              await openCustomerPortal();
+                            } catch (error) {
+                              toast({
+                                title: "Error",
+                                description: error instanceof Error ? error.message : "Failed to open billing portal",
+                                variant: "destructive",
+                              });
+                            } finally {
+                              setLoadingPlan(null);
+                            }
                           } else if (plan.priceId) {
                             handleSubscribe(plan.id, plan.priceId);
                           }
