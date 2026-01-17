@@ -9,7 +9,8 @@ import {
   Gem,
   Building2,
   Sparkles,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,9 +18,13 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { cn } from "@/lib/utils";
+import { useSubscription, STRIPE_PLANS, CREDIT_PACKS } from "@/hooks/useSubscription";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const plans = [
   {
+    id: "free",
     name: "Freemium",
     price: "$0",
     period: "/month",
@@ -35,8 +40,10 @@ const plans = [
     cta: "Current Plan",
     popular: false,
     disabled: true,
+    priceId: null,
   },
   {
+    id: "premium",
     name: "Premium",
     price: "$7.99",
     period: "/month",
@@ -53,8 +60,10 @@ const plans = [
     cta: "Upgrade to Premium",
     popular: false,
     disabled: false,
+    priceId: STRIPE_PLANS.premium.monthly.priceId,
   },
   {
+    id: "pro",
     name: "Pro",
     price: "$34.99",
     period: "/month",
@@ -73,8 +82,10 @@ const plans = [
     cta: "Upgrade to Pro",
     popular: true,
     disabled: false,
+    priceId: STRIPE_PLANS.pro.monthly.priceId,
   },
   {
+    id: "platinum",
     name: "Platinum",
     price: "$99.99",
     period: "/month",
@@ -93,8 +104,10 @@ const plans = [
     cta: "Upgrade to Platinum",
     popular: false,
     disabled: false,
+    priceId: STRIPE_PLANS.platinum.monthly.priceId,
   },
   {
+    id: "enterprise",
     name: "Enterprise",
     price: "Custom",
     period: "",
@@ -113,20 +126,90 @@ const plans = [
     cta: "Contact Sales",
     popular: false,
     disabled: false,
+    priceId: null,
   },
 ];
 
 const creditPackages = [
-  { credits: 10, price: "$4.99", perCredit: "$0.50" },
-  { credits: 25, price: "$9.99", perCredit: "$0.40", popular: true },
-  { credits: 50, price: "$17.99", perCredit: "$0.36" },
-  { credits: 100, price: "$29.99", perCredit: "$0.30" },
-  { credits: 250, price: "$59.99", perCredit: "$0.24" },
+  { credits: 10 as const, price: "$4.99", perCredit: "$0.50", priceId: CREDIT_PACKS[10].priceId },
+  { credits: 50 as const, price: "$14.99", perCredit: "$0.30", popular: true, priceId: CREDIT_PACKS[50].priceId },
+  { credits: 150 as const, price: "$39.99", perCredit: "$0.27", priceId: CREDIT_PACKS[150].priceId },
 ];
 
 export default function Pricing() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const { plan: currentPlan, createCheckout, isLoading: isLoadingSub } = useSubscription();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [loadingCredits, setLoadingCredits] = useState<number | null>(null);
+
+  const handleSubscribe = async (planId: string, priceId: string | null) => {
+    if (!priceId) return;
+    
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to subscribe to a plan",
+        variant: "destructive",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    try {
+      setLoadingPlan(planId);
+      await createCheckout(priceId, "subscription");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start checkout",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handleBuyCredits = async (credits: 10 | 50 | 150, priceId: string) => {
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to purchase credits",
+        variant: "destructive",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    try {
+      setLoadingCredits(credits);
+      await createCheckout(priceId, "payment");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start checkout",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingCredits(null);
+    }
+  };
+
+  const getPlanCta = (plan: typeof plans[0]) => {
+    if (plan.id === currentPlan) {
+      return "Current Plan";
+    }
+    return plan.cta;
+  };
+
+  const isPlanDisabled = (plan: typeof plans[0]) => {
+    if (plan.id === "free") return true;
+    if (plan.id === currentPlan) return true;
+    if (plan.id === "enterprise") return false;
+    return false;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -196,6 +279,10 @@ export default function Pricing() {
           <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {plans.map((plan, index) => {
               const Icon = plan.icon;
+              const isCurrentPlan = plan.id === currentPlan;
+              const isDisabled = isPlanDisabled(plan);
+              const isLoading = loadingPlan === plan.id;
+              
               return (
                 <motion.div
                   key={plan.name}
@@ -206,23 +293,29 @@ export default function Pricing() {
                   <Card
                     className={cn(
                       "relative h-full border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md",
-                      plan.popular && "border-primary/50 bg-gradient-to-b from-primary/5 to-transparent"
+                      plan.popular && "border-primary/50 bg-gradient-to-b from-primary/5 to-transparent",
+                      isCurrentPlan && "ring-2 ring-primary"
                     )}
                   >
-                    {plan.popular && (
+                    {plan.popular && !isCurrentPlan && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                         <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
+                      </div>
+                    )}
+                    {isCurrentPlan && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <Badge className="bg-primary text-primary-foreground">Your Plan</Badge>
                       </div>
                     )}
                     <CardHeader className="pb-4">
                       <div className="flex items-center gap-2 mb-2">
                         <div className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-lg",
-                          plan.popular ? "bg-primary/20" : "bg-muted"
+                          plan.popular || isCurrentPlan ? "bg-primary/20" : "bg-muted"
                         )}>
                           <Icon className={cn(
                             "h-4 w-4",
-                            plan.popular ? "text-primary" : "text-muted-foreground"
+                            plan.popular || isCurrentPlan ? "text-primary" : "text-muted-foreground"
                           )} />
                         </div>
                         <CardTitle className="text-base sm:text-lg">{plan.name}</CardTitle>
@@ -256,23 +349,29 @@ export default function Pricing() {
                       <Button
                         className={cn(
                           "w-full rounded-full text-sm",
-                          plan.popular 
+                          plan.popular || isCurrentPlan
                             ? "bg-primary text-primary-foreground" 
-                            : plan.disabled 
+                            : isDisabled 
                               ? "bg-muted text-muted-foreground cursor-not-allowed"
                               : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
                         )}
-                        disabled={plan.disabled}
+                        disabled={isDisabled || isLoading}
                         onClick={() => {
-                          if (plan.name === "Enterprise") {
+                          if (plan.id === "enterprise") {
                             window.open("mailto:sales@audiomax.com?subject=Enterprise%20Inquiry", "_blank");
-                          } else if (!plan.disabled) {
-                            // TODO: Integrate Stripe checkout
-                            navigate("/usage");
+                          } else if (plan.priceId) {
+                            handleSubscribe(plan.id, plan.priceId);
                           }
                         }}
                       >
-                        {plan.cta}
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Processing...
+                          </>
+                        ) : (
+                          getPlanCta(plan)
+                        )}
                       </Button>
                     </CardContent>
                   </Card>
@@ -298,38 +397,43 @@ export default function Pricing() {
               </p>
             </div>
 
-            <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-              {creditPackages.map((pkg, index) => (
-                <motion.div
-                  key={pkg.credits}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.6 + index * 0.05 }}
-                >
-                  <Card
-                    className={cn(
-                      "relative cursor-pointer border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md hover:border-primary/50",
-                      pkg.popular && "border-primary/50 ring-1 ring-primary/20"
-                    )}
-                    onClick={() => {
-                      // TODO: Integrate Stripe checkout for credits
-                      navigate("/usage");
-                    }}
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3 max-w-2xl mx-auto">
+              {creditPackages.map((pkg, index) => {
+                const isLoading = loadingCredits === pkg.credits;
+                
+                return (
+                  <motion.div
+                    key={pkg.credits}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.6 + index * 0.05 }}
                   >
-                    {pkg.popular && (
-                      <div className="absolute -top-2 right-2">
-                        <Badge variant="secondary" className="text-[10px]">Best Value</Badge>
-                      </div>
-                    )}
-                    <CardContent className="p-4 text-center">
-                      <p className="text-2xl sm:text-3xl font-bold text-primary">{pkg.credits}</p>
-                      <p className="text-xs text-muted-foreground">credits</p>
-                      <p className="mt-2 text-lg font-semibold">{pkg.price}</p>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">{pkg.perCredit}/credit</p>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
+                    <Card
+                      className={cn(
+                        "relative cursor-pointer border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md hover:border-primary/50",
+                        pkg.popular && "border-primary/50 ring-1 ring-primary/20"
+                      )}
+                      onClick={() => !isLoading && handleBuyCredits(pkg.credits, pkg.priceId)}
+                    >
+                      {pkg.popular && (
+                        <div className="absolute -top-2 right-2">
+                          <Badge variant="secondary" className="text-[10px]">Best Value</Badge>
+                        </div>
+                      )}
+                      <CardContent className="p-4 text-center">
+                        {isLoading ? (
+                          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                        ) : (
+                          <p className="text-2xl sm:text-3xl font-bold text-primary">{pkg.credits}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">credits</p>
+                        <p className="mt-2 text-lg font-semibold">{pkg.price}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">{pkg.perCredit}/credit</p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </div>
           </motion.div>
 
