@@ -32,10 +32,10 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
               className={cn(
                 "relative flex flex-col items-center gap-2 sm:gap-3 rounded-xl border p-3 sm:p-4 transition-all",
                 isDisabled
-                  ? "cursor-not-allowed opacity-40 border-border/20 bg-muted/20"
+                  ? "cursor-not-allowed opacity-40 border-border/30 bg-muted/20"
                   : selected === format.id
-                  ? "border-primary/50 bg-primary/5 shadow-sm"
-                  : "border-border bg-muted hover:bg-muted/80 hover:border-border"
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border/60 bg-card hover:bg-muted hover:border-border"
               )}
               whileHover={isDisabled ? {} : { scale: 1.01 }}
               whileTap={isDisabled ? {} : { scale: 0.99 }}
