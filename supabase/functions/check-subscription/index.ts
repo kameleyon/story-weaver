@@ -78,11 +78,19 @@ serve(async (req) => {
 
     if (subscriptions.data.length > 0) {
       const subscription = subscriptions.data[0];
-      subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
-      cancelAtPeriodEnd = subscription.cancel_at_period_end;
+      
+      // Handle current_period_end - may be at subscription level or item level
+      const periodEnd = subscription.current_period_end || 
+        subscription.items?.data?.[0]?.current_period_end;
+      
+      if (periodEnd && typeof periodEnd === 'number') {
+        subscriptionEnd = new Date(periodEnd * 1000).toISOString();
+      }
+      
+      cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
       
       const productId = subscription.items.data[0].price.product as string;
-      logStep("Active subscription found", { subscriptionId: subscription.id, productId });
+      logStep("Active subscription found", { subscriptionId: subscription.id, productId, periodEnd });
 
       // Map product IDs to plans
       const productToPlan: Record<string, string> = {
