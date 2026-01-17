@@ -136,10 +136,10 @@ export function StyleSelector({
               key={style.id}
               onClick={() => onSelect(style.id)}
               className={cn(
-                "group relative flex-shrink-0 w-[100px] sm:w-[120px] overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all",
+                "group relative flex-shrink-0 w-[100px] sm:w-[120px] overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all bg-muted/40",
                 selected === style.id
                   ? "border-primary shadow-sm shadow-primary/20"
-                  : "border-transparent hover:border-muted-foreground/30"
+                  : "border-border/40 hover:border-muted-foreground/50"
               )}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
