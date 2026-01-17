@@ -77,7 +77,6 @@ const pricingPlans = [
 
 export default function Landing() {
   const [currentFeature, setCurrentFeature] = useState(0);
-  const [activeSection, setActiveSection] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -86,36 +85,6 @@ export default function Landing() {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
-
-  // Track active section for nav highlighting
-  useEffect(() => {
-    const handleScroll = () => {
-      const sections = ["features", "how-it-works", "pricing"];
-      const scrollPosition = window.scrollY + 100;
-
-      for (const sectionId of sections) {
-        const element = document.getElementById(sectionId);
-        if (element) {
-          const { offsetTop, offsetHeight } = element;
-          if (scrollPosition >= offsetTop && scrollPosition < offsetTop + offsetHeight) {
-            setActiveSection(sectionId);
-            return;
-          }
-        }
-      }
-      setActiveSection("");
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,33 +95,15 @@ export default function Landing() {
             <ThemedLogo className="h-8 sm:h-10 w-auto" />
           </div>
           <nav className="hidden items-center gap-6 lg:gap-8 md:flex">
-            <button
-              onClick={() => scrollToSection("features")}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                activeSection === "features" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
+            <a href="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
               Features
-            </button>
-            <button
-              onClick={() => scrollToSection("how-it-works")}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                activeSection === "how-it-works" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
+            </a>
+            <a href="#how-it-works" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
               How It Works
-            </button>
-            <button
-              onClick={() => scrollToSection("pricing")}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                activeSection === "pricing" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
+            </a>
+            <a href="#pricing" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
               Pricing
-            </button>
+            </a>
           </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -176,20 +127,20 @@ export default function Landing() {
 
       {/* Hero Section */}
       <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-14 sm:pt-16">
-        {/* Background gradient - more subtle to avoid banding */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/3 to-transparent" />
         
-        {/* Floating elements - reduced opacity and larger blur for smoother gradients */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Floating elements */}
+        <div className="absolute inset-0 overflow-hidden">
           <motion.div
-            className="absolute -top-40 -right-40 h-80 sm:h-[500px] w-80 sm:w-[500px] rounded-full bg-primary/5 blur-[100px]"
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.4, 0.3] }}
-            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-20 -right-20 h-64 sm:h-96 w-64 sm:w-96 rounded-full bg-primary/10 blur-3xl"
+            animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.6, 0.4] }}
+            transition={{ duration: 8, repeat: Infinity }}
           />
           <motion.div
-            className="absolute -bottom-40 -left-40 h-80 sm:h-[500px] w-80 sm:w-[500px] rounded-full bg-accent/5 blur-[100px]"
-            animate={{ scale: [1.1, 1, 1.1], opacity: [0.3, 0.4, 0.3] }}
-            transition={{ duration: 10, repeat: Infinity, delay: 3, ease: "easeInOut" }}
+            className="absolute -bottom-20 -left-20 h-64 sm:h-96 w-64 sm:w-96 rounded-full bg-accent/10 blur-3xl"
+            animate={{ scale: [1.2, 1, 1.2], opacity: [0.4, 0.6, 0.4] }}
+            transition={{ duration: 8, repeat: Infinity, delay: 2 }}
           />
         </div>
 

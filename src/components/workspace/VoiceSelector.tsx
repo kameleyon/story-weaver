@@ -30,8 +30,8 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
               className={cn(
                 "flex items-center gap-2 rounded-xl border px-4 py-2.5 transition-all",
                 isSelected
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border/60 bg-card hover:bg-muted hover:border-border"
+                  ? "border-primary/50 bg-primary/5 shadow-sm"
+                  : "border-border bg-muted hover:bg-muted/80 hover:border-border"
               )}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
