@@ -35,7 +35,7 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
                   ? "cursor-not-allowed opacity-40 border-border/20 bg-muted/20"
                   : selected === format.id
                   ? "border-primary/50 bg-primary/5 shadow-sm"
-                  : "border-border/50 bg-muted/60 hover:bg-muted/70 hover:border-border/70"
+                  : "border-border bg-muted hover:bg-muted/80 hover:border-border"
               )}
               whileHover={isDisabled ? {} : { scale: 1.01 }}
               whileTap={isDisabled ? {} : { scale: 0.99 }}
