@@ -47,10 +47,37 @@ serve(async (req) => {
     
     logStep("Webhook received", { hasSignature: !!signature });
 
-    // For now, parse without signature verification
-    // In production, use the webhook secret for verification
-    const event = JSON.parse(body) as Stripe.Event;
-    logStep("Event type", { type: event.type });
+    // Verify webhook signature for security
+    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    if (!webhookSecret) {
+      logStep("ERROR", { message: "Webhook secret not configured" });
+      return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
+
+    if (!signature) {
+      logStep("ERROR", { message: "No signature provided" });
+      return new Response(JSON.stringify({ error: "No signature provided" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
+
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      logStep("ERROR", { message: `Signature verification failed: ${errorMessage}` });
+      return new Response(JSON.stringify({ error: "Signature verification failed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
+
+    logStep("Event verified and parsed", { type: event.type });
 
     switch (event.type) {
       case "checkout.session.completed": {
