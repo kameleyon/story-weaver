@@ -10,7 +10,7 @@
 @layer base {
   :root {
     /* Teal & Mist Color Palette */
-    --brand-dark: 180 7% 13%; /* #1E2223 - Carbon Black */
+    --brand-dark: 200 9% 6%; /* #0F1112 - Carbon Black */
     --brand-primary: 186 76% 21%; /* #0D565F - Dark Teal */
     --brand-secondary: 178 40% 29%; /* #2D6967 - Stormy Teal */
     --brand-accent: 170 36% 48%; /* #4EA69A - Ocean Mist */
