@@ -1,11 +1,11 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
   ArrowLeft, 
   Zap, 
   Video,
-  Clock,
   TrendingUp,
   Calendar,
   CreditCard,
@@ -13,7 +13,9 @@ import {
   Crown,
   ExternalLink,
   Plus,
-  DollarSign
+  DollarSign,
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,8 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, format, startOfMonth, endOfMonth } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 // Plan limits configuration
 const planLimits = {
@@ -35,7 +39,33 @@ const planLimits = {
 
 export default function Usage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { toast } = useToast();
+  const { 
+    plan, 
+    subscribed, 
+    subscriptionEnd, 
+    cancelAtPeriodEnd,
+    creditsBalance, 
+    isLoading: isLoadingSub,
+    checkSubscription,
+    openCustomerPortal 
+  } = useSubscription();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+
+  // Show success toast if redirected from checkout
+  useEffect(() => {
+    if (searchParams.get("success") === "true") {
+      toast({
+        title: "Payment successful!",
+        description: "Your subscription has been activated. It may take a moment to reflect.",
+      });
+      // Refresh subscription status
+      checkSubscription();
+    }
+  }, [searchParams, toast, checkSubscription]);
 
   // Fetch usage data from generations table
   const { data: usageData, isLoading: isLoadingUsage } = useQuery({
@@ -93,17 +123,36 @@ export default function Usage() {
     enabled: !!user?.id,
   });
 
-  // Mock plan data (will be replaced with Stripe integration)
-  const currentPlan = "free";
-  const planInfo = planLimits[currentPlan as keyof typeof planLimits];
+  const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
   const videosLimit = planInfo.videos;
   const videosCreated = usageData?.videosCreated || 0;
   const videosPercentage = videosLimit === Infinity ? 0 : (videosCreated / videosLimit) * 100;
 
-  // Calculate next billing date (end of current month for free users)
-  const renewalDate = usageData?.billingEnd 
-    ? format(usageData.billingEnd, "MMMM d, yyyy")
+  // Calculate renewal date
+  const renewalDate = subscriptionEnd 
+    ? format(new Date(subscriptionEnd), "MMMM d, yyyy")
     : format(endOfMonth(new Date()), "MMMM d, yyyy");
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await checkSubscription();
+    setIsRefreshing(false);
+  };
+
+  const handleOpenPortal = async () => {
+    try {
+      setIsOpeningPortal(true);
+      await openCustomerPortal();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to open billing portal",
+        variant: "destructive",
+      });
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -121,7 +170,18 @@ export default function Usage() {
             </Button>
             <ThemedLogo className="h-6 sm:h-8 w-auto" />
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -144,21 +204,44 @@ export default function Usage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-xl sm:text-2xl font-bold text-foreground">{planInfo.label}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-foreground">
+                      {isLoadingSub ? "..." : planInfo.label}
+                    </p>
                     <Badge variant="secondary" className="text-xs">Current</Badge>
+                    {cancelAtPeriodEnd && (
+                      <Badge variant="destructive" className="text-xs">Cancels Soon</Badge>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Resets on {renewalDate}
+                    {subscribed ? `Renews on ${renewalDate}` : `Resets on ${renewalDate}`}
                   </p>
                 </div>
               </div>
-              <Button 
-                className="gap-2 rounded-full bg-primary w-full sm:w-auto"
-                onClick={() => navigate("/pricing")}
-              >
-                <Zap className="h-4 w-4" />
-                Upgrade Plan
-              </Button>
+              <div className="flex gap-2 w-full sm:w-auto">
+                {subscribed ? (
+                  <Button 
+                    variant="outline"
+                    className="gap-2 rounded-full flex-1 sm:flex-initial"
+                    onClick={handleOpenPortal}
+                    disabled={isOpeningPortal}
+                  >
+                    {isOpeningPortal ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4" />
+                    )}
+                    Manage Subscription
+                  </Button>
+                ) : (
+                  <Button 
+                    className="gap-2 rounded-full bg-primary w-full sm:w-auto"
+                    onClick={() => navigate("/pricing")}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Upgrade Plan
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -184,7 +267,7 @@ export default function Usage() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   {videosLimit === Infinity 
                     ? "Unlimited videos with your plan" 
-                    : `${videosLimit - videosCreated} videos remaining this cycle`}
+                    : `${Math.max(0, videosLimit - videosCreated)} videos remaining this cycle`}
                 </p>
               </CardContent>
             </Card>
@@ -198,7 +281,9 @@ export default function Usage() {
               </CardHeader>
               <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
                 <div className="flex items-end justify-between">
-                  <span className="text-2xl sm:text-3xl font-bold">0</span>
+                  <span className="text-2xl sm:text-3xl font-bold">
+                    {isLoadingSub ? "..." : creditsBalance}
+                  </span>
                   <span className="text-sm text-muted-foreground">bonus credits</span>
                 </div>
                 <Button 
@@ -227,24 +312,49 @@ export default function Usage() {
               <CardDescription className="text-xs sm:text-sm">Manage your payment methods and billing</CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="rounded-lg border border-dashed border-border/50 bg-muted/20 p-4 sm:p-6 text-center">
-                <CreditCard className="h-8 w-8 sm:h-10 sm:w-10 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-sm font-medium text-foreground">No payment method on file</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Add a payment method to upgrade your plan or purchase credits
-                </p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4 gap-2 rounded-full text-sm"
-                  onClick={() => {
-                    // TODO: Integrate Stripe customer portal
-                    navigate("/pricing");
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Payment Method
-                </Button>
-              </div>
+              {subscribed ? (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 sm:p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
+                      <Crown className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Active Subscription</p>
+                      <p className="text-sm text-muted-foreground">
+                        {planInfo.label} plan • {cancelAtPeriodEnd ? "Cancels" : "Renews"} {renewalDate}
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="mt-4 gap-2 rounded-full text-sm w-full sm:w-auto"
+                    onClick={handleOpenPortal}
+                    disabled={isOpeningPortal}
+                  >
+                    {isOpeningPortal ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4" />
+                    )}
+                    Manage in Stripe
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/50 bg-muted/20 p-4 sm:p-6 text-center">
+                  <CreditCard className="h-8 w-8 sm:h-10 sm:w-10 mx-auto text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-foreground">No active subscription</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                    Upgrade your plan to unlock more features
+                  </p>
+                  <Button 
+                    className="mt-4 gap-2 rounded-full text-sm"
+                    onClick={() => navigate("/pricing")}
+                  >
+                    <Zap className="h-4 w-4" />
+                    View Plans
+                  </Button>
+                </div>
+              )}
 
               {/* Quick actions */}
               <div className="mt-4 sm:mt-6 grid gap-3 grid-cols-1 sm:grid-cols-2">
@@ -263,7 +373,8 @@ export default function Usage() {
                 <Button 
                   variant="ghost" 
                   className="justify-start gap-2 h-auto py-3 text-sm"
-                  disabled
+                  onClick={handleOpenPortal}
+                  disabled={!subscribed || isOpeningPortal}
                 >
                   <Receipt className="h-4 w-4 text-muted-foreground" />
                   <div className="text-left">
@@ -341,28 +452,6 @@ export default function Usage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Billing History */}
-          <Card className="mt-4 sm:mt-6 border-border/50 bg-card/50 shadow-sm">
-            <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <Receipt className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                Billing History
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">View your past invoices</CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="py-6 text-center">
-                <Receipt className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  No billing history available
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  You're on the free plan. Upgrade to see invoices here.
-                </p>
-              </div>
             </CardContent>
           </Card>
         </motion.div>
