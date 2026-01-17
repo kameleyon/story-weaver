@@ -39,6 +39,11 @@ export default function Settings() {
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
   const [keysSaved, setKeysSaved] = useState(false);
 
+  // Password change state
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   // Notification settings
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [projectUpdates, setProjectUpdates] = useState(true);
@@ -127,6 +132,61 @@ export default function Settings() {
       });
     } finally {
       setIsSavingKeys(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in both password fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Passwords don't match",
+        description: "Please make sure both passwords match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Password updated",
+        description: "Your password has been changed successfully.",
+      });
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      console.error("Error changing password:", error);
+      toast({
+        title: "Error updating password",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -369,13 +429,36 @@ export default function Settings() {
                   <CardDescription>Manage your account security</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <Label>Change Password</Label>
-                    <Input type="password" placeholder="Current password" />
-                    <Input type="password" placeholder="New password" />
-                    <Input type="password" placeholder="Confirm new password" />
+                    <p className="text-sm text-muted-foreground">
+                      Enter a new password to update your account security. Password must be at least 6 characters.
+                    </p>
+                    <Input 
+                      type="password" 
+                      placeholder="New password" 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                    <Input 
+                      type="password" 
+                      placeholder="Confirm new password" 
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
                   </div>
-                  <Button className="rounded-full">Update Password</Button>
+                  <Button 
+                    className="gap-2 rounded-full"
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword || !newPassword || !confirmPassword}
+                  >
+                    {isChangingPassword ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Shield className="h-4 w-4" />
+                    )}
+                    {isChangingPassword ? "Updating..." : "Update Password"}
+                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
