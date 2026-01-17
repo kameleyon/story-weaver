@@ -1,7 +1,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import audiomaxLogoLight from "@/assets/audiomax-logo-light.png";
-import audiomaxLogoDark from "@/assets/audiomax-logo.png";
+import audiomaxLogoDark from "@/assets/audiomax-logo-dark.png";
 
 interface ThemedLogoProps {
   className?: string;
