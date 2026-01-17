@@ -14,16 +14,16 @@ const logStep = (step: string, details?: any) => {
 
 // Credit pack product IDs
 const creditPackProducts: Record<string, number> = {
-  "prod_Tnz0gHVRtX0ZKa": 10,   // 10 credits
-  "prod_Tnz0B2aJPD895y": 50,   // 50 credits
-  "prod_Tnz1CygtJnMhUz": 150,  // 150 credits
+  "prod_TnzLJDYSV45eEF": 10,   // 10 credits
+  "prod_TnzL0a9nwvoZKm": 50,   // 50 credits
+  "prod_TnzL2ewLWIt1hD": 150,  // 150 credits
 };
 
 // Subscription plan product IDs
 const subscriptionProducts: Record<string, string> = {
-  "prod_Tnyz2nMLqpHz3R": "premium",
-  "prod_Tnz0KUQX2J5VBH": "pro",
-  "prod_Tnz0BeRmJDdh0V": "platinum",
+  "prod_TnzLdHWPkqAiqr": "premium",
+  "prod_TnzLCasreSakEb": "pro",
+  "prod_TnzLP4tQINtak9": "platinum",
 };
 
 serve(async (req) => {

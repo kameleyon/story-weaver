@@ -5,23 +5,23 @@ import { useAuth } from "@/hooks/useAuth";
 // Stripe product/price mappings
 export const STRIPE_PLANS = {
   premium: {
-    monthly: { priceId: "price_1SqN1x6hfVkBDzkSzfLDk9eF", productId: "prod_Tnyz2nMLqpHz3R" },
-    yearly: { priceId: "price_1SqN1x6hfVkBDzkSzfLDk9eF", productId: "prod_Tnyz2nMLqpHz3R" }, // Same for now
+    monthly: { priceId: "price_1SqNMMGAnMJbBpYYWDNwqgIy", productId: "prod_TnzLdHWPkqAiqr" },
+    yearly: { priceId: "price_1SqNMMGAnMJbBpYYWDNwqgIy", productId: "prod_TnzLdHWPkqAiqr" },
   },
   pro: {
-    monthly: { priceId: "price_1SqN2D6hfVkBDzkS6ywVTBEt", productId: "prod_Tnz0KUQX2J5VBH" },
-    yearly: { priceId: "price_1SqN2D6hfVkBDzkS6ywVTBEt", productId: "prod_Tnz0KUQX2J5VBH" },
+    monthly: { priceId: "price_1SqNMSGAnMJbBpYYZyRMcn4u", productId: "prod_TnzLCasreSakEb" },
+    yearly: { priceId: "price_1SqNMSGAnMJbBpYYZyRMcn4u", productId: "prod_TnzLCasreSakEb" },
   },
   platinum: {
-    monthly: { priceId: "price_1SqN2U6hfVkBDzkSNCDvRyeP", productId: "prod_Tnz0BeRmJDdh0V" },
-    yearly: { priceId: "price_1SqN2U6hfVkBDzkSNCDvRyeP", productId: "prod_Tnz0BeRmJDdh0V" },
+    monthly: { priceId: "price_1SqNMUGAnMJbBpYYkDOyTmWo", productId: "prod_TnzLP4tQINtak9" },
+    yearly: { priceId: "price_1SqNMUGAnMJbBpYYkDOyTmWo", productId: "prod_TnzLP4tQINtak9" },
   },
 } as const;
 
 export const CREDIT_PACKS = {
-  10: { priceId: "price_1SqN2f6hfVkBDzkSQyX5onNh", productId: "prod_Tnz0gHVRtX0ZKa", price: 4.99 },
-  50: { priceId: "price_1SqN2q6hfVkBDzkSNbEXBWTL", productId: "prod_Tnz0B2aJPD895y", price: 14.99 },
-  150: { priceId: "price_1SqN316hfVkBDzkSVq77cGDd", productId: "prod_Tnz1CygtJnMhUz", price: 39.99 },
+  10: { priceId: "price_1SqNMVGAnMJbBpYY7WeJFkiO", productId: "prod_TnzLJDYSV45eEF", price: 4.99 },
+  50: { priceId: "price_1SqNMWGAnMJbBpYYd3SU5e7B", productId: "prod_TnzL0a9nwvoZKm", price: 14.99 },
+  150: { priceId: "price_1SqNMYGAnMJbBpYYlwqZdhSJ", productId: "prod_TnzL2ewLWIt1hD", price: 39.99 },
 } as const;
 
 export interface SubscriptionState {
