@@ -221,7 +221,7 @@ export function StyleSelector({
       )}
 
       {/* Brand Mark Option */}
-      <div className="pt-4 border-t border-border/30 pr-1">
+      <div className="pt-4 border-t border-border/30 px-1">
         <div className="flex items-center gap-3">
           <Checkbox 
             id="brand-mark" 
@@ -243,7 +243,7 @@ export function StyleSelector({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="pt-3 pr-1">
+            <div className="pt-3 px-1">
               <Input
                 placeholder="Company name or copyright text..."
                 value={brandMarkText}
