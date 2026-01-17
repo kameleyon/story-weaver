@@ -17,7 +17,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
+  // Service role client for DB operations
+  const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     { auth: { persistSession: false } }
@@ -30,27 +31,48 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new Error("No authorization header provided");
+    }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
     
-    const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    // Create a client with the user's auth header for getClaims
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Use getClaims to verify the JWT
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      // Check if it's an expired token
+      if (claimsError?.message?.includes("expired")) {
+        throw new Error("Session expired. Please refresh the page.");
+      }
+      throw new Error("Authentication error: Invalid session");
+    }
+    
+    const userId = claimsData.claims.sub as string;
+    const userEmail = claimsData.claims.email as string;
+    
+    if (!userId || !userEmail) {
+      throw new Error("User not authenticated or email not available");
+    }
+    logStep("User authenticated", { userId, email: userEmail });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
 
     if (customers.data.length === 0) {
       logStep("No Stripe customer found, returning free tier");
       
       // Check for credits in the database
-      const { data: creditData } = await supabaseClient
+      const { data: creditData } = await supabaseAdmin
         .from("user_credits")
         .select("credits_balance")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .single();
 
       return new Response(JSON.stringify({
@@ -118,10 +140,10 @@ serve(async (req) => {
     }
 
     // Get credits balance
-    const { data: creditData } = await supabaseClient
+    const { data: creditData } = await supabaseAdmin
       .from("user_credits")
       .select("credits_balance")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
     logStep("Returning subscription status", { plan, subscriptionEnd });
