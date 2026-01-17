@@ -312,7 +312,7 @@ export default function Landing() {
                 transition={{ delay: index * 0.1 }}
                 className="relative rounded-2xl border border-border/50 bg-card/50 p-6 sm:p-8 backdrop-blur-sm shadow-sm"
               >
-                <span className="text-3xl sm:text-4xl font-bold text-primary/20">{item.step}</span>
+                <span className="text-3xl sm:text-4xl font-bold text-accent/70">{item.step}</span>
                 <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-foreground">{item.title}</h3>
                 <p className="mt-2 text-sm sm:text-base text-muted-foreground">{item.description}</p>
               </motion.div>
