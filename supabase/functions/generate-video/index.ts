@@ -1276,7 +1276,8 @@ async function handleAudioPhase(
           _meta: { ...s._meta, statusMessage: statusMsg, costTracking, phaseTimings },
         })),
       })
-      .eq("id", generationId);
+      .eq("id", generationId)
+      .eq("user_id", user.id);
 
     return new Response(
       JSON.stringify({
@@ -1314,7 +1315,8 @@ async function handleAudioPhase(
         },
       })),
     })
-    .eq("id", generationId);
+    .eq("id", generationId)
+    .eq("user_id", user.id);
 
   console.log(
     `Phase: AUDIO complete (chunked) in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`,
@@ -1598,7 +1600,8 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
         };
       }),
     })
-    .eq("id", generationId);
+    .eq("id", generationId)
+    .eq("user_id", user.id);
 
   console.log(
     `Phase: IMAGES chunk complete - ${completedThisChunk} this chunk, ${newCompletedTotal}/${totalImages} total, hasMore: ${hasMore}`,
@@ -1674,9 +1677,10 @@ async function handleFinalizePhase(
       })),
       completed_at: new Date().toISOString(),
     })
-    .eq("id", generationId);
+    .eq("id", generationId)
+    .eq("user_id", user.id);
 
-  await supabase.from("projects").update({ status: "complete" }).eq("id", projectId);
+  await supabase.from("projects").update({ status: "complete" }).eq("id", projectId).eq("user_id", user.id);
 
   console.log(
     `Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}`,
@@ -1756,7 +1760,8 @@ async function handleRegenerateAudio(
   await supabase
     .from("generations")
     .update({ scenes })
-    .eq("id", generationId);
+    .eq("id", generationId)
+    .eq("user_id", user.id);
 
   console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully with voiceover: "${newVoiceover.substring(0, 50)}..."`);
 
@@ -1893,7 +1898,8 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
   await supabase
     .from("generations")
     .update({ scenes })
-    .eq("id", generationId);
+    .eq("id", generationId)
+    .eq("user_id", user.id);
 
   console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Image regenerated successfully`);
 
