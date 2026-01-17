@@ -270,7 +270,7 @@ export default function Landing() {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="border-t border-border/30 bg-muted/20 py-16 sm:py-24">
+      <section id="how-it-works" className="border-t border-border/30 bg-muted/30 py-16 sm:py-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -310,7 +310,7 @@ export default function Landing() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
-                className="relative rounded-2xl border border-border/50 bg-card/50 p-6 sm:p-8 backdrop-blur-sm shadow-sm"
+                className="relative rounded-2xl border border-border/50 bg-card p-6 sm:p-8 shadow-sm"
               >
                 <span className="text-3xl sm:text-4xl font-bold text-accent/70">{item.step}</span>
                 <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-foreground">{item.title}</h3>
@@ -348,7 +348,7 @@ export default function Landing() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
-                  className="flex gap-4 rounded-2xl border border-border/50 bg-card/50 p-5 sm:p-6 backdrop-blur-sm shadow-sm"
+                  className="flex gap-4 rounded-2xl border border-border/50 bg-card p-5 sm:p-6 shadow-sm"
                 >
                   <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                     <IconComponent className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
@@ -365,7 +365,7 @@ export default function Landing() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="border-t border-border/30 bg-muted/20 py-16 sm:py-24">
+      <section id="pricing" className="border-t border-border/30 bg-muted/30 py-16 sm:py-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
