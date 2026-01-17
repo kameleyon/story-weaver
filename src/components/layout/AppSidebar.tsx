@@ -140,7 +140,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 variant="ghost"
                 size="icon"
                 onClick={toggleSidebar}
-                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent/50"
+                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-accent"
               >
                 {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </Button>
