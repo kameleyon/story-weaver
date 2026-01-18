@@ -168,10 +168,10 @@ export default function Dashboard() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.4 }}
-                className="bg-card p-8 sm:p-12 relative overflow-hidden min-h-[180px]"
+                className="bg-card px-12 sm:px-16 py-8 sm:py-12 relative overflow-hidden min-h-[160px] sm:min-h-[180px]"
               >
-                {/* Background illustration */}
-                <div className="absolute right-0 top-0 bottom-0 w-2/3 pointer-events-none">
+                {/* Background illustration - hidden on mobile */}
+                <div className="absolute right-0 top-0 bottom-0 w-2/3 pointer-events-none hidden sm:block">
                   <img 
                     src={HERO_SLIDES[currentSlide].image} 
                     alt="" 
@@ -180,17 +180,17 @@ export default function Dashboard() {
                   <div className="absolute inset-0 bg-gradient-to-r from-card via-card/60 to-transparent" />
                 </div>
                 
-                <div className="relative z-10">
-                  <div className="flex items-center gap-4 mb-4">
+                <div className="relative z-10 pr-4 sm:pr-0">
+                  <div className="flex items-center gap-3 mb-3">
                     {(() => {
                       const Icon = HERO_SLIDES[currentSlide].icon;
-                      return <Icon className="h-8 w-8 text-primary" />;
+                      return <Icon className="h-6 w-6 sm:h-8 sm:w-8 text-primary shrink-0" />;
                     })()}
                   </div>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+                  <h2 className="text-xl sm:text-3xl font-bold text-foreground mb-2">
                     {HERO_SLIDES[currentSlide].title}
                   </h2>
-                  <p className="text-muted-foreground text-sm sm:text-base max-w-md">
+                  <p className="text-muted-foreground text-xs sm:text-base max-w-md">
                     {HERO_SLIDES[currentSlide].subtitle}
                   </p>
                 </div>
@@ -200,24 +200,24 @@ export default function Dashboard() {
             {/* Navigation Arrows */}
             <button
               onClick={prevSlide}
-              className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors"
+              className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 p-1.5 sm:p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors z-20"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
             <button
               onClick={nextSlide}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors"
+              className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-1.5 sm:p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors z-20"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
             
             {/* Dots */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+            <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
               {HERO_SLIDES.map((_, idx) => (
                 <button
                   key={idx}
                   onClick={() => setCurrentSlide(idx)}
-                  className={`h-2 w-2 rounded-full transition-colors ${
+                  className={`h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full transition-colors ${
                     idx === currentSlide ? "bg-primary" : "bg-muted-foreground/30"
                   }`}
                 />
