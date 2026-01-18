@@ -136,14 +136,19 @@ export type Database = {
           description: string | null
           format: string
           id: string
+          inspiration_style: string | null
           is_favorite: boolean
           length: string
           presenter_focus: string | null
+          project_type: string
           status: string
+          story_genre: string | null
+          story_tone: string | null
           style: string
           title: string
           updated_at: string
           user_id: string
+          voice_inclination: string | null
         }
         Insert: {
           brand_mark?: string | null
@@ -153,14 +158,19 @@ export type Database = {
           description?: string | null
           format?: string
           id?: string
+          inspiration_style?: string | null
           is_favorite?: boolean
           length?: string
           presenter_focus?: string | null
+          project_type?: string
           status?: string
+          story_genre?: string | null
+          story_tone?: string | null
           style?: string
           title: string
           updated_at?: string
           user_id: string
+          voice_inclination?: string | null
         }
         Update: {
           brand_mark?: string | null
@@ -170,14 +180,19 @@ export type Database = {
           description?: string | null
           format?: string
           id?: string
+          inspiration_style?: string | null
           is_favorite?: boolean
           length?: string
           presenter_focus?: string | null
+          project_type?: string
           status?: string
+          story_genre?: string | null
+          story_tone?: string | null
           style?: string
           title?: string
           updated_at?: string
           user_id?: string
+          voice_inclination?: string | null
         }
         Relationships: []
       }
