@@ -19,6 +19,13 @@ interface GenerationRequest {
   presenterFocus?: string;
   characterDescription?: string;
   disableExpressions?: boolean;
+  // Storytelling-specific fields
+  projectType?: "doc2video" | "storytelling";
+  inspirationStyle?: string;
+  storyTone?: string;
+  storyGenre?: string;
+  voiceInclination?: string;
+  brandName?: string;
   // For chunked phases
   phase?: "script" | "audio" | "images" | "finalize" | "regenerate-audio" | "regenerate-image";
   generationId?: string;
@@ -1170,6 +1177,309 @@ Return ONLY valid JSON:
   );
 }
 
+// ============= STORYTELLING SCRIPT PHASE =============
+async function handleStorytellingScriptPhase(
+  supabase: any,
+  user: any,
+  content: string,
+  format: string,
+  length: string,
+  style: string,
+  customStyle?: string,
+  brandMark?: string,
+  inspirationStyle?: string,
+  storyTone?: string,
+  storyGenre?: string,
+  disableExpressions?: boolean,
+  brandName?: string,
+  characterDescription?: string,
+): Promise<Response> {
+  const phaseStart = Date.now();
+
+  // Map storytelling lengths to scene counts
+  const lengthConfig: Record<string, { count: number; targetDuration: number; avgSceneDuration: number }> = {
+    short: { count: 4, targetDuration: 90, avgSceneDuration: 22 },      // <3 min
+    brief: { count: 8, targetDuration: 210, avgSceneDuration: 26 },     // <7 min  
+    extended: { count: 16, targetDuration: 480, avgSceneDuration: 30 }, // <15 min
+    presentation: { count: 16, targetDuration: 480, avgSceneDuration: 30 }, // alias
+  };
+  const config = lengthConfig[length] || lengthConfig.brief;
+  const sceneCount = config.count;
+  const targetWords = Math.floor(config.avgSceneDuration * 2.5);
+
+  const styleDescription = getStylePrompt(style, customStyle);
+  const includeTextOverlay = TEXT_OVERLAY_STYLES.includes(style.toLowerCase());
+  const dimensions = getImageDimensions(format);
+
+  // Build inspiration guidance
+  const inspirationGuide: Record<string, string> = {
+    "aaron-sorkin": "Write with sharp, rapid-fire dialogue. Use walk-and-talk energy, overlapping ideas, and intellectual sparring. Build momentum through rhythm and wit.",
+    "quentin-tarantino": "Bold, unconventional narrative structure. Pop culture references, memorable monologues, and unexpected tonal shifts. Make every scene electric.",
+    "nora-ephron": "Warm, romantic wit with observational humor. Relatable inner monologue, cozy settings, and heartfelt emotional beats.",
+    "david-mamet": "Terse, rhythmic dialogue with staccato pacing. Subtext over text. Characters speak in fragments, interruptions, and loaded silences.",
+    "agatha-christie": "Mystery and suspense with careful misdirection. Plant clues subtly, build tension, and deliver satisfying reveals.",
+    "neil-gaiman": "Mythical storytelling blending the mundane with the magical. Lyrical prose, archetypal characters, and a sense of wonder.",
+    "maya-angelou": "Poetic, uplifting prose with dignity and grace. Personal yet universal themes. The rhythm of spoken word.",
+    "ernest-hemingway": "Sparse, powerful minimalism. Short sentences. Strong verbs. Let the emotion live in what's unsaid.",
+  };
+
+  const toneGuide: Record<string, string> = {
+    casual: "Conversational and relaxed. Like talking to a friend over coffee.",
+    professional: "Polished and authoritative. Clear, confident, and credible.",
+    dramatic: "Heightened emotion and stakes. Build tension and release.",
+    humorous: "Light, witty, with well-timed comedic beats. Don't force jokes—let humor emerge naturally.",
+    inspirational: "Uplifting and motivating. Appeal to hopes and aspirations.",
+    suspenseful: "Edge-of-seat tension. Strategic reveals and cliffhangers.",
+    educational: "Clear explanations with engaging examples. Make complex ideas accessible.",
+  };
+
+  const genreGuide: Record<string, string> = {
+    documentary: "Factual narrative with human interest. Blend information with emotional storytelling.",
+    fiction: "Character-driven narrative with plot arcs. Create a world the audience can inhabit.",
+    educational: "Structured learning with engaging delivery. Examples, analogies, and clear takeaways.",
+    marketing: "Persuasive narrative focused on value and transformation. End with clear call-to-action.",
+    "personal-story": "Intimate, first-person narrative. Vulnerability, authenticity, and universal themes.",
+    "news-report": "Objective journalism style. Who, what, when, where, why. Credible and timely.",
+  };
+
+  const inspirationSection = inspirationStyle && inspirationStyle !== "none" && inspirationGuide[inspirationStyle]
+    ? `\n=== WRITING INSPIRATION: ${inspirationStyle.toUpperCase().replace(/-/g, " ")} ===\n${inspirationGuide[inspirationStyle]}`
+    : "";
+
+  const toneSection = storyTone && toneGuide[storyTone]
+    ? `\n=== TONE: ${storyTone.toUpperCase()} ===\n${toneGuide[storyTone]}`
+    : "";
+
+  const genreSection = storyGenre && genreGuide[storyGenre]
+    ? `\n=== GENRE: ${storyGenre.toUpperCase().replace(/-/g, " ")} ===\n${genreGuide[storyGenre]}`
+    : "";
+
+  const characterGuidance = characterDescription
+    ? `\n=== CHARACTER APPEARANCE ===\nAll human characters in visual prompts MUST match this description:\n${characterDescription}\nInclude these character details in EVERY visualPrompt that features people.`
+    : "";
+
+  const brandSection = brandName
+    ? `\n=== BRAND ATTRIBUTION ===\nSubtly weave "${brandName}" into the narrative as the source or presenter of this story.`
+    : "";
+
+  const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
+
+=== STORY IDEA ===
+${content}
+${inspirationSection}${toneSection}${genreSection}${characterGuidance}${brandSection}
+
+=== TIMING REQUIREMENTS ===
+- Target duration: ${config.targetDuration} seconds
+- Create exactly ${sceneCount} scenes
+- MAXIMUM 40 seconds per scene
+- Each voiceover: ~${targetWords} words for natural narration pacing
+
+=== FORMAT ===
+- Format: ${format} (${dimensions.width}x${dimensions.height})
+- Visual Style: ${styleDescription}
+
+=== NARRATIVE STRUCTURE ===
+Create a compelling story arc:
+1. OPENING (Scene 1): Hook the audience immediately. Start in media res or with a provocative question.
+2. RISING ACTION (Scenes 2-${Math.floor(sceneCount * 0.4)}): Build the world, introduce conflict or stakes.
+3. CLIMAX (Scenes ${Math.floor(sceneCount * 0.4) + 1}-${Math.floor(sceneCount * 0.7)}): Peak tension, key revelation, or turning point.
+4. FALLING ACTION (Scenes ${Math.floor(sceneCount * 0.7) + 1}-${sceneCount - 1}): Consequences unfold, resolution begins.
+5. CONCLUSION (Scene ${sceneCount}): Satisfying ending with emotional resonance.
+
+=== VOICEOVER STYLE ===
+- Write CONTINUOUS narration—this is a story, not a presentation
+- IMMERSIVE storytelling voice (not instructional)
+- Show, don't tell—use sensory details and vivid imagery
+- Vary sentence rhythm for musicality
+- NO labels, NO stage directions, NO markdown
+${
+  disableExpressions
+    ? `- Do NOT include any paralinguistic tags or expressions like [chuckle], [sigh], etc.
+- Write clean, flowing prose without bracketed expressions`
+    : `- Include paralinguistic tags sparingly for emotional emphasis: [sigh], [chuckle], [gasp], [laugh]
+- Use them only at key emotional moments, not every scene`
+}
+
+=== VISUAL PROMPTS ===
+- Each visualPrompt should be a CINEMATIC MOMENT—dynamic, emotional, visually striking
+- Describe the scene as if directing a film: composition, lighting, mood, character positioning
+- Include camera angle suggestions: close-up, wide shot, over-the-shoulder, etc.
+- Ensure visual variety across scenes (different settings, scales, perspectives)
+
+${
+  includeTextOverlay
+    ? `=== TEXT OVERLAY ===
+- Provide title (2-5 words) and subtitle for each scene
+- Titles should be evocative, not explanatory`
+    : ""
+}
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON:
+{
+  "title": "Story Title",
+  "scenes": [
+    {
+      "number": 1,
+      "narrativeBeat": "opening",
+      "voiceover": "Flowing narrative text...",
+      "visualPrompt": "Cinematic visual description...",
+      "subVisuals": ["Optional additional visual moment..."],
+      "duration": 25${
+        includeTextOverlay
+          ? `,
+      "title": "Evocative Headline",
+      "subtitle": "Emotional subtext"`
+          : ""
+      }
+    }
+  ]
+}`;
+
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with Claude Sonnet...");
+
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
+
+  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://audiomax.lovable.app",
+      "X-Title": "AudioMax Storytelling",
+    },
+    body: JSON.stringify({
+      model: "anthropic/claude-sonnet-4.5",
+      messages: [{ role: "user", content: scriptPrompt }],
+      temperature: 0.8, // Slightly higher for creative storytelling
+      max_tokens: 12000, // More tokens for longer narratives
+    }),
+  });
+
+  if (!scriptResponse.ok) {
+    const errText = await scriptResponse.text().catch(() => "");
+    throw new Error(`Script generation failed: ${scriptResponse.status} - ${errText}`);
+  }
+
+  const scriptData = await scriptResponse.json();
+  const scriptContent = scriptData.choices?.[0]?.message?.content;
+  const tokensUsed = scriptData.usage?.total_tokens || 0;
+
+  if (!scriptContent) throw new Error("No script content received");
+
+  let parsedScript: ScriptResponse;
+  try {
+    const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found in response");
+    parsedScript = JSON.parse(jsonMatch[0]);
+  } catch (parseError) {
+    console.error("Script parse error:", parseError, "Raw content:", scriptContent.substring(0, 500));
+    throw new Error("Failed to parse script JSON");
+  }
+
+  // Sanitize voiceovers
+  parsedScript.scenes = parsedScript.scenes.map((s) => ({
+    ...s,
+    voiceover: sanitizeVoiceover(s.voiceover),
+  }));
+
+  // Calculate total images needed
+  let totalImages = 0;
+  for (const scene of parsedScript.scenes) {
+    totalImages += 1; // Primary
+    if (scene.subVisuals && scene.duration >= 15) {
+      const maxSub = scene.duration >= 25 ? 2 : 1;
+      totalImages += Math.min(scene.subVisuals.length, maxSub);
+    }
+  }
+
+  // Create project with storytelling metadata
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .insert({
+      user_id: user.id,
+      title: parsedScript.title || "Untitled Story",
+      content,
+      format,
+      length,
+      style,
+      brand_mark: brandMark || null,
+      character_description: characterDescription || null,
+      project_type: "storytelling",
+      inspiration_style: inspirationStyle || null,
+      story_tone: storyTone || null,
+      story_genre: storyGenre || null,
+      voice_inclination: disableExpressions ? "disabled" : null,
+      status: "generating",
+    })
+    .select()
+    .single();
+
+  if (projectError) {
+    console.error("Project creation error:", projectError);
+    throw new Error("Failed to create project");
+  }
+
+  const phaseTime = Date.now() - phaseStart;
+  const costTracking: CostTracking = {
+    scriptTokens: tokensUsed,
+    audioSeconds: 0,
+    imagesGenerated: 0,
+    estimatedCostUsd: tokensUsed * PRICING.scriptPerToken,
+  };
+
+  // Create generation record
+  const { data: generation, error: genError } = await supabase
+    .from("generations")
+    .insert({
+      project_id: project.id,
+      user_id: user.id,
+      status: "generating",
+      progress: 10,
+      script: scriptContent,
+      scenes: parsedScript.scenes.map((s, idx) => ({
+        ...s,
+        _meta: {
+          statusMessage: "Story script complete. Ready for audio narration.",
+          totalImages,
+          completedImages: 0,
+          sceneIndex: idx,
+          costTracking,
+          phaseTimings: { script: phaseTime },
+        },
+      })),
+      started_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (genError) {
+    console.error("Generation creation error:", genError);
+    throw new Error("Failed to create generation");
+  }
+
+  console.log(
+    `Phase: STORYTELLING SCRIPT complete in ${phaseTime}ms - "${parsedScript.title}" with ${parsedScript.scenes.length} scenes, ${totalImages} images planned`,
+  );
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "script",
+      projectId: project.id,
+      generationId: generation.id,
+      title: parsedScript.title,
+      sceneCount: parsedScript.scenes.length,
+      totalImages,
+      progress: 10,
+      costTracking,
+      phaseTime,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
 async function handleAudioPhase(
   supabase: any,
   user: any,
@@ -2012,6 +2322,29 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      
+      // Route based on project type
+      if (body.projectType === "storytelling") {
+        console.log(`[generate-video] Routing to STORYTELLING pipeline`);
+        return await handleStorytellingScriptPhase(
+          supabase, 
+          user, 
+          content, 
+          format, 
+          length, 
+          style, 
+          customStyle, 
+          body.brandMark,
+          body.inspirationStyle,
+          body.storyTone,
+          body.storyGenre,
+          body.disableExpressions,
+          body.brandName,
+          body.characterDescription,
+        );
+      }
+      
+      // Default: Doc2Video pipeline
       return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription, body.disableExpressions);
     }
 
