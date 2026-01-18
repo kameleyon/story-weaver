@@ -31,15 +31,24 @@ export function useVideoExport() {
     async (scenes: Scene[], format: "landscape" | "portrait" | "square") => {
       abortRef.current = false;
 
+      // Access WebCodecs constructors safely via globalThis to prevent ReferenceError on iOS Safari
+      const AudioEncoderCtor = (globalThis as any).AudioEncoder as typeof AudioEncoder | undefined;
+      const AudioDataCtor = (globalThis as any).AudioData as typeof AudioData | undefined;
+
       // Check for WebCodecs API support (required for video export)
       const supportsVideo =
         typeof VideoEncoder !== "undefined" &&
         typeof VideoFrame !== "undefined";
 
       // Audio is optional (some mobile browsers have VideoEncoder but no AudioEncoder)
-      const supportsAudio =
-        typeof AudioEncoder !== "undefined" &&
-        typeof AudioData !== "undefined";
+      const supportsAudio = !!AudioEncoderCtor && !!AudioDataCtor;
+
+      console.log("[VideoExport] Capabilities:", {
+        hasVideoEncoder: typeof VideoEncoder !== "undefined",
+        hasAudioEncoder: !!AudioEncoderCtor,
+        hasAudioData: !!AudioDataCtor,
+        userAgent: navigator.userAgent.slice(0, 100),
+      });
 
       if (!supportsVideo) {
         const errorMsg =
@@ -169,9 +178,9 @@ export function useVideoExport() {
 
         // Preflight audio support (some mobile browsers partially implement WebCodecs)
         let audioEnabled = supportsAudio && wantsAudio;
-        if (audioEnabled && typeof (AudioEncoder as any).isConfigSupported === "function") {
+        if (audioEnabled && typeof AudioEncoderCtor?.isConfigSupported === "function") {
           try {
-            const support = await (AudioEncoder as any).isConfigSupported({
+            const support = await AudioEncoderCtor.isConfigSupported({
               codec: "mp4a.40.2",
               numberOfChannels: 2,
               sampleRate: 48000,
@@ -194,11 +203,11 @@ export function useVideoExport() {
         // This prevents creating an MP4 with an audio track on browsers that claim partial support.
         let muxer!: Muxer<ArrayBufferTarget>;
 
-        // Create audio encoder (optional)
+        // Create audio encoder (optional) - use constructor from globalThis
         let audioEncoder: AudioEncoder | null = null;
-        if (audioEnabled) {
+        if (audioEnabled && AudioEncoderCtor) {
           try {
-            audioEncoder = new AudioEncoder({
+            audioEncoder = new AudioEncoderCtor({
               output: (chunk, meta) => {
                 muxer.addAudioChunk(chunk, meta);
               },
@@ -208,6 +217,7 @@ export function useVideoExport() {
             });
           } catch (e) {
             // Some mobile browsers expose the symbol but fail at runtime.
+            console.warn("[VideoExport] AudioEncoder instantiation failed:", e);
             audioEnabled = false;
             audioEncoder = null;
             setState((s) => ({
@@ -299,7 +309,7 @@ export function useVideoExport() {
               planarData[remaining + j] = rightChannel[i + j]; // Right channel after
             }
 
-            const audioData = new AudioData({
+            const audioData = new AudioDataCtor!({
               format: "f32-planar",
               sampleRate: 48000,
               numberOfFrames: remaining,
