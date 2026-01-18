@@ -69,6 +69,13 @@ interface GenerationParams {
   presenterFocus?: string;
   characterDescription?: string;
   disableExpressions?: boolean;
+  // New storytelling fields
+  projectType?: "doc2video" | "storytelling";
+  inspirationStyle?: string;
+  storyTone?: string;
+  storyGenre?: string;
+  voiceInclination?: string;
+  brandName?: string;
 }
 
 type ProjectRow = {
@@ -244,6 +251,13 @@ export function useGenerationPipeline() {
           presenterFocus: params.presenterFocus,
           characterDescription: params.characterDescription,
           disableExpressions: params.disableExpressions,
+          // Storytelling fields
+          projectType: params.projectType,
+          inspirationStyle: params.inspirationStyle,
+          storyTone: params.storyTone,
+          storyGenre: params.storyGenre,
+          voiceInclination: params.voiceInclination,
+          brandName: params.brandName,
         });
 
         if (!scriptResult.success) throw new Error(scriptResult.error || "Script generation failed");

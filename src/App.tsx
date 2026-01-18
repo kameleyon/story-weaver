@@ -8,6 +8,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
+import Dashboard from "./pages/Dashboard";
+import CreateWorkspace from "./pages/CreateWorkspace";
 import Settings from "./pages/Settings";
 import Usage from "./pages/Usage";
 import Pricing from "./pages/Pricing";
@@ -26,11 +28,21 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
+            {/* Main app - Dashboard */}
             <Route
               path="/app"
               element={
                 <ProtectedRoute>
                   <Index />
+                </ProtectedRoute>
+              }
+            />
+            {/* Create workspace - Doc2Video or Storytelling */}
+            <Route
+              path="/app/create"
+              element={
+                <ProtectedRoute>
+                  <CreateWorkspace />
                 </ProtectedRoute>
               }
             />

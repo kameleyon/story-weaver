@@ -1,17 +1,14 @@
-import { useRef } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
-import { Workspace, WorkspaceHandle } from "@/components/workspace/Workspace";
+import Dashboard from "./Dashboard";
 
 const Index = () => {
-  const workspaceRef = useRef<WorkspaceHandle>(null);
-
   const handleNewProject = () => {
-    workspaceRef.current?.resetWorkspace();
+    // Navigate handled by sidebar
   };
 
-  const handleOpenProject = (projectId: string) => {
-    void workspaceRef.current?.openProject(projectId);
+  const handleOpenProject = (_projectId: string) => {
+    // Navigate handled by sidebar
   };
 
   return (
@@ -19,7 +16,7 @@ const Index = () => {
       <div className="flex min-h-screen w-full overflow-hidden">
         <AppSidebar onNewProject={handleNewProject} onOpenProject={handleOpenProject} />
         <main className="flex-1 min-w-0 overflow-hidden">
-          <Workspace ref={workspaceRef} />
+          <Dashboard />
         </main>
       </div>
     </SidebarProvider>
