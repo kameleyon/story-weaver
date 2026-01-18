@@ -168,16 +168,16 @@ export default function Dashboard() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.4 }}
-                className={`bg-gradient-to-br ${HERO_SLIDES[currentSlide].gradient} p-8 sm:p-12 relative overflow-hidden`}
+                className="bg-card p-8 sm:p-12 relative overflow-hidden min-h-[180px]"
               >
                 {/* Background illustration */}
-                <div className="absolute right-0 top-0 bottom-0 w-1/2 opacity-30 pointer-events-none">
+                <div className="absolute right-0 top-0 bottom-0 w-2/3 pointer-events-none">
                   <img 
                     src={HERO_SLIDES[currentSlide].image} 
                     alt="" 
-                    className="h-full w-full object-cover object-center"
+                    className="h-full w-full object-cover object-right"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-card via-card/60 to-transparent" />
                 </div>
                 
                 <div className="relative z-10">
