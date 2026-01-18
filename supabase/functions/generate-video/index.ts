@@ -984,6 +984,21 @@ Include these character details in EVERY visualPrompt that features people.
 
   const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
 
+=== CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
+Before writing the script, carefully analyze the content to identify:
+1. KEY CHARACTERS: Who are the people/entities mentioned? (e.g., "Leo Messi", "a mother", "police officer", "robber")
+2. GENDER: Determine gender from context (names, pronouns, roles, topics)
+   - Names like "Leo", "John", "Mike" → male
+   - Names like "Sarah", "Maria", "Emma" → female  
+   - Topics like "motherhood", "pregnancy" → female protagonist
+   - Topics like "fatherhood", "brotherhood" → male protagonist
+   - Professions: Use context clues, avoid stereotypes but match content intent
+3. ROLES & RELATIONSHIPS: Who does what? (e.g., "the robber runs", "the cop chases")
+4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
+   - A robber in scene 1 MUST be the SAME robber in scene 5
+   - A police officer chasing should NOT become a different person
+   - If there are 2 cops, describe BOTH distinctly and consistently
+
 Content: ${content}
 ${presenterGuidance}${characterGuidance}
 === TIMING REQUIREMENTS ===
@@ -1025,16 +1040,43 @@ ${
     : ""
 }
 
+=== CHARACTER BIBLE (REQUIRED) ===
+You MUST create a "characters" object defining EVERY person/entity in the video.
+This ensures visual CONSISTENCY - the same person looks identical across all scenes.
+
+For each character specify:
+- Their role/name as the key
+- A DETAILED visual description including:
+  - GENDER (male/female) - MUST match the content context
+  - Age range (child, young adult, middle-aged, elderly)
+  - Ethnicity/skin tone if mentioned or implied
+  - Hair (color, style, length)
+  - Body type (slim, athletic, stocky, etc.)
+  - Clothing (specific outfit they wear throughout)
+  - Distinguishing features (glasses, beard, tattoos, etc.)
+
+CRITICAL RULES:
+- If content mentions "Leo Messi" → male footballer, Argentine, athletic build
+- If content discusses "motherhood" → female protagonist, NOT a man in a suit
+- If content has "police vs robber" → TWO distinct characters, both consistent throughout
+- If content mentions specific gender pronouns → MATCH them exactly
+- If ambiguous → make a logical choice and be CONSISTENT
+
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
   "title": "Video Title",
+  "characters": {
+    "Protagonist": "A 35-year-old female with warm brown skin, curly black hair in a protective style, wearing a cream cardigan over a floral dress, gentle expression, medium build",
+    "Police Officer": "A male officer in his 40s, clean-shaven, crew cut, wearing full police uniform with badge visible, serious expression, athletic build",
+    "Robber": "A young male in his 20s, wearing a dark hoodie and jeans, nervous expression, slim build, short brown hair"
+  },
   "scenes": [
     {
       "number": 1,
       "narrativeBeat": "hook",
       "voiceover": "Spoken text...",
-      "visualPrompt": "Visual description...",
+      "visualPrompt": "A 35-year-old female with warm brown skin, curly black hair in a protective style, wearing a cream cardigan over a floral dress - standing in a sunny kitchen, looking thoughtful...",
       "subVisuals": ["Optional additional visual..."],
       "duration": 18${
         includeTextOverlay
@@ -1266,6 +1308,19 @@ async function handleStorytellingScriptPhase(
 
 const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
 
+=== CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
+Before writing the story, carefully analyze the story idea to identify:
+1. KEY CHARACTERS: Who are the people/creatures/entities in this story?
+2. GENDER: Determine gender from context:
+   - Explicit names/pronouns → match them exactly
+   - "Mother/grandmother/sister" → female
+   - "Father/grandfather/brother" → male
+   - Creatures → assign consistent gender if personified
+3. ROLES & RELATIONSHIPS: Who is the protagonist? Antagonist? Supporting characters?
+4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
+   - If a dragon appears, it must be the SAME dragon every time
+   - If there are multiple cops, describe EACH distinctly and track them
+
 === STORY IDEA ===
 ${content}
 ${inspirationSection}${toneSection}${genreSection}${characterGuidance}${brandSection}
@@ -1302,22 +1357,31 @@ ${
 - Use them only at key emotional moments, not every scene`
 }
 
-=== CHARACTER CONSISTENCY (CRITICAL) ===
-You MUST include a "characters" object in your response that defines each main character's EXACT visual appearance.
-This ensures visual consistency across ALL scenes.
+=== CHARACTER BIBLE (CRITICAL FOR CONSISTENCY) ===
+You MUST include a "characters" object defining EVERY character's EXACT visual appearance.
+This is NON-NEGOTIABLE for visual consistency across scenes.
 
 For each character, specify:
-- name: The character's name or role (e.g., "Dragon", "Hero", "Unicorn")
-- visualDescription: DETAILED physical description that will be used for EVERY image. Include:
-  - Species/type (dragon, unicorn, human, etc.)
-  - Color palette (scales, fur, skin tone, etc.)
-  - Distinguishing features (horns, wings, patterns, scars, etc.)
-  - Size/proportions (large, small, slender, muscular, etc.)
-  - Clothing/accessories if applicable
+- name/role as the key
+- A DETAILED visual description including:
+  - GENDER (male/female) - inferred from story context, names, pronouns
+  - Species/type (human, dragon, unicorn, robot, etc.)
+  - Age (if applicable)
+  - Physical appearance (color, build, features)
+  - Distinguishing features (horns, wings, scars, clothing, etc.)
+  - Clothing/accessories (consistent throughout unless story dictates change)
 
-Then, in EVERY visualPrompt, reference characters by their EXACT visualDescription from this bible.
-Do NOT describe the same character differently across scenes unless they physically transform.
-If a character transforms (e.g., dragon becomes unicorn), create separate character entries for each form.
+CRITICAL GENDER RULES:
+- Stories about "motherhood", "sisterhood", "her journey" → female protagonist
+- Stories about "fatherhood", "his battle", "brotherhood" → male protagonist
+- Named characters → research typical gender (e.g., "Maria" = female, "James" = male)
+- When ambiguous → make a logical choice and be STRICTLY consistent
+
+CRITICAL CONSISTENCY RULES:
+- A character appearing in scene 1 MUST look IDENTICAL in scene 5
+- If a dragon has "emerald scales and golden eyes" in scene 1, it has the SAME in all scenes
+- If a story has "the hero and the villain" → TWO distinct character descriptions
+- NEVER describe the same character differently unless they physically transform
 
 === VISUAL PROMPTS ===
 - Each visualPrompt should be a CINEMATIC MOMENT—dynamic, emotional, visually striking
@@ -1339,15 +1403,16 @@ Return ONLY valid JSON:
 {
   "title": "Story Title",
   "characters": {
-    "Dragon": "A majestic crimson dragon with golden-flecked scales, amber eyes with vertical pupils, two curved ivory horns, large leathery wings with orange membrane, long serpentine tail with a spaded tip, muscular build standing 15 feet tall",
-    "Unicorn": "A graceful white unicorn with a shimmering silver mane, a single spiraling pearlescent horn, soft violet eyes, slender elegant build, flowing tail that sparkles with starlight"
+    "Dragon": "A majestic MALE crimson dragon with golden-flecked scales, amber eyes with vertical pupils, two curved ivory horns, large leathery wings with orange membrane, long serpentine tail with a spaded tip, muscular build standing 15 feet tall",
+    "Hero": "A young FEMALE warrior, early 20s, dark skin with intricate face paint, braided black hair with golden beads, wearing leather armor with bronze accents, athletic build, determined expression, carries a curved sword",
+    "Unicorn": "A graceful FEMALE white unicorn with a shimmering silver mane, a single spiraling pearlescent horn, soft violet eyes, slender elegant build, flowing tail that sparkles with starlight"
   },
   "scenes": [
     {
       "number": 1,
       "narrativeBeat": "opening",
       "voiceover": "Flowing narrative text...",
-      "visualPrompt": "A majestic crimson dragon with golden-flecked scales, amber eyes with vertical pupils, two curved ivory horns, large leathery wings with orange membrane, long serpentine tail with a spaded tip, muscular build standing 15 feet tall - perched atop a misty mountain peak at dawn. Wide establishing shot with dramatic backlighting...",
+      "visualPrompt": "A young FEMALE warrior, early 20s, dark skin with intricate face paint, braided black hair with golden beads, wearing leather armor with bronze accents, athletic build, determined expression - standing at the edge of a misty cliff, staring down at the valley below. Wide establishing shot at golden hour...",
       "subVisuals": ["Optional additional visual moment..."],
       "duration": 25${
         includeTextOverlay
