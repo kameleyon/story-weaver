@@ -1,5 +1,4 @@
 import {
-  Plus,
   User,
   Settings,
   LogOut,
@@ -18,7 +17,6 @@ import {
   Sparkles,
   Home,
   Headphones,
-  ChevronDown,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -99,7 +97,6 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   // Show upgrade modal for freemium or cancelled users (once per session)
   useEffect(() => {
@@ -189,12 +186,6 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
     navigate("/");
   };
 
-  const handleNewProjectSelect = (mode: "doc2video" | "storytelling") => {
-    setNewProjectOpen(false);
-    onNewProject();
-    navigate(`/app/create?mode=${mode}`);
-  };
-
   const isActiveRoute = (path: string) => location.pathname === path;
   const isCreateRoute = location.pathname === "/app/create";
   const currentMode = new URLSearchParams(location.search).get("mode") || "doc2video";
@@ -203,15 +194,8 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
     <>
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
       <SidebarHeader className="p-3">
-        {/* Search bar - only when expanded */}
-        {!isCollapsed && (
-          <div className="mb-3 sm:mb-4">
-            <ProjectSearch onSelectProject={onOpenProject} />
-          </div>
-        )}
-
-        {/* Collapse/Expand Toggle */}
-        <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"}`}>
+        {/* Collapse/Expand Toggle - always on top */}
+        <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"} mb-3`}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -227,176 +211,160 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
           </Tooltip>
         </div>
 
-        {/* New Project Button with Dropdown */}
-        <div className={`mt-3 sm:mt-4 ${isCollapsed ? "flex justify-center" : ""}`}>
-          <DropdownMenu open={newProjectOpen} onOpenChange={setNewProjectOpen}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  {isCollapsed ? (
-                    <button
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/40 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
-                    >
-                      <Plus className="h-4 w-4" strokeWidth={2.5} />
-                    </button>
-                  ) : (
-                    <Button
-                      className="w-full justify-between gap-2 sm:gap-2.5 rounded-full bg-primary/40 text-sm text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Plus className="h-4 w-4" />
-                        <span className="font-medium">New Project</span>
-                      </div>
-                      <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                    </Button>
-                  )}
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              {isCollapsed && <TooltipContent side="right">New Project</TooltipContent>}
-            </Tooltip>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuItem 
-                className="cursor-pointer p-3" 
-                onClick={() => handleNewProjectSelect("doc2video")}
-              >
-                <Video className="mr-3 h-4 w-4 text-primary" />
-                <div>
-                  <div className="font-medium">Doc-to-Video</div>
-                  <div className="text-xs text-muted-foreground">Transform text scripts into videos</div>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className="cursor-pointer p-3" 
-                onClick={() => handleNewProjectSelect("storytelling")}
-              >
-                <Headphones className="mr-3 h-4 w-4 text-accent-foreground" />
-                <div>
-                  <div className="font-medium">Storytelling</div>
-                  <div className="text-xs text-muted-foreground">Turn story ideas into visual narratives</div>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {/* Search bar - only when expanded */}
+        {!isCollapsed && (
+          <div>
+            <ProjectSearch onSelectProject={onOpenProject} />
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        {/* Core Tools Section */}
-        {!isCollapsed && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground/70 px-3 py-2">
-              Core Tools
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="space-y-0.5">
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => navigate("/app/create?mode=doc2video")}
-                    className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
-                      isCreateRoute && currentMode === "doc2video" 
-                        ? "bg-primary/10 text-primary" 
-                        : "hover:bg-sidebar-accent/50"
-                    }`}
-                  >
-                    <Video className="h-4 w-4" />
-                    <span className="text-sm font-medium">Doc-to-Video</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => navigate("/app/create?mode=storytelling")}
-                    className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
-                      isCreateRoute && currentMode === "storytelling" 
-                        ? "bg-primary/10 text-primary" 
-                        : "hover:bg-sidebar-accent/50"
-                    }`}
-                  >
-                    <Headphones className="h-4 w-4" />
-                    <span className="text-sm font-medium">Storytelling</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {/* Main Navigation - flat list */}
+        <SidebarGroup className="mt-2">
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-0.5">
+              {/* Dashboard */}
+              <SidebarMenuItem>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/app")}
+                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                        isActiveRoute("/app") 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "justify-center" : ""}`}
+                    >
+                      <Home className="h-4 w-4" />
+                      {!isCollapsed && <span className="text-sm font-medium">Dashboard</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">Dashboard</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
 
-        {/* Navigation Section */}
-        {!isCollapsed && (
-          <SidebarGroup className="mt-2">
-            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground/70 px-3 py-2">
-              Navigation
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="space-y-0.5">
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => navigate("/app")}
-                    className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
-                      isActiveRoute("/app") 
-                        ? "bg-primary/10 text-primary" 
-                        : "hover:bg-sidebar-accent/50"
-                    }`}
-                  >
-                    <Home className="h-4 w-4" />
-                    <span className="text-sm font-medium">Dashboard</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => navigate("/projects")}
-                    className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
-                      isActiveRoute("/projects") 
-                        ? "bg-primary/10 text-primary" 
-                        : "hover:bg-sidebar-accent/50"
-                    }`}
-                  >
-                    <FolderOpen className="h-4 w-4" />
-                    <span className="text-sm font-medium">All Projects</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+              {/* Doc-to-Video */}
+              <SidebarMenuItem>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/app/create?mode=doc2video")}
+                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                        isCreateRoute && currentMode === "doc2video" 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "justify-center" : ""}`}
+                    >
+                      <Video className="h-4 w-4" />
+                      {!isCollapsed && <span className="text-sm font-medium">Doc-to-Video</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">Doc-to-Video</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
+
+              {/* Storytelling */}
+              <SidebarMenuItem>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/app/create?mode=storytelling")}
+                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                        isCreateRoute && currentMode === "storytelling" 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "justify-center" : ""}`}
+                    >
+                      <Headphones className="h-4 w-4" />
+                      {!isCollapsed && <span className="text-sm font-medium">Storytelling</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">Storytelling</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
+
+              {/* All Projects */}
+              <SidebarMenuItem>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/projects")}
+                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                        isActiveRoute("/projects") 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "justify-center" : ""}`}
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                      {!isCollapsed && <span className="text-sm font-medium">All Projects</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">All Projects</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         {/* Recent Projects Section */}
-        {!isCollapsed && (
-          <SidebarGroup className="mt-2">
+        <SidebarGroup className="mt-4">
+          {!isCollapsed ? (
             <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground/70 px-3 py-2 flex items-center gap-2">
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
-            <SidebarGroupContent className="mt-1">
-              <SidebarMenu className="space-y-0.5 sm:space-y-1">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  </div>
-                ) : recentProjects.length === 0 ? (
-                  <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground/70">No projects yet</div>
-                ) : (
-                  recentProjects.map((project) => (
-                    <SidebarMenuItem key={project.id} className="group relative">
-                      <SidebarMenuButton
-                        onClick={() => {
-                          const mode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
-                          navigate(`/app/create?mode=${mode}&project=${project.id}`);
-                          onOpenProject(project.id);
-                        }}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 pr-8 transition-colors hover:bg-sidebar-accent/50"
-                      >
-                        {project.project_type === "storytelling" ? (
-                          <Headphones className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                        ) : (
-                          <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                        )}
-                        <div className="flex flex-col items-start overflow-hidden">
-                          <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
-                          <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">
-                            {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
-                          </span>
-                        </div>
-                      </SidebarMenuButton>
+          ) : (
+            <div className="flex justify-center py-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <History className="h-4 w-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="right">Recent Projects</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+          <SidebarGroupContent className="mt-1">
+            <SidebarMenu className="space-y-0.5 sm:space-y-1">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : recentProjects.length === 0 ? (
+                !isCollapsed && <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground/70">No projects yet</div>
+              ) : (
+                recentProjects.map((project) => (
+                  <SidebarMenuItem key={project.id} className="group relative">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          onClick={() => {
+                            const mode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
+                            navigate(`/app/create?mode=${mode}&project=${project.id}`);
+                            onOpenProject(project.id);
+                          }}
+                          className={`w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 transition-colors hover:bg-sidebar-accent/50 ${
+                            isCollapsed ? "justify-center pr-3" : "pr-8"
+                          }`}
+                        >
+                          {project.project_type === "storytelling" ? (
+                            <Headphones className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                          ) : (
+                            <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                          )}
+                          {!isCollapsed && (
+                            <div className="flex flex-col items-start overflow-hidden">
+                              <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
+                              <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">
+                                {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
+                              </span>
+                            </div>
+                          )}
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {isCollapsed && <TooltipContent side="right">{project.title}</TooltipContent>}
+                    </Tooltip>
+                    {!isCollapsed && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -418,13 +386,13 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </SidebarMenuItem>
-                  ))
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+                    )}
+                  </SidebarMenuItem>
+                ))
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="p-2 sm:p-3">
