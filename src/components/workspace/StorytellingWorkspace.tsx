@@ -192,7 +192,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                 >
                   {/* Hero */}
                   <div className="text-center">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent-foreground text-xs font-medium mb-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
                       <Headphones className="h-3.5 w-3.5" />
                       Storytelling Mode
                     </div>
