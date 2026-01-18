@@ -161,14 +161,24 @@ export default function Dashboard() {
           
           {/* Hero Slider */}
           <div className="relative overflow-hidden rounded-2xl border border-border/50">
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={currentSlide}
-                initial={{ opacity: 0, x: 50 }}
+                initial={{ opacity: 0, x: 100 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -50 }}
-                transition={{ duration: 0.4 }}
-                className="bg-card px-12 sm:px-16 py-8 sm:py-12 relative overflow-hidden h-[200px] sm:h-[220px]"
+                exit={{ opacity: 0, x: -100 }}
+                transition={{ duration: 0.3 }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -50) {
+                    nextSlide();
+                  } else if (info.offset.x > 50) {
+                    prevSlide();
+                  }
+                }}
+                className="bg-card px-12 sm:px-16 py-8 sm:py-12 relative overflow-hidden h-[200px] sm:h-[220px] cursor-grab active:cursor-grabbing"
               >
                 {/* Background illustration */}
                 <div className="absolute right-0 top-0 bottom-0 w-full sm:w-2/3 pointer-events-none">
@@ -180,7 +190,7 @@ export default function Dashboard() {
                   <div className="absolute inset-0 bg-gradient-to-r from-card via-card/70 sm:via-card/60 to-card/20 sm:to-transparent" />
                 </div>
                 
-                <div className="relative z-10 pr-4 sm:pr-0">
+                <div className="relative z-10 pr-4 sm:pr-0 select-none">
                   <div className="flex items-center gap-3 mb-3">
                     {(() => {
                       const Icon = HERO_SLIDES[currentSlide].icon;
