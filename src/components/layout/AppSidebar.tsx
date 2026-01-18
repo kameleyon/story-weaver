@@ -223,20 +223,20 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         {/* Main Navigation - flat list */}
         <SidebarGroup className="mt-2">
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-0.5">
+            <SidebarMenu className={`space-y-0.5 ${isCollapsed ? "items-center" : ""}`}>
               {/* Dashboard */}
-              <SidebarMenuItem>
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       onClick={() => navigate("/app")}
-                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
                         isActiveRoute("/app") 
                           ? "bg-primary/10 text-primary" 
                           : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "justify-center" : ""}`}
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
-                      <Home className="h-4 w-4" />
+                      <Home className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span className="text-sm font-medium">Dashboard</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
@@ -245,18 +245,18 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               </SidebarMenuItem>
 
               {/* Doc-to-Video */}
-              <SidebarMenuItem>
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       onClick={() => navigate("/app/create?mode=doc2video")}
-                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
                         isCreateRoute && currentMode === "doc2video" 
                           ? "bg-primary/10 text-primary" 
                           : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "justify-center" : ""}`}
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
-                      <Video className="h-4 w-4" />
+                      <Video className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span className="text-sm font-medium">Doc-to-Video</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
@@ -265,18 +265,18 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               </SidebarMenuItem>
 
               {/* Storytelling */}
-              <SidebarMenuItem>
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       onClick={() => navigate("/app/create?mode=storytelling")}
-                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
                         isCreateRoute && currentMode === "storytelling" 
                           ? "bg-primary/10 text-primary" 
                           : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "justify-center" : ""}`}
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
-                      <Headphones className="h-4 w-4" />
+                      <Headphones className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span className="text-sm font-medium">Storytelling</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
@@ -285,18 +285,18 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               </SidebarMenuItem>
 
               {/* All Projects */}
-              <SidebarMenuItem>
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       onClick={() => navigate("/projects")}
-                      className={`w-full cursor-pointer rounded-lg px-3 py-2.5 transition-colors ${
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
                         isActiveRoute("/projects") 
                           ? "bg-primary/10 text-primary" 
                           : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "justify-center" : ""}`}
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
-                      <FolderOpen className="h-4 w-4" />
+                      <FolderOpen className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span className="text-sm font-medium">All Projects</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
@@ -307,64 +307,44 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Recent Projects Section */}
-        <SidebarGroup className="mt-4">
-          {!isCollapsed ? (
+        {/* Recent Projects Section - only show when expanded */}
+        {!isCollapsed && (
+          <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground/70 px-3 py-2 flex items-center gap-2">
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
-          ) : (
-            <div className="flex justify-center py-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <History className="h-4 w-4 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent side="right">Recent Projects</TooltipContent>
-              </Tooltip>
-            </div>
-          )}
-          <SidebarGroupContent className="mt-1">
-            <SidebarMenu className="space-y-0.5 sm:space-y-1">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : recentProjects.length === 0 ? (
-                !isCollapsed && <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground/70">No projects yet</div>
-              ) : (
-                recentProjects.map((project) => (
-                  <SidebarMenuItem key={project.id} className="group relative">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton
-                          onClick={() => {
-                            const mode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
-                            navigate(`/app/create?mode=${mode}&project=${project.id}`);
-                            onOpenProject(project.id);
-                          }}
-                          className={`w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 transition-colors hover:bg-sidebar-accent/50 ${
-                            isCollapsed ? "justify-center pr-3" : "pr-8"
-                          }`}
-                        >
-                          {project.project_type === "storytelling" ? (
-                            <Headphones className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                          ) : (
-                            <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                          )}
-                          {!isCollapsed && (
-                            <div className="flex flex-col items-start overflow-hidden">
-                              <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
-                              <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">
-                                {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
-                              </span>
-                            </div>
-                          )}
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      {isCollapsed && <TooltipContent side="right">{project.title}</TooltipContent>}
-                    </Tooltip>
-                    {!isCollapsed && (
+            <SidebarGroupContent className="mt-1">
+              <SidebarMenu className="space-y-0.5 sm:space-y-1">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : recentProjects.length === 0 ? (
+                  <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground/70">No projects yet</div>
+                ) : (
+                  recentProjects.map((project) => (
+                    <SidebarMenuItem key={project.id} className="group relative">
+                      <SidebarMenuButton
+                        onClick={() => {
+                          const mode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
+                          navigate(`/app/create?mode=${mode}&project=${project.id}`);
+                          onOpenProject(project.id);
+                        }}
+                        className="w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 transition-colors hover:bg-sidebar-accent/50 pr-8"
+                      >
+                        {project.project_type === "storytelling" ? (
+                          <Headphones className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                        ) : (
+                          <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                        )}
+                        <div className="flex flex-col items-start overflow-hidden">
+                          <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
+                          <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">
+                            {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </SidebarMenuButton>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -386,13 +366,13 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    )}
-                  </SidebarMenuItem>
-                ))
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                    </SidebarMenuItem>
+                  ))
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-2 sm:p-3">
