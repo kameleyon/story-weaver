@@ -35,6 +35,8 @@ export function useVideoExport() {
       const AudioEncoderCtor = (globalThis as any).AudioEncoder as typeof AudioEncoder | undefined;
       const AudioDataCtor = (globalThis as any).AudioData as typeof AudioData | undefined;
 
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
       // Check for WebCodecs API support (required for video export)
       const supportsVideo =
         typeof VideoEncoder !== "undefined" &&
@@ -44,6 +46,7 @@ export function useVideoExport() {
       const supportsAudio = !!AudioEncoderCtor && !!AudioDataCtor;
 
       console.log("[VideoExport] Capabilities:", {
+        isIOS,
         hasVideoEncoder: typeof VideoEncoder !== "undefined",
         hasAudioEncoder: !!AudioEncoderCtor,
         hasAudioData: !!AudioDataCtor,
@@ -57,11 +60,20 @@ export function useVideoExport() {
         throw new Error(errorMsg);
       }
 
-      const dimensions = {
+      const baseDimensions = {
         landscape: { width: 1920, height: 1080 },
         portrait: { width: 1080, height: 1920 },
         square: { width: 1080, height: 1080 },
       } as const;
+
+      // iOS Safari often OOMs on 1080p WebCodecs encoding; use a lighter preset.
+      const iosDimensions = {
+        landscape: { width: 1280, height: 720 },
+        portrait: { width: 720, height: 1280 },
+        square: { width: 960, height: 960 },
+      } as const;
+
+      const dimensions = isIOS ? iosDimensions : baseDimensions;
 
       const selected = dimensions[format];
       if (!selected) {
@@ -69,7 +81,8 @@ export function useVideoExport() {
       }
 
       const { width, height } = selected;
-      const fps = 30;
+      const fps = isIOS ? 24 : 30;
+      const targetBitrate = isIOS ? 2_500_000 : 8_000_000;
 
       setState({ status: "loading", progress: 0 });
 
@@ -248,8 +261,10 @@ export function useVideoExport() {
         });
 
         // Create video encoder
+        let videoChunkCount = 0;
         const videoEncoder = new VideoEncoder({
           output: (chunk, meta) => {
+            videoChunkCount++;
             muxer.addVideoChunk(chunk, meta);
           },
           error: (e) => {
@@ -258,13 +273,47 @@ export function useVideoExport() {
           },
         });
 
-        videoEncoder.configure({
-          codec: "avc1.640028", // H.264 High Profile
-          width,
-          height,
-          bitrate: 8_000_000,
-          framerate: fps,
-        });
+        // Prefer a widely supported H.264 baseline profile first (esp. on iOS Safari)
+        const videoConfigCandidates = [
+          {
+            codec: "avc1.42E01E", // Baseline Profile, Level 3.0-ish
+            width,
+            height,
+            bitrate: targetBitrate,
+            framerate: fps,
+          },
+          {
+            codec: "avc1.4D4028", // Main Profile
+            width,
+            height,
+            bitrate: targetBitrate,
+            framerate: fps,
+          },
+          {
+            codec: "avc1.640028", // High Profile (previous default)
+            width,
+            height,
+            bitrate: targetBitrate,
+            framerate: fps,
+          },
+        ];
+
+        let chosenVideoConfig = videoConfigCandidates[0];
+        if (typeof (VideoEncoder as any).isConfigSupported === "function") {
+          for (const cfg of videoConfigCandidates) {
+            try {
+              const support = await (VideoEncoder as any).isConfigSupported(cfg);
+              if (support?.supported) {
+                chosenVideoConfig = cfg;
+                break;
+              }
+            } catch {
+              // ignore and try next
+            }
+          }
+        }
+
+        videoEncoder.configure(chosenVideoConfig);
 
         if (audioEnabled && audioEncoder) {
           audioEncoder.configure({
@@ -419,8 +468,23 @@ export function useVideoExport() {
         videoEncoder.close();
         audioEncoder?.close();
 
-        muxer.finalize();
+        if (videoChunkCount === 0) {
+          throw new Error(
+            "This browser couldn't encode the video (0 chunks produced). Please try exporting on a desktop browser."
+          );
+        }
+
+        try {
+          muxer.finalize();
+        } catch (e) {
+          console.error("[VideoExport] muxer.finalize failed:", e);
+          throw new Error("Failed to finalize MP4 on this device. Try exporting on desktop.");
+        }
+
         const { buffer } = muxer.target as ArrayBufferTarget;
+        if (!buffer || buffer.byteLength < 1024) {
+          throw new Error("Export produced an empty MP4. Try exporting on a desktop browser.");
+        }
 
         const videoBlob = new Blob([buffer], { type: "video/mp4" });
         const videoUrl = URL.createObjectURL(videoBlob);
@@ -439,6 +503,17 @@ export function useVideoExport() {
 
   const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
     if (!url) return;
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    // iOS Safari often blocks "download" for blob URLs unless handled as a navigation.
+    if (isIOS) {
+      const win = window.open(url, "_blank");
+      if (!win) {
+        window.location.href = url;
+      }
+      return;
+    }
 
     const a = document.createElement("a");
     a.href = url;
