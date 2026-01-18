@@ -26,19 +26,21 @@ export function ContentInput({ content, onContentChange }: ContentInputProps) {
   // };
 
   return (
-    <div className="space-y-2 sm:space-y-3">
-      <label className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 sm:gap-2">
-        <FileUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        Add your source
-      </label>
-      <div className="overflow-hidden rounded-xl sm:rounded-2xl border border-border/50 bg-card shadow-sm">
-        <Textarea
-          placeholder="Please add all your sources and documentations."
-          className="min-h-[140px] sm:min-h-[180px] resize-none rounded-xl sm:rounded-2xl border-0 bg-transparent p-4 sm:p-6 text-sm sm:text-[15px] leading-relaxed placeholder:text-muted-foreground/50 focus-visible:ring-0"
-          value={content}
-          onChange={(e) => onContentChange(e.target.value)}
-        />
-      </div>
+    <div className="space-y-3">
+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+        Your Source Content
+      </h3>
+      <Textarea
+        placeholder="Please add all your sources and documentations.
+
+Example: Paste your article, blog post, script, or any text content you want to transform into a video..."
+        className="min-h-[180px] resize-none rounded-xl border-border bg-muted/50 dark:bg-white/10 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50 focus:ring-primary/20"
+        value={content}
+        onChange={(e) => onContentChange(e.target.value)}
+      />
+      <p className="text-xs text-muted-foreground/60">
+        Paste your content or describe what you want to create.
+      </p>
     </div>
   );
 

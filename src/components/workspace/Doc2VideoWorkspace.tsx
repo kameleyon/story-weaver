@@ -177,11 +177,14 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                   className="max-w-2xl mx-auto space-y-6 sm:space-y-8"
                 >
                   {/* Hero */}
-                  <div className="text-center">
+                  <div className="text-center space-y-3">
+                    <span className="inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                      Doc2Video Mode
+                    </span>
                     <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                       What would you like to create?
                     </h1>
-                    <p className="mt-1.5 sm:mt-2 text-sm text-muted-foreground/70">
+                    <p className="text-sm text-muted-foreground/70">
                       Paste your content or describe your video idea
                     </p>
                   </div>
