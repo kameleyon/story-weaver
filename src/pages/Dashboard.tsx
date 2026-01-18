@@ -22,6 +22,11 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { formatDistanceToNow } from "date-fns";
 
+// Import slide illustrations
+import slideDoc2Video from "@/assets/dashboard/slide-doc2video.png";
+import slideStorytelling from "@/assets/dashboard/slide-storytelling.png";
+import slideStyles from "@/assets/dashboard/slide-styles.png";
+
 const HERO_SLIDES = [
   {
     id: 1,
@@ -29,6 +34,7 @@ const HERO_SLIDES = [
     subtitle: "Turn scripts and documents into engaging videos with AI",
     gradient: "from-primary/20 via-primary/10 to-background",
     icon: Video,
+    image: slideDoc2Video,
   },
   {
     id: 2,
@@ -36,6 +42,7 @@ const HERO_SLIDES = [
     subtitle: "Create visual narratives from your story ideas",
     gradient: "from-accent/20 via-accent/10 to-background",
     icon: Headphones,
+    image: slideStorytelling,
   },
   {
     id: 3,
@@ -43,6 +50,7 @@ const HERO_SLIDES = [
     subtitle: "Choose from 12+ unique artistic styles for your videos",
     gradient: "from-secondary/30 via-secondary/10 to-background",
     icon: Sparkles,
+    image: slideStyles,
   },
 ];
 
@@ -160,20 +168,32 @@ export default function Dashboard() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.4 }}
-                className={`bg-gradient-to-br ${HERO_SLIDES[currentSlide].gradient} p-8 sm:p-12`}
+                className={`bg-gradient-to-br ${HERO_SLIDES[currentSlide].gradient} p-8 sm:p-12 relative overflow-hidden`}
               >
-                <div className="flex items-center gap-4 mb-4">
-                  {(() => {
-                    const Icon = HERO_SLIDES[currentSlide].icon;
-                    return <Icon className="h-8 w-8 text-primary" />;
-                  })()}
+                {/* Background illustration */}
+                <div className="absolute right-0 top-0 bottom-0 w-1/2 opacity-30 pointer-events-none">
+                  <img 
+                    src={HERO_SLIDES[currentSlide].image} 
+                    alt="" 
+                    className="h-full w-full object-cover object-center"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-                  {HERO_SLIDES[currentSlide].title}
-                </h2>
-                <p className="text-muted-foreground text-sm sm:text-base max-w-md">
-                  {HERO_SLIDES[currentSlide].subtitle}
-                </p>
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-4">
+                    {(() => {
+                      const Icon = HERO_SLIDES[currentSlide].icon;
+                      return <Icon className="h-8 w-8 text-primary" />;
+                    })()}
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+                    {HERO_SLIDES[currentSlide].title}
+                  </h2>
+                  <p className="text-muted-foreground text-sm sm:text-base max-w-md">
+                    {HERO_SLIDES[currentSlide].subtitle}
+                  </p>
+                </div>
               </motion.div>
             </AnimatePresence>
             
