@@ -192,7 +192,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
   return (
     <>
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50 text-white/80">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50 text-foreground/80 dark:text-white/80">
       <SidebarHeader className="p-3">
         {/* Collapse/Expand Toggle - always on top */}
         <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"} mb-3`}>
@@ -310,18 +310,18 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         {/* Recent Projects Section - only show when expanded */}
         {!isCollapsed && (
           <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-white/50 px-3 py-2 flex items-center gap-2">
+            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-white/50 px-3 py-2 flex items-center gap-2">
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
             <SidebarGroupContent className="mt-1 ml-3">
-              <SidebarMenu className="space-y-0.5 sm:space-y-1 border-l border-white/10 pl-2">
+              <SidebarMenu className="space-y-0.5 sm:space-y-1 border-l border-foreground/10 dark:border-white/10 pl-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-white/50" />
+                    <Loader2 className="h-4 w-4 animate-spin text-foreground/50 dark:text-white/50" />
                   </div>
                 ) : recentProjects.length === 0 ? (
-                  <div className="px-3 py-2 text-xs sm:text-sm text-white/50">No projects yet</div>
+                  <div className="px-3 py-2 text-xs sm:text-sm text-foreground/50 dark:text-white/50">No projects yet</div>
                 ) : (
                   recentProjects.map((project) => {
                     const projectMode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
@@ -342,9 +342,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           }`}
                         >
                           {project.project_type === "storytelling" ? (
-                            <Headphones className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-white/60"}`} />
+                            <Headphones className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
                           ) : (
-                            <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-white/60"}`} />
+                            <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
                           )}
                           <span className="truncate text-xs sm:text-sm">{project.title}</span>
                         </SidebarMenuButton>
@@ -356,7 +356,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                               className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/60" />
+                              <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-foreground/60 dark:text-white/60" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
