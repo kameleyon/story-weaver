@@ -240,25 +240,30 @@ export function useGenerationPipeline() {
           statusMessage: "Generating script with AI..." 
         }));
 
-        const scriptResult = await callPhase(session, {
-          phase: "script",
-          content: params.content,
-          format: params.format,
-          length: params.length,
-          style: params.style,
-          customStyle: params.customStyle,
-          brandMark: params.brandMark,
-          presenterFocus: params.presenterFocus,
-          characterDescription: params.characterDescription,
-          disableExpressions: params.disableExpressions,
-          // Storytelling fields
-          projectType: params.projectType,
-          inspirationStyle: params.inspirationStyle,
-          storyTone: params.storyTone,
-          storyGenre: params.storyGenre,
-          voiceInclination: params.voiceInclination,
-          brandName: params.brandName,
-        });
+        // Script phase needs longer timeout due to character analysis
+        const scriptResult = await callPhase(
+          session,
+          {
+            phase: "script",
+            content: params.content,
+            format: params.format,
+            length: params.length,
+            style: params.style,
+            customStyle: params.customStyle,
+            brandMark: params.brandMark,
+            presenterFocus: params.presenterFocus,
+            characterDescription: params.characterDescription,
+            disableExpressions: params.disableExpressions,
+            // Storytelling fields
+            projectType: params.projectType,
+            inspirationStyle: params.inspirationStyle,
+            storyTone: params.storyTone,
+            storyGenre: params.storyGenre,
+            voiceInclination: params.voiceInclination,
+            brandName: params.brandName,
+          },
+          180000 // 3 minutes for script + character analysis
+        );
 
         if (!scriptResult.success) throw new Error(scriptResult.error || "Script generation failed");
 
