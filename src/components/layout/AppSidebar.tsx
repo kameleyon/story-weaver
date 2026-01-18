@@ -310,7 +310,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         {/* Recent Projects Section - only show when expanded */}
         {!isCollapsed && (
           <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground/70 px-3 py-2 flex items-center gap-2">
+            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-white/50 px-3 py-2 flex items-center gap-2">
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
@@ -318,56 +318,60 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               <SidebarMenu className="space-y-0.5 sm:space-y-1">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-4 w-4 animate-spin text-white/50" />
                   </div>
                 ) : recentProjects.length === 0 ? (
-                  <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground/70">No projects yet</div>
+                  <div className="px-3 py-2 text-xs sm:text-sm text-white/50">No projects yet</div>
                 ) : (
-                  recentProjects.map((project) => (
-                    <SidebarMenuItem key={project.id} className="group relative">
-                      <SidebarMenuButton
-                        onClick={() => {
-                          const mode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
-                          navigate(`/app/create?mode=${mode}&project=${project.id}`);
-                          onOpenProject(project.id);
-                        }}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 transition-colors hover:bg-sidebar-accent/50 pr-8"
-                      >
-                        {project.project_type === "storytelling" ? (
-                          <Headphones className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                        ) : (
-                          <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                        )}
-                        <div className="flex flex-col items-start overflow-hidden">
+                  recentProjects.map((project) => {
+                    const projectMode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
+                    const currentProjectId = new URLSearchParams(location.search).get("project");
+                    const isActiveProject = currentProjectId === project.id;
+                    
+                    return (
+                      <SidebarMenuItem key={project.id} className="group relative">
+                        <SidebarMenuButton
+                          onClick={() => {
+                            navigate(`/app/create?mode=${projectMode}&project=${project.id}`);
+                            onOpenProject(project.id);
+                          }}
+                          className={`w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 transition-colors pr-8 ${
+                            isActiveProject 
+                              ? "bg-primary/10 text-primary" 
+                              : "hover:bg-sidebar-accent/50"
+                          }`}
+                        >
+                          {project.project_type === "storytelling" ? (
+                            <Headphones className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-white/60"}`} />
+                          ) : (
+                            <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-white/60"}`} />
+                          )}
                           <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
-                          <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">
-                            {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
-                          </span>
-                        </div>
-                      </SidebarMenuButton>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive cursor-pointer text-sm"
-                            onClick={(e) => handleDeleteProject(project, e as unknown as React.MouseEvent)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </SidebarMenuItem>
-                  ))
+                        </SidebarMenuButton>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/60" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive cursor-pointer text-sm"
+                              onClick={(e) => handleDeleteProject(project, e as unknown as React.MouseEvent)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </SidebarMenuItem>
+                    );
+                  })
                 )}
               </SidebarMenu>
             </SidebarGroupContent>
