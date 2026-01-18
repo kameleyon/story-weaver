@@ -30,6 +30,13 @@ export function useVideoExport() {
     async (scenes: Scene[], format: "landscape" | "portrait" | "square") => {
       abortRef.current = false;
 
+      // Check for WebCodecs API support (required for video export)
+      if (typeof VideoEncoder === "undefined" || typeof AudioEncoder === "undefined" || typeof VideoFrame === "undefined" || typeof AudioData === "undefined") {
+        const errorMsg = "Video export is not supported on this device. Please use a desktop browser (Chrome, Edge, or Safari 16.4+) to export videos.";
+        setState({ status: "error", progress: 0, error: errorMsg });
+        throw new Error(errorMsg);
+      }
+
       const dimensions = {
         landscape: { width: 1920, height: 1080 },
         portrait: { width: 1080, height: 1920 },
