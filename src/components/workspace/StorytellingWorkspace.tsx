@@ -33,7 +33,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [inspiration, setInspiration] = useState<InspirationStyle>("none");
     const [tone, setTone] = useState<StoryTone>("casual");
     const [genre, setGenre] = useState<StoryGenre>("documentary");
-    const [inclinations, setInclinations] = useState<VoiceInclination[]>([]);
+    const [inclination, setInclination] = useState<VoiceInclination>("none");
     const [inclinationsDisabled, setInclinationsDisabled] = useState(false);
     const [brandName, setBrandName] = useState("");
     
@@ -80,8 +80,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
           inspirationStyle: inspiration !== "none" ? inspiration : undefined,
           storyTone: tone,
           storyGenre: genre,
-          voiceInclination: !inclinationsDisabled && inclinations.length > 0 
-            ? inclinations.join(",") 
+          voiceInclination: !inclinationsDisabled && inclination !== "none" 
+            ? inclination 
             : undefined,
           brandName: brandName.trim() || undefined,
         });
@@ -94,7 +94,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       setInspiration("none");
       setTone("casual");
       setGenre("documentary");
-      setInclinations([]);
+      setInclination("none");
       setInclinationsDisabled(false);
       setBrandName("");
       setFormat("portrait");
@@ -228,8 +228,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                       </div>
                       <div className="flex-1">
                         <InclinationSelector 
-                          selected={inclinations} 
-                          onSelect={setInclinations}
+                          selected={inclination} 
+                          onSelect={setInclination}
                           disabled={inclinationsDisabled}
                           onDisabledChange={setInclinationsDisabled}
                         />
