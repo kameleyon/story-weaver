@@ -57,12 +57,14 @@ interface Scene {
     phaseTimings?: Record<string, number>;
     totalTimeMs?: number;
     lastUpdate?: string;
+    characterBible?: Record<string, string>; // Character descriptions for visual consistency
   };
 }
 
 interface ScriptResponse {
   title: string;
   scenes: Scene[];
+  characters?: Record<string, string>; // Character bible for visual consistency
 }
 
 interface CostTracking {
@@ -1262,7 +1264,7 @@ async function handleStorytellingScriptPhase(
     ? `\n=== BRAND ATTRIBUTION ===\nSubtly weave "${brandName}" into the narrative as the source or presenter of this story.`
     : "";
 
-  const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
+const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
 
 === STORY IDEA ===
 ${content}
@@ -1300,8 +1302,26 @@ ${
 - Use them only at key emotional moments, not every scene`
 }
 
+=== CHARACTER CONSISTENCY (CRITICAL) ===
+You MUST include a "characters" object in your response that defines each main character's EXACT visual appearance.
+This ensures visual consistency across ALL scenes.
+
+For each character, specify:
+- name: The character's name or role (e.g., "Dragon", "Hero", "Unicorn")
+- visualDescription: DETAILED physical description that will be used for EVERY image. Include:
+  - Species/type (dragon, unicorn, human, etc.)
+  - Color palette (scales, fur, skin tone, etc.)
+  - Distinguishing features (horns, wings, patterns, scars, etc.)
+  - Size/proportions (large, small, slender, muscular, etc.)
+  - Clothing/accessories if applicable
+
+Then, in EVERY visualPrompt, reference characters by their EXACT visualDescription from this bible.
+Do NOT describe the same character differently across scenes unless they physically transform.
+If a character transforms (e.g., dragon becomes unicorn), create separate character entries for each form.
+
 === VISUAL PROMPTS ===
 - Each visualPrompt should be a CINEMATIC MOMENT—dynamic, emotional, visually striking
+- ALWAYS include the FULL character visual description from the characters bible for any character in the scene
 - Describe the scene as if directing a film: composition, lighting, mood, character positioning
 - Include camera angle suggestions: close-up, wide shot, over-the-shoulder, etc.
 - Ensure visual variety across scenes (different settings, scales, perspectives)
@@ -1318,12 +1338,16 @@ ${
 Return ONLY valid JSON:
 {
   "title": "Story Title",
+  "characters": {
+    "Dragon": "A majestic crimson dragon with golden-flecked scales, amber eyes with vertical pupils, two curved ivory horns, large leathery wings with orange membrane, long serpentine tail with a spaded tip, muscular build standing 15 feet tall",
+    "Unicorn": "A graceful white unicorn with a shimmering silver mane, a single spiraling pearlescent horn, soft violet eyes, slender elegant build, flowing tail that sparkles with starlight"
+  },
   "scenes": [
     {
       "number": 1,
       "narrativeBeat": "opening",
       "voiceover": "Flowing narrative text...",
-      "visualPrompt": "Cinematic visual description...",
+      "visualPrompt": "A majestic crimson dragon with golden-flecked scales, amber eyes with vertical pupils, two curved ivory horns, large leathery wings with orange membrane, long serpentine tail with a spaded tip, muscular build standing 15 feet tall - perched atop a misty mountain peak at dawn. Wide establishing shot with dramatic backlighting...",
       "subVisuals": ["Optional additional visual moment..."],
       "duration": 25${
         includeTextOverlay
@@ -1447,6 +1471,7 @@ Return ONLY valid JSON:
           sceneIndex: idx,
           costTracking,
           phaseTimings: { script: phaseTime },
+          characterBible: parsedScript.characters || null, // Store character bible for image generation
         },
       })),
       started_at: new Date().toISOString(),
@@ -1688,6 +1713,10 @@ async function handleImagesPhase(
   };
   const phaseTimings = meta.phaseTimings || {};
 
+  // Get character bible for visual consistency (storytelling projects)
+  const characterBible = meta.characterBible || {};
+  const hasCharacterBible = Object.keys(characterBible).length > 0;
+
   // Get already completed images count from meta
   let completedImagesSoFar = meta.completedImages || 0;
 
@@ -1716,11 +1745,26 @@ SIGNATURE: Add a small, elegant signature text "${brandMark}" in the bottom-left
 The signature should be subtle but legible, styled like a trademark or ownership mark. Use a clean sans-serif font.`;
     }
 
+    // Add character consistency instructions if we have a character bible
+    let characterInstructions = "";
+    if (hasCharacterBible) {
+      const characterDescriptions = Object.entries(characterBible)
+        .map(([name, desc]) => `- ${name}: ${desc}`)
+        .join("\n");
+      characterInstructions = `
+
+CHARACTER CONSISTENCY BIBLE (use EXACT descriptions for any characters that appear):
+${characterDescriptions}
+
+CRITICAL: If any of these characters appear in this scene, they MUST match their description EXACTLY. Do not deviate from the character bible.`;
+    }
+
     return `${visualPrompt}
 
 STYLE: ${styleDescription}
 ${textInstructions}
 ${brandMarkInstructions}
+${characterInstructions}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
   };
