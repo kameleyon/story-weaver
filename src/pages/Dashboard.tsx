@@ -168,16 +168,16 @@ export default function Dashboard() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.4 }}
-                className="bg-card px-12 sm:px-16 py-8 sm:py-12 relative overflow-hidden min-h-[160px] sm:min-h-[180px]"
+                className="bg-card px-12 sm:px-16 py-8 sm:py-12 relative overflow-hidden min-h-[180px] sm:min-h-[200px]"
               >
-                {/* Background illustration - hidden on mobile */}
-                <div className="absolute right-0 top-0 bottom-0 w-2/3 pointer-events-none hidden sm:block">
+                {/* Background illustration */}
+                <div className="absolute right-0 top-0 bottom-0 w-full sm:w-2/3 pointer-events-none">
                   <img 
                     src={HERO_SLIDES[currentSlide].image} 
                     alt="" 
-                    className="h-full w-full object-cover object-right"
+                    className="h-full w-full object-cover object-center sm:object-right opacity-40 sm:opacity-100"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-r from-card via-card/60 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-card via-card/80 sm:via-card/60 to-card/40 sm:to-transparent" />
                 </div>
                 
                 <div className="relative z-10 pr-4 sm:pr-0">
