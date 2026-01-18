@@ -192,7 +192,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
   return (
     <>
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50 text-white/80">
       <SidebarHeader className="p-3">
         {/* Collapse/Expand Toggle - always on top */}
         <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"} mb-3`}>
