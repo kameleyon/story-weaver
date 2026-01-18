@@ -33,7 +33,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [inspiration, setInspiration] = useState<InspirationStyle>("none");
     const [tone, setTone] = useState<StoryTone>("casual");
     const [genre, setGenre] = useState<StoryGenre>("documentary");
-    const [inclination, setInclination] = useState<VoiceInclination>("neutral");
+    const [inclinations, setInclinations] = useState<VoiceInclination[]>([]);
+    const [inclinationsDisabled, setInclinationsDisabled] = useState(false);
     const [brandName, setBrandName] = useState("");
     
     // Shared inputs
@@ -79,7 +80,9 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
           inspirationStyle: inspiration !== "none" ? inspiration : undefined,
           storyTone: tone,
           storyGenre: genre,
-          voiceInclination: inclination !== "neutral" ? inclination : undefined,
+          voiceInclination: !inclinationsDisabled && inclinations.length > 0 
+            ? inclinations.join(",") 
+            : undefined,
           brandName: brandName.trim() || undefined,
         });
       }
@@ -91,7 +94,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       setInspiration("none");
       setTone("casual");
       setGenre("documentary");
-      setInclination("neutral");
+      setInclinations([]);
+      setInclinationsDisabled(false);
       setBrandName("");
       setFormat("portrait");
       setLength("brief");
@@ -223,7 +227,12 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                         <VoiceSelector selected={voice} onSelect={setVoice} />
                       </div>
                       <div className="flex-1">
-                        <InclinationSelector selected={inclination} onSelect={setInclination} />
+                        <InclinationSelector 
+                          selected={inclinations} 
+                          onSelect={setInclinations}
+                          disabled={inclinationsDisabled}
+                          onDisabledChange={setInclinationsDisabled}
+                        />
                       </div>
                     </div>
                   </div>
