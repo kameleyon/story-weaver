@@ -37,19 +37,26 @@ const INSPIRATIONS: { id: InspirationStyle; label: string; description: string }
 ];
 
 export function InspirationSelector({ selected, onSelect }: InspirationSelectorProps) {
+  const selectedItem = INSPIRATIONS.find((item) => item.id === selected);
+
   return (
     <div className="space-y-3">
       <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
         Writing Inspiration
       </h3>
       <Select value={selected} onValueChange={(val) => onSelect(val as InspirationStyle)}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select a writing style" />
+        <SelectTrigger className="w-full h-auto py-3">
+          <div className="flex flex-col items-start text-left">
+            <span className="font-medium">{selectedItem?.label || "Select a writing style"}</span>
+            {selectedItem && (
+              <span className="text-xs text-muted-foreground">{selectedItem.description}</span>
+            )}
+          </div>
         </SelectTrigger>
         <SelectContent>
           {INSPIRATIONS.map((item) => (
             <SelectItem key={item.id} value={item.id} className="focus:bg-muted focus:text-foreground">
-              <div className="flex flex-col">
+              <div className="flex flex-col items-start">
                 <span className="font-medium">{item.label}</span>
                 <span className="text-xs text-muted-foreground">{item.description}</span>
               </div>
