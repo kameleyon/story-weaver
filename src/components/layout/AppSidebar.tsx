@@ -237,7 +237,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
                       <Home className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm font-medium">Dashboard</span>}
+                      {!isCollapsed && <span className="text-sm">Dashboard</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
                   {isCollapsed && <TooltipContent side="right">Dashboard</TooltipContent>}
@@ -257,7 +257,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
                       <Video className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm font-medium">Doc-to-Video</span>}
+                      {!isCollapsed && <span className="text-sm">Doc-to-Video</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
                   {isCollapsed && <TooltipContent side="right">Doc-to-Video</TooltipContent>}
@@ -277,7 +277,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
                       <Headphones className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm font-medium">Storytelling</span>}
+                      {!isCollapsed && <span className="text-sm">Storytelling</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
                   {isCollapsed && <TooltipContent side="right">Storytelling</TooltipContent>}
@@ -297,7 +297,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
                       <FolderOpen className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm font-medium">All Projects</span>}
+                      {!isCollapsed && <span className="text-sm">All Projects</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
                   {isCollapsed && <TooltipContent side="right">All Projects</TooltipContent>}
@@ -314,8 +314,8 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
-            <SidebarGroupContent className="mt-1">
-              <SidebarMenu className="space-y-0.5 sm:space-y-1">
+            <SidebarGroupContent className="mt-1 ml-3">
+              <SidebarMenu className="space-y-0.5 sm:space-y-1 border-l border-white/10 pl-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-4 w-4 animate-spin text-white/50" />
@@ -346,7 +346,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           ) : (
                             <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-white/60"}`} />
                           )}
-                          <span className="truncate text-xs sm:text-sm font-medium">{project.title}</span>
+                          <span className="truncate text-xs sm:text-sm">{project.title}</span>
                         </SidebarMenuButton>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -398,7 +398,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   </Avatar>
                   {!isCollapsed && (
                     <div className="flex flex-col items-start overflow-hidden">
-                      <span className="truncate text-xs sm:text-sm font-medium">{user?.email?.split("@")[0] || "User"}</span>
+                      <span className="truncate text-xs sm:text-sm">{user?.email?.split("@")[0] || "User"}</span>
                       <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">{getPlanDisplayName()}</span>
                     </div>
                   )}
