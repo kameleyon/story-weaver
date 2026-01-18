@@ -190,8 +190,35 @@ export function useVideoExport() {
           }));
         }
 
+        // We create the muxer AFTER we've confirmed audio encoder construction works.
+        // This prevents creating an MP4 with an audio track on browsers that claim partial support.
+        let muxer!: Muxer<ArrayBufferTarget>;
+
+        // Create audio encoder (optional)
+        let audioEncoder: AudioEncoder | null = null;
+        if (audioEnabled) {
+          try {
+            audioEncoder = new AudioEncoder({
+              output: (chunk, meta) => {
+                muxer.addAudioChunk(chunk, meta);
+              },
+              error: (e) => {
+                console.error("Audio encoder error:", e);
+              },
+            });
+          } catch (e) {
+            // Some mobile browsers expose the symbol but fail at runtime.
+            audioEnabled = false;
+            audioEncoder = null;
+            setState((s) => ({
+              ...s,
+              warning: "Audio export isn't supported on this device. Exporting a silent video.",
+            }));
+          }
+        }
+
         // Create MP4 muxer
-        const muxer = new Muxer({
+        muxer = new Muxer({
           target: new ArrayBufferTarget(),
           video: {
             codec: "avc",
@@ -229,18 +256,7 @@ export function useVideoExport() {
           framerate: fps,
         });
 
-        // Create audio encoder (optional)
-        let audioEncoder: AudioEncoder | null = null;
-        if (audioEnabled) {
-          audioEncoder = new AudioEncoder({
-            output: (chunk, meta) => {
-              muxer.addAudioChunk(chunk, meta);
-            },
-            error: (e) => {
-              console.error("Audio encoder error:", e);
-            },
-          });
-
+        if (audioEnabled && audioEncoder) {
           audioEncoder.configure({
             codec: "mp4a.40.2", // AAC-LC
             numberOfChannels: 2,
