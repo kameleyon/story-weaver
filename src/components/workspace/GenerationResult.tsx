@@ -588,6 +588,13 @@ export function GenerationResult({
                   </div>
                   <Progress value={exportState.progress} className="h-2" />
                 </div>
+
+                {exportState.warning && (
+                  <p className="text-xs text-muted-foreground">
+                    {exportState.warning}
+                  </p>
+                )}
+
                 <p className="text-xs text-muted-foreground">
                   Please keep this tab open. The video is being rendered in your browser.
                 </p>
