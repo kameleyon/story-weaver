@@ -423,7 +423,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
             </div>
           </div>
 
-          <DialogFooter className="mt-4 flex-col gap-2 sm:flex-col">
+          <DialogFooter className="mt-4 flex-col gap-2 sm:flex-col sm:space-x-0">
             <Button 
               onClick={handleUpgradeNow}
               disabled={upgradeLoading}
@@ -437,9 +437,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               Upgrade Now
             </Button>
             <Button 
-              variant="ghost" 
+              variant="outline" 
               onClick={() => setUpgradeModalOpen(false)}
-              className="w-full text-muted-foreground"
+              className="w-full text-muted-foreground hover:text-foreground"
             >
               No thanks
             </Button>
