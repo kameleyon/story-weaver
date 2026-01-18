@@ -14,7 +14,7 @@ import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { InspirationSelector, type InspirationStyle } from "./InspirationSelector";
 import { ToneSelector, type StoryTone } from "./ToneSelector";
 import { GenreSelector, type StoryGenre } from "./GenreSelector";
-import { InclinationSelector, type VoiceInclination } from "./InclinationSelector";
+import { InclinationSelector } from "./InclinationSelector";
 import { StorytellingLengthSelector, type StoryLength } from "./StorytellingLengthSelector";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
@@ -33,8 +33,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [inspiration, setInspiration] = useState<InspirationStyle>("none");
     const [tone, setTone] = useState<StoryTone>("casual");
     const [genre, setGenre] = useState<StoryGenre>("documentary");
-    const [inclination, setInclination] = useState<VoiceInclination>("none");
-    const [inclinationsDisabled, setInclinationsDisabled] = useState(false);
+    const [disableVoiceExpressions, setDisableVoiceExpressions] = useState(false);
     const [brandName, setBrandName] = useState("");
     
     // Shared inputs
@@ -80,9 +79,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
           inspirationStyle: inspiration !== "none" ? inspiration : undefined,
           storyTone: tone,
           storyGenre: genre,
-          voiceInclination: !inclinationsDisabled && inclination !== "none" 
-            ? inclination 
-            : undefined,
+          disableExpressions: disableVoiceExpressions,
           brandName: brandName.trim() || undefined,
         });
       }
@@ -94,8 +91,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       setInspiration("none");
       setTone("casual");
       setGenre("documentary");
-      setInclination("none");
-      setInclinationsDisabled(false);
+      setDisableVoiceExpressions(false);
       setBrandName("");
       setFormat("portrait");
       setLength("brief");
@@ -228,10 +224,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                       </div>
                       <div className="flex-1">
                         <InclinationSelector 
-                          selected={inclination} 
-                          onSelect={setInclination}
-                          disabled={inclinationsDisabled}
-                          onDisabledChange={setInclinationsDisabled}
+                          disabled={disableVoiceExpressions}
+                          onDisabledChange={setDisableVoiceExpressions}
                         />
                       </div>
                     </div>
