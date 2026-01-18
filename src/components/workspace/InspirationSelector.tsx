@@ -48,7 +48,7 @@ export function InspirationSelector({ selected, onSelect }: InspirationSelectorP
         </SelectTrigger>
         <SelectContent>
           {INSPIRATIONS.map((item) => (
-            <SelectItem key={item.id} value={item.id}>
+            <SelectItem key={item.id} value={item.id} className="focus:bg-muted focus:text-foreground">
               <div className="flex flex-col">
                 <span className="font-medium">{item.label}</span>
                 <span className="text-xs text-muted-foreground">{item.description}</span>
