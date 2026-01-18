@@ -8,6 +8,7 @@ interface ExportState {
   status: ExportStatus;
   progress: number; // 0-100
   error?: string;
+  warning?: string;
   videoUrl?: string;
 }
 
@@ -31,8 +32,18 @@ export function useVideoExport() {
       abortRef.current = false;
 
       // Check for WebCodecs API support (required for video export)
-      if (typeof VideoEncoder === "undefined" || typeof AudioEncoder === "undefined" || typeof VideoFrame === "undefined" || typeof AudioData === "undefined") {
-        const errorMsg = "Video export is not supported on this device. Please use a desktop browser (Chrome, Edge, or Safari 16.4+) to export videos.";
+      const supportsVideo =
+        typeof VideoEncoder !== "undefined" &&
+        typeof VideoFrame !== "undefined";
+
+      // Audio is optional (some mobile browsers have VideoEncoder but no AudioEncoder)
+      const supportsAudio =
+        typeof AudioEncoder !== "undefined" &&
+        typeof AudioData !== "undefined";
+
+      if (!supportsVideo) {
+        const errorMsg =
+          "Video export is not supported on this device. Please use a desktop browser (Chrome, Edge, or Safari 16.4+) to export videos.";
         setState({ status: "error", progress: 0, error: errorMsg });
         throw new Error(errorMsg);
       }
@@ -154,6 +165,31 @@ export function useVideoExport() {
         const totalDuration = assets.reduce((sum, a) => sum + a.duration, 0);
         const totalFrames = Math.ceil(totalDuration * fps);
 
+        const wantsAudio = scenes.some((s) => !!s.audioUrl);
+
+        // Preflight audio support (some mobile browsers partially implement WebCodecs)
+        let audioEnabled = supportsAudio && wantsAudio;
+        if (audioEnabled && typeof (AudioEncoder as any).isConfigSupported === "function") {
+          try {
+            const support = await (AudioEncoder as any).isConfigSupported({
+              codec: "mp4a.40.2",
+              numberOfChannels: 2,
+              sampleRate: 48000,
+              bitrate: 128000,
+            });
+            if (!support?.supported) audioEnabled = false;
+          } catch {
+            audioEnabled = false;
+          }
+        }
+
+        if (wantsAudio && !audioEnabled) {
+          setState((s) => ({
+            ...s,
+            warning: "Audio export isn't supported on this device. Exporting a silent video.",
+          }));
+        }
+
         // Create MP4 muxer
         const muxer = new Muxer({
           target: new ArrayBufferTarget(),
@@ -162,11 +198,15 @@ export function useVideoExport() {
             width,
             height,
           },
-          audio: {
-            codec: "aac",
-            numberOfChannels: 2,
-            sampleRate: 48000,
-          },
+          ...(audioEnabled
+            ? {
+                audio: {
+                  codec: "aac",
+                  numberOfChannels: 2,
+                  sampleRate: 48000,
+                },
+              }
+            : {}),
           fastStart: "in-memory",
         });
 
@@ -189,73 +229,76 @@ export function useVideoExport() {
           framerate: fps,
         });
 
-        // Create audio encoder
-        const audioEncoder = new AudioEncoder({
-          output: (chunk, meta) => {
-            muxer.addAudioChunk(chunk, meta);
-          },
-          error: (e) => {
-            console.error("Audio encoder error:", e);
-          },
-        });
-
-        audioEncoder.configure({
-          codec: "mp4a.40.2", // AAC-LC
-          numberOfChannels: 2,
-          sampleRate: 48000,
-          bitrate: 128000,
-        });
-
-        // Merge all audio into a single buffer for encoding
-        const audioCtx = new OfflineAudioContext(2, Math.ceil(totalDuration * 48000), 48000);
-        let audioOffset = 0;
-
-        for (const asset of assets) {
-          if (asset.audioBuffer) {
-            const source = audioCtx.createBufferSource();
-            source.buffer = asset.audioBuffer;
-            source.connect(audioCtx.destination);
-            source.start(audioOffset);
-          }
-          audioOffset += asset.duration;
-        }
-
-        const renderedAudio = await audioCtx.startRendering();
-
-        // Encode audio in chunks
-        const audioChunkSize = 1024;
-        const totalAudioSamples = renderedAudio.length;
-        const leftChannel = renderedAudio.getChannelData(0);
-        const rightChannel = renderedAudio.getChannelData(1);
-
-        for (let i = 0; i < totalAudioSamples; i += audioChunkSize) {
-          if (abortRef.current) throw new Error("Export cancelled");
-
-          const remaining = Math.min(audioChunkSize, totalAudioSamples - i);
-          
-          // Create properly formatted planar audio data
-          // For f32-planar: left channel samples followed by right channel samples
-          const planarData = new Float32Array(remaining * 2);
-          for (let j = 0; j < remaining; j++) {
-            planarData[j] = leftChannel[i + j]; // Left channel first
-            planarData[remaining + j] = rightChannel[i + j]; // Right channel after
-          }
-
-          const audioData = new AudioData({
-            format: "f32-planar",
-            sampleRate: 48000,
-            numberOfFrames: remaining,
-            numberOfChannels: 2,
-            timestamp: Math.round((i / 48000) * 1_000_000), // microseconds
-            data: planarData,
+        // Create audio encoder (optional)
+        let audioEncoder: AudioEncoder | null = null;
+        if (audioEnabled) {
+          audioEncoder = new AudioEncoder({
+            output: (chunk, meta) => {
+              muxer.addAudioChunk(chunk, meta);
+            },
+            error: (e) => {
+              console.error("Audio encoder error:", e);
+            },
           });
 
-          audioEncoder.encode(audioData);
-          audioData.close();
+          audioEncoder.configure({
+            codec: "mp4a.40.2", // AAC-LC
+            numberOfChannels: 2,
+            sampleRate: 48000,
+            bitrate: 128000,
+          });
 
-          // Yield every 50 audio chunks to keep UI responsive
-          if ((i / audioChunkSize) % 50 === 0) {
-            await yieldToUI();
+          // Merge all audio into a single buffer for encoding
+          const audioCtx = new OfflineAudioContext(2, Math.ceil(totalDuration * 48000), 48000);
+          let audioOffset = 0;
+
+          for (const asset of assets) {
+            if (asset.audioBuffer) {
+              const source = audioCtx.createBufferSource();
+              source.buffer = asset.audioBuffer;
+              source.connect(audioCtx.destination);
+              source.start(audioOffset);
+            }
+            audioOffset += asset.duration;
+          }
+
+          const renderedAudio = await audioCtx.startRendering();
+
+          // Encode audio in chunks
+          const audioChunkSize = 1024;
+          const totalAudioSamples = renderedAudio.length;
+          const leftChannel = renderedAudio.getChannelData(0);
+          const rightChannel = renderedAudio.getChannelData(1);
+
+          for (let i = 0; i < totalAudioSamples; i += audioChunkSize) {
+            if (abortRef.current) throw new Error("Export cancelled");
+
+            const remaining = Math.min(audioChunkSize, totalAudioSamples - i);
+
+            // Create properly formatted planar audio data
+            // For f32-planar: left channel samples followed by right channel samples
+            const planarData = new Float32Array(remaining * 2);
+            for (let j = 0; j < remaining; j++) {
+              planarData[j] = leftChannel[i + j]; // Left channel first
+              planarData[remaining + j] = rightChannel[i + j]; // Right channel after
+            }
+
+            const audioData = new AudioData({
+              format: "f32-planar",
+              sampleRate: 48000,
+              numberOfFrames: remaining,
+              numberOfChannels: 2,
+              timestamp: Math.round((i / 48000) * 1_000_000), // microseconds
+              data: planarData,
+            });
+
+            audioEncoder.encode(audioData);
+            audioData.close();
+
+            // Yield every 50 audio chunks to keep UI responsive
+            if ((i / audioChunkSize) % 50 === 0) {
+              await yieldToUI();
+            }
           }
         }
 
@@ -266,7 +309,7 @@ export function useVideoExport() {
         for (let sceneIdx = 0; sceneIdx < assets.length; sceneIdx++) {
           if (abortRef.current) {
             videoEncoder.close();
-            audioEncoder.close();
+            audioEncoder?.close();
             throw new Error("Export cancelled");
           }
 
@@ -343,12 +386,12 @@ export function useVideoExport() {
         }
 
         // Step 4: Finalize encoding
-        setState({ status: "encoding", progress: 90 });
+        setState((s) => ({ ...s, status: "encoding", progress: 90 }));
 
         await videoEncoder.flush();
-        await audioEncoder.flush();
+        if (audioEncoder) await audioEncoder.flush();
         videoEncoder.close();
-        audioEncoder.close();
+        audioEncoder?.close();
 
         muxer.finalize();
         const { buffer } = muxer.target as ArrayBufferTarget;
@@ -356,7 +399,7 @@ export function useVideoExport() {
         const videoBlob = new Blob([buffer], { type: "video/mp4" });
         const videoUrl = URL.createObjectURL(videoBlob);
 
-        setState({ status: "complete", progress: 100, videoUrl });
+        setState((s) => ({ ...s, status: "complete", progress: 100, videoUrl }));
 
         return videoUrl;
       } catch (error) {
