@@ -254,8 +254,8 @@ export default function Dashboard() {
             <Card className="border-border/50">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-accent/10">
-                    <Clock className="h-5 w-5 text-accent-foreground" />
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <Clock className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold">{stats?.totalMinutes || 0}</p>
@@ -268,8 +268,8 @@ export default function Dashboard() {
             <Card className="border-border/50">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-secondary/50">
-                    <HardDrive className="h-5 w-5 text-secondary-foreground" />
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <HardDrive className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold">{stats?.storageUsed || 0} MB</p>
