@@ -86,6 +86,14 @@ export function GenerationResult({
     if (exportState.status !== "complete" || !exportState.videoUrl) return;
     if (lastAutoDownloadedUrlRef.current === exportState.videoUrl) return;
 
+    // iOS Safari blocks non-gesture downloads; require an explicit tap on "Download Video".
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      shouldAutoDownloadRef.current = false;
+      lastAutoDownloadedUrlRef.current = exportState.videoUrl;
+      return;
+    }
+
     lastAutoDownloadedUrlRef.current = exportState.videoUrl;
     shouldAutoDownloadRef.current = false;
 
