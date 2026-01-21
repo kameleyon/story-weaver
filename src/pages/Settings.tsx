@@ -49,17 +49,27 @@ export default function Settings() {
   const [projectUpdates, setProjectUpdates] = useState(true);
   const [marketingEmails, setMarketingEmails] = useState(false);
 
-  // Load existing API keys on mount
+  // Track if keys exist (for masked display)
+  const [hasGemini, setHasGemini] = useState(false);
+  const [hasReplicate, setHasReplicate] = useState(false);
+
+  // Load existing API keys on mount (via encrypted edge function)
   useEffect(() => {
     const loadApiKeys = async () => {
       if (!user) return;
       
       try {
-        const { data, error } = await supabase
-          .from("user_api_keys")
-          .select("gemini_api_key, replicate_api_token")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        
+        if (!token) {
+          setIsLoadingKeys(false);
+          return;
+        }
+
+        const { data, error } = await supabase.functions.invoke("manage-api-keys", {
+          method: "GET",
+        });
 
         if (error) {
           console.error("Error loading API keys:", error);
@@ -67,8 +77,11 @@ export default function Settings() {
         }
 
         if (data) {
+          // Display masked keys if they exist
           setGeminiKey(data.gemini_api_key || "");
           setReplicateKey(data.replicate_api_token || "");
+          setHasGemini(data.has_gemini || false);
+          setHasReplicate(data.has_replicate || false);
         }
       } catch (err) {
         console.error("Failed to load API keys:", err);
@@ -83,46 +96,56 @@ export default function Settings() {
   const handleSaveApiKeys = async () => {
     if (!user) return;
     
+    // Don't save if user hasn't entered new keys (just viewing masked values)
+    const isGeminiMasked = geminiKey.startsWith("••••");
+    const isReplicateMasked = replicateKey.startsWith("••••");
+    
+    if (isGeminiMasked && isReplicateMasked) {
+      toast({
+        title: "No changes to save",
+        description: "Enter new API keys to update them.",
+      });
+      return;
+    }
+    
     setIsSavingKeys(true);
     
     try {
-      // Check if record exists
-      const { data: existing } = await supabase
-        .from("user_api_keys")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (existing) {
-        // Update existing record
-        const { error } = await supabase
-          .from("user_api_keys")
-          .update({
-            gemini_api_key: geminiKey || null,
-            replicate_api_token: replicateKey || null,
-          })
-          .eq("user_id", user.id);
-
-        if (error) throw error;
-      } else {
-        // Insert new record
-        const { error } = await supabase
-          .from("user_api_keys")
-          .insert({
-            user_id: user.id,
-            gemini_api_key: geminiKey || null,
-            replicate_api_token: replicateKey || null,
-          });
-
-        if (error) throw error;
+      // Build payload with only non-masked keys
+      const payload: { gemini_api_key?: string; replicate_api_token?: string } = {};
+      
+      if (!isGeminiMasked) {
+        payload.gemini_api_key = geminiKey || "";
+      }
+      if (!isReplicateMasked) {
+        payload.replicate_api_token = replicateKey || "";
       }
 
+      const { error } = await supabase.functions.invoke("manage-api-keys", {
+        method: "POST",
+        body: payload,
+      });
+
+      if (error) throw error;
+
       setKeysSaved(true);
+      setHasGemini(!!payload.gemini_api_key || hasGemini);
+      setHasReplicate(!!payload.replicate_api_token || hasReplicate);
+      
       toast({
         title: "API keys saved",
-        description: "Your API keys have been securely stored.",
+        description: "Your API keys have been encrypted and securely stored.",
       });
       setTimeout(() => setKeysSaved(false), 2000);
+      
+      // Reload to show masked version
+      const { data } = await supabase.functions.invoke("manage-api-keys", {
+        method: "GET",
+      });
+      if (data) {
+        setGeminiKey(data.gemini_api_key || "");
+        setReplicateKey(data.replicate_api_token || "");
+      }
     } catch (error) {
       console.error("Error saving API keys:", error);
       toast({
