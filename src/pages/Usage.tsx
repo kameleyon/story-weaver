@@ -209,7 +209,7 @@ export default function Usage() {
                     </p>
                     <Badge variant="secondary" className="text-xs">Current</Badge>
                     {cancelAtPeriodEnd && (
-                      <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">Cancels Soon</Badge>
+                      <Badge className="text-xs bg-primary/20 text-primary">Cancels Soon</Badge>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
