@@ -95,9 +95,26 @@ serve(async (req) => {
     if (!elevenLabsResponse.ok) {
       const errorText = await elevenLabsResponse.text();
       console.error("ElevenLabs API error:", elevenLabsResponse.status, errorText);
+      
+      // Parse error for user-friendly messages
+      let userMessage = "Failed to clone voice";
+      let statusCode = 500;
+      
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.detail?.status === "voice_limit_reached") {
+          userMessage = "Voice limit reached. Please delete unused voices in your ElevenLabs account or upgrade your subscription.";
+          statusCode = 400;
+        } else if (errorJson.detail?.message) {
+          userMessage = errorJson.detail.message;
+        }
+      } catch {
+        // Keep default message if parsing fails
+      }
+      
       return new Response(
-        JSON.stringify({ error: `ElevenLabs API error: ${errorText}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: userMessage }),
+        { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

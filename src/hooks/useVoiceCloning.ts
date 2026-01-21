@@ -75,7 +75,19 @@ export function useVoiceCloning() {
         body: { audioUrl, voiceName: name, description },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Try to extract a meaningful error message
+        const errorBody = error.context?.body;
+        if (errorBody) {
+          try {
+            const parsed = JSON.parse(errorBody);
+            throw new Error(parsed.error || "Failed to clone voice");
+          } catch {
+            throw new Error(error.message || "Failed to clone voice");
+          }
+        }
+        throw new Error(error.message || "Failed to clone voice");
+      }
       if (!data.success) throw new Error(data.error || "Failed to clone voice");
 
       return data;
