@@ -601,7 +601,7 @@ export function GenerationResult({
 
             {exportState.status === "error" ? (
               <>
-                <p className="text-sm text-destructive">{exportState.error}</p>
+                <p className="text-sm text-muted-foreground">{exportState.error}</p>
                 <Button
                   onClick={resetExport}
                   variant="outline"

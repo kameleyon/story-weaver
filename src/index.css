@@ -42,7 +42,8 @@
     --accent: 173 50% 45%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    /* Using muted amber for warnings instead of red */
+    --destructive: 173 58% 32%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 180 10% 90%;
@@ -88,7 +89,7 @@
     --accent: 173 50% 50%;
     --accent-foreground: 200 9% 6%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 173 58% 39%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 200 8% 18%;

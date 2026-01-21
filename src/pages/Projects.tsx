@@ -527,7 +527,7 @@ export default function Projects() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={(e) => { e.stopPropagation(); handleDelete(project); }}
-                              className="text-destructive focus:text-destructive"
+                              className="text-muted-foreground focus:text-foreground"
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
@@ -711,7 +711,7 @@ export default function Projects() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleDelete(project)}
-                              className="text-destructive focus:text-destructive"
+                              className="text-muted-foreground focus:text-foreground"
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
@@ -761,7 +761,7 @@ export default function Projects() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-muted text-foreground hover:bg-muted/80"
             >
               Delete
             </AlertDialogAction>
@@ -782,7 +782,7 @@ export default function Projects() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmBulkDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-muted text-foreground hover:bg-muted/80"
             >
               Delete All
             </AlertDialogAction>

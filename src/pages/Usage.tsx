@@ -209,7 +209,7 @@ export default function Usage() {
                     </p>
                     <Badge variant="secondary" className="text-xs">Current</Badge>
                     {cancelAtPeriodEnd && (
-                      <Badge variant="destructive" className="text-xs">Cancels Soon</Badge>
+                      <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">Cancels Soon</Badge>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -430,7 +430,7 @@ export default function Usage() {
                                 activity.status === "completed" 
                                   ? "bg-primary/20 text-primary" 
                                   : activity.status === "failed"
-                                    ? "bg-destructive/20 text-destructive"
+                                    ? "bg-muted text-muted-foreground"
                                     : "bg-muted"
                               }`}
                             >
