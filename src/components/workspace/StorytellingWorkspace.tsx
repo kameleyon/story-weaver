@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { StoryIdeaInput } from "./StoryIdeaInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
-import { VoiceSelector, type VoiceGender } from "./VoiceSelector";
+import { VoiceSelector, type VoiceSelection } from "./VoiceSelector";
 import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { InspirationSelector, type InspirationStyle } from "./InspirationSelector";
 import { ToneSelector, type StoryTone } from "./ToneSelector";
@@ -41,7 +41,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [length, setLength] = useState<StoryLength>("brief");
     const [style, setStyle] = useState<VisualStyle>("minimalist");
     const [customStyle, setCustomStyle] = useState("");
-    const [voice, setVoice] = useState<VoiceGender>("female");
+    const [voice, setVoice] = useState<VoiceSelection>({ type: "standard", gender: "female" });
     const [characterDescription, setCharacterDescription] = useState("");
     const [characterDescOpen, setCharacterDescOpen] = useState(false);
     const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
@@ -97,7 +97,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       setLength("brief");
       setStyle("minimalist");
       setCustomStyle("");
-      setVoice("female");
+      setVoice({ type: "standard", gender: "female" });
       setCharacterDescription("");
       setCharacterDescOpen(false);
       setBrandMarkEnabled(false);

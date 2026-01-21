@@ -14,6 +14,7 @@ import Settings from "./pages/Settings";
 import Usage from "./pages/Usage";
 import Pricing from "./pages/Pricing";
 import Projects from "./pages/Projects";
+import VoiceLab from "./pages/VoiceLab";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -68,6 +69,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Projects />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/voice-lab"
+              element={
+                <ProtectedRoute>
+                  <VoiceLab />
                 </ProtectedRoute>
               }
             />

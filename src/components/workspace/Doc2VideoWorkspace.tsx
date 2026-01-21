@@ -9,7 +9,7 @@ import { ContentInput } from "./ContentInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { LengthSelector, type VideoLength } from "./LengthSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
-import { VoiceSelector, type VoiceGender } from "./VoiceSelector";
+import { VoiceSelector, type VoiceSelection } from "./VoiceSelector";
 import { PresenterFocusInput } from "./PresenterFocusInput";
 import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { GenerationProgress } from "./GenerationProgress";
@@ -33,7 +33,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
     const [length, setLength] = useState<VideoLength>("brief");
     const [style, setStyle] = useState<VisualStyle>("minimalist");
     const [customStyle, setCustomStyle] = useState("");
-    const [voice, setVoice] = useState<VoiceGender>("female");
+    const [voice, setVoice] = useState<VoiceSelection>({ type: "standard", gender: "female" });
     const [presenterFocus, setPresenterFocus] = useState("");
     const [characterDescription, setCharacterDescription] = useState("");
     const [presenterFocusOpen, setPresenterFocusOpen] = useState(false);
@@ -87,7 +87,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
       setLength("brief");
       setStyle("minimalist");
       setCustomStyle("");
-      setVoice("female");
+      setVoice({ type: "standard", gender: "female" });
       setPresenterFocus("");
       setCharacterDescription("");
       setPresenterFocusOpen(false);
