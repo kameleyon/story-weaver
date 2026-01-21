@@ -132,7 +132,7 @@ export default function Dashboard() {
         .select("id, title, created_at, project_type")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(5);
+        .limit(3);
       return data || [];
     },
     enabled: !!user?.id,
