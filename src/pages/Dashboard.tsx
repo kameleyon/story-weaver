@@ -132,7 +132,7 @@ export default function Dashboard() {
         .select("id, title, created_at, project_type")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(3);
+        .limit(5);
       return data || [];
     },
     enabled: !!user?.id,
@@ -295,24 +295,19 @@ export default function Dashboard() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
                     {recentProjects.map((project) => (
                       <button
                         key={project.id}
                         onClick={() => navigate(`/app/create?project=${project.id}`)}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
                       >
                         {project.project_type === "storytelling" ? (
                           <Headphones className="h-4 w-4 text-muted-foreground shrink-0" />
                         ) : (
                           <Video className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{project.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
+                        <p className="flex-1 text-sm font-medium truncate">{project.title}</p>
                         <Play className="h-4 w-4 text-muted-foreground shrink-0" />
                       </button>
                     ))}
