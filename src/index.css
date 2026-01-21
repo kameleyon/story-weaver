@@ -20,13 +20,13 @@
 
     /* Semantic Tokens - Light Mode */
     --background: 0 0% 99%;
-    --foreground: 180 7% 15%;
+    --foreground: 200 9% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 180 7% 15%;
+    --card-foreground: 200 9% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 180 7% 15%;
+    --popover-foreground: 200 9% 12%;
 
     /* Unified teal green */
     --primary: 173 58% 32%;
@@ -36,7 +36,7 @@
     --secondary-foreground: 0 0% 100%;
 
     --muted: 180 10% 95%;
-    --muted-foreground: 180 7% 45%;
+    --muted-foreground: 200 9% 35%;
 
     /* Lighter teal for hover states */
     --accent: 173 50% 45%;

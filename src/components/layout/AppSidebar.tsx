@@ -427,7 +427,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
             <DropdownMenuItem
-              className="cursor-pointer rounded-lg text-destructive focus:text-destructive"
+              className="cursor-pointer rounded-lg text-primary hover:text-primary focus:text-primary"
               onClick={handleSignOut}
             >
               <LogOut className="mr-2 h-4 w-4" />

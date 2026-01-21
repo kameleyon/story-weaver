@@ -93,20 +93,20 @@ interface Project {
   project_type?: string;
 }
 
-// Style color mapping for visual variety
+// Style color mapping for visual variety - Teal & Mist palette
 const styleColors: Record<string, string> = {
-  "3d-pixar": "from-purple-500/20 to-pink-500/20",
-  "anime": "from-rose-500/20 to-orange-500/20",
-  "realistic": "from-blue-500/20 to-cyan-500/20",
-  "sketch": "from-gray-500/20 to-slate-500/20",
-  "doodle": "from-yellow-500/20 to-amber-500/20",
-  "minimalist": "from-neutral-500/20 to-stone-500/20",
-  "painterly": "from-emerald-500/20 to-teal-500/20",
-  "caricature": "from-fuchsia-500/20 to-violet-500/20",
-  "claymation": "from-orange-500/20 to-red-500/20",
-  "crayon": "from-lime-500/20 to-green-500/20",
-  "stick": "from-indigo-500/20 to-blue-500/20",
-  "storybook": "from-pink-500/20 to-rose-500/20",
+  "3d-pixar": "from-[#4EA69A]/30 to-[#2D6967]/20",
+  "anime": "from-[#71C0C2]/30 to-[#4EA69A]/20",
+  "realistic": "from-[#0D565F]/30 to-[#2D6967]/20",
+  "sketch": "from-[#86D2CA]/20 to-[#DAEEE9]/15",
+  "doodle": "from-[#86D2CA]/30 to-[#71C0C2]/20",
+  "minimalist": "from-[#DAEEE9]/30 to-[#86D2CA]/15",
+  "painterly": "from-[#2D6967]/30 to-[#4EA69A]/20",
+  "caricature": "from-[#71C0C2]/30 to-[#0D565F]/20",
+  "claymation": "from-[#4EA69A]/35 to-[#86D2CA]/20",
+  "crayon": "from-[#86D2CA]/35 to-[#4EA69A]/20",
+  "stick": "from-[#0D565F]/30 to-[#71C0C2]/20",
+  "storybook": "from-[#2D6967]/30 to-[#86D2CA]/20",
 };
 
 export default function Projects() {
