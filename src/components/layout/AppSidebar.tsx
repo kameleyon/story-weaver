@@ -265,6 +265,26 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
+              {/* Voice Lab */}
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/voice-lab")}
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
+                        isActiveRoute("/voice-lab") 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                    >
+                      <Mic className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && <span className="text-sm">Voice Lab</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">Voice Lab</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
+
               {/* Storytelling */}
               <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
@@ -302,26 +322,6 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </TooltipTrigger>
                   {isCollapsed && <TooltipContent side="right">All Projects</TooltipContent>}
-                </Tooltip>
-              </SidebarMenuItem>
-
-              {/* Voice Lab */}
-              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton
-                      onClick={() => navigate("/voice-lab")}
-                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
-                        isActiveRoute("/voice-lab") 
-                          ? "bg-primary/10 text-primary" 
-                          : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
-                    >
-                      <Mic className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm">Voice Lab</span>}
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Voice Lab</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
             </SidebarMenu>
