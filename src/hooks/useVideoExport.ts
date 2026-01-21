@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import type { Scene } from "./useGenerationPipeline";
+import { appendVideoExportLog } from "@/lib/videoExportDebug";
 
 export type ExportStatus = "idle" | "loading" | "rendering" | "encoding" | "complete" | "error";
 
@@ -26,14 +27,17 @@ export function useVideoExport() {
 
   const log = useCallback((...args: any[]) => {
     // Keep a consistent prefix to make filtering easier.
+    appendVideoExportLog("log", ["[VideoExport]", ...args]);
     console.log("[VideoExport]", ...args);
   }, []);
 
   const warn = useCallback((...args: any[]) => {
+    appendVideoExportLog("warn", ["[VideoExport]", ...args]);
     console.warn("[VideoExport]", ...args);
   }, []);
 
   const err = useCallback((...args: any[]) => {
+    appendVideoExportLog("error", ["[VideoExport]", ...args]);
     console.error("[VideoExport]", ...args);
   }, []);
 
