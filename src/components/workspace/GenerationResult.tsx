@@ -11,6 +11,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Share2,
   Square,
   Terminal,
   Trash2,
@@ -64,7 +65,7 @@ export function GenerationResult({
   const sceneAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
+  const { state: exportState, exportVideo, downloadVideo, shareVideo, reset: resetExport } = useVideoExport();
   const { state: zipState, downloadImagesAsZip } = useImagesZipDownload();
   const shouldAutoDownloadRef = useRef(false);
   const lastAutoDownloadedUrlRef = useRef<string | null>(null);
@@ -612,19 +613,36 @@ export function GenerationResult({
             ) : exportState.status === "complete" ? (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Your video is ready. Click the button below to save it to your device.
+                  Your video is ready.
                 </p>
-                <Button
-                  className="w-full gap-2"
-                  onClick={() => {
-                    const safeName =
-                      title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
-                    downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                  }}
-                >
-                  <Download className="h-4 w-4" />
-                  Download Video
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => {
+                      const safeName =
+                        title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+                      downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download to Files
+                  </Button>
+                  {/* Share button for iOS Save to Photos */}
+                  {typeof navigator !== "undefined" && navigator.canShare && (
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => {
+                        const safeName =
+                          title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+                        shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                      }}
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share / Save to Photos
+                    </Button>
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   onClick={resetExport}
@@ -667,16 +685,31 @@ export function GenerationResult({
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3">
         {exportState.status === "complete" && exportState.videoUrl ? (
-          <Button
-            className="flex-1 gap-2"
-            onClick={() => {
-              const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
-              downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
-            }}
-          >
-            <Download className="h-4 w-4" />
-            Download Video
-          </Button>
+          <>
+            <Button
+              className="flex-1 gap-2"
+              onClick={() => {
+                const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+                downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
+              }}
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
+            {typeof navigator !== "undefined" && navigator.canShare && (
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={() => {
+                  const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+                  shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                }}
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </Button>
+            )}
+          </>
         ) : (
           <Button
             className="flex-1 gap-2"
