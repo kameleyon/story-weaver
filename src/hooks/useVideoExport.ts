@@ -574,13 +574,13 @@ export function useVideoExport() {
           message,
           name: error instanceof Error ? error.name : undefined,
           stack: error instanceof Error ? error.stack : undefined,
-          statusAtFail: state.status,
         });
         setState({ status: "error", progress: 0, error: message });
         throw error;
       }
     },
-    [err, log, state.status, warn]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
