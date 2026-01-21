@@ -281,13 +281,13 @@ export default function Dashboard() {
           </div>
 
           {/* Quick Start + Tips Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Quick Start */}
-            <Card className="border-border/50">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Quick Start - wider (2 columns) */}
+            <Card className="border-border/50 lg:col-span-2">
               <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Quick Start</h3>
+                <h3 className="text-lg font-semibold mb-3">Quick Start</h3>
                 {recentProjects.length === 0 ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-6">
                     <p className="text-muted-foreground mb-4">No projects yet</p>
                     <Button onClick={() => navigate("/app/create?mode=doc2video")} className="gap-2">
                       <Play className="h-4 w-4" />
@@ -295,17 +295,17 @@ export default function Dashboard() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {recentProjects.map((project) => (
                       <button
                         key={project.id}
                         onClick={() => navigate(`/app/create?project=${project.id}`)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors text-left"
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors text-left"
                       >
                         {project.project_type === "storytelling" ? (
-                          <Headphones className="h-4 w-4 text-muted-foreground" />
+                          <Headphones className="h-4 w-4 text-muted-foreground shrink-0" />
                         ) : (
-                          <Video className="h-4 w-4 text-muted-foreground" />
+                          <Video className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{project.title}</p>
@@ -313,7 +313,7 @@ export default function Dashboard() {
                             {formatDistanceToNow(new Date(project.created_at), { addSuffix: true })}
                           </p>
                         </div>
-                        <Play className="h-4 w-4 text-muted-foreground" />
+                        <Play className="h-4 w-4 text-muted-foreground shrink-0" />
                       </button>
                     ))}
                   </div>
@@ -321,23 +321,41 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            {/* Did You Know */}
+            {/* Did You Know - narrower (1 column) with more tips */}
             <Card className="border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
+              <CardContent className="p-6 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-3">
                   <Lightbulb className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">Did You Know?</h3>
                 </div>
                 <AnimatePresence mode="wait">
-                  <motion.p
+                  <motion.div
                     key={currentTip}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="text-muted-foreground leading-relaxed"
+                    className="flex-1 flex flex-col"
                   >
-                    {TIPS[currentTip]}
-                  </motion.p>
+                    <p className="text-muted-foreground leading-relaxed text-sm mb-4">
+                      {TIPS[currentTip]}
+                    </p>
+                    <div className="mt-auto pt-3 border-t border-border/30">
+                      <p className="text-xs text-muted-foreground/60">
+                        Tip {currentTip + 1} of {TIPS.length}
+                      </p>
+                      <div className="flex gap-1 mt-2">
+                        {TIPS.map((_, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setCurrentTip(idx)}
+                            className={`h-1 flex-1 rounded-full transition-colors ${
+                              idx === currentTip ? "bg-primary" : "bg-muted-foreground/20"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
                 </AnimatePresence>
               </CardContent>
             </Card>
