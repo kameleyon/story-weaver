@@ -523,7 +523,7 @@ export default function Pricing() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep My Plan</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDowngrade} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDowngrade} className="bg-muted text-foreground hover:bg-muted/80">
               {loadingPlan === "free" ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />

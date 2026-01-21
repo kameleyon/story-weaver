@@ -361,7 +361,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuItem
-                              className="text-destructive focus:text-destructive cursor-pointer text-sm"
+                              className="text-muted-foreground focus:text-foreground cursor-pointer text-sm"
                               onClick={(e) => handleDeleteProject(project, e as unknown as React.MouseEvent)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -450,7 +450,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-muted text-foreground hover:bg-muted/80"
             >
               Delete
             </AlertDialogAction>
