@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.manage-api-keys]
 verify_jwt = false
+
+[functions.clone-voice]
+verify_jwt = false
