@@ -22,6 +22,21 @@ const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 export function useVideoExport() {
   const [state, setState] = useState<ExportState>({ status: "idle", progress: 0 });
   const abortRef = useRef(false);
+  const exportRunIdRef = useRef(0);
+
+  const log = useCallback((...args: any[]) => {
+    // Keep a consistent prefix to make filtering easier.
+    console.log("[VideoExport]", ...args);
+  }, []);
+
+  const warn = useCallback((...args: any[]) => {
+    console.warn("[VideoExport]", ...args);
+  }, []);
+
+  const err = useCallback((...args: any[]) => {
+    console.error("[VideoExport]", ...args);
+  }, []);
+
   const reset = useCallback(() => {
     abortRef.current = true;
     setState({ status: "idle", progress: 0 });
@@ -30,6 +45,10 @@ export function useVideoExport() {
   const exportVideo = useCallback(
     async (scenes: Scene[], format: "landscape" | "portrait" | "square") => {
       abortRef.current = false;
+      const runId = ++exportRunIdRef.current;
+      const t0 = performance.now();
+
+      log("Run", runId, "Start export", { scenes: scenes.length, format });
 
       // Access WebCodecs constructors safely via globalThis to prevent ReferenceError on iOS Safari
       const AudioEncoderCtor = (globalThis as any).AudioEncoder as typeof AudioEncoder | undefined;
@@ -45,7 +64,7 @@ export function useVideoExport() {
       // Audio is optional (some mobile browsers have VideoEncoder but no AudioEncoder)
       const supportsAudio = !!AudioEncoderCtor && !!AudioDataCtor;
 
-      console.log("[VideoExport] Capabilities:", {
+      log("Run", runId, "Capabilities", {
         isIOS,
         hasVideoEncoder: typeof VideoEncoder !== "undefined",
         hasAudioEncoder: !!AudioEncoderCtor,
@@ -56,6 +75,7 @@ export function useVideoExport() {
       if (!supportsVideo) {
         const errorMsg =
           "Video export is not supported on this device. Please use a desktop browser (Chrome, Edge, or Safari 16.4+) to export videos.";
+        err("Run", runId, "Unsupported device/browser (missing WebCodecs video)");
         setState({ status: "error", progress: 0, error: errorMsg });
         throw new Error(errorMsg);
       }
@@ -84,12 +104,14 @@ export function useVideoExport() {
       const fps = isIOS ? 24 : 30;
       const targetBitrate = isIOS ? 2_500_000 : 8_000_000;
 
+      log("Run", runId, "Export settings", { width, height, fps, targetBitrate, isIOS });
+
       setState({ status: "loading", progress: 0 });
 
       try {
         // Step 1: Preload all images and audio
         // For scenes with multiple images, load all of them
-        console.log("[VideoExport] Loading assets for", scenes.length, "scenes");
+        log("Run", runId, "Loading assets for", scenes.length, "scenes");
         
         // Build a flat list of all images to load
         interface SceneAsset {
@@ -134,7 +156,7 @@ export function useVideoExport() {
                 }
                 loadedImages.push(loadedImg);
               } catch (e) {
-                console.warn(`Scene ${idx + 1}: Failed to load image:`, e);
+                warn("Run", runId, `Scene ${idx + 1}: Failed to load image`, e);
               }
             }
 
@@ -147,7 +169,7 @@ export function useVideoExport() {
                 audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
                 await audioCtx.close();
               } catch (e) {
-                console.warn(`Failed to load audio for scene ${idx + 1}:`, e);
+                warn("Run", runId, `Failed to load audio for scene ${idx + 1}`, e);
               }
             }
 
@@ -173,7 +195,7 @@ export function useVideoExport() {
         if (abortRef.current) throw new Error("Export cancelled");
 
         const totalImagesLoaded = assets.reduce((sum, a) => sum + a.images.length, 0);
-        console.log(`[VideoExport] Loaded ${totalImagesLoaded} total images for ${assets.length} scenes`);
+        log("Run", runId, `Loaded ${totalImagesLoaded} total images for ${assets.length} scenes`);
 
         // Step 2: Setup MP4 muxer and video encoder
         setState({ status: "rendering", progress: 20 });
@@ -186,6 +208,8 @@ export function useVideoExport() {
         // Calculate total duration and frames
         const totalDuration = assets.reduce((sum, a) => sum + a.duration, 0);
         const totalFrames = Math.ceil(totalDuration * fps);
+
+        log("Run", runId, "Timeline", { totalDuration, totalFrames, fps });
 
         const wantsAudio = scenes.some((s) => !!s.audioUrl);
 
@@ -210,6 +234,8 @@ export function useVideoExport() {
             ...s,
             warning: "Audio export isn't supported on this device. Exporting a silent video.",
           }));
+
+          warn("Run", runId, "Audio requested but disabled; exporting silent video");
         }
 
         // We create the muxer AFTER we've confirmed audio encoder construction works.
@@ -225,12 +251,14 @@ export function useVideoExport() {
                 muxer.addAudioChunk(chunk, meta);
               },
               error: (e) => {
-                console.error("Audio encoder error:", e);
+                err("Run", runId, "Audio encoder error", e);
               },
             });
+
+            log("Run", runId, "AudioEncoder instantiated");
           } catch (e) {
             // Some mobile browsers expose the symbol but fail at runtime.
-            console.warn("[VideoExport] AudioEncoder instantiation failed:", e);
+            warn("Run", runId, "AudioEncoder instantiation failed", e);
             audioEnabled = false;
             audioEncoder = null;
             setState((s) => ({
@@ -268,7 +296,7 @@ export function useVideoExport() {
             muxer.addVideoChunk(chunk, meta);
           },
           error: (e) => {
-            console.error("Video encoder error:", e);
+            err("Run", runId, "Video encoder error", e);
             throw e;
           },
         });
@@ -304,6 +332,10 @@ export function useVideoExport() {
           for (const cfg of videoConfigCandidates) {
             try {
               const support = await (VideoEncoder as any).isConfigSupported(cfg);
+              log("Run", runId, "VideoEncoder.isConfigSupported", {
+                codec: cfg.codec,
+                supported: !!support?.supported,
+              });
               if (support?.supported) {
                 chosenVideoConfig = cfg;
                 break;
@@ -314,7 +346,9 @@ export function useVideoExport() {
           }
         }
 
+        log("Run", runId, "Configuring VideoEncoder", chosenVideoConfig);
         videoEncoder.configure(chosenVideoConfig);
+        log("Run", runId, "VideoEncoder configured");
 
         if (audioEnabled && audioEncoder) {
           audioEncoder.configure({
@@ -323,6 +357,8 @@ export function useVideoExport() {
             sampleRate: 48000,
             bitrate: 128000,
           });
+
+          log("Run", runId, "AudioEncoder configured");
 
           // Merge all audio into a single buffer for encoding
           const audioCtx = new OfflineAudioContext(2, Math.ceil(totalDuration * 48000), 48000);
@@ -339,6 +375,12 @@ export function useVideoExport() {
           }
 
           const renderedAudio = await audioCtx.startRendering();
+
+          log("Run", runId, "OfflineAudioContext rendered", {
+            length: renderedAudio.length,
+            duration: renderedAudio.duration,
+            sampleRate: renderedAudio.sampleRate,
+          });
 
           // Encode audio in chunks
           const audioChunkSize = 1024;
@@ -376,6 +418,11 @@ export function useVideoExport() {
               await yieldToUI();
             }
           }
+
+          log("Run", runId, "Audio encoding queued", {
+            totalAudioSamples,
+            audioChunkSize,
+          });
         }
 
         // Step 3: Render each frame
@@ -391,6 +438,13 @@ export function useVideoExport() {
 
           const { images, duration } = assets[sceneIdx];
           const sceneFrames = Math.ceil(duration * fps);
+
+          log("Run", runId, "Render scene", {
+            sceneIdx: sceneIdx + 1,
+            duration,
+            sceneFrames,
+            images: images.length,
+          });
           
           // If we have multiple images, divide the scene into segments
           const imageCount = Math.max(1, images.length);
@@ -446,7 +500,18 @@ export function useVideoExport() {
 
             // Keyframe at start of each scene and at image transitions
             const isKeyframe = frameInScene === 0 || frameInScene === segmentStart;
-            videoEncoder.encode(frame, { keyFrame: isKeyframe });
+            try {
+              videoEncoder.encode(frame, { keyFrame: isKeyframe });
+            } catch (e) {
+              err("Run", runId, "videoEncoder.encode failed", {
+                sceneIdx: sceneIdx + 1,
+                frameInScene,
+                currentFrame,
+                isKeyframe,
+                message: e instanceof Error ? e.message : String(e),
+              });
+              throw e;
+            }
             frame.close();
 
             currentFrame++;
@@ -464,10 +529,14 @@ export function useVideoExport() {
         // Step 4: Finalize encoding
         setState((s) => ({ ...s, status: "encoding", progress: 90 }));
 
+        log("Run", runId, "Flushing encoders...");
+
         await videoEncoder.flush();
         if (audioEncoder) await audioEncoder.flush();
         videoEncoder.close();
         audioEncoder?.close();
+
+        log("Run", runId, "Encoders flushed/closed", { videoChunkCount });
 
         if (videoChunkCount === 0) {
           throw new Error(
@@ -476,13 +545,15 @@ export function useVideoExport() {
         }
 
         try {
+          log("Run", runId, "Finalizing muxer...");
           muxer.finalize();
         } catch (e) {
-          console.error("[VideoExport] muxer.finalize failed:", e);
+          err("Run", runId, "muxer.finalize failed", e);
           throw new Error("Failed to finalize MP4 on this device. Try exporting on desktop.");
         }
 
         const { buffer } = muxer.target as ArrayBufferTarget;
+        log("Run", runId, "Muxed buffer", { byteLength: buffer?.byteLength ?? 0 });
         if (!buffer || buffer.byteLength < 1024) {
           throw new Error("Export produced an empty MP4. Try exporting on a desktop browser.");
         }
@@ -490,16 +561,26 @@ export function useVideoExport() {
         const videoBlob = new Blob([buffer], { type: "video/mp4" });
         const videoUrl = URL.createObjectURL(videoBlob);
 
+        log("Run", runId, "Complete", {
+          ms: Math.round(performance.now() - t0),
+          urlCreated: !!videoUrl,
+        });
         setState((s) => ({ ...s, status: "complete", progress: 100, videoUrl }));
 
         return videoUrl;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Export failed";
+        err("Run", runId, "Export failed", {
+          message,
+          name: error instanceof Error ? error.name : undefined,
+          stack: error instanceof Error ? error.stack : undefined,
+          statusAtFail: state.status,
+        });
         setState({ status: "error", progress: 0, error: message });
         throw error;
       }
     },
-    []
+    [err, log, state.status, warn]
   );
 
   const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
