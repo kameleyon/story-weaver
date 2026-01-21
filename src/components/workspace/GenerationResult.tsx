@@ -579,14 +579,19 @@ export function GenerationResult({
       </div>
 
       {/* Export Progress Modal */}
-      {exportState.status !== "idle" && exportState.status !== "complete" && (
+      {exportState.status !== "idle" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <Card className="w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-foreground">
-                {exportState.status === "error" ? "Export Failed" : "Exporting Video..."}
+                {exportState.status === "error"
+                  ? "Export Failed"
+                  : exportState.status === "complete"
+                  ? "Export Complete!"
+                  : "Exporting Video..."}
               </h3>
-              {exportState.status === "error" && (
+              {(exportState.status === "error" ||
+                exportState.status === "complete") && (
                 <Button variant="ghost" size="icon" onClick={resetExport}>
                   <X className="h-4 w-4" />
                 </Button>
@@ -594,14 +599,48 @@ export function GenerationResult({
             </div>
 
             {exportState.status === "error" ? (
-              <p className="text-sm text-destructive">{exportState.error}</p>
+              <>
+                <p className="text-sm text-destructive">{exportState.error}</p>
+                <Button
+                  onClick={resetExport}
+                  variant="outline"
+                  className="w-full mt-4"
+                >
+                  Close
+                </Button>
+              </>
+            ) : exportState.status === "complete" ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Your video is ready. Click the button below to save it to your device.
+                </p>
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => {
+                    const safeName =
+                      title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
+                    downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  Download Video
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={resetExport}
+                  className="w-full"
+                >
+                  Close
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>
                       {exportState.status === "loading" && "Loading assets..."}
-                      {exportState.status === "rendering" && "Rendering video..."}
+                      {exportState.status === "rendering" &&
+                        "Rendering video..."}
                       {exportState.status === "encoding" && "Encoding..."}
                     </span>
                     <span>{exportState.progress}%</span>
@@ -616,15 +655,10 @@ export function GenerationResult({
                 )}
 
                 <p className="text-xs text-muted-foreground">
-                  Please keep this tab open. The video is being rendered in your browser.
+                  Please keep this tab open. The video is being rendered in your
+                  browser.
                 </p>
               </>
-            )}
-
-            {exportState.status === "error" && (
-              <Button onClick={resetExport} variant="outline" className="w-full">
-                Close
-              </Button>
             )}
           </Card>
         </div>
