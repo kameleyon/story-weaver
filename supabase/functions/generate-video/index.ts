@@ -7,6 +7,158 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= INPUT VALIDATION =============
+const INPUT_LIMITS = {
+  content: 50000, // Max 50K characters for content
+  format: 20,
+  length: 20,
+  style: 50,
+  customStyle: 2000,
+  brandMark: 500,
+  presenterFocus: 2000,
+  characterDescription: 2000,
+  inspirationStyle: 100,
+  storyTone: 100,
+  storyGenre: 100,
+  voiceInclination: 100,
+  brandName: 200,
+  newVoiceover: 5000,
+  imageModification: 1000,
+  generationId: 50,
+  projectId: 50,
+};
+
+const ALLOWED_FORMATS = ["landscape", "portrait", "square"];
+const ALLOWED_LENGTHS = ["short", "brief", "presentation"];
+const ALLOWED_PHASES = ["script", "audio", "images", "finalize", "regenerate-audio", "regenerate-image"];
+const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling"];
+
+// Validate and sanitize string input
+function validateString(value: unknown, fieldName: string, maxLength: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} exceeds maximum length of ${maxLength} characters`);
+  }
+  return trimmed || null;
+}
+
+// Validate enum value
+function validateEnum<T extends string>(value: unknown, fieldName: string, allowed: readonly T[]): T | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  const lower = value.toLowerCase().trim();
+  if (!allowed.includes(lower as T)) {
+    throw new Error(`${fieldName} must be one of: ${allowed.join(", ")}`);
+  }
+  return lower as T;
+}
+
+// Validate UUID format
+function validateUUID(value: unknown, fieldName: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(value.trim())) {
+    throw new Error(`${fieldName} must be a valid UUID`);
+  }
+  return value.trim();
+}
+
+// Validate non-negative integer
+function validateNonNegativeInt(value: unknown, fieldName: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative integer`);
+  }
+  return value;
+}
+
+// Sanitize content to remove potential injection patterns
+function sanitizeContent(content: string): string {
+  // Remove potential script injection patterns
+  let sanitized = content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/on\w+\s*=/gi, "");
+  
+  // Remove excessive whitespace while preserving structure
+  sanitized = sanitized.replace(/\s{10,}/g, "    ");
+  
+  return sanitized.trim();
+}
+
+// Validate entire request body
+function validateGenerationRequest(body: unknown): GenerationRequest {
+  if (!body || typeof body !== "object") {
+    throw new Error("Request body must be a JSON object");
+  }
+  
+  const raw = body as Record<string, unknown>;
+  
+  const validated: GenerationRequest = {};
+  
+  // Validate phase
+  if (raw.phase !== undefined) {
+    validated.phase = validateEnum(raw.phase, "phase", ALLOWED_PHASES) as GenerationRequest["phase"];
+  }
+  
+  // Validate content with sanitization
+  const content = validateString(raw.content, "content", INPUT_LIMITS.content);
+  if (content) {
+    validated.content = sanitizeContent(content);
+  }
+  
+  // Validate format
+  validated.format = validateEnum(raw.format, "format", ALLOWED_FORMATS) ?? undefined;
+  
+  // Validate length
+  validated.length = validateEnum(raw.length, "length", ALLOWED_LENGTHS) ?? undefined;
+  
+  // Validate style
+  validated.style = validateString(raw.style, "style", INPUT_LIMITS.style) ?? undefined;
+  
+  // Validate optional string fields
+  validated.customStyle = validateString(raw.customStyle, "customStyle", INPUT_LIMITS.customStyle) ?? undefined;
+  validated.brandMark = validateString(raw.brandMark, "brandMark", INPUT_LIMITS.brandMark) ?? undefined;
+  validated.presenterFocus = validateString(raw.presenterFocus, "presenterFocus", INPUT_LIMITS.presenterFocus) ?? undefined;
+  validated.characterDescription = validateString(raw.characterDescription, "characterDescription", INPUT_LIMITS.characterDescription) ?? undefined;
+  validated.inspirationStyle = validateString(raw.inspirationStyle, "inspirationStyle", INPUT_LIMITS.inspirationStyle) ?? undefined;
+  validated.storyTone = validateString(raw.storyTone, "storyTone", INPUT_LIMITS.storyTone) ?? undefined;
+  validated.storyGenre = validateString(raw.storyGenre, "storyGenre", INPUT_LIMITS.storyGenre) ?? undefined;
+  validated.voiceInclination = validateString(raw.voiceInclination, "voiceInclination", INPUT_LIMITS.voiceInclination) ?? undefined;
+  validated.brandName = validateString(raw.brandName, "brandName", INPUT_LIMITS.brandName) ?? undefined;
+  validated.newVoiceover = validateString(raw.newVoiceover, "newVoiceover", INPUT_LIMITS.newVoiceover) ?? undefined;
+  validated.imageModification = validateString(raw.imageModification, "imageModification", INPUT_LIMITS.imageModification) ?? undefined;
+  
+  // Validate project type
+  validated.projectType = validateEnum(raw.projectType, "projectType", ALLOWED_PROJECT_TYPES) as GenerationRequest["projectType"] ?? undefined;
+  
+  // Validate UUIDs
+  validated.generationId = validateUUID(raw.generationId, "generationId") ?? undefined;
+  validated.projectId = validateUUID(raw.projectId, "projectId") ?? undefined;
+  
+  // Validate boolean
+  if (raw.disableExpressions !== undefined) {
+    if (typeof raw.disableExpressions !== "boolean") {
+      throw new Error("disableExpressions must be a boolean");
+    }
+    validated.disableExpressions = raw.disableExpressions;
+  }
+  
+  // Validate numeric fields
+  validated.sceneIndex = validateNonNegativeInt(raw.sceneIndex, "sceneIndex") ?? undefined;
+  
+  return validated;
+}
+
 // ============= TYPES =============
 interface GenerationRequest {
   // For starting new generation
@@ -2403,7 +2555,35 @@ serve(async (req) => {
 
     const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
 
-    const body: GenerationRequest & { imageStartIndex?: number; audioStartIndex?: number; imageIndex?: number } = await req.json();
+    // Parse and validate request body with comprehensive input validation
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON in request body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    let body: GenerationRequest & { imageStartIndex?: number; audioStartIndex?: number; imageIndex?: number };
+    try {
+      body = validateGenerationRequest(rawBody) as typeof body;
+      // Validate additional numeric fields not in GenerationRequest
+      const rawObj = rawBody as Record<string, unknown>;
+      body.imageStartIndex = validateNonNegativeInt(rawObj.imageStartIndex, "imageStartIndex") ?? undefined;
+      body.audioStartIndex = validateNonNegativeInt(rawObj.audioStartIndex, "audioStartIndex") ?? undefined;
+      body.imageIndex = validateNonNegativeInt(rawObj.imageIndex, "imageIndex") ?? undefined;
+    } catch (validationError) {
+      console.error("[generate-video] Input validation failed:", validationError);
+      return new Response(JSON.stringify({ 
+        error: validationError instanceof Error ? validationError.message : "Invalid input" 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
     const {
       phase,
       generationId,
@@ -2421,7 +2601,7 @@ serve(async (req) => {
       imageIndex, // Index of specific image within a multi-image scene
     } = body;
 
-    console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}`);
+    console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}, User: ${user.id}`);
 
     // Route to appropriate phase handler
     if (!phase || phase === "script") {
