@@ -49,6 +49,28 @@ serve(async (req) => {
       );
     }
 
+    // Check voice clone limit (1 per user)
+    const { count: existingVoiceCount, error: countError } = await supabaseAdmin
+      .from("user_voices")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    if (countError) {
+      console.error("Error checking voice count:", countError);
+      return new Response(
+        JSON.stringify({ error: "Failed to check voice limit" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if ((existingVoiceCount ?? 0) >= 1) {
+      console.log(`User ${user.id} already has ${existingVoiceCount} voice(s) - limit reached`);
+      return new Response(
+        JSON.stringify({ error: "You can only have 1 cloned voice. Please delete your existing voice to create a new one." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { audioUrl, voiceName, description } = await req.json();
 
     if (!audioUrl || !voiceName) {
