@@ -2612,6 +2612,30 @@ serve(async (req) => {
         });
       }
       
+      // Check daily generation limit (3 per day)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      const { count: todayGenerations, error: countError } = await supabase
+        .from("generations")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", todayStart.toISOString());
+      
+      if (countError) {
+        console.error("[generate-video] Error checking daily limit:", countError);
+      } else if ((todayGenerations ?? 0) >= 3) {
+        console.log(`[generate-video] User ${user.id} has reached daily limit: ${todayGenerations}/3`);
+        return new Response(JSON.stringify({ 
+          error: "Daily limit reached. You can only create 3 videos per day. Please try again tomorrow." 
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      console.log(`[generate-video] User daily usage: ${todayGenerations ?? 0}/3`);
+      
       // Route based on project type
       if (body.projectType === "storytelling") {
         console.log(`[generate-video] Routing to STORYTELLING pipeline`);

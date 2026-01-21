@@ -194,7 +194,8 @@ export default function VoiceLab() {
   };
 
   const hasAudio = !!recordedBlob || !!uploadedFile;
-  const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning;
+  const hasExistingVoice = voices.length >= 1;
+  const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasExistingVoice;
   const isReady = hasAudio;
 
   return (
@@ -434,22 +435,29 @@ export default function VoiceLab() {
                       />
                     </div>
 
-                    <div className="flex justify-end">
-                      <Button
-                        size="lg"
-                        disabled={!canClone}
-                        onClick={handleClone}
-                        className="px-8"
-                      >
-                        {isCloning ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Cloning...
-                          </>
-                        ) : (
-                          "Next"
-                        )}
-                      </Button>
+                    <div className="flex flex-col gap-2">
+                      {hasExistingVoice && (
+                        <p className="text-sm text-destructive">
+                          You already have a cloned voice. Delete it to create a new one.
+                        </p>
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          size="lg"
+                          disabled={!canClone}
+                          onClick={handleClone}
+                          className="px-8"
+                        >
+                          {isCloning ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Cloning...
+                            </>
+                          ) : (
+                            "Next"
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
