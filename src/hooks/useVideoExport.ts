@@ -276,7 +276,8 @@ export function useVideoExport() {
         // Prefer a widely supported H.264 baseline profile first (esp. on iOS Safari)
         const videoConfigCandidates = [
           {
-            codec: "avc1.42E01E", // Baseline Profile, Level 3.0-ish
+            // Level 4.0 supports up to 1920x1080 @ 30fps (Level 3.0 only supports ~720x480)
+            codec: "avc1.42E028", // Baseline Profile, Level 4.0
             width,
             height,
             bitrate: targetBitrate,
