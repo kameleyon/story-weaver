@@ -587,20 +587,33 @@ export function useVideoExport() {
     []
   );
 
+  // Share video for iOS "Save to Photos" via native share sheet
+  const shareVideo = useCallback(async (url: string, filename = "video.mp4") => {
+    if (!url) return false;
+
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: "video/mp4" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: filename,
+        });
+        return true;
+      }
+    } catch (e) {
+      console.warn("[VideoExport] Sharing failed:", e);
+    }
+    return false;
+  }, []);
+
   const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
     if (!url) return;
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-    // iOS Safari often blocks "download" for blob URLs unless handled as a navigation.
-    if (isIOS) {
-      const win = window.open(url, "_blank");
-      if (!win) {
-        window.location.href = url;
-      }
-      return;
-    }
-
+    // FIX: Removed iOS-specific window.open workaround.
+    // Modern iOS Safari supports standard download attributes better.
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
@@ -619,6 +632,7 @@ export function useVideoExport() {
     state,
     exportVideo,
     downloadVideo,
+    shareVideo,
     reset,
   };
 }
