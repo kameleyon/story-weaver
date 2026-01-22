@@ -272,7 +272,7 @@ export default function VoiceLab() {
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                   />
                   
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <div className="mx-auto w-12 h-12 flex items-center justify-center">
                       <Upload className="h-6 w-6 text-muted-foreground" />
                     </div>
@@ -280,37 +280,39 @@ export default function VoiceLab() {
                       <p className="font-medium">Click to upload, or drag and drop</p>
                       <p className="text-sm text-muted-foreground">Audio or video files up to 10MB each</p>
                     </div>
+                    
+                    <div className="flex items-center justify-center">
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground">or</Badge>
+                    </div>
+                    
+                    {/* Record Button - inside zone but with stopPropagation */}
+                    <Button
+                      variant="outline"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        isRecording ? stopRecording() : startRecording();
+                      }}
+                      className={cn(
+                        "gap-2",
+                        isRecording && "border-primary text-primary"
+                      )}
+                    >
+                      {isRecording ? (
+                        <>
+                          <Square className="h-4 w-4" />
+                          Stop Recording ({formatDuration(recordingDuration)})
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="h-4 w-4" />
+                          Record audio
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
-
-                {/* Separator */}
-                <div className="flex items-center justify-center gap-4">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-sm text-muted-foreground">or</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-
-                {/* Record Button - separate from upload zone */}
-                <Button
-                  variant="outline"
-                  onClick={() => isRecording ? stopRecording() : startRecording()}
-                  className={cn(
-                    "w-full gap-2",
-                    isRecording && "border-primary text-primary"
-                  )}
-                >
-                  {isRecording ? (
-                    <>
-                      <Square className="h-4 w-4" />
-                      Stop Recording ({formatDuration(recordingDuration)})
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="h-4 w-4" />
-                      Record audio
-                    </>
-                  )}
-                </Button>
 
                 {/* Recording Visualizer (shows when recording) */}
                 {isRecording && (
