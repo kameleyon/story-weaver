@@ -852,7 +852,7 @@ async function generateSceneAudio(
   return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
 }
 
-// ============= IMAGE GENERATION =============
+// ============= IMAGE GENERATION WITH NANO BANANA =============
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiKey: string,
@@ -860,38 +860,15 @@ async function generateImageWithReplicate(
 ): Promise<
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // Get aspect ratio for Imagen 4
+  // Map format to nano-banana supported aspect ratios
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
-  /* ============= OLD P-IMAGE SETTINGS (COMMENTED FOR LATER USE) =============
-  const dimensions = getImageDimensions(format);
-  
-  // p-image model endpoint and input:
-  // URL: "https://api.replicate.com/v1/models/prunaai/p-image/predictions"
-  // Input: {
-  //   prompt,
-  //   aspect_ratio: dimensions.aspectRatio,
-  //   prompt_upsampling: false,
-  //   disable_safety_checker: true,
-  // }
-  ============================================================================= */
-
-  /* ============= OLD SEEDREAM-4.5 SETTINGS (COMMENTED FOR LATER USE) =============
-  // Seedream model endpoint and input:
-  // URL: "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions"
-  // Input: {
-  //   prompt,
-  //   size: "4K",
-  //   aspect_ratio: aspectRatio,
-  //   sequential_image_generation: "disabled",
-  //   max_images: 1,
-  // }
-  ============================================================================= */
-
   try {
-    // Using Google Imagen 4 Fast model
-    // Docs: https://replicate.com/google/imagen-4-fast
-    const createResponse = await fetch("https://api.replicate.com/v1/models/google/imagen-4-fast/predictions", {
+    // Using Google Nano Banana model via Replicate
+    // Docs: https://replicate.com/google/nano-banana
+    console.log(`[IMG] Generating image with Nano Banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
+    
+    const createResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -903,7 +880,6 @@ async function generateImageWithReplicate(
           prompt,
           aspect_ratio: aspectRatio,
           output_format: "png",
-          safety_filter_level: "block_only_high",
         },
       }),
     });
@@ -912,16 +888,19 @@ async function generateImageWithReplicate(
       const status = createResponse.status;
       const retryAfter = createResponse.headers.get("retry-after");
       const errText = await createResponse.text().catch(() => "");
+      console.error(`[IMG] Nano Banana create failed: ${status} - ${errText}`);
       return {
         ok: false,
-        error: `Replicate image create failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `Replicate Nano Banana failed: ${status}${errText ? ` - ${errText}` : ""}`,
         status,
         retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
       };
     }
 
     let prediction = await createResponse.json();
+    console.log(`[IMG] Nano Banana prediction started: ${prediction.id}, status: ${prediction.status}`);
 
+    // Poll for completion if not finished
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await sleep(2000);
       const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
@@ -931,10 +910,11 @@ async function generateImageWithReplicate(
     }
 
     if (prediction.status === "failed") {
+      console.error(`[IMG] Nano Banana prediction failed: ${prediction.error}`);
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
-    // Imagen 4 returns output as URL string or array of URLs
+    // Nano Banana returns output as URL string or array of URLs
     const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     const imageUrl =
       typeof first === "string"
@@ -943,14 +923,21 @@ async function generateImageWithReplicate(
           ? first.url
           : null;
 
-    if (!imageUrl) return { ok: false, error: "No image URL returned" };
+    if (!imageUrl) {
+      console.error(`[IMG] Nano Banana no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
+      return { ok: false, error: "No image URL returned from Nano Banana" };
+    }
 
+    console.log(`[IMG] Nano Banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
+    
     const imgResponse = await fetch(imageUrl);
     if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
 
     const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+    console.log(`[IMG] Nano Banana image downloaded: ${bytes.length} bytes`);
     return { ok: true, bytes };
   } catch (err) {
+    console.error(`[IMG] Nano Banana error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
@@ -1241,7 +1228,7 @@ Return ONLY valid JSON:
   ]
 }`;
 
-  console.log("Phase: SCRIPT - Generating via OpenRouter...");
+  console.log("Phase: SCRIPT - Generating via OpenRouter with GPT-5.2...");
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
@@ -1255,7 +1242,7 @@ Return ONLY valid JSON:
       "X-Title": "AudioMax Video Generator",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4.5",
+      model: "openai/gpt-5.2",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.7,
       max_tokens: 8192,
@@ -1577,7 +1564,7 @@ Return ONLY valid JSON:
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with Claude Sonnet...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with GPT-5.2...");
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
@@ -1591,7 +1578,7 @@ Return ONLY valid JSON:
       "X-Title": "AudioMax Storytelling",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4.5",
+      model: "openai/gpt-5.2",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.8, // Slightly higher for creative storytelling
       max_tokens: 12000, // More tokens for longer narratives
@@ -1946,6 +1933,13 @@ async function handleImagesPhase(
   }
   const allImageTasks: ImageTask[] = [];
 
+  // Format description for aspect ratio clarity
+  const formatDescription = format === "portrait" 
+    ? "VERTICAL 9:16 portrait orientation (tall, like a phone screen)" 
+    : format === "square" 
+      ? "SQUARE 1:1 aspect ratio (equal width and height)" 
+      : "HORIZONTAL 16:9 landscape orientation (wide, like a TV screen)";
+
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
     let textInstructions = "";
     if (includeTextOverlay && scene.title && subIndex === 0) {
@@ -1976,14 +1970,33 @@ ${characterDescriptions}
 CRITICAL: If any of these characters appear in this scene, they MUST match their description EXACTLY. Do not deviate from the character bible.`;
     }
 
-    return `${visualPrompt}
+    // Build detailed, elaborate image generation prompt
+    return `CREATE A HIGHLY DETAILED, PRECISE, AND ACCURATE ILLUSTRATION:
 
-STYLE: ${styleDescription}
+SCENE DESCRIPTION: ${visualPrompt}
+
+FORMAT REQUIREMENT: ${formatDescription}. The image MUST be composed for this exact aspect ratio.
+
+VISUAL STYLE: ${styleDescription}
+
+GENERATION REQUIREMENTS:
+- Make the image ULTRA DETAILED with rich textures, accurate lighting, and proper shadows
+- Ensure ANATOMICAL ACCURACY for any humans, animals, or creatures depicted
+- If depicting real public figures or celebrities, research their actual appearance to generate someone who looks similar or close to them
+- Pay attention to CONTEXT and SETTING - ensure background elements match the scene's mood and location
+- Include PRECISE DETAILS: fabric textures, skin details, environmental elements, atmospheric effects
+- Ensure COMPOSITIONAL BALANCE appropriate for the ${format} format
+- Make the scene feel NATURAL and BELIEVABLE within the chosen style
+
+SUBJECT IDENTIFICATION:
+- Identify the main TOPIC and PRIMARY SUBJECT of this scene
+- Ensure all IMPORTANT ELEMENTS mentioned in the description are clearly visible
+- Maintain visual HIERARCHY - the main subject should be the focal point
 ${textInstructions}
 ${brandMarkInstructions}
 ${characterInstructions}
 
-Professional illustration with dynamic composition and clear visual hierarchy.`;
+OUTPUT: Ultra high resolution, professional illustration with dynamic composition, clear visual hierarchy, cinematic quality, and meticulous attention to detail.`;
   };
 
   let taskIndex = 0;
