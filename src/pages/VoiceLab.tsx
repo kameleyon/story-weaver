@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useVoiceCloning, UserVoice } from "@/hooks/useVoiceCloning";
+import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSidebarState } from "@/hooks/useSidebarState";
@@ -50,6 +51,7 @@ export default function VoiceLab() {
   // Form state
   const [voiceName, setVoiceName] = useState("");
   const [removeNoise, setRemoveNoise] = useState(true);
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   // Visualizer state
   const [audioLevels, setAudioLevels] = useState<number[]>(new Array(20).fill(0));
@@ -122,6 +124,11 @@ export default function VoiceLab() {
 
     } catch (error) {
       console.error("Failed to start recording:", error);
+      toast({
+        title: "Microphone access denied",
+        description: "Please allow microphone access in your browser settings to record audio.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -195,7 +202,7 @@ export default function VoiceLab() {
 
   const hasAudio = !!recordedBlob || !!uploadedFile;
   const hasExistingVoice = voices.length >= 1;
-  const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasExistingVoice;
+  const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasExistingVoice && consentAccepted;
   const isReady = hasAudio;
 
   return (
@@ -265,7 +272,7 @@ export default function VoiceLab() {
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                   />
                   
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <div className="mx-auto w-12 h-12 flex items-center justify-center">
                       <Upload className="h-6 w-6 text-muted-foreground" />
                     </div>
@@ -273,41 +280,37 @@ export default function VoiceLab() {
                       <p className="font-medium">Click to upload, or drag and drop</p>
                       <p className="text-sm text-muted-foreground">Audio or video files up to 10MB each</p>
                     </div>
-                    
-                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <span>or</span>
-                    </div>
-                    
-                    {/* Record Button */}
-                    <Button
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isRecording) {
-                          stopRecording();
-                        } else {
-                          startRecording();
-                        }
-                      }}
-                      className={cn(
-                        "gap-2",
-                        isRecording && "border-primary text-primary"
-                      )}
-                    >
-                      {isRecording ? (
-                        <>
-                          <Square className="h-4 w-4" />
-                          Stop Recording ({formatDuration(recordingDuration)})
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="h-4 w-4" />
-                          Record audio
-                        </>
-                      )}
-                    </Button>
                   </div>
                 </div>
+
+                {/* Separator */}
+                <div className="flex items-center justify-center gap-4">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-sm text-muted-foreground">or</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Record Button - separate from upload zone */}
+                <Button
+                  variant="outline"
+                  onClick={() => isRecording ? stopRecording() : startRecording()}
+                  className={cn(
+                    "w-full gap-2",
+                    isRecording && "border-primary text-primary"
+                  )}
+                >
+                  {isRecording ? (
+                    <>
+                      <Square className="h-4 w-4" />
+                      Stop Recording ({formatDuration(recordingDuration)})
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4" />
+                      Record audio
+                    </>
+                  )}
+                </Button>
 
                 {/* Recording Visualizer (shows when recording) */}
                 {isRecording && (
@@ -433,6 +436,23 @@ export default function VoiceLab() {
                         disabled={isCloning}
                         className="bg-muted/30"
                       />
+                    </div>
+
+                    {/* Consent Disclaimer */}
+                    <div className="flex items-start gap-3 p-4 bg-muted/30 rounded-lg border border-border/50">
+                      <Checkbox
+                        id="voice-consent"
+                        checked={consentAccepted}
+                        onCheckedChange={(checked) => setConsentAccepted(checked === true)}
+                        disabled={isCloning}
+                        className="mt-0.5"
+                      />
+                      <label htmlFor="voice-consent" className="text-sm text-muted-foreground leading-relaxed cursor-pointer">
+                        I hereby confirm that I have all necessary rights or consents to upload and clone these voice samples and that I will not use the platform-generated content for any illegal, fraudulent, or harmful purpose. I reaffirm my obligation to abide by AudioMax's{" "}
+                        <a href="/terms" className="text-primary underline hover:no-underline">Terms of Service</a>,{" "}
+                        <a href="/privacy" className="text-primary underline hover:no-underline">Privacy Policy</a>, and{" "}
+                        <a href="/acceptable-use" className="text-primary underline hover:no-underline">Acceptable Use Policy</a>.
+                      </label>
                     </div>
 
                     <div className="flex flex-col gap-2">
