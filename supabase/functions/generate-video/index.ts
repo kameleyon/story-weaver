@@ -852,23 +852,42 @@ async function generateSceneAudio(
   return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
 }
 
-// ============= IMAGE GENERATION WITH NANO BANANA =============
-async function generateImageWithReplicate(
+// ============= IMAGE GENERATION MODELS (with fallback chain) =============
+// Model priority: Nano Banana -> Imagen 4 Fast -> Flux Schnell
+const IMAGE_MODELS = [
+  { 
+    name: "google/nano-banana", 
+    label: "Nano Banana",
+    endpoint: "https://api.replicate.com/v1/models/google/nano-banana/predictions",
+    aspectRatioMap: { portrait: "9:16", square: "1:1", landscape: "16:9" },
+  },
+  { 
+    name: "google/imagen-4-fast", 
+    label: "Imagen 4 Fast",
+    endpoint: "https://api.replicate.com/v1/models/google/imagen-4-fast/predictions",
+    aspectRatioMap: { portrait: "9:16", square: "1:1", landscape: "16:9" },
+  },
+  { 
+    name: "black-forest-labs/flux-schnell", 
+    label: "Flux Schnell",
+    endpoint: "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+    aspectRatioMap: { portrait: "9:16", square: "1:1", landscape: "16:9" },
+  },
+];
+
+// Single model image generation attempt
+async function tryImageModel(
+  modelConfig: typeof IMAGE_MODELS[0],
   prompt: string,
   replicateApiKey: string,
   format: string,
-): Promise<
-  { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
-> {
-  // Map format to nano-banana supported aspect ratios
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }> {
+  const aspectRatio = modelConfig.aspectRatioMap[format as keyof typeof modelConfig.aspectRatioMap] || "16:9";
 
   try {
-    // Using Google Nano Banana model via Replicate
-    // Docs: https://replicate.com/google/nano-banana
-    console.log(`[IMG] Generating image with Nano Banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
+    console.log(`[IMG] Trying ${modelConfig.label}, format: ${format}, aspect_ratio: ${aspectRatio}`);
     
-    const createResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana/predictions", {
+    const createResponse = await fetch(modelConfig.endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -888,17 +907,17 @@ async function generateImageWithReplicate(
       const status = createResponse.status;
       const retryAfter = createResponse.headers.get("retry-after");
       const errText = await createResponse.text().catch(() => "");
-      console.error(`[IMG] Nano Banana create failed: ${status} - ${errText}`);
+      console.error(`[IMG] ${modelConfig.label} create failed: ${status} - ${errText}`);
       return {
         ok: false,
-        error: `Replicate Nano Banana failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `${modelConfig.label} failed: ${status}${errText ? ` - ${errText}` : ""}`,
         status,
         retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
       };
     }
 
     let prediction = await createResponse.json();
-    console.log(`[IMG] Nano Banana prediction started: ${prediction.id}, status: ${prediction.status}`);
+    console.log(`[IMG] ${modelConfig.label} prediction started: ${prediction.id}, status: ${prediction.status}`);
 
     // Poll for completion if not finished
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
@@ -910,11 +929,11 @@ async function generateImageWithReplicate(
     }
 
     if (prediction.status === "failed") {
-      console.error(`[IMG] Nano Banana prediction failed: ${prediction.error}`);
+      console.error(`[IMG] ${modelConfig.label} prediction failed: ${prediction.error}`);
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
-    // Nano Banana returns output as URL string or array of URLs
+    // Handle output format - can be URL string or array of URLs
     const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     const imageUrl =
       typeof first === "string"
@@ -924,22 +943,53 @@ async function generateImageWithReplicate(
           : null;
 
     if (!imageUrl) {
-      console.error(`[IMG] Nano Banana no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
-      return { ok: false, error: "No image URL returned from Nano Banana" };
+      console.error(`[IMG] ${modelConfig.label} no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
+      return { ok: false, error: `No image URL returned from ${modelConfig.label}` };
     }
 
-    console.log(`[IMG] Nano Banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
+    console.log(`[IMG] ${modelConfig.label} success, downloading from: ${imageUrl.substring(0, 80)}...`);
     
     const imgResponse = await fetch(imageUrl);
     if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
 
     const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[IMG] Nano Banana image downloaded: ${bytes.length} bytes`);
+    console.log(`[IMG] ${modelConfig.label} image downloaded: ${bytes.length} bytes`);
     return { ok: true, bytes };
   } catch (err) {
-    console.error(`[IMG] Nano Banana error:`, err);
+    console.error(`[IMG] ${modelConfig.label} error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
+}
+
+// Image generation with fallback chain
+async function generateImageWithReplicate(
+  prompt: string,
+  replicateApiKey: string,
+  format: string,
+): Promise<
+  { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
+> {
+  let lastError = "";
+  
+  for (const model of IMAGE_MODELS) {
+    console.log(`[IMG] Attempting generation with ${model.label}...`);
+    
+    const result = await tryImageModel(model, prompt, replicateApiKey, format);
+    
+    if (result.ok) {
+      console.log(`[IMG] Successfully generated image with ${model.label}`);
+      return result;
+    }
+    
+    lastError = result.error;
+    console.warn(`[IMG] ${model.label} failed: ${result.error}, trying next model...`);
+    
+    // Brief delay before trying next model
+    await sleep(1000);
+  }
+  
+  console.error(`[IMG] All image models failed. Last error: ${lastError}`);
+  return { ok: false, error: `All image models failed. Last error: ${lastError}` };
 }
 
 // ============= TRUE IMAGE EDITING WITH NANO BANANA =============
