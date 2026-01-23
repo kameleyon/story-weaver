@@ -414,21 +414,10 @@ export function GenerationResult({
                 alt={`Scene ${currentScene?.number}`}
                 loading="lazy"
                 className="w-full h-full object-cover"
-                initial={{ opacity: 0, scale: 1 }}
-                animate={{
-                  opacity: 1,
-                  scale: isPlayingAll ? 1.06 : 1,
-                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{
-                  opacity: { duration: 0.35, ease: "easeOut" },
-                  scale: { 
-                    duration: currentImages.length > 1 
-                      ? (currentScene?.duration ?? 6) / currentImages.length 
-                      : Math.max(1, currentScene?.duration ?? 6), 
-                    ease: "linear" 
-                  },
-                }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
               />
             ) : (
               <motion.div
