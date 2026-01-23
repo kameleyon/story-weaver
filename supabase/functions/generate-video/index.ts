@@ -514,6 +514,7 @@ async function generateSceneAudioOpenRouter(
       
       console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} - Generating audio with voice: ${voice}`);
 
+      // OpenRouter requires stream: true for audio output
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -521,8 +522,9 @@ async function generateSceneAudioOpenRouter(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openai/gpt-audio",
+          model: "openai/gpt-4o-audio-preview",
           modalities: ["text", "audio"],
+          stream: true,
           audio: {
             voice: voice,
             format: "wav",
@@ -550,14 +552,53 @@ async function generateSceneAudioOpenRouter(
         throw new Error(`OpenRouter TTS failed: ${response.status} - ${errText}`);
       }
 
-      const data = await response.json();
-      
-      // Check for audio data in the response
-      const audioData = data.choices?.[0]?.message?.audio?.data;
-      if (!audioData) {
-        console.error(`[TTS-OpenRouter] Scene ${sceneIndex + 1} no audio in response:`, JSON.stringify(data).substring(0, 500));
-        throw new Error("No audio data in OpenRouter response");
+      // Parse streaming response to collect audio chunks
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body reader");
+
+      let audioDataChunks: string[] = [];
+      let audioId: string | null = null;
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+
+          try {
+            const chunk = JSON.parse(jsonStr);
+            const delta = chunk.choices?.[0]?.delta;
+            
+            // Collect audio data chunks
+            if (delta?.audio?.data) {
+              audioDataChunks.push(delta.audio.data);
+            }
+            if (delta?.audio?.id) {
+              audioId = delta.audio.id;
+            }
+          } catch {
+            // Skip malformed JSON chunks
+          }
+        }
       }
+
+      // Combine all audio chunks
+      const audioData = audioDataChunks.join("");
+      if (!audioData) {
+        console.error(`[TTS-OpenRouter] Scene ${sceneIndex + 1} no audio data collected from stream`);
+        throw new Error("No audio data in OpenRouter streaming response");
+      }
+      
+      console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} collected ${audioDataChunks.length} chunks, total base64 length: ${audioData.length}`);
 
       console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} got audio base64 length: ${audioData.length}`);
 
