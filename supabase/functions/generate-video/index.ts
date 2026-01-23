@@ -480,255 +480,126 @@ function sanitizeForGeminiTTS(text: string): string {
   return sanitized;
 }
 
-// ============= GEMINI TTS MODELS (with fallback chain) =============
-// Only preview models work - the non-preview models (gemini-2.5-flash-tts, gemini-2.5-pro-tts) 
-// return 404 errors as they no longer exist in the API
-const GEMINI_TTS_MODELS = [
-  { name: "gemini-2.5-flash-preview-tts", label: "Flash Preview TTS" },
-  { name: "gemini-2.5-pro-preview-tts", label: "Pro Preview TTS" },
-];
+// ============= OPENROUTER GPT-AUDIO TTS =============
+// Uses OpenRouter's openai/gpt-audio model for TTS - no content filtering issues
+const OPENROUTER_TTS_VOICES = ["alloy", "ash", "ballad", "coral", "echo", "nova", "onyx", "sage", "shimmer", "verse"];
 
-async function generateSceneAudioGeminiWithModel(
+async function generateSceneAudioOpenRouter(
   scene: Scene,
   sceneIndex: number,
-  googleApiKey: string,
+  openrouterApiKey: string,
   supabase: any,
   userId: string,
   projectId: string,
-  modelName: string,
-  modelLabel: string,
-  retryAttempt: number = 0,
   isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
-  let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
 
   if (!voiceoverText || voiceoverText.length < 2) {
     return { url: null, error: "No voiceover text" };
   }
 
-  // Remove promotional/call-to-action phrases that trigger content filters
-  const promotionalPatterns = [
-    /\b(swiv|follow|like|subscribe|kòmante|comment|pataje|share|abòneman)\b[^.]*\./gi,
-    /\b(swiv kont|follow the|like and|share this)\b[^.]*$/gi,
-    /\.\s*(swiv|like|pataje|share|follow)[^.]*$/gi,
-  ];
-  for (const pattern of promotionalPatterns) {
-    voiceoverText = voiceoverText.replace(pattern, '.');
-  }
-  
-  // Replace celebrity/brand names that trigger content filters with generic terms
-  // This helps bypass automated content moderation on famous person names
-  const celebrityReplacements: [RegExp, string][] = [
-    [/\bNeymar\b/gi, 'li'],           // Replace with "him" in Creole
-    [/\bMessi\b/gi, 'jwè a'],         // "the player"
-    [/\bRonaldo\b/gi, 'jwè a'],
-    [/\bReal Madrid\b/gi, 'ekip la'], // "the team"
-    [/\bReal\b/gi, 'ekip la'],
-    [/\bBarcelona\b/gi, 'ekip la'],
-    [/\bBarça\b/gi, 'ekip la'],
-    [/\bPSG\b/gi, 'ekip la'],
-    [/\bParis Saint-Germain\b/gi, 'ekip la'],
-    [/\bMbappe\b/gi, 'jwè a'],
-    [/\bHaaland\b/gi, 'jwè a'],
-  ];
-  for (const [pattern, replacement] of celebrityReplacements) {
-    voiceoverText = voiceoverText.replace(pattern, replacement);
-  }
-  
-  voiceoverText = voiceoverText.replace(/\.+/g, '.').replace(/\s+/g, ' ').trim();
-  
-  // On retries, apply increasingly aggressive text transformations
-  if (retryAttempt > 0) {
-    voiceoverText = voiceoverText.replace(/[Ss]wiv[^.]*\./g, '').trim();
-    
-    // For high retry counts, simplify text drastically
-    if (retryAttempt >= 5) {
-      // Remove any remaining proper nouns (capitalized words that aren't sentence starters)
-      voiceoverText = voiceoverText.replace(/(?<!\. |\n|^)[A-Z][a-zàèìòùéêîôûäëïöüç]+/g, 'li');
-    }
-    
-    const variations = [
-      voiceoverText,
-      "Narrate naturally: " + voiceoverText,
-      "Story: " + voiceoverText,
-      voiceoverText + " End.",
-      "Content: " + voiceoverText,
-      "Segment: " + voiceoverText,
-      voiceoverText.split('.').slice(0, -1).join('.') + ".", // Remove last sentence
-      voiceoverText.split('.').slice(1).join('.'), // Remove first sentence
-      "Audio narration: " + voiceoverText.substring(0, Math.floor(voiceoverText.length * 0.8)), // Truncate 20%
-      voiceoverText.replace(/[,:;]/g, ''), // Remove punctuation that might trigger filters
-    ];
-    voiceoverText = variations[retryAttempt % variations.length];
-    console.log(`[TTS-Gemini] Retry ${retryAttempt} using variation: ${voiceoverText.substring(0, 80)}...`);
-  }
+  const TTS_ATTEMPTS = 3;
+  let lastError = "";
 
-  try {
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Using ${modelLabel} for Haitian Creole`);
-    console.log(`[TTS-Gemini] Text length: ${voiceoverText.length} chars, retry: ${retryAttempt}`);
+  for (let attempt = 0; attempt < TTS_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} retry ${attempt + 1}/${TTS_ATTEMPTS}`);
+        await sleep(2000 * attempt);
+      }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${googleApiKey}`,
-      {
+      // Pick a consistent voice based on scene index for variety
+      const voice = OPENROUTER_TTS_VOICES[sceneIndex % OPENROUTER_TTS_VOICES.length];
+      
+      console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} - Generating audio with voice: ${voice}`);
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          contents: [
+          model: "openai/gpt-audio",
+          modalities: ["text", "audio"],
+          audio: {
+            voice: voice,
+            format: "wav",
+          },
+          messages: [
             {
-              parts: [
-                {
-                  text: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${voiceoverText}`,
-                },
-              ],
+              role: "user",
+              content: `Read this narration aloud naturally and expressively: ${voiceoverText}`,
             },
           ],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: "Enceladus",
-                },
-              },
-            },
-          },
         }),
-      },
-    );
+      });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[TTS-Gemini] ${modelLabel} API error response:`, errText);
-      throw new Error(`${modelLabel} failed: ${response.status} - ${errText}`);
-    }
-
-    const data = await response.json();
-    console.log(`[TTS-Gemini] ${modelLabel} response structure:`, JSON.stringify(Object.keys(data)));
-
-    // Check for candidates
-    if (!data.candidates || data.candidates.length === 0) {
-      console.error(`[TTS-Gemini] ${modelLabel} no candidates in response:`, JSON.stringify(data));
-      throw new Error(`No candidates in ${modelLabel} response`);
-    }
-
-    const candidate = data.candidates[0];
-    
-    // Check for finishReason: OTHER which indicates content filtering
-    if (candidate.finishReason === "OTHER") {
-      console.warn(`[TTS-Gemini] ${modelLabel} returned finishReason: OTHER (content filter)`);
-      throw new Error(`${modelLabel} content filter triggered (finishReason: OTHER)`);
-    }
-    
-    const content = candidate?.content;
-    const parts = content?.parts;
-
-    if (!parts || parts.length === 0) {
-      console.error(`[TTS-Gemini] ${modelLabel} no parts in candidate:`, JSON.stringify(candidate));
-      throw new Error(`No parts in ${modelLabel} response`);
-    }
-
-    const inlineData = parts[0]?.inlineData;
-    if (!inlineData || !inlineData.data) {
-      console.error(`[TTS-Gemini] ${modelLabel} no inlineData:`, JSON.stringify(parts[0]));
-      throw new Error(`No audio data in ${modelLabel} response`);
-    }
-
-    const audioData = inlineData.data;
-    const mimeType = inlineData.mimeType || "audio/L16";
-    console.log(`[TTS-Gemini] ${modelLabel} got audio data, mimeType: ${mimeType}, base64 length: ${audioData.length}`);
-
-    // Decode base64 audio (raw PCM data)
-    let pcmBytes = base64Decode(audioData);
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} raw PCM bytes: ${pcmBytes.length}`);
-
-    // Trim trailing silence from PCM (16-bit samples, little-endian)
-    const SILENCE_THRESHOLD = 300;
-    let trimEnd = pcmBytes.length;
-
-    for (let i = pcmBytes.length - 2; i >= 0; i -= 2) {
-      const sample = Math.abs(((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16) >> 16);
-      if (sample > SILENCE_THRESHOLD) {
-        trimEnd = Math.min(pcmBytes.length, i + 14400);
-        break;
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[TTS-OpenRouter] Scene ${sceneIndex + 1} API error: ${response.status} - ${errText}`);
+        
+        // Check for rate limits
+        if (response.status === 429) {
+          lastError = "Rate limit exceeded";
+          await sleep(5000); // Wait longer before retry
+          continue;
+        }
+        
+        throw new Error(`OpenRouter TTS failed: ${response.status} - ${errText}`);
       }
+
+      const data = await response.json();
+      
+      // Check for audio data in the response
+      const audioData = data.choices?.[0]?.message?.audio?.data;
+      if (!audioData) {
+        console.error(`[TTS-OpenRouter] Scene ${sceneIndex + 1} no audio in response:`, JSON.stringify(data).substring(0, 500));
+        throw new Error("No audio data in OpenRouter response");
+      }
+
+      console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} got audio base64 length: ${audioData.length}`);
+
+      // Decode base64 audio (already WAV format)
+      const audioBytes = base64Decode(audioData);
+      console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} decoded ${audioBytes.length} bytes`);
+
+      // Calculate duration from WAV (assuming 24kHz, 16-bit mono)
+      // WAV header is 44 bytes, data starts after
+      const dataSize = audioBytes.length - 44;
+      const durationSeconds = Math.max(1, dataSize / (24000 * 2));
+
+      // Upload to Supabase storage
+      const audioPath = isRegeneration 
+        ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+        : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+        
+      const { error: uploadError } = await supabase.storage
+        .from("audio")
+        .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      // Create signed URL
+      const { data: signedData, error: signError } = await supabase.storage
+        .from("audio")
+        .createSignedUrl(audioPath, 604800); // 7 days
+      
+      if (signError || !signedData?.signedUrl) {
+        throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+      }
+
+      console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} audio uploaded OK`);
+      return { url: signedData.signedUrl, durationSeconds };
+
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Unknown OpenRouter TTS error";
+      console.error(`[TTS-OpenRouter] Scene ${sceneIndex + 1} error:`, lastError);
     }
-
-    if (trimEnd < pcmBytes.length) {
-      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`);
-      pcmBytes = pcmBytes.slice(0, trimEnd);
-    }
-
-    // Convert PCM to WAV (Gemini returns 24kHz, 16-bit mono PCM)
-    const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} WAV bytes: ${wavBytes.length}`);
-
-    // Calculate accurate duration
-    const durationSeconds = Math.max(1, pcmBytes.length / (24000 * 2));
-
-    const audioPath = isRegeneration 
-      ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
-      : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
-    const { error: uploadError } = await supabase.storage
-      .from("audio")
-      .upload(audioPath, wavBytes, { contentType: "audio/wav", upsert: true });
-
-    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-    // Use signed URL for secure access (7 days expiration)
-    const { data: signedData, error: signError } = await supabase.storage
-      .from("audio")
-      .createSignedUrl(audioPath, 604800); // 7 days in seconds
-    
-    if (signError || !signedData?.signedUrl) {
-      throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
-    }
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} audio uploaded OK using ${modelLabel}`);
-    return { url: signedData.signedUrl, durationSeconds };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : "Unknown Gemini TTS error";
-    console.error(`[TTS-Gemini] Scene ${sceneIndex + 1} ${modelLabel} error:`, errorMsg);
-    return { url: null, error: errorMsg };
   }
-}
 
-// Main Gemini TTS function with model fallback chain
-async function generateSceneAudioGemini(
-  scene: Scene,
-  sceneIndex: number,
-  googleApiKey: string,
-  supabase: any,
-  userId: string,
-  projectId: string,
-  retryAttempt: number = 0,
-  isRegeneration: boolean = false,
-): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
-  // Try each Gemini TTS model in order
-  for (const model of GEMINI_TTS_MODELS) {
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Trying ${model.label}...`);
-    
-    const result = await generateSceneAudioGeminiWithModel(
-      scene,
-      sceneIndex,
-      googleApiKey,
-      supabase,
-      userId,
-      projectId,
-      model.name,
-      model.label,
-      retryAttempt,
-      isRegeneration,
-    );
-    
-    if (result.url) {
-      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - SUCCESS with ${model.label}`);
-      return result;
-    }
-    
-    console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - ${model.label} failed: ${result.error}, trying next model...`);
-  }
-  
-  // All models failed
-  return { url: null, error: "All Gemini TTS models failed" };
+  return { url: null, error: lastError };
 }
 
 // ============= TTS GENERATION (Replicate Chatterbox) =============
@@ -846,59 +717,30 @@ async function generateSceneAudioReplicate(
 }
 
 // ============= UNIFIED TTS HANDLER =============
+// Now uses OpenRouter GPT-Audio for ALL languages - no content filtering issues
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
-  replicateApiKey: string,
-  googleApiKey: string | undefined,
+  openrouterApiKey: string,
+  _unusedApiKey: string | undefined, // Kept for signature compatibility, no longer used
   supabase: any,
   userId: string,
   projectId: string,
   isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
-  const voiceoverText = sanitizeVoiceover(scene.voiceover);
-
-  // Haitian Creole: prefer Gemini TTS, but fall back to Replicate if Gemini refuses (finishReason: OTHER)
-  if (googleApiKey && isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, trying Gemini 2.5 Flash TTS first`);
-
-    // Haitian Creole: use Gemini ONLY with 10 retries (Replicate doesn't speak Creole)
-    const MAX_RETRIES = 10;
-    let lastError = "";
-
-    for (let retry = 0; retry < MAX_RETRIES; retry++) {
-      if (retry > 0) {
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_RETRIES}`);
-        await sleep(1500 * Math.min(retry, 4)); // Cap backoff at 6 seconds
-      }
-
-      const geminiResult = await generateSceneAudioGemini(
-        scene,
-        sceneIndex,
-        googleApiKey,
-        supabase,
-        userId,
-        projectId,
-        retry,
-        isRegeneration,
-      );
-
-      if (geminiResult.url) return geminiResult;
-
-      lastError = geminiResult.error || "Unknown error";
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${lastError}`);
-    }
-
-    // No Replicate fallback for Creole - it doesn't speak Creole
-    console.error(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts for Haitian Creole`);
-    return {
-      url: null,
-      error: `Gemini TTS failed after ${MAX_RETRIES} retries for Haitian Creole: ${lastError}`,
-    };
-  }
-
-  // Default: Replicate Chatterbox
-  return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
+  // Use OpenRouter GPT-Audio for all TTS - handles all languages including Haitian Creole
+  // No content filtering on celebrity names or other content
+  console.log(`[TTS] Scene ${sceneIndex + 1} - Using OpenRouter GPT-Audio`);
+  
+  return generateSceneAudioOpenRouter(
+    scene,
+    sceneIndex,
+    openrouterApiKey,
+    supabase,
+    userId,
+    projectId,
+    isRegeneration,
+  );
 }
 
 // ============= IMAGE GENERATION WITH NANO BANANA =============
@@ -1763,8 +1605,7 @@ async function handleAudioPhase(
   user: any,
   generationId: string,
   projectId: string,
-  replicateApiKey: string,
-  googleApiKey?: string,
+  openrouterApiKey: string,
   startIndex: number = 0,
 ): Promise<Response> {
   const requestStart = Date.now();
@@ -1824,7 +1665,7 @@ async function handleAudioPhase(
     if (audioUrls[i]) continue;
 
     batchPromises.push(
-      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId).then((result) => ({
+      generateSceneAudio(scenes[i], i, openrouterApiKey, undefined, supabase, user.id, projectId).then((result) => ({
         index: i,
         result,
       })),
@@ -2344,8 +2185,7 @@ async function handleRegenerateAudio(
   projectId: string,
   sceneIndex: number,
   newVoiceover: string,
-  replicateApiKey: string,
-  googleApiKey: string | undefined,
+  openrouterApiKey: string,
 ): Promise<Response> {
   console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Starting audio regeneration...`);
 
@@ -2371,8 +2211,8 @@ async function handleRegenerateAudio(
   const audioResult = await generateSceneAudio(
     scenes[sceneIndex],
     sceneIndex,
-    replicateApiKey,
-    googleApiKey,
+    openrouterApiKey,
+    undefined,
     supabase,
     user.id,
     projectId,
@@ -2607,15 +2447,15 @@ serve(async (req) => {
       });
     }
 
-    const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
-    if (!REPLICATE_API_KEY) {
-      return new Response(JSON.stringify({ error: "Replicate not configured" }), {
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
+      return new Response(JSON.stringify({ error: "OpenRouter API key not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
+    const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
 
     // Parse and validate request body with comprehensive input validation
     let rawBody: unknown;
@@ -2737,8 +2577,7 @@ serve(async (req) => {
           user,
           generationId,
           projectId,
-          REPLICATE_API_KEY,
-          GOOGLE_TTS_API_KEY,
+          OPENROUTER_API_KEY,
           audioStartIndex || 0,
         );
       case "images":
@@ -2747,7 +2586,7 @@ serve(async (req) => {
           user,
           generationId,
           projectId,
-          REPLICATE_API_KEY,
+          REPLICATE_API_KEY || "",
           imageStartIndex || 0,
         );
       case "finalize":
@@ -2766,8 +2605,7 @@ serve(async (req) => {
           projectId,
           sceneIndex,
           newVoiceover,
-          REPLICATE_API_KEY,
-          GOOGLE_TTS_API_KEY,
+          OPENROUTER_API_KEY,
         );
       case "regenerate-image":
         if (typeof sceneIndex !== "number") {
@@ -2783,7 +2621,7 @@ serve(async (req) => {
           projectId,
           sceneIndex,
           imageModification || "", // Empty string means full regeneration from original prompt
-          REPLICATE_API_KEY,
+          REPLICATE_API_KEY || "",
           imageIndex, // Pass the specific image index
         );
       default:
