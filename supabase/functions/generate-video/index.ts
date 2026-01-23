@@ -2385,12 +2385,11 @@ TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as 
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     }
 
-    // Add brand mark signature if provided
+    // Add brand mark watermark if provided
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-SIGNATURE: Add a small, elegant signature text "${brandMark}" in the bottom-left corner of the image. 
-The signature should be subtle but legible, styled like a trademark or ownership mark. Use a clean sans-serif font.`;
+BRANDING: Overlay the text "${brandMark}" as a watermark in the bottom-center of the image. Use the font "Inter" (clean, modern, bold sans-serif). The text must appear as a floating digital layer—white with slight transparency or a subtle drop shadow—distinct from the scene's lighting. Ensure it looks like a professional media trademark or copyright stamp, consistently placed at the bottom edge.`;
     }
 
     // Add character consistency instructions if we have a character bible
