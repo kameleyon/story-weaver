@@ -898,6 +898,118 @@ async function generateSceneAudioElevenLabs(
   }
 }
 
+// ============= ELEVENLABS SPEECH-TO-SPEECH (Voice Changer) =============
+// Transforms source audio to match a target voice while preserving timing and emotion
+async function transformAudioWithElevenLabsSTS(
+  sourceAudioUrl: string,
+  targetVoiceId: string,
+  sceneIndex: number,
+  elevenLabsApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  isRegeneration: boolean = false,
+): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
+  try {
+    console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} - Downloading source audio for voice transformation...`);
+    
+    // Download the source audio
+    const sourceResponse = await fetch(sourceAudioUrl);
+    if (!sourceResponse.ok) {
+      throw new Error(`Failed to download source audio: ${sourceResponse.status}`);
+    }
+    const sourceAudioBytes = new Uint8Array(await sourceResponse.arrayBuffer());
+    console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} - Source audio downloaded: ${sourceAudioBytes.length} bytes`);
+
+    // Prepare multipart form data for Speech-to-Speech API
+    const boundary = `----ElevenLabsSTS${Date.now()}`;
+    
+    // Build multipart body
+    const parts: Uint8Array[] = [];
+    const encoder = new TextEncoder();
+    
+    // Add audio file part
+    parts.push(encoder.encode(`--${boundary}\r\n`));
+    parts.push(encoder.encode(`Content-Disposition: form-data; name="audio"; filename="source.wav"\r\n`));
+    parts.push(encoder.encode(`Content-Type: audio/wav\r\n\r\n`));
+    parts.push(sourceAudioBytes);
+    parts.push(encoder.encode(`\r\n`));
+    
+    // Add model_id part
+    parts.push(encoder.encode(`--${boundary}\r\n`));
+    parts.push(encoder.encode(`Content-Disposition: form-data; name="model_id"\r\n\r\n`));
+    parts.push(encoder.encode(`eleven_multilingual_sts_v2\r\n`));
+    
+    // Add voice_settings part (optional but recommended for consistency)
+    parts.push(encoder.encode(`--${boundary}\r\n`));
+    parts.push(encoder.encode(`Content-Disposition: form-data; name="voice_settings"\r\n\r\n`));
+    parts.push(encoder.encode(`{"stability": 0.5, "similarity_boost": 0.8, "style": 0.5, "use_speaker_boost": true}\r\n`));
+    
+    // End boundary
+    parts.push(encoder.encode(`--${boundary}--\r\n`));
+    
+    // Combine all parts
+    const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+    const body = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) {
+      body.set(part, offset);
+      offset += part.length;
+    }
+    
+    console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} - Calling Speech-to-Speech API with voice: ${targetVoiceId}`);
+    
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/speech-to-speech/${targetVoiceId}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": elevenLabsApiKey,
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body: body,
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[STS-ElevenLabs] API error:`, response.status, errText);
+      throw new Error(`ElevenLabs STS failed: ${response.status} - ${errText}`);
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const audioBytes = new Uint8Array(audioBuffer);
+    console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} - Transformed audio bytes: ${audioBytes.length}`);
+
+    // Estimate duration (MP3 at 128kbps ≈ 16KB/sec)
+    const durationSeconds = Math.max(1, audioBytes.length / 16000);
+
+    const audioPath = isRegeneration
+      ? `${userId}/${projectId}/scene-${sceneIndex + 1}-sts-${Date.now()}.mp3`
+      : `${userId}/${projectId}/scene-${sceneIndex + 1}-sts.mp3`;
+    const { error: uploadError } = await supabase.storage
+      .from("audio")
+      .upload(audioPath, audioBytes, { contentType: "audio/mpeg", upsert: true });
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+    const { data: signedData, error: signError } = await supabase.storage
+      .from("audio")
+      .createSignedUrl(audioPath, 604800);
+
+    if (signError || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+    }
+
+    console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} ✅ Voice transformation SUCCESS`);
+    return { url: signedData.signedUrl, durationSeconds, provider: `ElevenLabs STS (Voice Cloned)` };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown ElevenLabs STS error";
+    console.error(`[STS-ElevenLabs] Scene ${sceneIndex + 1} error:`, errorMsg);
+    return { url: null, error: errorMsg };
+  }
+}
+
 // ============= TTS GENERATION (Replicate Chatterbox) =============
 async function generateSceneAudioReplicate(
   scene: Scene,
@@ -1013,9 +1125,10 @@ async function generateSceneAudioReplicate(
 }
 
 // ============= UNIFIED TTS HANDLER =============
-// Fallback chain for Haitian Creole: Gemini → OpenRouter (gpt-audio) → OpenRouter (gpt-4o-mini-tts) → ElevenLabs
-// For custom/cloned voices: ElevenLabs directly
-// For English: Replicate Chatterbox
+// For Haitian Creole + cloned voice: Gemini TTS → ElevenLabs Speech-to-Speech (voice changer)
+// For Haitian Creole (standard voice): Gemini TTS only (2 models)
+// For custom/cloned voices (non-HC): ElevenLabs directly
+// For English/other: Replicate Chatterbox
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
@@ -1029,11 +1142,73 @@ async function generateSceneAudio(
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
   const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  const isHC = isHaitianCreole(voiceoverText);
 
-  // If custom voice is selected, use ElevenLabs directly
-  if (customVoiceId && ELEVENLABS_API_KEY) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Using custom voice via ElevenLabs: ${customVoiceId}`);
+  // ========== CASE 1: Haitian Creole + Cloned Voice ==========
+  // Generate with Google TTS → Transform with ElevenLabs Speech-to-Speech
+  if (isHC && customVoiceId && ELEVENLABS_API_KEY && googleApiKey) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole + Cloned Voice workflow`);
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS`);
+    
+    const MAX_GEMINI_RETRIES = 3;
+    let geminiAudioUrl: string | null = null;
+    
+    for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
+      if (retry > 0) {
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
+        await sleep(1500 * retry);
+      }
+
+      const geminiResult = await generateSceneAudioGemini(
+        scene,
+        sceneIndex,
+        googleApiKey,
+        supabase,
+        userId,
+        projectId,
+        retry,
+        isRegeneration,
+      );
+
+      if (geminiResult.url) {
+        geminiAudioUrl = geminiResult.url;
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready`);
+        break;
+      }
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
+    }
+
+    if (!geminiAudioUrl) {
+      console.error(`[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation`);
+      return { url: null, error: "Gemini TTS failed - cannot proceed with voice transformation" };
+    }
+
+    // Step 2: Transform the audio with ElevenLabs Speech-to-Speech
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Step 2: Transform voice with ElevenLabs STS`);
+    const stsResult = await transformAudioWithElevenLabsSTS(
+      geminiAudioUrl,
+      customVoiceId,
+      sceneIndex,
+      ELEVENLABS_API_KEY,
+      supabase,
+      userId,
+      projectId,
+      isRegeneration,
+    );
+
+    if (stsResult.url) {
+      console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS → ElevenLabs STS (Voice Cloned)`);
+      return stsResult;
+    }
+    
+    console.error(`[TTS] Scene ${sceneIndex + 1} - Voice transformation failed: ${stsResult.error}`);
+    return stsResult;
+  }
+
+  // ========== CASE 2: Non-HC + Cloned Voice ==========
+  // Use ElevenLabs TTS directly (it supports the language natively)
+  if (customVoiceId && ELEVENLABS_API_KEY && !isHC) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Using custom voice via ElevenLabs TTS: ${customVoiceId}`);
     const result = await generateSceneAudioElevenLabs(
       scene,
       sceneIndex,
@@ -1052,13 +1227,12 @@ async function generateSceneAudio(
     return result;
   }
 
-  // Haitian Creole: use fallback chain Gemini → OpenRouter → ElevenLabs
-  if (isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using multi-provider fallback chain`);
+  // ========== CASE 3: Haitian Creole (Standard Voice) ==========
+  // Use only Gemini TTS (2 models: flash-preview and pro-preview)
+  if (isHC) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS only`);
 
-    // Step 1: Try Gemini TTS (3 retries with each model)
     if (googleApiKey) {
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying Gemini TTS first...`);
       const MAX_GEMINI_RETRIES = 3;
       
       for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
@@ -1084,81 +1258,18 @@ async function generateSceneAudio(
         }
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
       }
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed, trying OpenRouter...`);
     }
 
-    // Step 2: Try OpenRouter (openai/gpt-audio)
-    if (OPENROUTER_API_KEY) {
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying OpenRouter gpt-audio...`);
-      const orGptAudioResult = await generateSceneAudioOpenRouter(
-        scene,
-        sceneIndex,
-        OPENROUTER_API_KEY,
-        supabase,
-        userId,
-        projectId,
-        "openai/gpt-audio",
-        "gpt-audio",
-        isRegeneration,
-      );
-
-      if (orGptAudioResult.url) {
-        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${orGptAudioResult.provider}`);
-        return orGptAudioResult;
-      }
-      console.log(`[TTS] Scene ${sceneIndex + 1} - OpenRouter gpt-audio failed: ${orGptAudioResult.error}`);
-
-      // Step 3: Try OpenRouter (openai/gpt-4o-mini-tts)
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying OpenRouter gpt-4o-mini-tts...`);
-      const orMiniTtsResult = await generateSceneAudioOpenRouter(
-        scene,
-        sceneIndex,
-        OPENROUTER_API_KEY,
-        supabase,
-        userId,
-        projectId,
-        "openai/gpt-4o-mini-tts",
-        "gpt-4o-mini-tts",
-        isRegeneration,
-      );
-
-      if (orMiniTtsResult.url) {
-        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${orMiniTtsResult.provider}`);
-        return orMiniTtsResult;
-      }
-      console.log(`[TTS] Scene ${sceneIndex + 1} - OpenRouter gpt-4o-mini-tts failed: ${orMiniTtsResult.error}`);
-    }
-
-    // Step 4: Try ElevenLabs as last resort (may not support Haitian Creole well)
-    if (ELEVENLABS_API_KEY) {
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying ElevenLabs as last resort...`);
-      const elevenLabsResult = await generateSceneAudioElevenLabs(
-        scene,
-        sceneIndex,
-        ELEVENLABS_API_KEY,
-        supabase,
-        userId,
-        projectId,
-        undefined, // Use default voice
-        isRegeneration,
-      );
-
-      if (elevenLabsResult.url) {
-        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${elevenLabsResult.provider}`);
-        return elevenLabsResult;
-      }
-      console.log(`[TTS] Scene ${sceneIndex + 1} - ElevenLabs failed: ${elevenLabsResult.error}`);
-    }
-
-    // All providers failed for Haitian Creole
-    console.error(`[TTS] Scene ${sceneIndex + 1} - ALL TTS providers failed for Haitian Creole`);
+    // Gemini failed for Haitian Creole
+    console.error(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed for Haitian Creole`);
     return {
       url: null,
-      error: "All TTS providers failed for Haitian Creole (Gemini, OpenRouter, ElevenLabs)",
+      error: "Gemini TTS failed for Haitian Creole",
     };
   }
 
-  // Default for English/other languages: Replicate Chatterbox
+  // ========== CASE 4: Default (English/other languages) ==========
+  // Use Replicate Chatterbox
   const result = await generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
   if (result.url) {
     console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox`);
