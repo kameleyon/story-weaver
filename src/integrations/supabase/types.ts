@@ -148,7 +148,10 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string
+          voice_id: string | null
           voice_inclination: string | null
+          voice_name: string | null
+          voice_type: string | null
         }
         Insert: {
           brand_mark?: string | null
@@ -170,7 +173,10 @@ export type Database = {
           title: string
           updated_at?: string
           user_id: string
+          voice_id?: string | null
           voice_inclination?: string | null
+          voice_name?: string | null
+          voice_type?: string | null
         }
         Update: {
           brand_mark?: string | null
@@ -192,7 +198,10 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+          voice_id?: string | null
           voice_inclination?: string | null
+          voice_name?: string | null
+          voice_type?: string | null
         }
         Relationships: []
       }

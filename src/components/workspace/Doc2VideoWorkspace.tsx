@@ -76,6 +76,10 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
           characterDescription: characterDescription.trim() || undefined,
           disableExpressions,
           projectType: "doc2video",
+          // Voice selection
+          voiceType: voice.type,
+          voiceId: voice.voiceId,
+          voiceName: voice.voiceName,
         });
       }
     };

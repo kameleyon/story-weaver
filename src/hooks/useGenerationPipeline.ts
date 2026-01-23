@@ -69,6 +69,10 @@ interface GenerationParams {
   presenterFocus?: string;
   characterDescription?: string;
   disableExpressions?: boolean;
+  // Voice selection
+  voiceType?: "standard" | "custom";
+  voiceId?: string;
+  voiceName?: string;
   // New storytelling fields
   projectType?: "doc2video" | "storytelling";
   inspirationStyle?: string;
@@ -254,6 +258,10 @@ export function useGenerationPipeline() {
             presenterFocus: params.presenterFocus,
             characterDescription: params.characterDescription,
             disableExpressions: params.disableExpressions,
+            // Voice selection
+            voiceType: params.voiceType,
+            voiceId: params.voiceId,
+            voiceName: params.voiceName,
             // Storytelling fields
             projectType: params.projectType,
             inspirationStyle: params.inspirationStyle,

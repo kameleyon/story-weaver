@@ -171,6 +171,10 @@ interface GenerationRequest {
   presenterFocus?: string;
   characterDescription?: string;
   disableExpressions?: boolean;
+  // Voice selection
+  voiceType?: "standard" | "custom";
+  voiceId?: string;
+  voiceName?: string;
   // Storytelling-specific fields
   projectType?: "doc2video" | "storytelling";
   inspirationStyle?: string;
@@ -708,6 +712,183 @@ async function generateSceneAudioGemini(
   return { url: null, error: "All Gemini TTS models failed" };
 }
 
+// ============= OPENROUTER TTS (gpt-audio and gpt-4o-mini-tts) =============
+async function generateSceneAudioOpenRouter(
+  scene: Scene,
+  sceneIndex: number,
+  openRouterApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  modelName: string,
+  modelLabel: string,
+  isRegeneration: boolean = false,
+): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
+  let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
+
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  try {
+    console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} - Using ${modelLabel}`);
+    console.log(`[TTS-OpenRouter] Text length: ${voiceoverText.length} chars`);
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openRouterApiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://audiomax.lovable.app",
+        "X-Title": "AudioMax",
+      },
+      body: JSON.stringify({
+        model: modelName,
+        modalities: ["text", "audio"],
+        audio: { voice: "alloy", format: "wav" },
+        messages: [
+          {
+            role: "user",
+            content: `Please read the following text aloud with natural enthusiasm and warmth, like sharing exciting news with a friend:\n\n${voiceoverText}`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[TTS-OpenRouter] ${modelLabel} API error:`, response.status, errText);
+      throw new Error(`${modelLabel} failed: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    console.log(`[TTS-OpenRouter] ${modelLabel} response received`);
+
+    // Extract audio from response
+    const message = data.choices?.[0]?.message;
+    if (!message?.audio?.data) {
+      console.error(`[TTS-OpenRouter] ${modelLabel} no audio data in response:`, JSON.stringify(data).substring(0, 500));
+      throw new Error(`No audio data in ${modelLabel} response`);
+    }
+
+    const audioBase64 = message.audio.data;
+    const audioBytes = base64Decode(audioBase64);
+    console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} audio bytes: ${audioBytes.length}`);
+
+    // Estimate duration (WAV format: 16-bit, typically 24kHz or 44.1kHz)
+    const durationSeconds = Math.max(1, audioBytes.length / (24000 * 2));
+
+    const audioPath = isRegeneration
+      ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+      : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+    const { error: uploadError } = await supabase.storage
+      .from("audio")
+      .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+    const { data: signedData, error: signError } = await supabase.storage
+      .from("audio")
+      .createSignedUrl(audioPath, 604800);
+
+    if (signError || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+    }
+
+    console.log(`[TTS-OpenRouter] Scene ${sceneIndex + 1} ✅ SUCCESS with ${modelLabel}`);
+    return { url: signedData.signedUrl, durationSeconds, provider: `OpenRouter ${modelLabel}` };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown OpenRouter TTS error";
+    console.error(`[TTS-OpenRouter] Scene ${sceneIndex + 1} ${modelLabel} error:`, errorMsg);
+    return { url: null, error: errorMsg };
+  }
+}
+
+// ============= ELEVENLABS TTS =============
+async function generateSceneAudioElevenLabs(
+  scene: Scene,
+  sceneIndex: number,
+  elevenLabsApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  voiceId?: string,
+  isRegeneration: boolean = false,
+): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
+  let voiceoverText = sanitizeVoiceover(scene.voiceover);
+
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  // Default to George voice if no custom voice specified
+  const selectedVoiceId = voiceId || "JBFqnCBsd6RMkjVDRZzb";
+  const voiceLabel = voiceId ? `Custom Voice (${voiceId.substring(0, 8)}...)` : "George (default)";
+
+  try {
+    console.log(`[TTS-ElevenLabs] Scene ${sceneIndex + 1} - Using ${voiceLabel}`);
+    console.log(`[TTS-ElevenLabs] Text length: ${voiceoverText.length} chars`);
+
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": elevenLabsApiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: voiceoverText,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.5,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[TTS-ElevenLabs] API error:`, response.status, errText);
+      throw new Error(`ElevenLabs failed: ${response.status} - ${errText}`);
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const audioBytes = new Uint8Array(audioBuffer);
+    console.log(`[TTS-ElevenLabs] Scene ${sceneIndex + 1} audio bytes: ${audioBytes.length}`);
+
+    // Estimate duration (MP3 at 128kbps ≈ 16KB/sec)
+    const durationSeconds = Math.max(1, audioBytes.length / 16000);
+
+    const audioPath = isRegeneration
+      ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.mp3`
+      : `${userId}/${projectId}/scene-${sceneIndex + 1}.mp3`;
+    const { error: uploadError } = await supabase.storage
+      .from("audio")
+      .upload(audioPath, audioBytes, { contentType: "audio/mpeg", upsert: true });
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+    const { data: signedData, error: signError } = await supabase.storage
+      .from("audio")
+      .createSignedUrl(audioPath, 604800);
+
+    if (signError || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+    }
+
+    console.log(`[TTS-ElevenLabs] Scene ${sceneIndex + 1} ✅ SUCCESS with ${voiceLabel}`);
+    return { url: signedData.signedUrl, durationSeconds, provider: `ElevenLabs ${voiceLabel}` };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown ElevenLabs TTS error";
+    console.error(`[TTS-ElevenLabs] Scene ${sceneIndex + 1} error:`, errorMsg);
+    return { url: null, error: errorMsg };
+  }
+}
+
 // ============= TTS GENERATION (Replicate Chatterbox) =============
 async function generateSceneAudioReplicate(
   scene: Scene,
@@ -823,6 +1004,9 @@ async function generateSceneAudioReplicate(
 }
 
 // ============= UNIFIED TTS HANDLER =============
+// Fallback chain for Haitian Creole: Gemini → OpenRouter (gpt-audio) → OpenRouter (gpt-4o-mini-tts) → ElevenLabs
+// For custom/cloned voices: ElevenLabs directly
+// For English: Replicate Chatterbox
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
@@ -832,50 +1016,146 @@ async function generateSceneAudio(
   userId: string,
   projectId: string,
   isRegeneration: boolean = false,
-): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
+  customVoiceId?: string,
+): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
+  const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
 
-  // Haitian Creole: prefer Gemini TTS, but fall back to Replicate if Gemini refuses (finishReason: OTHER)
-  if (googleApiKey && isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, trying Gemini 2.5 Flash TTS first`);
+  // If custom voice is selected, use ElevenLabs directly
+  if (customVoiceId && ELEVENLABS_API_KEY) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Using custom voice via ElevenLabs: ${customVoiceId}`);
+    const result = await generateSceneAudioElevenLabs(
+      scene,
+      sceneIndex,
+      ELEVENLABS_API_KEY,
+      supabase,
+      userId,
+      projectId,
+      customVoiceId,
+      isRegeneration,
+    );
+    if (result.url) {
+      console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${result.provider}`);
+      return result;
+    }
+    console.error(`[TTS] Scene ${sceneIndex + 1} - Custom voice failed: ${result.error}`);
+    return result;
+  }
 
-    // Haitian Creole: use Gemini ONLY with 10 retries (Replicate doesn't speak Creole)
-    const MAX_RETRIES = 10;
-    let lastError = "";
+  // Haitian Creole: use fallback chain Gemini → OpenRouter → ElevenLabs
+  if (isHaitianCreole(voiceoverText)) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using multi-provider fallback chain`);
 
-    for (let retry = 0; retry < MAX_RETRIES; retry++) {
-      if (retry > 0) {
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_RETRIES}`);
-        await sleep(1500 * Math.min(retry, 4)); // Cap backoff at 6 seconds
+    // Step 1: Try Gemini TTS (3 retries with each model)
+    if (googleApiKey) {
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying Gemini TTS first...`);
+      const MAX_GEMINI_RETRIES = 3;
+      
+      for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
+        if (retry > 0) {
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
+          await sleep(1500 * retry);
+        }
+
+        const geminiResult = await generateSceneAudioGemini(
+          scene,
+          sceneIndex,
+          googleApiKey,
+          supabase,
+          userId,
+          projectId,
+          retry,
+          isRegeneration,
+        );
+
+        if (geminiResult.url) {
+          console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS`);
+          return { ...geminiResult, provider: "Gemini TTS" };
+        }
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
       }
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed, trying OpenRouter...`);
+    }
 
-      const geminiResult = await generateSceneAudioGemini(
+    // Step 2: Try OpenRouter (openai/gpt-audio)
+    if (OPENROUTER_API_KEY) {
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying OpenRouter gpt-audio...`);
+      const orGptAudioResult = await generateSceneAudioOpenRouter(
         scene,
         sceneIndex,
-        googleApiKey,
+        OPENROUTER_API_KEY,
         supabase,
         userId,
         projectId,
-        retry,
+        "openai/gpt-audio",
+        "gpt-audio",
         isRegeneration,
       );
 
-      if (geminiResult.url) return geminiResult;
+      if (orGptAudioResult.url) {
+        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${orGptAudioResult.provider}`);
+        return orGptAudioResult;
+      }
+      console.log(`[TTS] Scene ${sceneIndex + 1} - OpenRouter gpt-audio failed: ${orGptAudioResult.error}`);
 
-      lastError = geminiResult.error || "Unknown error";
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${lastError}`);
+      // Step 3: Try OpenRouter (openai/gpt-4o-mini-tts)
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying OpenRouter gpt-4o-mini-tts...`);
+      const orMiniTtsResult = await generateSceneAudioOpenRouter(
+        scene,
+        sceneIndex,
+        OPENROUTER_API_KEY,
+        supabase,
+        userId,
+        projectId,
+        "openai/gpt-4o-mini-tts",
+        "gpt-4o-mini-tts",
+        isRegeneration,
+      );
+
+      if (orMiniTtsResult.url) {
+        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${orMiniTtsResult.provider}`);
+        return orMiniTtsResult;
+      }
+      console.log(`[TTS] Scene ${sceneIndex + 1} - OpenRouter gpt-4o-mini-tts failed: ${orMiniTtsResult.error}`);
     }
 
-    // No Replicate fallback for Creole - it doesn't speak Creole
-    console.error(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed after ${MAX_RETRIES} attempts for Haitian Creole`);
+    // Step 4: Try ElevenLabs as last resort (may not support Haitian Creole well)
+    if (ELEVENLABS_API_KEY) {
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying ElevenLabs as last resort...`);
+      const elevenLabsResult = await generateSceneAudioElevenLabs(
+        scene,
+        sceneIndex,
+        ELEVENLABS_API_KEY,
+        supabase,
+        userId,
+        projectId,
+        undefined, // Use default voice
+        isRegeneration,
+      );
+
+      if (elevenLabsResult.url) {
+        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: ${elevenLabsResult.provider}`);
+        return elevenLabsResult;
+      }
+      console.log(`[TTS] Scene ${sceneIndex + 1} - ElevenLabs failed: ${elevenLabsResult.error}`);
+    }
+
+    // All providers failed for Haitian Creole
+    console.error(`[TTS] Scene ${sceneIndex + 1} - ALL TTS providers failed for Haitian Creole`);
     return {
       url: null,
-      error: `Gemini TTS failed after ${MAX_RETRIES} retries for Haitian Creole: ${lastError}`,
+      error: "All TTS providers failed for Haitian Creole (Gemini, OpenRouter, ElevenLabs)",
     };
   }
 
-  // Default: Replicate Chatterbox
-  return generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
+  // Default for English/other languages: Replicate Chatterbox
+  const result = await generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
+  if (result.url) {
+    console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox`);
+    return { ...result, provider: "Replicate Chatterbox" };
+  }
+  return result;
 }
 
 // ============= IMAGE GENERATION WITH NANO BANANA =============
@@ -1114,6 +1394,9 @@ async function handleScriptPhase(
   presenterFocus?: string,
   characterDescription?: string,
   disableExpressions?: boolean,
+  voiceType?: string,
+  voiceId?: string,
+  voiceName?: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -1323,6 +1606,9 @@ Return ONLY valid JSON:
       brand_mark: brandMark || null,
       presenter_focus: presenterFocus || null,
       character_description: characterDescription || null,
+      voice_type: voiceType || "standard",
+      voice_id: voiceId || null,
+      voice_name: voiceName || null,
       status: "generating",
     })
     .select()
@@ -1746,10 +2032,10 @@ async function handleAudioPhase(
 ): Promise<Response> {
   const requestStart = Date.now();
 
-  // Fetch generation
+  // Fetch generation with project voice settings
   const { data: generation, error: genFetchError } = await supabase
     .from("generations")
-    .select("*")
+    .select("*, projects!inner(voice_type, voice_id, voice_name)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
@@ -1767,6 +2053,11 @@ async function handleAudioPhase(
     estimatedCostUsd: 0,
   };
   const phaseTimings = meta.phaseTimings || {};
+
+  // Get voice settings from project
+  const voiceType = generation.projects?.voice_type || "standard";
+  const customVoiceId = voiceType === "custom" ? generation.projects?.voice_id : undefined;
+  console.log(`[Audio] Voice settings: type=${voiceType}, voiceId=${customVoiceId || "none"}`);
 
   // Keep any audio already generated (chunked calls)
   const audioUrls: (string | null)[] = scenes.map((s) => (s as any).audioUrl ?? null);
@@ -1794,14 +2085,14 @@ async function handleAudioPhase(
     })
     .eq("id", generationId);
 
-  const batchPromises: Promise<{ index: number; result: { url: string | null; durationSeconds?: number } }>[] = [];
+  const batchPromises: Promise<{ index: number; result: { url: string | null; durationSeconds?: number; provider?: string } }>[] = [];
 
   for (let i = batchStart; i < batchEnd; i++) {
     // Skip scenes that already have audio
     if (audioUrls[i]) continue;
 
     batchPromises.push(
-      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId).then((result) => ({
+      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId, false, customVoiceId).then((result) => ({
         index: i,
         result,
       })),
@@ -2697,7 +2988,7 @@ serve(async (req) => {
       }
       
       // Default: Doc2Video pipeline
-      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription, body.disableExpressions);
+      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription, body.disableExpressions, body.voiceType, body.voiceId, body.voiceName);
     }
 
     if (!generationId || !projectId) {
