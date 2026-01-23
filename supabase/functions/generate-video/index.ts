@@ -17,6 +17,8 @@ const INPUT_LIMITS = {
   brandMark: 500,
   presenterFocus: 2000,
   characterDescription: 2000,
+  voiceId: 200,
+  voiceName: 200,
   inspirationStyle: 100,
   storyTone: 100,
   storyGenre: 100,
@@ -32,6 +34,7 @@ const ALLOWED_FORMATS = ["landscape", "portrait", "square"];
 const ALLOWED_LENGTHS = ["short", "brief", "presentation"];
 const ALLOWED_PHASES = ["script", "audio", "images", "finalize", "regenerate-audio", "regenerate-image"];
 const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling"];
+const ALLOWED_VOICE_TYPES = ["standard", "custom"] as const;
 
 // Validate and sanitize string input
 function validateString(value: unknown, fieldName: string, maxLength: number): string | null {
@@ -152,6 +155,12 @@ function validateGenerationRequest(body: unknown): GenerationRequest {
     }
     validated.disableExpressions = raw.disableExpressions;
   }
+
+  // Validate voice selection
+  validated.voiceType =
+    (validateEnum(raw.voiceType, "voiceType", ALLOWED_VOICE_TYPES) as GenerationRequest["voiceType"]) ?? undefined;
+  validated.voiceId = validateString(raw.voiceId, "voiceId", INPUT_LIMITS.voiceId) ?? undefined;
+  validated.voiceName = validateString(raw.voiceName, "voiceName", INPUT_LIMITS.voiceName) ?? undefined;
   
   // Validate numeric fields
   validated.sceneIndex = validateNonNegativeInt(raw.sceneIndex, "sceneIndex") ?? undefined;
