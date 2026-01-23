@@ -2737,10 +2737,10 @@ async function handleRegenerateAudio(
 ): Promise<Response> {
   console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Starting audio regeneration...`);
 
-  // Fetch generation
+  // Fetch generation WITH project voice settings (same as main audio phase)
   const { data: generation } = await supabase
     .from("generations")
-    .select("scenes")
+    .select("scenes, projects!inner(voice_type, voice_id, voice_name)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
@@ -2752,10 +2752,28 @@ async function handleRegenerateAudio(
     throw new Error("Invalid scene index");
   }
 
+  // Extract voice settings from project
+  const voiceType = generation.projects?.voice_type;
+  const voiceId = generation.projects?.voice_id;
+  const voiceName = generation.projects?.voice_name;
+  
+  // Determine if custom voice should be used
+  const customVoiceId = voiceType === "custom" && voiceId ? voiceId : undefined;
+  
+  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings: type=${voiceType}, id=${voiceId}, name=${voiceName}`);
+  if (customVoiceId) {
+    console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using custom cloned voice: ${customVoiceId}`);
+  }
+
   // Update the scene with new voiceover
   scenes[sceneIndex].voiceover = newVoiceover;
 
   // Generate new audio (with isRegeneration=true to create unique filename and bypass cache)
+  // IMPORTANT: Pass customVoiceId to follow the same 4-scenario workflow as main generation:
+  // - HC + Cloned Voice: Gemini TTS → ElevenLabs STS
+  // - HC + Standard Voice: Gemini TTS only (3 retries)
+  // - Non-HC + Cloned Voice: ElevenLabs TTS directly
+  // - Non-HC + Standard Voice: Replicate Chatterbox
   const audioResult = await generateSceneAudio(
     scenes[sceneIndex],
     sceneIndex,
@@ -2765,6 +2783,7 @@ async function handleRegenerateAudio(
     user.id,
     projectId,
     true, // isRegeneration - creates unique filename to bypass browser cache
+    customVoiceId, // Pass custom voice ID for proper routing
   );
 
   if (!audioResult.url) {
@@ -2785,6 +2804,9 @@ async function handleRegenerateAudio(
     .eq("user_id", user.id);
 
   console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully with voiceover: "${newVoiceover.substring(0, 50)}..."`);
+  if (audioResult.provider) {
+    console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Provider used: ${audioResult.provider}`);
+  }
 
   return new Response(
     JSON.stringify({
@@ -2794,6 +2816,7 @@ async function handleRegenerateAudio(
       audioUrl: audioResult.url,
       duration: scenes[sceneIndex].duration,
       voiceover: scenes[sceneIndex].voiceover, // Return the updated voiceover for confirmation
+      provider: audioResult.provider, // Include provider info for debugging
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
