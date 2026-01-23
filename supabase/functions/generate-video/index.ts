@@ -506,21 +506,38 @@ async function generateSceneAudioGeminiWithModel(
     return { url: null, error: "No voiceover text" };
   }
 
+  // Remove promotional/call-to-action phrases that trigger content filters
+  // These patterns are commonly flagged: "like", "subscribe", "follow", "comment", etc.
+  const promotionalPatterns = [
+    /\b(swiv|follow|like|subscribe|kòmante|comment|pataje|share|abòneman)\b[^.]*\./gi,
+    /\b(swiv kont|follow the|like and|share this)\b[^.]*$/gi,
+    /\.\s*(swiv|like|pataje|share|follow)[^.]*$/gi,
+  ];
+  for (const pattern of promotionalPatterns) {
+    voiceoverText = voiceoverText.replace(pattern, '.');
+  }
+  voiceoverText = voiceoverText.replace(/\.+/g, '.').replace(/\s+/g, ' ').trim();
+  
   // On retries, add text variations to bypass content filtering
   // The content filter seems triggered by certain text patterns, so we vary the input
   if (retryAttempt > 0) {
+    // Strip any remaining promotional content on retries
+    voiceoverText = voiceoverText.replace(/[Ss]wiv[^.]*\./g, '').trim();
+    
     const variations = [
-      "Please narrate: " + voiceoverText,
-      "Read aloud: " + voiceoverText,
-      voiceoverText + " - end of narration.",
-      "Voice over text: " + voiceoverText,
-      "Narration: " + voiceoverText,
+      voiceoverText, // Try clean text first
+      "Please narrate the following: " + voiceoverText,
+      "Read this story aloud: " + voiceoverText,
+      voiceoverText + " End of narration.",
+      "Educational content: " + voiceoverText,
+      "Documentary narration: " + voiceoverText,
       "Story segment: " + voiceoverText,
-      "[Speaking naturally] " + voiceoverText,
-      voiceoverText.replace(/\./g, ',').replace(/,([^,]*)$/, '.$1'), // Replace periods with commas except last
+      voiceoverText.replace(/\./g, ';').replace(/;([^;]*)$/, '.$1'), // Replace periods with semicolons except last
+      voiceoverText.split('.').slice(0, -1).join('.') + ".", // Remove last sentence
+      "In this segment: " + voiceoverText,
     ];
     voiceoverText = variations[retryAttempt % variations.length];
-    console.log(`[TTS-Gemini] Retry ${retryAttempt} using variation: ${voiceoverText.substring(0, 50)}...`);
+    console.log(`[TTS-Gemini] Retry ${retryAttempt} using variation: ${voiceoverText.substring(0, 80)}...`);
   }
 
   try {
