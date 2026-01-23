@@ -530,6 +530,18 @@ interface VoiceCardProps {
 }
 
 function VoiceCard({ voice, isPlaying, onPlay, onDelete }: VoiceCardProps) {
+  // Safely format the creation date
+  const getCreatedTimeAgo = () => {
+    try {
+      if (!voice.created_at) return "recently";
+      const date = new Date(voice.created_at);
+      if (isNaN(date.getTime())) return "recently";
+      return formatDistanceToNow(date, { addSuffix: true });
+    } catch {
+      return "recently";
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -553,7 +565,7 @@ function VoiceCard({ voice, isPlaying, onPlay, onDelete }: VoiceCardProps) {
       <div className="flex-1 min-w-0">
         <p className="font-medium truncate">{voice.voice_name}</p>
         <p className="text-xs text-muted-foreground">
-          Created {formatDistanceToNow(new Date(voice.created_at), { addSuffix: true })}
+          Created {getCreatedTimeAgo()}
         </p>
       </div>
 
