@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +17,8 @@ import {
   RefreshCw,
   Loader2,
   Clock,
-  Coins
+  Coins,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,8 +29,15 @@ import { ThemedLogo } from "@/components/ThemedLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDistanceToNow, format, startOfMonth, endOfMonth } from "date-fns";
+import { formatDistanceToNow, format, startOfMonth, endOfMonth, subMonths, isSameMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Plan limits configuration
 const planLimits = {
@@ -101,9 +109,26 @@ export default function Usage() {
     enabled: !!user?.id,
   });
 
-  // Fetch recent activity with cost and timing data
-  const { data: recentActivity = [], isLoading: isLoadingActivity } = useQuery({
-    queryKey: ["recent-activity", user?.id],
+  // Month filter state
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  
+  // Generate month options (last 12 months)
+  const monthOptions = useMemo(() => {
+    const options = [{ value: "all", label: "All Time" }];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = subMonths(now, i);
+      options.push({
+        value: format(date, "yyyy-MM"),
+        label: format(date, "MMMM yyyy"),
+      });
+    }
+    return options;
+  }, []);
+
+  // Fetch ALL activity with cost and timing data
+  const { data: allActivity = [], isLoading: isLoadingActivity } = useQuery({
+    queryKey: ["all-activity", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
 
@@ -119,8 +144,7 @@ export default function Usage() {
           project:projects(title)
         `)
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       
@@ -141,6 +165,18 @@ export default function Usage() {
     },
     enabled: !!user?.id,
   });
+
+  // Filter activity by selected month
+  const filteredActivity = useMemo(() => {
+    if (selectedMonth === "all") return allActivity;
+    
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const filterDate = new Date(year, month - 1);
+    
+    return allActivity.filter(activity => 
+      isSameMonth(new Date(activity.created_at), filterDate)
+    );
+  }, [allActivity, selectedMonth]);
 
   const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
   const videosLimit = planInfo.videos;
@@ -405,31 +441,48 @@ export default function Usage() {
             </CardContent>
           </Card>
 
-          {/* Recent Activity */}
+          {/* Activity History */}
           <Card className="mt-4 sm:mt-6 border-border/50 bg-card/50 shadow-sm">
             <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                Recent Activity
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Your recent video generations</CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                    Activity History
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">All your video generations</CardDescription>
+                </div>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-full sm:w-[180px] h-9">
+                    <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Filter by month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               {isLoadingActivity ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   Loading activity...
                 </div>
-              ) : recentActivity.length === 0 ? (
+              ) : filteredActivity.length === 0 ? (
                 <div className="py-8 text-center">
                   <Video className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
-                  <p className="text-sm text-muted-foreground">No activity yet</p>
+                  <p className="text-sm text-muted-foreground">No activity found</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Your video generations will appear here
+                    {selectedMonth === "all" ? "Your video generations will appear here" : "No generations in this period"}
                   </p>
                 </div>
               ) : (
-              <div className="space-y-2">
-                  {recentActivity.map((activity) => {
+              <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-thin">
+                  {filteredActivity.map((activity) => {
                     const formatTime = (ms: number | null) => {
                       if (!ms) return null;
                       const seconds = Math.floor(ms / 1000);
@@ -459,7 +512,7 @@ export default function Usage() {
                           <div className="flex items-center gap-2 mt-0.5">
                             <Badge 
                               variant="secondary" 
-                              className={`text-[10px] px-1.5 py-0 h-4 ${
+                              className={`text-[10px] px-1.5 py-0 h-4 font-normal ${
                                 isComplete
                                   ? "bg-primary/20 text-primary" 
                                   : isFailed
