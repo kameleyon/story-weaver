@@ -87,7 +87,7 @@
 
     /* Lighter teal for hover states */
     --accent: 173 50% 50%;
-    --accent-foreground: 200 9% 6%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 173 58% 39%;
     --destructive-foreground: 0 0% 100%;
