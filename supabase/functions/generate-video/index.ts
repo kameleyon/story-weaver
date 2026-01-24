@@ -1560,41 +1560,37 @@ We do NOT support other languages at this time.
 
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the script, carefully analyze the content to identify:
-1. KEY CHARACTERS: Who are the people/entities mentioned? (e.g., "Leo Messi", "a mother", "police officer", "robber")
+1. KEY CHARACTERS: Who are the people/entities mentioned?
 2. GENDER: Determine gender from context (names, pronouns, roles, topics)
    - Names like "Leo", "John", "Mike" → male
-   - Names like "Sarah", "Maria", "Emma" → female  
+   - Names like "Sarah", "Maria", "Emma" → female
    - Topics like "motherhood", "pregnancy" → female protagonist
    - Topics like "fatherhood", "brotherhood" → male protagonist
-   - Professions: Use context clues, avoid stereotypes but match content intent
-3. ROLES & RELATIONSHIPS: Who does what? (e.g., "the robber runs", "the cop chases")
+3. ROLES & RELATIONSHIPS: Who does what?
 4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
-   - A robber in scene 1 MUST be the SAME robber in scene 5
-   - A police officer chasing should NOT become a different person
-   - If there are 2 cops, describe BOTH distinctly and consistently
-5. TEMPORAL CONTEXT: If the content discusses different time periods of a character's life:
-   - Childhood scenes → show the character AS A CHILD (age 5-12)
-   - Teenage years → show the character AS A TEENAGER (age 13-19)
-   - Young adult → show the character AS A YOUNG ADULT (age 20-35)
-   - Middle-aged → show the character AS MIDDLE-AGED (age 40-55)
-   - Elderly → show the character AS ELDERLY (age 60+)
-   - CRITICAL: The SAME person at different ages must share key visual traits (eye color, facial structure, ethnicity, distinguishing features) but reflect the correct AGE for that scene
-6. HISTORICAL/CULTURAL CONTEXT: Match clothing, hairstyles, technology, and environments to the time period and culture being depicted
+5. TEMPORAL CONTEXT: Childhood → show AS A CHILD, Adult → show AS ADULT, etc.
+   - The SAME person at different ages must share key visual traits (eye color, facial structure, ethnicity) but reflect the correct AGE
+6. HISTORICAL/CULTURAL CONTEXT: Match clothing, hairstyles, technology to time period
 
 Content: ${content}
 ${presenterGuidance}${characterGuidance}
+
+=== VISUAL STYLE & ART DIRECTION ===
+All image prompts must adhere to this style:
+- ART STYLE: ${styleDescription}
+- ASPECT RATIO: ${format} (${dimensions.width}x${dimensions.height})
+- QUALITY: Ultra-detailed, 8K resolution, dramatic lighting
+- CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
+${brandMark ? `- BRANDING: Every image prompt must include instructions to overlay the brand mark "${brandMark}" in the bottom-center as a floating digital watermark` : ""}
+
 === TIMING REQUIREMENTS ===
 - Target duration: ${config.targetDuration} seconds
 - Create exactly ${sceneCount} scenes
-- MAXIMUM 25 seconds per scene
+- MAXIMUM 25 seconds per scene - MINIMUM 3 seconds per scene (to avoid glitchy flashes)
 - Each voiceover: ~${targetWords} words
 
-=== FORMAT ===
-- Format: ${format} (${dimensions.width}x${dimensions.height})
-- Style: ${styleDescription}
-
 === NARRATIVE ARC ===
-1. HOOK (Scenes 1-2): Create intrigue
+1. HOOK (Scenes 1-2): Create intrigue (High energy, fast cuts)
 2. CONFLICT (Early-middle): Show tension
 3. CHOICE (Middle): Fork in the road
 4. SOLUTION (Later): Show method/progress
@@ -1615,10 +1611,8 @@ ${
 
 ${
   includeTextOverlay
-    ? `
-=== TEXT OVERLAY ===
-- Provide title (2-5 words) and subtitle for each scene
-`
+    ? `=== TEXT OVERLAY ===
+- Provide title (2-5 words) and subtitle for each scene`
     : ""
 }
 
@@ -1626,47 +1620,43 @@ ${
 You MUST create a "characters" object defining EVERY person/entity in the video.
 This ensures visual CONSISTENCY - the same person looks identical across all scenes.
 
-For each character specify:
-- Their role/name as the key (use "CharacterName_age_period" format if showing same person at different ages, e.g., "Messi_childhood", "Messi_adult")
-- A DETAILED visual description including:
-  - GENDER (male/female) - MUST match the content context
-  - AGE: The SPECIFIC age for this version of the character (critical for biographical content!)
-  - Ethnicity/skin tone if mentioned or implied
-  - Hair (color, style, length - adjusted for age if needed)
-  - Body type (adjusted appropriately for age - child bodies differ from adult bodies!)
-  - Clothing (period-appropriate, age-appropriate, culture-appropriate)
-  - Distinguishing features that remain CONSTANT across ages (eye color, facial structure, birthmarks, etc.)
-  - Distinguishing features that CHANGE with age (wrinkles, hair color/loss, body changes)
+For each character specify using "CharacterName_age" format if showing same person at different ages:
+- GENDER (male/female) - MUST match the content context
+- AGE: The SPECIFIC age for this version of the character
+- Ethnicity/skin tone if mentioned or implied
+- Hair (color, style, length)
+- Body type
+- Clothing (period-appropriate, age-appropriate, culture-appropriate)
+- Distinguishing features that remain CONSTANT across ages (eye color, facial structure, birthmarks)
+- Distinguishing features that CHANGE with age (wrinkles, hair color/loss)
 
-CRITICAL RULES FOR TEMPORAL CONSISTENCY:
-- If content is biographical (someone's life story, childhood, journey), create SEPARATE character entries for each life stage
-- Example: "Messi_child": "A 7-year-old Argentine boy with dark hair, brown eyes, small and thin build, wearing modest 1990s clothing, playful expression"
-- Example: "Messi_adult": "A 35-year-old Argentine man with the SAME dark hair and brown eyes, athletic build, wearing Inter Miami jersey, determined expression"
-- The SAME PERSON at different ages MUST share: eye color, facial structure, ethnicity, key distinguishing features
-- The SAME PERSON at different ages WILL DIFFER in: body size, clothing style, hairstyle, wrinkles, setting
+Example:
+"Protagonist_child": "A 7-year-old Argentine boy with dark hair, brown eyes, small and thin build, wearing modest 1990s clothing, playful expression"
+"Protagonist_adult": "A 35-year-old man with the SAME dark hair and brown eyes, athletic build, wearing Inter Miami jersey, determined expression"
 
-GENERAL RULES:
-- If content mentions "Leo Messi" → male footballer, Argentine, athletic build
-- If content discusses "motherhood" → female protagonist, NOT a man in a suit
-- If content has "police vs robber" → TWO distinct characters, both consistent throughout
-- If content mentions specific gender pronouns → MATCH them exactly
-- If ambiguous → make a logical choice and be CONSISTENT
+=== PROMPT ENGINEERING RULES (FOR IMAGE PROMPTS) ===
+When generating the 'visualPrompt' for each scene, you MUST:
+1. COPY-PASTE the full physical description from the CHARACTER BIBLE into the prompt (do not just use the name)
+2. Describe the ACTION clearly (e.g., "running", "sitting", "celebrating")
+3. Define the SETTING (background, lighting, weather, environment)
+4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
+5. NO TEXT in images unless specifically requested
+${brandMark ? `6. End with: "Brand watermark '${brandMark}' in bottom-center as floating digital overlay"` : ""}
 
 === OUTPUT FORMAT ===
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
   "title": "Video Title",
   "characters": {
-    "Protagonist": "A 35-year-old female with warm brown skin, curly black hair in a protective style, wearing a cream cardigan over a floral dress, gentle expression, medium build",
-    "Police Officer": "A male officer in his 40s, clean-shaven, crew cut, wearing full police uniform with badge visible, serious expression, athletic build",
-    "Robber": "A young male in his 20s, wearing a dark hoodie and jeans, nervous expression, slim build, short brown hair"
+    "Protagonist_child": "A 7-year-old boy with dark hair, brown eyes...",
+    "Protagonist_adult": "A 35-year-old man with the SAME dark hair and brown eyes..."
   },
   "scenes": [
     {
       "number": 1,
       "narrativeBeat": "hook",
-      "voiceover": "Spoken text...",
-      "visualPrompt": "A 35-year-old female with warm brown skin, curly black hair in a protective style, wearing a cream cardigan over a floral dress - standing in a sunny kitchen, looking thoughtful...",
+      "voiceover": "Script text here...",
+      "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
       "subVisuals": ["Optional additional visual..."],
       "duration": 18${
         includeTextOverlay
@@ -1911,38 +1901,32 @@ We do NOT support other languages at this time.
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the story, carefully analyze the story idea to identify:
 1. KEY CHARACTERS: Who are the people/creatures/entities in this story?
-2. GENDER: Determine gender from context:
-   - Explicit names/pronouns → match them exactly
-   - "Mother/grandmother/sister" → female
-   - "Father/grandfather/brother" → male
-   - Creatures → assign consistent gender if personified
+2. GENDER: Determine gender from context (names, pronouns, roles, topics)
 3. ROLES & RELATIONSHIPS: Who is the protagonist? Antagonist? Supporting characters?
 4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
-   - If a dragon appears, it must be the SAME dragon every time
-   - If there are multiple cops, describe EACH distinctly and track them
-5. TEMPORAL CONTEXT: If the story spans different time periods or shows a character's journey through life:
-   - Childhood scenes → show the character AS A CHILD with appropriate age, size, and clothing
-   - Past events → show period-appropriate settings, clothing, and technology
-   - Present day → show current-era elements
-   - CRITICAL: The SAME character at different ages must share key visual traits but reflect the correct AGE
-6. CULTURAL/ENVIRONMENTAL CONTEXT: Match settings, clothing, and atmosphere to the time, place, and culture being depicted
+5. TEMPORAL CONTEXT: Childhood → show AS A CHILD, Adult → show AS ADULT, etc.
+   - The SAME person at different ages must share key visual traits (eye color, facial structure, ethnicity) but reflect the correct AGE
+6. HISTORICAL/CULTURAL CONTEXT: Match clothing, hairstyles, technology, environments to time period and culture
 
 === STORY IDEA ===
 ${content}
 ${inspirationSection}${toneSection}${genreSection}${characterGuidance}${brandSection}
 
+=== VISUAL STYLE & ART DIRECTION ===
+All image prompts must adhere to this style:
+- ART STYLE: ${styleDescription}
+- ASPECT RATIO: ${format} (${dimensions.width}x${dimensions.height})
+- QUALITY: Cinematic, ultra-detailed, 8K resolution, dramatic lighting
+- CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
+${brandName ? `- BRANDING: Every image prompt must include instructions to overlay the brand mark "${brandName}" in the bottom-center as a floating digital watermark` : ""}
+
 === TIMING REQUIREMENTS ===
 - Target duration: ${config.targetDuration} seconds
 - Create exactly ${sceneCount} scenes
-- MAXIMUM 40 seconds per scene
+- MAXIMUM 40 seconds per scene - MINIMUM 3 seconds per scene
 - Each voiceover: ~${targetWords} words for natural narration pacing
 
-=== FORMAT ===
-- Format: ${format} (${dimensions.width}x${dimensions.height})
-- Visual Style: ${styleDescription}
-
 === NARRATIVE STRUCTURE ===
-Create a compelling story arc:
 1. OPENING (Scene 1): Hook the audience immediately. Start in media res or with a provocative question.
 2. RISING ACTION (Scenes 2-${Math.floor(sceneCount * 0.4)}): Build the world, introduce conflict or stakes.
 3. CLIMAX (Scenes ${Math.floor(sceneCount * 0.4) + 1}-${Math.floor(sceneCount * 0.7)}): Peak tension, key revelation, or turning point.
@@ -1963,47 +1947,6 @@ ${
 - Use them only at key emotional moments, not every scene`
 }
 
-=== CHARACTER BIBLE (CRITICAL FOR CONSISTENCY) ===
-You MUST include a "characters" object defining EVERY character's EXACT visual appearance.
-This is NON-NEGOTIABLE for visual consistency across scenes.
-
-For each character, specify:
-- name/role as the key (use "CharacterName_age" format if showing same person at different ages, e.g., "Hero_child", "Hero_adult")
-- A DETAILED visual description including:
-  - GENDER (male/female) - inferred from story context, names, pronouns
-  - Species/type (human, dragon, unicorn, robot, etc.)
-  - AGE: The SPECIFIC age for this version of the character
-  - Physical appearance (color, build, features appropriate for age)
-  - Distinguishing features that remain CONSTANT (eye color, facial structure, scales color for creatures)
-  - Distinguishing features that CHANGE with age (size, wrinkles, body proportions)
-  - Clothing/accessories (period-appropriate, age-appropriate, consistent within time period)
-
-CRITICAL TEMPORAL RULES:
-- If the story shows a character's life journey, create SEPARATE entries for each life stage
-- Example: "Hero_child": "A 7-year-old human boy with bright blue eyes, messy brown hair, freckles, wearing patched medieval peasant clothes, curious expression"
-- Example: "Hero_adult": "A 30-year-old man with the SAME bright blue eyes and brown hair, now with slight stubble, wearing knight's armor, determined expression"
-- The SAME character at different ages MUST share: eye color, hair color, ethnicity, key distinguishing features
-- The SAME character at different ages WILL DIFFER in: body size/proportions, clothing style, setting details
-
-CRITICAL GENDER RULES:
-- Stories about "motherhood", "sisterhood", "her journey" → female protagonist
-- Stories about "fatherhood", "his battle", "brotherhood" → male protagonist
-- Named characters → research typical gender (e.g., "Maria" = female, "James" = male)
-- When ambiguous → make a logical choice and be STRICTLY consistent
-
-CRITICAL CONSISTENCY RULES:
-- A character appearing in scene 1 MUST look IDENTICAL in scene 5 (unless showing different age)
-- If a dragon has "emerald scales and golden eyes" in scene 1, it has the SAME in all scenes
-- If a story has "the hero and the villain" → TWO distinct character descriptions
-- NEVER describe the same character differently unless they physically transform
-
-=== VISUAL PROMPTS ===
-- Each visualPrompt should be a CINEMATIC MOMENT—dynamic, emotional, visually striking
-- ALWAYS include the FULL character visual description from the characters bible for any character in the scene
-- Describe the scene as if directing a film: composition, lighting, mood, character positioning
-- Include camera angle suggestions: close-up, wide shot, over-the-shoulder, etc.
-- Ensure visual variety across scenes (different settings, scales, perspectives)
-
 ${
   includeTextOverlay
     ? `=== TEXT OVERLAY ===
@@ -2012,21 +1955,47 @@ ${
     : ""
 }
 
+=== CHARACTER BIBLE (REQUIRED) ===
+You MUST create a "characters" object defining EVERY character's EXACT visual appearance.
+This ensures visual CONSISTENCY - the same person looks identical across all scenes.
+
+For each character specify using "CharacterName_age" format if showing same person at different ages:
+- GENDER (male/female) - inferred from story context, names, pronouns
+- Species/type (human, dragon, unicorn, robot, etc.)
+- AGE: The SPECIFIC age for this version of the character
+- Physical appearance (color, build, features appropriate for age)
+- Distinguishing features that remain CONSTANT (eye color, facial structure, scales color for creatures)
+- Distinguishing features that CHANGE with age (size, wrinkles, body proportions)
+- Clothing/accessories (period-appropriate, age-appropriate, consistent within time period)
+
+Example:
+"Hero_child": "A 7-year-old human boy with bright blue eyes, messy brown hair, freckles, wearing patched medieval peasant clothes, curious expression"
+"Hero_adult": "A 30-year-old man with the SAME bright blue eyes and brown hair, now with slight stubble, wearing knight's armor, determined expression"
+
+=== PROMPT ENGINEERING RULES (FOR IMAGE PROMPTS) ===
+When generating the 'visualPrompt' for each scene, you MUST:
+1. COPY-PASTE the full physical description from the CHARACTER BIBLE into the prompt (do not just use the name)
+2. Describe the ACTION clearly (e.g., "running", "sitting", "celebrating")
+3. Define the SETTING (background, lighting, weather, environment)
+4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
+5. NO TEXT in images unless specifically requested
+${brandName ? `6. End with: "Brand watermark '${brandName}' in bottom-center as floating digital overlay"` : ""}
+
 === OUTPUT FORMAT ===
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
   "title": "Story Title",
   "characters": {
-    "Dragon": "A majestic MALE crimson dragon with golden-flecked scales, amber eyes with vertical pupils, two curved ivory horns, large leathery wings with orange membrane, long serpentine tail with a spaded tip, muscular build standing 15 feet tall",
-    "Hero": "A young FEMALE warrior, early 20s, dark skin with intricate face paint, braided black hair with golden beads, wearing leather armor with bronze accents, athletic build, determined expression, carries a curved sword",
-    "Unicorn": "A graceful FEMALE white unicorn with a shimmering silver mane, a single spiraling pearlescent horn, soft violet eyes, slender elegant build, flowing tail that sparkles with starlight"
+    "Dragon": "A majestic MALE crimson dragon with golden-flecked scales, amber eyes...",
+    "Hero_child": "A 7-year-old human boy with bright blue eyes, messy brown hair...",
+    "Hero_adult": "A 30-year-old man with the SAME bright blue eyes and brown hair..."
   },
   "scenes": [
     {
       "number": 1,
       "narrativeBeat": "opening",
       "voiceover": "Flowing narrative text...",
-      "visualPrompt": "A young FEMALE warrior, early 20s, dark skin with intricate face paint, braided black hair with golden beads, wearing leather armor with bronze accents, athletic build, determined expression - standing at the edge of a misty cliff, staring down at the valley below. Wide establishing shot at golden hour...",
+      "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
       "subVisuals": ["Optional additional visual moment..."],
       "duration": 25${
         includeTextOverlay
