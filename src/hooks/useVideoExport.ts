@@ -464,13 +464,11 @@ export function useVideoExport() {
             );
             const img = images[imageIndex] || null;
 
-            // Progress within current image segment for Ken Burns
+            // Track segment position for keyframe insertion at image transitions
             const segmentStart = imageIndex * framesPerImage;
-            const segmentEnd = Math.min((imageIndex + 1) * framesPerImage, sceneFrames);
-            const progressInSegment = (frameInScene - segmentStart) / (segmentEnd - segmentStart);
             
-            // Ken Burns effect: slow zoom
-            const scale = 1 + progressInSegment * 0.05;
+            // Static image (no zoom/Ken Burns effect to keep brand mark stable)
+            const scale = 1;
 
             ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, width, height);
