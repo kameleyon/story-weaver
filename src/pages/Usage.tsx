@@ -15,7 +15,9 @@ import {
   Plus,
   DollarSign,
   RefreshCw,
-  Loader2
+  Loader2,
+  Clock,
+  Coins
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,7 +101,7 @@ export default function Usage() {
     enabled: !!user?.id,
   });
 
-  // Fetch recent activity
+  // Fetch recent activity with cost and timing data
   const { data: recentActivity = [], isLoading: isLoadingActivity } = useQuery({
     queryKey: ["recent-activity", user?.id],
     queryFn: async () => {
@@ -110,7 +112,10 @@ export default function Usage() {
         .select(`
           id,
           created_at,
+          started_at,
+          completed_at,
           status,
+          scenes,
           project:projects(title)
         `)
         .eq("user_id", user.id)
@@ -118,7 +123,21 @@ export default function Usage() {
         .limit(10);
 
       if (error) throw error;
-      return data || [];
+      
+      // Extract cost tracking and calculate generation time
+      return (data || []).map(item => {
+        const scenes = item.scenes as any[];
+        const costTracking = scenes?.[0]?._meta?.costTracking;
+        const startedAt = item.started_at ? new Date(item.started_at).getTime() : null;
+        const completedAt = item.completed_at ? new Date(item.completed_at).getTime() : null;
+        const generationTimeMs = startedAt && completedAt ? completedAt - startedAt : null;
+        
+        return {
+          ...item,
+          costTracking,
+          generationTimeMs,
+        };
+      });
     },
     enabled: !!user?.id,
   });
@@ -409,47 +428,89 @@ export default function Usage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {recentActivity.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="flex items-center justify-between rounded-lg border border-border/30 bg-muted/20 p-3 sm:p-4"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                          <Video className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+              <div className="space-y-2">
+                  {recentActivity.map((activity) => {
+                    const formatTime = (ms: number | null) => {
+                      if (!ms) return null;
+                      const seconds = Math.floor(ms / 1000);
+                      const minutes = Math.floor(seconds / 60);
+                      const secs = seconds % 60;
+                      return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+                    };
+                    
+                    const isComplete = activity.status === "complete" || activity.status === "completed";
+                    const isFailed = activity.status === "failed" || activity.status === "error";
+                    
+                    return (
+                      <div
+                        key={activity.id}
+                        className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-3 py-2.5"
+                      >
+                        {/* Icon */}
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                          <Video className="h-4 w-4 text-primary" />
                         </div>
-                        <div className="min-w-0">
+                        
+                        {/* Title & Status */}
+                        <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">
                             {(activity.project as any)?.title || "Untitled Video"}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <Badge 
                               variant="secondary" 
-                              className={`text-[10px] ${
-                                activity.status === "completed" 
+                              className={`text-[10px] px-1.5 py-0 h-4 ${
+                                isComplete
                                   ? "bg-primary/20 text-primary" 
-                                  : activity.status === "failed"
-                                    ? "bg-muted text-muted-foreground"
-                                    : "bg-muted"
+                                  : isFailed
+                                    ? "bg-destructive/20 text-destructive"
+                                    : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
                               }`}
                             >
                               {activity.status}
                             </Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                            </span>
                           </div>
                         </div>
+                        
+                        {/* Stats - Only show for completed */}
+                        {isComplete && (
+                          <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground shrink-0">
+                            {/* Generation Time */}
+                            {activity.generationTimeMs && (
+                              <div className="flex items-center gap-1" title="Generation time">
+                                <Clock className="h-3 w-3" />
+                                <span>{formatTime(activity.generationTimeMs)}</span>
+                              </div>
+                            )}
+                            {/* Cost */}
+                            {activity.costTracking?.estimatedCostUsd && (
+                              <div className="flex items-center gap-1" title="Estimated cost">
+                                <DollarSign className="h-3 w-3" />
+                                <span>{activity.costTracking.estimatedCostUsd.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {/* Credits */}
+                            <div className="flex items-center gap-1" title="Credits used">
+                              <Coins className="h-3 w-3" />
+                              <span>1</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Mobile stats */}
+                        {isComplete && (
+                          <div className="flex sm:hidden items-center gap-2 text-[10px] text-muted-foreground shrink-0">
+                            {activity.costTracking?.estimatedCostUsd && (
+                              <span>${activity.costTracking.estimatedCostUsd.toFixed(2)}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground shrink-0">
-                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span className="hidden sm:inline">
-                          {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                        </span>
-                        <span className="sm:hidden">
-                          {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true }).replace(" ago", "")}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
