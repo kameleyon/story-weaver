@@ -1566,6 +1566,14 @@ Before writing the script, carefully analyze the content to identify:
    - A robber in scene 1 MUST be the SAME robber in scene 5
    - A police officer chasing should NOT become a different person
    - If there are 2 cops, describe BOTH distinctly and consistently
+5. TEMPORAL CONTEXT: If the content discusses different time periods of a character's life:
+   - Childhood scenes → show the character AS A CHILD (age 5-12)
+   - Teenage years → show the character AS A TEENAGER (age 13-19)
+   - Young adult → show the character AS A YOUNG ADULT (age 20-35)
+   - Middle-aged → show the character AS MIDDLE-AGED (age 40-55)
+   - Elderly → show the character AS ELDERLY (age 60+)
+   - CRITICAL: The SAME person at different ages must share key visual traits (eye color, facial structure, ethnicity, distinguishing features) but reflect the correct AGE for that scene
+6. HISTORICAL/CULTURAL CONTEXT: Match clothing, hairstyles, technology, and environments to the time period and culture being depicted
 
 Content: ${content}
 ${presenterGuidance}${characterGuidance}
@@ -1613,17 +1621,25 @@ You MUST create a "characters" object defining EVERY person/entity in the video.
 This ensures visual CONSISTENCY - the same person looks identical across all scenes.
 
 For each character specify:
-- Their role/name as the key
+- Their role/name as the key (use "CharacterName_age_period" format if showing same person at different ages, e.g., "Messi_childhood", "Messi_adult")
 - A DETAILED visual description including:
   - GENDER (male/female) - MUST match the content context
-  - Age range (child, young adult, middle-aged, elderly)
+  - AGE: The SPECIFIC age for this version of the character (critical for biographical content!)
   - Ethnicity/skin tone if mentioned or implied
-  - Hair (color, style, length)
-  - Body type (slim, athletic, stocky, etc.)
-  - Clothing (specific outfit they wear throughout)
-  - Distinguishing features (glasses, beard, tattoos, etc.)
+  - Hair (color, style, length - adjusted for age if needed)
+  - Body type (adjusted appropriately for age - child bodies differ from adult bodies!)
+  - Clothing (period-appropriate, age-appropriate, culture-appropriate)
+  - Distinguishing features that remain CONSTANT across ages (eye color, facial structure, birthmarks, etc.)
+  - Distinguishing features that CHANGE with age (wrinkles, hair color/loss, body changes)
 
-CRITICAL RULES:
+CRITICAL RULES FOR TEMPORAL CONSISTENCY:
+- If content is biographical (someone's life story, childhood, journey), create SEPARATE character entries for each life stage
+- Example: "Messi_child": "A 7-year-old Argentine boy with dark hair, brown eyes, small and thin build, wearing modest 1990s clothing, playful expression"
+- Example: "Messi_adult": "A 35-year-old Argentine man with the SAME dark hair and brown eyes, athletic build, wearing Inter Miami jersey, determined expression"
+- The SAME PERSON at different ages MUST share: eye color, facial structure, ethnicity, key distinguishing features
+- The SAME PERSON at different ages WILL DIFFER in: body size, clothing style, hairstyle, wrinkles, setting
+
+GENERAL RULES:
 - If content mentions "Leo Messi" → male footballer, Argentine, athletic build
 - If content discusses "motherhood" → female protagonist, NOT a man in a suit
 - If content has "police vs robber" → TWO distinct characters, both consistent throughout
@@ -1762,6 +1778,7 @@ Return ONLY valid JSON:
           sceneIndex: idx,
           costTracking,
           phaseTimings: { script: phaseTime },
+          characterBible: parsedScript.characters || null, // Store character bible for image generation
         },
       })),
       started_at: new Date().toISOString(),
@@ -1891,6 +1908,12 @@ Before writing the story, carefully analyze the story idea to identify:
 4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
    - If a dragon appears, it must be the SAME dragon every time
    - If there are multiple cops, describe EACH distinctly and track them
+5. TEMPORAL CONTEXT: If the story spans different time periods or shows a character's journey through life:
+   - Childhood scenes → show the character AS A CHILD with appropriate age, size, and clothing
+   - Past events → show period-appropriate settings, clothing, and technology
+   - Present day → show current-era elements
+   - CRITICAL: The SAME character at different ages must share key visual traits but reflect the correct AGE
+6. CULTURAL/ENVIRONMENTAL CONTEXT: Match settings, clothing, and atmosphere to the time, place, and culture being depicted
 
 === STORY IDEA ===
 ${content}
@@ -1933,14 +1956,22 @@ You MUST include a "characters" object defining EVERY character's EXACT visual a
 This is NON-NEGOTIABLE for visual consistency across scenes.
 
 For each character, specify:
-- name/role as the key
+- name/role as the key (use "CharacterName_age" format if showing same person at different ages, e.g., "Hero_child", "Hero_adult")
 - A DETAILED visual description including:
   - GENDER (male/female) - inferred from story context, names, pronouns
   - Species/type (human, dragon, unicorn, robot, etc.)
-  - Age (if applicable)
-  - Physical appearance (color, build, features)
-  - Distinguishing features (horns, wings, scars, clothing, etc.)
-  - Clothing/accessories (consistent throughout unless story dictates change)
+  - AGE: The SPECIFIC age for this version of the character
+  - Physical appearance (color, build, features appropriate for age)
+  - Distinguishing features that remain CONSTANT (eye color, facial structure, scales color for creatures)
+  - Distinguishing features that CHANGE with age (size, wrinkles, body proportions)
+  - Clothing/accessories (period-appropriate, age-appropriate, consistent within time period)
+
+CRITICAL TEMPORAL RULES:
+- If the story shows a character's life journey, create SEPARATE entries for each life stage
+- Example: "Hero_child": "A 7-year-old human boy with bright blue eyes, messy brown hair, freckles, wearing patched medieval peasant clothes, curious expression"
+- Example: "Hero_adult": "A 30-year-old man with the SAME bright blue eyes and brown hair, now with slight stubble, wearing knight's armor, determined expression"
+- The SAME character at different ages MUST share: eye color, hair color, ethnicity, key distinguishing features
+- The SAME character at different ages WILL DIFFER in: body size/proportions, clothing style, setting details
 
 CRITICAL GENDER RULES:
 - Stories about "motherhood", "sisterhood", "her journey" → female protagonist
@@ -1949,7 +1980,7 @@ CRITICAL GENDER RULES:
 - When ambiguous → make a logical choice and be STRICTLY consistent
 
 CRITICAL CONSISTENCY RULES:
-- A character appearing in scene 1 MUST look IDENTICAL in scene 5
+- A character appearing in scene 1 MUST look IDENTICAL in scene 5 (unless showing different age)
 - If a dragon has "emerald scales and golden eyes" in scene 1, it has the SAME in all scenes
 - If a story has "the hero and the villain" → TWO distinct character descriptions
 - NEVER describe the same character differently unless they physically transform
@@ -2403,7 +2434,13 @@ BRANDING: Overlay the text "${brandMark}" as a watermark in the bottom-center of
 CHARACTER CONSISTENCY BIBLE (use EXACT descriptions for any characters that appear):
 ${characterDescriptions}
 
-CRITICAL: If any of these characters appear in this scene, they MUST match their description EXACTLY. Do not deviate from the character bible.`;
+CRITICAL CHARACTER RULES:
+1. If any of these characters appear in this scene, they MUST match their description EXACTLY
+2. PAY ATTENTION TO AGE: If the scene mentions childhood/youth/past, use the corresponding age-specific character (e.g., "Messi_child" not "Messi_adult")
+3. TEMPORAL CONTEXT: Match the character's age to the TIME PERIOD being depicted in this specific scene
+4. VISUAL CONTINUITY: Characters at different ages must share key traits (eye color, ethnicity, facial structure) but reflect correct age
+5. ENVIRONMENTAL CONTEXT: Match clothing, hairstyles, and surroundings to the time period and location described
+6. Do NOT show a 35-year-old adult when depicting someone's childhood - show them as an actual child`;
     }
 
     // Build detailed, elaborate image generation prompt
