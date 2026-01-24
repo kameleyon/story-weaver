@@ -2401,7 +2401,7 @@ Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-BRANDING: Overlay the text "${brandMark}" as a watermark in the bottom-center of the image. Use the font "Inter" (clean, modern, bold sans-serif). The text must appear as a floating digital layer—white with slight transparency or a subtle drop shadow—distinct from the scene's lighting. Ensure it looks like a professional media trademark or copyright stamp, consistently placed at the bottom edge.`;
+BRANDING: Overlay the text "${brandMark}" as a SMALL, SUBTLE watermark in the bottom-center of the image. Use the font "Inter" in LIGHT weight (thin, not bold)—small font size approximately 2-3% of the image height. The text must appear as a delicate floating digital layer—white with 60-70% opacity—distinct from the scene's lighting. Keep it understated like a professional media trademark, NOT large or prominent. Consistently placed at the very bottom edge with minimal visual impact.`;
     }
 
     // Add character consistency instructions if we have a character bible
