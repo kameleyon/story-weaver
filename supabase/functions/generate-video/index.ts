@@ -1550,7 +1550,13 @@ Include these character details in EVERY visualPrompt that features people.
 `
     : "";
 
-  const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
+const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
+
+=== LANGUAGE REQUIREMENT (CRITICAL) ===
+ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
+The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
+If the input content is in another language (French, Spanish, Portuguese, etc.), TRANSLATE it to English for the output.
+We do NOT support other languages at this time.
 
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the script, carefully analyze the content to identify:
@@ -1895,6 +1901,12 @@ async function handleStorytellingScriptPhase(
     : "";
 
 const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
+
+=== LANGUAGE REQUIREMENT (CRITICAL) ===
+ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
+The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
+If the input content is in another language (French, Spanish, Portuguese, etc.), TRANSLATE it to English for the output.
+We do NOT support other languages at this time.
 
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the story, carefully analyze the story idea to identify:
