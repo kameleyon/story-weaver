@@ -37,11 +37,11 @@ interface StyleSelectorProps {
 const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview: string }[] = [
   { id: "minimalist", label: "Minimalist", icon: Sparkles, preview: minimalistPreview },
   { id: "doodle", label: "Urban Doodle", icon: Pencil, preview: doodlePreview },
+  { id: "stick", label: "Stick Figure", icon: Users, preview: stickPreview },
+  { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
   { id: "3d-pixar", label: "3D Pixar", icon: Box, preview: pixarPreview },
   { id: "storybook", label: "Storybook", icon: Palette, preview: storybookPreview },
-  { id: "stick", label: "Stick Figure", icon: Users, preview: stickPreview },
   { id: "anime", label: "Anime", icon: Cherry, preview: animePreview },
-  { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "moody", label: "Moody", icon: CloudMoon, preview: moodyPreview },
   { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
