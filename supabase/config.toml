@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.clone-voice]
 verify_jwt = false
+
+[functions.delete-voice]
+verify_jwt = false

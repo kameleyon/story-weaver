@@ -13,7 +13,8 @@ import {
   VolumeX,
   ThumbsUp,
   Headphones,
-  Pause
+  Pause,
+  AlertCircle
 } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
@@ -29,6 +30,13 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSidebarState } from "@/hooks/useSidebarState";
 import { useNavigate } from "react-router-dom";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function VoiceLab() {
   const navigate = useNavigate();
@@ -63,12 +71,16 @@ export default function VoiceLab() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
 
+  // Modal state for existing voice warning
+  const [showExistingVoiceModal, setShowExistingVoiceModal] = useState(false);
+
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, []);
+
 
   const startRecording = async () => {
     try {
@@ -204,6 +216,22 @@ export default function VoiceLab() {
   const hasExistingVoice = voices.length >= 1;
   const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasExistingVoice && consentAccepted;
   const isReady = hasAudio;
+
+  // Show modal when user has existing voice and tries to add audio
+  useEffect(() => {
+    if (hasAudio && voices.length >= 1) {
+      setShowExistingVoiceModal(true);
+    }
+  }, [hasAudio, voices.length]);
+
+  // Scroll to My Voices section when modal action is taken
+  const scrollToMyVoices = () => {
+    const myVoicesSection = document.getElementById("my-voices-section");
+    if (myVoicesSection) {
+      myVoicesSection.scrollIntoView({ behavior: "smooth" });
+    }
+    setShowExistingVoiceModal(false);
+  };
 
   return (
     <SidebarProvider defaultOpen={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -487,7 +515,7 @@ export default function VoiceLab() {
 
               {/* My Voices Section */}
               {voices.length > 0 && (
-                <Card className="border-border/50">
+                <Card id="my-voices-section" className="border-border/50">
                   <CardHeader>
                     <CardTitle className="text-lg">My Voices</CardTitle>
                   </CardHeader>
@@ -517,6 +545,32 @@ export default function VoiceLab() {
             </div>
           </div>
         </main>
+
+        {/* Existing Voice Warning Modal */}
+        <Dialog open={showExistingVoiceModal} onOpenChange={setShowExistingVoiceModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-primary" />
+                Voice Limit Reached
+              </DialogTitle>
+              <DialogDescription className="pt-2">
+                You already have a cloned voice. Delete it to create a new one.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowExistingVoiceModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={scrollToMyVoices}>
+                Go to My Voices
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </SidebarProvider>
   );
