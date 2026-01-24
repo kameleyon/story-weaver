@@ -131,7 +131,7 @@ export function useVoiceCloning() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-voices"] });
-      toast.success("Voice deleted from AudioMax and ElevenLabs");
+      toast.success("Your cloned voice was successfully deleted");
     },
     onError: (error: Error) => {
       toast.error("Failed to delete voice: " + error.message);
