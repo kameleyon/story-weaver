@@ -1641,7 +1641,7 @@ When generating the 'visualPrompt' for each scene, you MUST:
 3. Define the SETTING (background, lighting, weather, environment)
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
 5. NO TEXT in images unless specifically requested
-${brandMark ? `6. End with: "Brand watermark '${brandMark}' in bottom-center as floating digital overlay"` : ""}
+${brandMark ? `6. End with: "Small subtle brand watermark '${brandMark}' in bottom-center, Inter Light font, thin weight, 60-70% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -1979,7 +1979,7 @@ When generating the 'visualPrompt' for each scene, you MUST:
 3. Define the SETTING (background, lighting, weather, environment)
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
 5. NO TEXT in images unless specifically requested
-${brandName ? `6. End with: "Brand watermark '${brandName}' in bottom-center as floating digital overlay"` : ""}
+${brandName ? `6. End with: "Small subtle brand watermark '${brandName}' in bottom-center, Inter Light font, thin weight, 60-70% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
