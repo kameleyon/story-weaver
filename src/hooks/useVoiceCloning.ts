@@ -105,19 +105,33 @@ export function useVoiceCloning() {
     },
   });
 
-  // Delete voice mutation
+  // Delete voice mutation - also deletes from ElevenLabs
   const deleteVoiceMutation = useMutation({
     mutationFn: async (voiceId: string) => {
-      const { error } = await supabase
-        .from("user_voices")
-        .delete()
-        .eq("id", voiceId);
+      // Call delete-voice edge function to delete from both ElevenLabs and DB
+      const { data, error } = await supabase.functions.invoke("delete-voice", {
+        body: { voiceId },
+      });
+
+      if (error) {
+        const errorBody = error.context?.body;
+        if (errorBody) {
+          try {
+            const parsed = JSON.parse(errorBody);
+            throw new Error(parsed.error || "Failed to delete voice");
+          } catch {
+            throw new Error(error.message || "Failed to delete voice");
+          }
+        }
+        throw new Error(error.message || "Failed to delete voice");
+      }
       
-      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Failed to delete voice");
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-voices"] });
-      toast.success("Voice deleted");
+      toast.success("Voice deleted from AudioMax and ElevenLabs");
     },
     onError: (error: Error) => {
       toast.error("Failed to delete voice: " + error.message);

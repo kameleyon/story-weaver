@@ -103,9 +103,11 @@ serve(async (req) => {
     if (description) {
       formData.append("description", description);
     }
+    // Enable background noise removal
+    formData.append("remove_background_noise", "true");
 
     // Call ElevenLabs Instant Voice Cloning API
-    console.log("Calling ElevenLabs API...");
+    console.log("Calling ElevenLabs API with noise removal enabled...");
     const elevenLabsResponse = await fetch("https://api.elevenlabs.io/v1/voices/add", {
       method: "POST",
       headers: {
@@ -144,14 +146,72 @@ serve(async (req) => {
     const voiceId = elevenLabsResult.voice_id;
     console.log(`Voice cloned successfully! Voice ID: ${voiceId}`);
 
-    // Insert into user_voices table
+    // Generate a test phrase audio sample with the cloned voice
+    const testPhrase = "I'm going to read for twenty seconds without rushing: The goal is steady rhythm, clear diction, and natural breath pauses—no robotic cadence, no random pitch jumps.";
+    console.log("Generating test phrase audio with cloned voice...");
+    
+    let sampleUrl = audioUrl; // Default to original audio if TTS fails
+    
+    try {
+      const ttsResponse = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: testPhrase,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+              style: 0.3,
+              use_speaker_boost: true,
+            },
+          }),
+        }
+      );
+
+      if (ttsResponse.ok) {
+        const audioBuffer = await ttsResponse.arrayBuffer();
+        console.log(`Test phrase audio generated: ${audioBuffer.byteLength} bytes`);
+        
+        // Upload the generated sample to Supabase storage
+        const sampleFileName = `${user.id}/${Date.now()}-sample.mp3`;
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from("voice_samples")
+          .upload(sampleFileName, audioBuffer, {
+            contentType: "audio/mpeg",
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          const { data: urlData } = supabaseAdmin.storage
+            .from("voice_samples")
+            .getPublicUrl(sampleFileName);
+          sampleUrl = urlData.publicUrl;
+          console.log("Test phrase sample uploaded:", sampleUrl);
+        } else {
+          console.error("Failed to upload sample:", uploadError);
+        }
+      } else {
+        console.error("TTS generation failed:", ttsResponse.status);
+      }
+    } catch (ttsError) {
+      console.error("TTS error (non-fatal):", ttsError);
+      // Continue with original audio URL as sample
+    }
+
+    // Insert into user_voices table with the generated sample URL
     const { data: insertData, error: insertError } = await supabaseAdmin
       .from("user_voices")
       .insert({
         user_id: user.id,
         voice_name: voiceName,
         voice_id: voiceId,
-        sample_url: audioUrl,
+        sample_url: sampleUrl,
         description: description || null,
       })
       .select()
