@@ -1012,6 +1012,165 @@ async function transformAudioWithElevenLabsSTS(
 }
 
 // ============= TTS GENERATION (Replicate Chatterbox) =============
+// ============= TEXT CHUNKING FOR LONG SCRIPTS =============
+// Replicate Chatterbox has a ~500 character limit that causes silent truncation.
+// Split long text into sentence-bounded chunks, generate audio for each, and concatenate.
+const MAX_TTS_CHUNK_CHARS = 400; // Safe limit under 500
+
+function splitTextIntoChunks(text: string, maxChars: number = MAX_TTS_CHUNK_CHARS): string[] {
+  if (text.length <= maxChars) return [text];
+  
+  const chunks: string[] = [];
+  let remaining = text;
+  
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChars) {
+      chunks.push(remaining.trim());
+      break;
+    }
+    
+    // Find the best split point (sentence end) within maxChars
+    let splitIndex = -1;
+    const searchWindow = remaining.substring(0, maxChars);
+    
+    // Prefer splitting at sentence boundaries: . ! ?
+    const sentenceEnders = [". ", "! ", "? ", ".\n", "!\n", "?\n"];
+    for (const ender of sentenceEnders) {
+      const idx = searchWindow.lastIndexOf(ender);
+      if (idx > splitIndex) splitIndex = idx + ender.length - 1;
+    }
+    
+    // Fallback to comma or dash
+    if (splitIndex < 50) {
+      const commaIdx = searchWindow.lastIndexOf(", ");
+      const dashIdx = searchWindow.lastIndexOf("—");
+      splitIndex = Math.max(commaIdx, dashIdx);
+      if (splitIndex > 0) splitIndex += 1;
+    }
+    
+    // Last resort: split at space
+    if (splitIndex < 50) {
+      splitIndex = searchWindow.lastIndexOf(" ");
+    }
+    
+    // Emergency: hard cut
+    if (splitIndex < 50) {
+      splitIndex = maxChars;
+    }
+    
+    chunks.push(remaining.substring(0, splitIndex).trim());
+    remaining = remaining.substring(splitIndex).trim();
+  }
+  
+  console.log(`[TTS] Split text into ${chunks.length} chunks: ${chunks.map(c => c.length).join(", ")} chars`);
+  return chunks;
+}
+
+// Concatenate WAV files (assuming same sample rate/channels)
+function concatenateWavBuffers(buffers: Uint8Array[]): Uint8Array {
+  if (buffers.length === 0) return new Uint8Array(0);
+  if (buffers.length === 1) return buffers[0];
+  
+  // Extract PCM data from each WAV (skip 44-byte header)
+  const pcmBuffers: Uint8Array[] = [];
+  let totalPcmLength = 0;
+  
+  for (const buf of buffers) {
+    if (buf.length > 44) {
+      const pcm = buf.slice(44);
+      pcmBuffers.push(pcm);
+      totalPcmLength += pcm.length;
+    }
+  }
+  
+  // Build new WAV with concatenated PCM
+  const header = buffers[0].slice(0, 44);
+  const result = new Uint8Array(44 + totalPcmLength);
+  result.set(header, 0);
+  
+  // Update data size in header (bytes 40-43)
+  const dataSize = totalPcmLength;
+  result[40] = dataSize & 0xff;
+  result[41] = (dataSize >> 8) & 0xff;
+  result[42] = (dataSize >> 16) & 0xff;
+  result[43] = (dataSize >> 24) & 0xff;
+  
+  // Update file size in header (bytes 4-7)
+  const fileSize = 36 + totalPcmLength;
+  result[4] = fileSize & 0xff;
+  result[5] = (fileSize >> 8) & 0xff;
+  result[6] = (fileSize >> 16) & 0xff;
+  result[7] = (fileSize >> 24) & 0xff;
+  
+  // Copy PCM data
+  let offset = 44;
+  for (const pcm of pcmBuffers) {
+    result.set(pcm, offset);
+    offset += pcm.length;
+  }
+  
+  return result;
+}
+
+async function generateSingleChunkAudio(
+  text: string,
+  chunkIndex: number,
+  totalChunks: number,
+  replicateApiKey: string,
+): Promise<Uint8Array> {
+  console.log(`[TTS] Generating chunk ${chunkIndex + 1}/${totalChunks} (${text.length} chars)`);
+  
+  const createResponse = await fetch(
+    "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          text: text,
+          voice: "Marisol",
+          temperature: 1,
+          top_p: 0.9,
+          top_k: 1800,
+          repetition_penalty: 1.5,
+        },
+      }),
+    },
+  );
+
+  if (!createResponse.ok) {
+    const errText = await createResponse.text();
+    throw new Error(`Replicate TTS chunk ${chunkIndex + 1} failed: ${createResponse.status} - ${errText}`);
+  }
+
+  let prediction = await createResponse.json();
+  
+  // Poll if not completed
+  while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+    await sleep(1000);
+    const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+      headers: { Authorization: `Bearer ${replicateApiKey}` },
+    });
+    prediction = await pollResponse.json();
+  }
+
+  if (prediction.status === "failed") {
+    throw new Error(prediction.error || `TTS chunk ${chunkIndex + 1} prediction failed`);
+  }
+
+  const outputUrl = prediction.output;
+  if (!outputUrl) throw new Error(`No output URL from TTS chunk ${chunkIndex + 1}`);
+
+  const audioResponse = await fetch(outputUrl);
+  if (!audioResponse.ok) throw new Error(`Failed to download audio chunk ${chunkIndex + 1}`);
+
+  return new Uint8Array(await audioResponse.arrayBuffer());
+}
+
 async function generateSceneAudioReplicate(
   scene: Scene,
   sceneIndex: number,
@@ -1035,63 +1194,25 @@ async function generateSceneAudioReplicate(
 
   for (let attempt = 1; attempt <= TTS_ATTEMPTS; attempt++) {
     try {
-      console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Starting Replicate Chatterbox TTS`);
-
-      // Use official model endpoint (no version hash needed for official models)
-      const createResponse = await fetch(
-        "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${replicateApiKey}`,
-            "Content-Type": "application/json",
-            Prefer: "wait",
-          },
-          body: JSON.stringify({
-            input: {
-              text: voiceoverText,
-              voice: "Marisol",
-              temperature: 1,
-              top_p: 0.9,
-              top_k: 1800,
-              repetition_penalty: 1.5,
-            },
-          }),
-        },
-      );
-
-      if (!createResponse.ok) {
-        const errText = await createResponse.text();
-        throw new Error(`Replicate TTS failed: ${createResponse.status} - ${errText}`);
+      console.log(`[TTS] Scene ${sceneIndex + 1} attempt ${attempt} - Text length: ${voiceoverText.length} chars`);
+      
+      // Split text into chunks if needed
+      const chunks = splitTextIntoChunks(voiceoverText);
+      const audioBuffers: Uint8Array[] = [];
+      
+      // Generate audio for each chunk
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkAudio = await generateSingleChunkAudio(chunks[i], i, chunks.length, replicateApiKey);
+        audioBuffers.push(chunkAudio);
+        console.log(`[TTS] Scene ${sceneIndex + 1} chunk ${i + 1}/${chunks.length} OK - ${chunkAudio.length} bytes`);
       }
-
-      let prediction = await createResponse.json();
-      console.log(`[TTS] Scene ${sceneIndex + 1} prediction status: ${prediction.status}, id: ${prediction.id}`);
-
-      // Poll if not completed
-      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-        await sleep(1000);
-        const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-          headers: { Authorization: `Bearer ${replicateApiKey}` },
-        });
-        prediction = await pollResponse.json();
-      }
-
-      if (prediction.status === "failed") {
-        throw new Error(prediction.error || "TTS prediction failed");
-      }
-
-      const outputUrl = prediction.output;
-      if (!outputUrl) throw new Error("No output URL from TTS");
-
-      console.log(`[TTS] Scene ${sceneIndex + 1} output URL: ${outputUrl.substring(0, 80)}...`);
-
-      // Download and upload to Supabase
-      const audioResponse = await fetch(outputUrl);
-      if (!audioResponse.ok) throw new Error("Failed to download audio");
-
-      const audioBytes = new Uint8Array(await audioResponse.arrayBuffer());
-      console.log(`[TTS] Scene ${sceneIndex + 1} audio OK - ${audioBytes.length} bytes`);
+      
+      // Concatenate all chunks
+      const audioBytes = chunks.length > 1 
+        ? concatenateWavBuffers(audioBuffers)
+        : audioBuffers[0];
+      
+      console.log(`[TTS] Scene ${sceneIndex + 1} total audio: ${audioBytes.length} bytes (${chunks.length} chunks)`);
 
       // Estimate duration (~44100 samples/sec, 16-bit = 2 bytes/sample)
       durationSeconds = Math.max(1, audioBytes.length / (44100 * 2));
