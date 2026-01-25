@@ -460,6 +460,260 @@ function pcmToWav(
   return wavArray;
 }
 
+// ============= CHUNK & STITCH ENGINE (Bypass ~30s TTS limit) =============
+
+// Split text into safe chunks at sentence boundaries (~400 chars each)
+function splitTextIntoChunks(text: string, maxChars: number = 400): string[] {
+  // Split by sentence terminators
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  for (const sentence of sentences) {
+    const trimmedSentence = sentence.trim();
+    if (!trimmedSentence) continue;
+
+    // If adding this sentence would exceed max, save current and start new
+    if ((currentChunk + " " + trimmedSentence).trim().length > maxChars && currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+      currentChunk = trimmedSentence;
+    } else {
+      currentChunk = (currentChunk + " " + trimmedSentence).trim();
+    }
+  }
+
+  // Don't forget the last chunk
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  // If no chunks, return original text as single chunk
+  return chunks.length > 0 ? chunks : [text.trim()];
+}
+
+// Extract raw PCM data from a WAV file (strip header)
+function extractPcmFromWav(wavBytes: Uint8Array): { pcm: Uint8Array; sampleRate: number; numChannels: number; bitsPerSample: number } {
+  const view = new DataView(wavBytes.buffer, wavBytes.byteOffset, wavBytes.byteLength);
+
+  // Read header info (standard WAV has 44-byte header)
+  const numChannels = view.getUint16(22, true);
+  const sampleRate = view.getUint32(24, true);
+  const bitsPerSample = view.getUint16(34, true);
+
+  // Find 'data' chunk - standard position is at offset 36
+  // But some WAVs have extra chunks, so we search for it
+  let dataOffset = 36;
+  let dataSize = 0;
+
+  // Search for 'data' chunk ID (0x64617461)
+  for (let offset = 12; offset < Math.min(wavBytes.length - 8, 200); offset++) {
+    if (
+      wavBytes[offset] === 0x64 &&
+      wavBytes[offset + 1] === 0x61 &&
+      wavBytes[offset + 2] === 0x74 &&
+      wavBytes[offset + 3] === 0x61
+    ) {
+      dataOffset = offset + 8; // Skip 'data' + size (4 + 4 bytes)
+      dataSize = view.getUint32(offset + 4, true);
+      break;
+    }
+  }
+
+  // If no 'data' chunk found, assume standard 44-byte header
+  if (dataSize === 0) {
+    dataOffset = 44;
+    dataSize = wavBytes.length - 44;
+  }
+
+  const pcm = wavBytes.slice(dataOffset, dataOffset + dataSize);
+  return { pcm, sampleRate, numChannels, bitsPerSample };
+}
+
+// Merge multiple WAV buffers into one seamless audio file
+function stitchWavBuffers(buffers: Uint8Array[]): Uint8Array {
+  if (buffers.length === 0) return new Uint8Array(0);
+  if (buffers.length === 1) return buffers[0];
+
+  // Extract params from first WAV
+  const firstParsed = extractPcmFromWav(buffers[0]);
+  const { sampleRate, numChannels, bitsPerSample } = firstParsed;
+
+  // Extract PCM from all buffers
+  const pcmParts = buffers.map((b) => extractPcmFromWav(b).pcm);
+
+  // Calculate total PCM length
+  const totalLength = pcmParts.reduce((acc, part) => acc + part.length, 0);
+  const mergedPcm = new Uint8Array(totalLength);
+
+  // Concatenate all PCM data
+  let offset = 0;
+  for (const part of pcmParts) {
+    mergedPcm.set(part, offset);
+    offset += part.length;
+  }
+
+  // Build final WAV with merged PCM
+  return pcmToWav(mergedPcm, sampleRate, numChannels, bitsPerSample);
+}
+
+// Call Replicate Chatterbox TTS for a single chunk
+async function callReplicateTTSChunk(
+  text: string,
+  replicateApiKey: string,
+  chunkIndex: number,
+): Promise<Uint8Array> {
+  console.log(`[TTS-Chunk] Chunk ${chunkIndex + 1}: ${text.substring(0, 60)}... (${text.length} chars)`);
+
+  const createResponse = await fetch(
+    "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          text: text,
+          voice: "Marisol",
+          temperature: 1,
+          top_p: 0.9,
+          top_k: 1800,
+          repetition_penalty: 1.5,
+        },
+      }),
+    },
+  );
+
+  if (!createResponse.ok) {
+    const errText = await createResponse.text();
+    throw new Error(`Replicate TTS chunk ${chunkIndex + 1} failed: ${createResponse.status} - ${errText}`);
+  }
+
+  let prediction = await createResponse.json();
+
+  // Poll if not completed
+  while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+    await sleep(1000);
+    const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+      headers: { Authorization: `Bearer ${replicateApiKey}` },
+    });
+    prediction = await pollResponse.json();
+  }
+
+  if (prediction.status === "failed") {
+    throw new Error(`TTS chunk ${chunkIndex + 1} prediction failed: ${prediction.error || "Unknown error"}`);
+  }
+
+  const outputUrl = prediction.output;
+  if (!outputUrl) throw new Error(`No output URL from TTS chunk ${chunkIndex + 1}`);
+
+  // Download audio
+  const audioResponse = await fetch(outputUrl);
+  if (!audioResponse.ok) throw new Error(`Failed to download audio for chunk ${chunkIndex + 1}`);
+
+  return new Uint8Array(await audioResponse.arrayBuffer());
+}
+
+// Generate audio with chunking for long scripts
+async function generateSceneAudioReplicateChunked(
+  scene: Scene,
+  sceneIndex: number,
+  replicateApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  isRegeneration: boolean = false,
+): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
+
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  try {
+    // Split text into chunks to bypass ~30s limit
+    const chunks = splitTextIntoChunks(voiceoverText, 400);
+    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Splitting into ${chunks.length} chunks (${voiceoverText.length} total chars)`);
+
+    if (chunks.length === 1) {
+      // Short text - use regular single-call TTS
+      console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Single chunk, using direct call`);
+      const audioBuffer = await callReplicateTTSChunk(chunks[0], replicateApiKey, 0);
+      
+      const durationSeconds = Math.max(1, audioBuffer.length / (44100 * 2));
+      
+      const audioPath = isRegeneration
+        ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+        : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+        
+      const { error: uploadError } = await supabase.storage
+        .from("audio")
+        .upload(audioPath, audioBuffer, { contentType: "audio/wav", upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: signedData, error: signError } = await supabase.storage
+        .from("audio")
+        .createSignedUrl(audioPath, 604800);
+
+      if (signError || !signedData?.signedUrl) {
+        throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+      }
+
+      return { url: signedData.signedUrl, durationSeconds };
+    }
+
+    // Multiple chunks - generate in parallel and stitch
+    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Generating ${chunks.length} chunks in parallel...`);
+    
+    const chunkPromises = chunks.map((chunk, idx) =>
+      callReplicateTTSChunk(chunk, replicateApiKey, idx)
+        .catch((err) => {
+          console.error(`[TTS-Chunked] Chunk ${idx + 1} failed:`, err.message);
+          throw err;
+        })
+    );
+
+    const audioBuffers = await Promise.all(chunkPromises);
+    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: All ${audioBuffers.length} chunks generated. Stitching...`);
+
+    // Stitch all chunks together
+    const finalWavBytes = stitchWavBuffers(audioBuffers);
+    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Final stitched audio: ${finalWavBytes.length} bytes`);
+
+    // Calculate duration (~44100 samples/sec, 16-bit = 2 bytes/sample)
+    const durationSeconds = Math.max(1, finalWavBytes.length / (44100 * 2));
+
+    const audioPath = isRegeneration
+      ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+      : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+      
+    const { error: uploadError } = await supabase.storage
+      .from("audio")
+      .upload(audioPath, finalWavBytes, { contentType: "audio/wav", upsert: true });
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+    const { data: signedData, error: signError } = await supabase.storage
+      .from("audio")
+      .createSignedUrl(audioPath, 604800);
+
+    if (signError || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+    }
+
+    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: ✅ Stitched audio uploaded (${durationSeconds.toFixed(1)}s)`);
+    return { url: signedData.signedUrl, durationSeconds };
+
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown TTS chunking error";
+    console.error(`[TTS-Chunked] Scene ${sceneIndex + 1} error:`, errorMsg);
+    return { url: null, error: errorMsg };
+  }
+}
+
 // Extra sanitization for Gemini TTS to avoid content filtering
 function sanitizeForGeminiTTS(text: string): string {
   let sanitized = sanitizeVoiceover(text);
@@ -1270,10 +1524,10 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 4: Default (English/other languages) ==========
-  // Use Replicate Chatterbox
-  const result = await generateSceneAudioReplicate(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
+  // Use Replicate Chatterbox with Chunk & Stitch for long scripts
+  const result = await generateSceneAudioReplicateChunked(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
   if (result.url) {
-    console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox`);
+    console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox (Chunked)`);
     return { ...result, provider: "Replicate Chatterbox" };
   }
   return result;
