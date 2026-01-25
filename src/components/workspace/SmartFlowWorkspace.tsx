@@ -51,7 +51,10 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
 
-    const canGenerate = dataSource.trim().length > 10 && extractionPrompt.trim().length > 5;
+    const MAX_DATA_SOURCE_LENGTH = 100000;
+    const dataSourceLength = dataSource.length;
+    const isDataSourceTooLong = dataSourceLength > MAX_DATA_SOURCE_LENGTH;
+    const canGenerate = dataSource.trim().length > 10 && extractionPrompt.trim().length > 5 && !isDataSourceTooLong;
 
     const resetWorkspace = () => {
       setDataSource("");
@@ -316,9 +319,22 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                       onChange={(e) => setDataSource(e.target.value)}
                       className="min-h-[180px] rounded-xl border-border/50 bg-muted/50 dark:bg-white/10 resize-none focus:bg-background text-sm leading-relaxed"
                     />
-                    <p className="text-xs text-muted-foreground/60 px-1">
-                      Drop your data bank, research notes, or any content to extract insights from
-                    </p>
+                    <div className="flex items-center justify-between px-1">
+                      <p className="text-xs text-muted-foreground/60">
+                        Drop your data bank, research notes, or any content to extract insights from
+                      </p>
+                      <span className={cn(
+                        "text-xs font-medium",
+                        isDataSourceTooLong ? "text-destructive" : "text-muted-foreground/60"
+                      )}>
+                        {dataSourceLength.toLocaleString()} / {MAX_DATA_SOURCE_LENGTH.toLocaleString()}
+                      </span>
+                    </div>
+                    {isDataSourceTooLong && (
+                      <p className="text-xs text-destructive px-1">
+                        Content exceeds maximum length. Please reduce to under 100,000 characters.
+                      </p>
+                    )}
                   </div>
 
                   {/* Extraction Prompt */}
