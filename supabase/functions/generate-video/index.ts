@@ -9,7 +9,7 @@ const corsHeaders = {
 
 // ============= INPUT VALIDATION =============
 const INPUT_LIMITS = {
-  content: 50000, // Max 50K characters for content
+  content: 500000, // Max 500K characters for content (Smart Flow data sources)
   format: 20,
   length: 20,
   style: 50,
