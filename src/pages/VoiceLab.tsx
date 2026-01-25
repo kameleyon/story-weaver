@@ -255,9 +255,17 @@ export default function VoiceLab() {
           <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
             <div className="max-w-4xl mx-auto space-y-8">
               {/* Title */}
-              <div className="space-y-2">
-                <h1 className="text-2xl md:text-3xl font-bold">Voice Lab</h1>
-                <p className="text-muted-foreground">Create your digital twin with AI voice cloning</p>
+              <div className="text-center space-y-3">
+                <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  <Mic className="h-3.5 w-3.5" />
+                  Voice Lab
+                </span>
+                <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+                  Clone Your Voice
+                </h1>
+                <p className="text-sm text-muted-foreground/70">
+                  Create your digital twin with AI voice cloning
+                </p>
               </div>
 
               {/* Tips Section */}
