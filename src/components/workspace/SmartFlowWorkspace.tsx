@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp } from "lucide-react";
+import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp, Download, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,8 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 import { FormatSelector, VideoFormat } from "./FormatSelector";
 import { VoiceSelector, VoiceSelection } from "./VoiceSelector";
@@ -81,15 +83,77 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       setIsGenerating(true);
       setError(null);
 
-      // TODO: Implement Smart Flow generation pipeline
-      // For now, simulate a generation
-      setTimeout(() => {
-        setIsGenerating(false);
-        setResult({
-          imageUrl: "https://placehold.co/1080x1080/4EA69A/white?text=Smart+Flow+Infographic",
-          script: "This is a generated script explaining the infographic content...",
+      try {
+        const { data, error: invokeError } = await supabase.functions.invoke("generate-smartflow", {
+          body: {
+            dataSource,
+            extractionPrompt,
+            style,
+            customStyle: customStyle || undefined,
+            format,
+            brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+            enableVoice,
+            voiceType: voice.type,
+            voiceId: voice.voiceId,
+            voiceName: voice.voiceName,
+            voiceGender: voice.gender,
+          },
         });
-      }, 3000);
+
+        if (invokeError) {
+          throw new Error(invokeError.message || "Generation failed");
+        }
+
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+
+        setResult({
+          projectId: data.projectId,
+          generationId: data.generationId,
+          title: data.title,
+          imageUrl: data.imageUrl,
+          audioUrl: data.audioUrl,
+          script: data.script,
+          keyInsights: data.keyInsights,
+        });
+
+        toast({
+          title: "Infographic created!",
+          description: data.title,
+        });
+      } catch (err) {
+        console.error("Smart Flow generation error:", err);
+        setError(err instanceof Error ? err.message : "Generation failed");
+        toast({
+          title: "Generation failed",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    };
+
+    const handleDownload = async () => {
+      if (!result?.imageUrl) return;
+      
+      try {
+        const response = await fetch(result.imageUrl);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${result.title || "infographic"}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        toast({ title: "Download started!" });
+      } catch (err) {
+        toast({ title: "Download failed", variant: "destructive" });
+      }
     };
 
     const handleNewProject = () => {
@@ -116,7 +180,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
               className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => navigate("/app")}
             >
-              <ThemedLogo className="h-6 w-auto" />
+              <ThemedLogo className="h-10 w-auto" />
             </div>
           </div>
 
@@ -172,11 +236,30 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     </div>
                   )}
 
+                  {/* Key Insights */}
+                  {result.keyInsights && result.keyInsights.length > 0 && (
+                    <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
+                      <h4 className="text-sm font-medium mb-3">Key Insights</h4>
+                      <ul className="space-y-2">
+                        {result.keyInsights.map((insight: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium">
+                              {idx + 1}
+                            </span>
+                            {insight}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="flex gap-3">
-                    <Button variant="outline" onClick={handleNewProject} className="flex-1">
+                    <Button variant="outline" onClick={handleNewProject} className="flex-1 gap-2">
+                      <RotateCcw className="h-4 w-4" />
                       New Project
                     </Button>
-                    <Button className="flex-1 bg-primary hover:bg-primary/90">
+                    <Button onClick={handleDownload} className="flex-1 bg-primary hover:bg-primary/90 gap-2">
+                      <Download className="h-4 w-4" />
                       Download
                     </Button>
                   </div>
