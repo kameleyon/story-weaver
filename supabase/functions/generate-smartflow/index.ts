@@ -19,7 +19,17 @@ const INPUT_LIMITS = {
 };
 
 const ALLOWED_FORMATS = ["landscape", "portrait", "square"] as const;
-const ALLOWED_STYLES = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "sketch", "crayon", "custom"] as const;
+const ALLOWED_STYLES = [
+  "minimalist",
+  "doodle",
+  "stick",
+  "realistic",
+  "storybook",
+  "caricature",
+  "sketch",
+  "crayon",
+  "custom",
+] as const;
 
 function validateString(value: unknown, fieldName: string, maxLength: number): string | null {
   if (value === undefined || value === null) return null;
@@ -40,7 +50,7 @@ function validateEnum<T extends string>(value: unknown, fieldName: string, allow
 // ============= STYLE PROMPTS (synced with generate-video) =============
 const STYLE_PROMPTS: Record<string, string> = {
   minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
-  doodle: `Urban Minimalist Doodle style characterized by a flat 2D vector illustration technique with a distinct indie comic aesthetic. Make the artwork detailed, dynamic and filling up the entire page. Cinematic centered framing of the canvas. Add Words to illustrate the artwork. The artwork features bold, consistent-weight monoline black outlines that feel hand-drawn yet clean, with slightly rounded terminals to ensure a friendly, approachable feel. The color palette is strictly limited to muted primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled newsprint. 'Object' surrealism, with symbolic objects to create an instant iconographic look. To achieve a vintage screen-printed quality, the image includes subtle lo-fi distressing, light paper grain, tiny ink flecks, and occasional print misalignments. The composition is centralized, featuring a grounded main subject surrounded by a 'halo' of smaller floating thematic icons like coins, arrows, or charts.`,
+  doodle: `Urban Minimalist Doodle style. Flat 2D vector illustration with indie comic aesthetic. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled paper or newsprint. CHARACTER DESIGN: Object-Head surrealism where character heads are replaced with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line for a vintage screen-printed quality. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons (coins, arrows, charts) representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
   stick: `Hand-drawn stick figure comic style. CRITICAL BACKGROUND REQUIREMENT: The background MUST be solid pure white (#FFFFFF)—just clean solid white. Crude expressive black marker lines for the drawing only. Extremely simple character designs (circles for heads, single lines for limbs). Strictly black ink on pure white—NO SKIN COLOR, NO FLESH TONES. Rough sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines. High resolution on completely blank white canvas.`,
   realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
   storybook: `Whimsical storybook hand-drawn ink style. Hand-drawn black ink outlines with visible rough sketch construction lines, slightly uneven strokes, and occasional line overlap (imperfect but intentional). Bold vivid natural color palette. Crosshatching and scribbly pen shading for depth and texture, especially in shadows and on fabric folds. Watercolor + gouache-like washes: layered, semi-opaque paint with soft gradients. Edges slightly loose (not crisp), with gentle paint bleed and dry-brush texture in places. Cartoon-proportioned character design: slightly exaggerated features (large eyes, long limbs, expressive faces), but grounded in believable anatomy and posture. Background detailed but painterly: textured walls, props with sketchy detail, and atmospheric depth. Subtle grain + ink flecks for a handmade print feel. Cinematic framing, shallow depth cues, soft focus in far background. Editorial illustration / indie animation concept art aesthetic. Charming, cozy, slightly messy, richly textured, high detail, UHD.`,
@@ -52,7 +62,10 @@ const STYLE_PROMPTS: Record<string, string> = {
 
 // ============= FORMAT MAPPING (consistent with generate-video) =============
 const FORMAT_SPECS: Record<string, { aspectRatio: string; description: string }> = {
-  portrait: { aspectRatio: "9:16", description: "VERTICAL 9:16 portrait orientation - tall and narrow like a phone screen" },
+  portrait: {
+    aspectRatio: "9:16",
+    description: "VERTICAL 9:16 portrait orientation - tall and narrow like a phone screen",
+  },
   square: { aspectRatio: "1:1", description: "SQUARE 1:1 orientation - equal width and height" },
   landscape: { aspectRatio: "16:9", description: "HORIZONTAL 16:9 landscape orientation - wide like a TV screen" },
 };
@@ -164,7 +177,7 @@ async function generateAudioWithReplicate(
     const bytes = new Uint8Array(await audioResponse.arrayBuffer());
     // Estimate duration (MP3 at ~128kbps ≈ 16KB/sec)
     const durationSeconds = Math.max(1, Math.round(bytes.length / 16000));
-    
+
     console.log(`[SMARTFLOW-TTS] Audio generated successfully, ${bytes.length} bytes, ~${durationSeconds}s`);
     return { ok: true, bytes, durationSeconds };
   } catch (err) {
@@ -194,7 +207,10 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -256,7 +272,7 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
 
       // Generate with Replicate nano-banana
       const imageResult = await generateImageWithReplicate(imagePrompt, replicateApiKey, format);
-      
+
       if (!imageResult.ok) {
         throw new Error(imageResult.error);
       }
@@ -280,10 +296,10 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
 
       console.log("[SMARTFLOW] Image regenerated successfully:", signedUrlData.signedUrl);
 
-      return new Response(
-        JSON.stringify({ success: true, imageUrl: signedUrlData.signedUrl }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: true, imageUrl: signedUrlData.signedUrl }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ============= REGENERATE AUDIO =============
@@ -302,7 +318,7 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
       console.log("[SMARTFLOW] Regenerating audio for generation:", generationId);
 
       const audioResult = await generateAudioWithReplicate(script, replicateApiKey, voiceGender);
-      
+
       if (!audioResult.ok) {
         throw new Error(audioResult.error);
       }
@@ -333,10 +349,10 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
 
       console.log("[SMARTFLOW] Audio regenerated successfully:", audioSignedData.signedUrl);
 
-      return new Response(
-        JSON.stringify({ success: true, audioUrl: audioSignedData.signedUrl }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: true, audioUrl: audioSignedData.signedUrl }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ============= NORMAL GENERATION FLOW =============
@@ -468,7 +484,10 @@ Respond with a JSON object containing:
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: "You are an expert data analyst and infographic designer. Always respond with valid JSON." },
+          {
+            role: "system",
+            content: "You are an expert data analyst and infographic designer. Always respond with valid JSON.",
+          },
           { role: "user", content: analysisPrompt },
         ],
         response_format: { type: "json_object" },
@@ -485,21 +504,21 @@ Respond with a JSON object containing:
     let analysisResult;
     try {
       const content = analysisData.choices?.[0]?.message?.content || "";
-      
+
       // Robust JSON extraction - handle cases where AI adds text after JSON
       let jsonContent = content.trim();
-      
+
       // Find the first { and last } to extract just the JSON object
       const firstBrace = jsonContent.indexOf("{");
       const lastBrace = jsonContent.lastIndexOf("}");
-      
+
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
       }
-      
+
       // Remove any markdown code block markers
       jsonContent = jsonContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
-      
+
       console.log("[SMARTFLOW] Extracted JSON length:", jsonContent.length);
       analysisResult = JSON.parse(jsonContent);
     } catch (e) {
@@ -572,11 +591,7 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
     console.log("[SMARTFLOW] Image uploaded:", imageUrl);
 
     // Update progress
-    await supabase
-      .from("generations")
-      .update({ progress: 60 })
-      .eq("id", generation.id)
-      .eq("user_id", user.id);
+    await supabase.from("generations").update({ progress: 60 }).eq("id", generation.id).eq("user_id", user.id);
 
     // ============= STEP 3: Generate narration audio with Replicate (if enabled) =============
     let audioUrl: string | null = null;
@@ -589,7 +604,7 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
         const audioResult = await generateAudioWithReplicate(
           analysisResult.narrationScript,
           replicateApiKey,
-          voiceGender
+          voiceGender,
         );
 
         if (audioResult.ok) {
@@ -618,11 +633,7 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
     }
 
     // Update progress
-    await supabase
-      .from("generations")
-      .update({ progress: 90 })
-      .eq("id", generation.id)
-      .eq("user_id", user.id);
+    await supabase.from("generations").update({ progress: 90 }).eq("id", generation.id).eq("user_id", user.id);
 
     // ============= STEP 4: Finalize =============
     const scenes = [
@@ -675,13 +686,13 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
         keyInsights: analysisResult.keyInsights,
         scenes,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("[SMARTFLOW] Error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
