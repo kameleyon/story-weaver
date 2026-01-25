@@ -1809,56 +1809,78 @@ async function handleSmartFlowScriptPhase(
   const dimensions = getImageDimensions(format);
   const DEFAULT_DURATION = 15;
 
-  // Smart Flow prompt: Text-Rich Diagrammatic Layouts (Nano Banana can render text!)
-  const scriptPrompt = `You are an Elite Data Visualization Architect.
-Your goal is to design a SINGLE, HIGH-IMPACT INFOGRAPHIC that combines clear text, data, and visuals.
+  // Smart Flow prompt: Editorial-Style Text-Rich Infographics (NotebookLM style)
+  // These work STANDALONE without audio - self-explanatory with headlines + descriptions
+  const scriptPrompt = `You are an Elite Editorial Infographic Designer.
+Your goal is to create a SINGLE, MAGAZINE-QUALITY INFOGRAPHIC with rich, self-explanatory text that works WITHOUT audio narration.
 
 === DATA SOURCE ===
 ${content}
 
 === EXTRACTION GOAL ===
-${extractionPrompt || "Extract the most important insight or summary from this data."}
+${extractionPrompt || "Extract the most important insights and present them in an educational, visually rich format."}
 
 === VISUAL STYLE ===
 - Art Style: ${styleDescription}
 - Format: ${format} (${dimensions.width}x${dimensions.height})
 - BRANDING: ${brandMark ? `Include the text "${brandMark}" as a small footer.` : "None"}
 
+=== REFERENCE: NOTEBOOKLM INFOGRAPHIC STYLE ===
+Study this structure used by professional infographics:
+- **Main Headline**: Bold, catchy title at top (e.g., "3 of Spades: Your Business Power-Ups")
+- **Central Visual**: A character, object, or symbol as the focal anchor
+- **2-4 Content Sections** each containing:
+  - Section Title: Bold (e.g., "THE CREATIVE MULTIPLIER")
+  - Subtitle/Label: Short context (e.g., "+ 3 of Clubs")
+  - Description: 2-3 sentence explanation paragraph
+  - Supporting Icons: Small illustrations around the text
+- **Optional Stats/Metrics**: Numbers with labels (e.g., "1.5x-3x Multiplier")
+- **Thematic Border Icons**: Small floating elements around edges (gears, lightbulbs, coins, etc.)
+
 === YOUR TASK ===
-1. **Analyze**: Identify the CORE insight (The "Aha!" moment).
-2. **Script**: Write a 180-word narration script (professional, insightful).
-3. **Design the Visual**:
-   - The image generator CAN render text. You MUST use this capability.
-   - Plan a specific layout (Flowchart, Comparison/Split Screen, Pyramid, Cycle, Hub-and-Spoke, or List).
-   - Select 3-5 key text elements (Headlines, Stats, Labels) to render.
-   - *Constraint:* Keep text short (1-3 words per label) to ensure perfect rendering.
+1. **Analyze**: Identify 2-4 KEY INSIGHTS that tell a complete story.
+
+2. **Script (Optional Narration)**: Write a 180-word narration script. This is secondary to the visual - the infographic must be self-explanatory without it.
+
+3. **Design the Text-Rich Visual**:
+   - The image generator CAN render paragraphs of text. EXPLOIT THIS CAPABILITY FULLY.
+   - **DO NOT** limit yourself to short labels.
+   - Each section should have:
+     * A bold TITLE (2-4 words)
+     * A DESCRIPTION paragraph (15-25 words explaining the concept)
+     * Optional: A stat, metric, or key takeaway
 
 4. **Write the Image Prompt**:
-   - Start with: "A professional infographic illustration..."
-   - **SPECIFY TEXT**: Use the format: 'text "YOUR TEXT HERE"'.
-   - Example: 'A central circle containing the bold text "CORE VALUE".'
-   - Example: 'Three steps labeled "1. PLAN", "2. ACT", "3. REVIEW".'
-   - **SPECIFY LAYOUT**: "Split screen composition...", "Vertical flowchart...", "Hub-and-spoke diagram..."
-   - **SPECIFY STYLE**: Ensure the style (${style}) is maintained (e.g. "hand drawn lines", "vector flat style", "realistic 3D").
+   - Start with: "A professional editorial infographic illustration..."
+   - **SPECIFY ALL TEXT VERBATIM** using the format: 'text "YOUR EXACT TEXT HERE"'
+   - **BE EXPLICIT** about paragraph text, not just titles
+   
+   Example format for a section:
+   'Section 1: Bold title text "THE POWER BROKER" with subtitle text "+ 8 of Diamonds". Below it, description paragraph text "Add Executive energy to command respect, negotiate from strength, and turn your craft into a high-value enterprise." with a briefcase icon to the left.'
+   
+   - **SPECIFY LAYOUT**: "Magazine editorial layout...", "Multi-panel composition with central focus...", "Grid of content blocks..."
+   - **SPECIFY STYLE**: Maintain the ${style} aesthetic throughout
+   - **SPECIFY ICONS**: Describe thematic icons around each section (handshake, crown, coins, lightbulb, etc.)
 
 === OUTPUT FORMAT (STRICT JSON) ===
 Return ONLY valid JSON:
 {
-  "title": "Clear, impactful title",
+  "title": "Catchy, engaging headline",
   "scenes": [{
     "number": 1,
-    "voiceover": "Your narration script explaining the insight...",
-    "visualPrompt": "A professional infographic in ${styleDescription} style. LAYOUT: [Specific Layout Type]. TEXT ELEMENTS: Large title text '[TITLE]' at the top. KEY VISUALS: [Describe icons/charts/shapes]. LABELS: [Describe specific text labels near visual elements using 'text \"LABEL\"' format]. COMPOSITION: Balanced, clear hierarchy, ample negative space. COLOR: [Color palette]. ${brandMark ? `FOOTER: Small text "${brandMark}" at bottom-center.` : ""}",
+    "voiceover": "Optional narration script - but the visual is the star here...",
+    "visualPrompt": "A professional editorial infographic in ${styleDescription} style. LAYOUT: [Magazine/Panel layout]. MAIN TITLE: Bold text '[YOUR TITLE]' at top center. CENTRAL VISUAL: [Describe the anchor image - a character, object, or symbol]. SECTION 1: Title text '[TITLE 1]' with subtitle '[SUBTITLE]' and description paragraph text '[Full 15-25 word explanation]'. Accompanied by [icon description]. SECTION 2: Title text '[TITLE 2]' with description paragraph text '[explanation]'. [Continue for all sections]. FLOATING ICONS: [List thematic icons around edges]. COLOR PALETTE: [Specify colors]. ${brandMark ? `FOOTER: Small text "${brandMark}" at bottom-center.` : ""} STYLE: ${style} aesthetic with warm textured background.",
     "duration": ${DEFAULT_DURATION}
   }]
 }
 
-=== CONSTRAINTS ===
+=== CRITICAL REQUIREMENTS ===
 - ONLY produce 1 scene (single infographic)
-- The image generator CAN render legible text - USE IT
-- Keep each text label to 1-3 words for perfect rendering
-- Use engaging, professional language
-- Keep narration under 180 words`;
+- The infographic MUST be SELF-EXPLANATORY without audio
+- Include 2-4 content sections, each with TITLE + DESCRIPTION PARAGRAPH
+- Text can be 15-25 words per description - the generator handles this well
+- Include supporting icons and visual elements around text
+- Create magazine-editorial quality that looks professional`;
 
   // Call LLM for script generation via OpenRouter (Claude Sonnet 4.5)
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
