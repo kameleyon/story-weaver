@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp, Download, RotateCcw, Pencil, X } from "lucide-react";
+import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp, Download, RotateCcw, Pencil, X, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import { toast } from "@/hooks/use-toast";
 import { FormatSelector, VideoFormat } from "./FormatSelector";
 import { VoiceSelector, VoiceSelection } from "./VoiceSelector";
 import { SmartFlowStyleSelector, SmartFlowStyle } from "./SmartFlowStyleSelector";
+import { GenerationProgress } from "./GenerationProgress";
+import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
@@ -55,7 +57,22 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     
     // Edit modal state
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showAudioEditModal, setShowAudioEditModal] = useState(false);
     const [editPrompt, setEditPrompt] = useState("");
+    const [audioEditScript, setAudioEditScript] = useState("");
+    const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
+    
+    // Generation progress state (matches GenerationState interface)
+    const [generationState, setGenerationState] = useState<GenerationState>({
+      step: "analysis",
+      progress: 0,
+      sceneCount: 1,
+      currentScene: 1,
+      totalImages: 1,
+      completedImages: 0,
+      isGenerating: false,
+      statusMessage: "",
+    });
 
     const MAX_DATA_SOURCE_LENGTH = 250000;
     const dataSourceLength = dataSource.length;
@@ -91,6 +108,36 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       if (!canGenerate) return;
       setIsGenerating(true);
       setError(null);
+      
+      // Initialize progress state
+      setGenerationState({
+        step: "analysis",
+        progress: 5,
+        sceneCount: 1,
+        currentScene: 1,
+        totalImages: 1,
+        completedImages: 0,
+        isGenerating: true,
+        statusMessage: "Analyzing your data...",
+      });
+
+      // Simulate progress updates for UX
+      const progressInterval = setInterval(() => {
+        setGenerationState(prev => {
+          if (!prev.isGenerating) return prev;
+          
+          if (prev.progress < 25) {
+            return { ...prev, progress: prev.progress + 2, statusMessage: "Extracting key insights..." };
+          } else if (prev.progress < 50) {
+            return { ...prev, step: "scripting", progress: prev.progress + 2, statusMessage: "Creating visual layout..." };
+          } else if (prev.progress < 75) {
+            return { ...prev, step: "visuals", progress: prev.progress + 1, statusMessage: "Generating infographic..." };
+          } else if (prev.progress < 90) {
+            return { ...prev, progress: prev.progress + 0.5, statusMessage: enableVoice ? "Creating narration audio..." : "Finalizing image..." };
+          }
+          return prev;
+        });
+      }, 500);
 
       try {
         const { data, error: invokeError } = await supabase.functions.invoke("generate-smartflow", {
@@ -109,6 +156,8 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           },
         });
 
+        clearInterval(progressInterval);
+
         if (invokeError) {
           throw new Error(invokeError.message || "Generation failed");
         }
@@ -116,6 +165,15 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
         if (data?.error) {
           throw new Error(data.error);
         }
+
+        // Complete!
+        setGenerationState(prev => ({
+          ...prev,
+          step: "complete",
+          progress: 100,
+          isGenerating: false,
+          statusMessage: "Complete!",
+        }));
 
         setResult({
           projectId: data.projectId,
@@ -132,8 +190,15 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           description: data.title,
         });
       } catch (err) {
+        clearInterval(progressInterval);
         console.error("Smart Flow generation error:", err);
         setError(err instanceof Error ? err.message : "Generation failed");
+        setGenerationState(prev => ({
+          ...prev,
+          step: "error",
+          isGenerating: false,
+          error: err instanceof Error ? err.message : "Generation failed",
+        }));
         toast({
           title: "Generation failed",
           description: err instanceof Error ? err.message : "Unknown error",
@@ -204,6 +269,42 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
         });
       } finally {
         setIsRegenerating(false);
+      }
+    };
+
+    const handleRegenerateAudio = async () => {
+      if (!result?.generationId || !audioEditScript.trim()) return;
+      
+      setIsRegeneratingAudio(true);
+      try {
+        const { data, error: invokeError } = await supabase.functions.invoke("generate-smartflow", {
+          body: {
+            phase: "regenerate-audio",
+            generationId: result.generationId,
+            script: audioEditScript.trim(),
+            voiceType: voice.type,
+            voiceId: voice.voiceId,
+            voiceName: voice.voiceName,
+            voiceGender: voice.gender,
+          },
+        });
+
+        if (invokeError) throw new Error(invokeError.message);
+        if (data?.error) throw new Error(data.error);
+
+        setResult((prev: any) => ({ ...prev, audioUrl: data.audioUrl, script: audioEditScript.trim() }));
+        setShowAudioEditModal(false);
+        
+        toast({ title: "Audio regenerated!" });
+      } catch (err) {
+        console.error("Audio regeneration error:", err);
+        toast({
+          title: "Audio regeneration failed",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      } finally {
+        setIsRegeneratingAudio(false);
       }
     };
 
@@ -299,6 +400,17 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                           className="flex-1 h-10"
                           style={{ colorScheme: 'dark' }}
                         />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setAudioEditScript(result.script || "");
+                            setShowAudioEditModal(true);
+                          }}
+                          className="h-8 w-8"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -325,18 +437,9 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="flex flex-col items-center justify-center py-20"
+                  className="max-w-2xl mx-auto space-y-6"
                 >
-                  <div className="relative">
-                    <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                    <div className="relative rounded-full bg-primary/10 p-6">
-                      <Wallpaper className="h-10 w-10 text-primary animate-pulse" />
-                    </div>
-                  </div>
-                  <h3 className="mt-6 text-lg font-medium">Creating Your Infographic</h3>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Analyzing data and generating visuals...
-                  </p>
+                  <GenerationProgress state={generationState} />
                 </motion.div>
               ) : (
                 <motion.div
@@ -546,6 +649,74 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   <>
                     <Pencil className="h-4 w-4" />
                     Regenerate Image
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Audio Modal */}
+      <Dialog open={showAudioEditModal} onOpenChange={setShowAudioEditModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Narration</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Current Audio Preview */}
+            {result?.audioUrl && (
+              <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+                <audio controls src={result.audioUrl} className="w-full h-10" style={{ colorScheme: 'dark' }} />
+              </div>
+            )}
+            
+            {/* Script Edit */}
+            <div className="space-y-2">
+              <Label>Narration Script</Label>
+              <Textarea
+                placeholder="Edit the narration script..."
+                value={audioEditScript}
+                onChange={(e) => setAudioEditScript(e.target.value)}
+                className="min-h-[150px] resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Modify the script and regenerate the audio
+              </p>
+            </div>
+
+            {/* Voice Selection */}
+            <div className="space-y-2">
+              <Label>Voice</Label>
+              <VoiceSelector selected={voice} onSelect={setVoice} />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowAudioEditModal(false);
+                  setAudioEditScript("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRegenerateAudio}
+                disabled={!audioEditScript.trim() || isRegeneratingAudio}
+                className="flex-1 bg-primary hover:bg-primary/90 gap-2"
+              >
+                {isRegeneratingAudio ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-4 w-4" />
+                    Regenerate Audio
                   </>
                 )}
               </Button>
