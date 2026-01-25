@@ -419,23 +419,26 @@ export function useVideoExport() {
 
             const remaining = Math.min(audioChunkSize, totalAudioSamples - i);
 
-            // Create properly formatted planar audio data
-            // For f32-planar: left channel samples followed by right channel samples
-            const planarData = new Float32Array(remaining * 2);
+            // Create interleaved audio data (L0, R0, L1, R1...)
+            // Some mobile WebCodecs implementations (iOS) don't accept planar data.
+            const interleavedData = new Float32Array(remaining * 2);
             for (let j = 0; j < remaining; j++) {
-              planarData[j] = leftChannel[i + j]; // Left channel first
-              planarData[remaining + j] = rightChannel[i + j]; // Right channel after
+              const leftSample = leftChannel[i + j] ?? 0;
+              const rightSample = rightChannel[i + j] ?? leftSample;
+              const baseIndex = j * 2;
+              interleavedData[baseIndex] = leftSample;
+              interleavedData[baseIndex + 1] = rightSample;
             }
 
             // Use Math.floor for strict timestamp monotonicity (iOS Safari is strict)
             const timestampUs = Math.floor((i / 48000) * 1_000_000);
             const audioData = new AudioDataCtor!({
-              format: "f32-planar",
+              format: "f32",
               sampleRate: 48000,
               numberOfFrames: remaining,
               numberOfChannels: 2,
               timestamp: timestampUs,
-              data: planarData,
+              data: interleavedData,
             });
 
             audioEncoder.encode(audioData);
