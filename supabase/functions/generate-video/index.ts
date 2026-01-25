@@ -493,12 +493,16 @@ function splitTextIntoChunks(text: string, maxChars: number = 400): string[] {
 
 // Extract raw PCM data from a WAV file (strip header)
 function extractPcmFromWav(wavBytes: Uint8Array): { pcm: Uint8Array; sampleRate: number; numChannels: number; bitsPerSample: number } {
-  const view = new DataView(wavBytes.buffer, wavBytes.byteOffset, wavBytes.byteLength);
+  // CRITICAL: Create a fresh ArrayBuffer copy to avoid byteOffset issues
+  const freshBuffer = new Uint8Array(wavBytes).buffer;
+  const view = new DataView(freshBuffer);
 
   // Read header info (standard WAV has 44-byte header)
   const numChannels = view.getUint16(22, true);
   const sampleRate = view.getUint32(24, true);
   const bitsPerSample = view.getUint16(34, true);
+
+  console.log(`[WAV-Parse] Header: ${sampleRate}Hz, ${numChannels}ch, ${bitsPerSample}bit`);
 
   // Find 'data' chunk - standard position is at offset 36
   // But some WAVs have extra chunks, so we search for it
@@ -515,6 +519,7 @@ function extractPcmFromWav(wavBytes: Uint8Array): { pcm: Uint8Array; sampleRate:
     ) {
       dataOffset = offset + 8; // Skip 'data' + size (4 + 4 bytes)
       dataSize = view.getUint32(offset + 4, true);
+      console.log(`[WAV-Parse] Found data chunk at offset ${offset}, size ${dataSize}`);
       break;
     }
   }
@@ -523,6 +528,7 @@ function extractPcmFromWav(wavBytes: Uint8Array): { pcm: Uint8Array; sampleRate:
   if (dataSize === 0) {
     dataOffset = 44;
     dataSize = wavBytes.length - 44;
+    console.log(`[WAV-Parse] Using default 44-byte header, data size ${dataSize}`);
   }
 
   const pcm = wavBytes.slice(dataOffset, dataOffset + dataSize);
@@ -534,16 +540,33 @@ function stitchWavBuffers(buffers: Uint8Array[]): Uint8Array {
   if (buffers.length === 0) return new Uint8Array(0);
   if (buffers.length === 1) return buffers[0];
 
-  // Extract params from first WAV
-  const firstParsed = extractPcmFromWav(buffers[0]);
-  const { sampleRate, numChannels, bitsPerSample } = firstParsed;
+  console.log(`[WAV-Stitch] Stitching ${buffers.length} audio buffers...`);
 
-  // Extract PCM from all buffers
-  const pcmParts = buffers.map((b) => extractPcmFromWav(b).pcm);
+  // Extract params and PCM from all buffers
+  const parsedBuffers = buffers.map((b, idx) => {
+    const parsed = extractPcmFromWav(b);
+    console.log(`[WAV-Stitch] Buffer ${idx + 1}: ${parsed.pcm.length} bytes, ${parsed.sampleRate}Hz`);
+    return parsed;
+  });
+
+  // Use first buffer's params as reference
+  const { sampleRate, numChannels, bitsPerSample } = parsedBuffers[0];
+
+  // Validate all buffers have matching params
+  for (let i = 1; i < parsedBuffers.length; i++) {
+    const p = parsedBuffers[i];
+    if (p.sampleRate !== sampleRate || p.numChannels !== numChannels || p.bitsPerSample !== bitsPerSample) {
+      console.warn(`[WAV-Stitch] Buffer ${i + 1} mismatch: ${p.sampleRate}Hz vs ${sampleRate}Hz - may cause audio artifacts`);
+    }
+  }
+
+  // Extract PCM parts
+  const pcmParts = parsedBuffers.map(p => p.pcm);
 
   // Calculate total PCM length
   const totalLength = pcmParts.reduce((acc, part) => acc + part.length, 0);
   const mergedPcm = new Uint8Array(totalLength);
+  console.log(`[WAV-Stitch] Total PCM size: ${totalLength} bytes`);
 
   // Concatenate all PCM data
   let offset = 0;
@@ -553,7 +576,9 @@ function stitchWavBuffers(buffers: Uint8Array[]): Uint8Array {
   }
 
   // Build final WAV with merged PCM
-  return pcmToWav(mergedPcm, sampleRate, numChannels, bitsPerSample);
+  const finalWav = pcmToWav(mergedPcm, sampleRate, numChannels, bitsPerSample);
+  console.log(`[WAV-Stitch] Final WAV: ${finalWav.length} bytes at ${sampleRate}Hz`);
+  return finalWav;
 }
 
 // Call Replicate Chatterbox TTS for a single chunk
@@ -681,10 +706,14 @@ async function generateSceneAudioReplicateChunked(
 
     // Stitch all chunks together
     const finalWavBytes = stitchWavBuffers(audioBuffers);
-    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Final stitched audio: ${finalWavBytes.length} bytes`);
-
-    // Calculate duration (~44100 samples/sec, 16-bit = 2 bytes/sample)
-    const durationSeconds = Math.max(1, finalWavBytes.length / (44100 * 2));
+    
+    // Parse the final WAV to get actual sample rate for duration calculation
+    const finalParsed = extractPcmFromWav(finalWavBytes);
+    const bytesPerSample = finalParsed.bitsPerSample / 8;
+    const bytesPerSecond = finalParsed.sampleRate * finalParsed.numChannels * bytesPerSample;
+    const durationSeconds = Math.max(1, finalParsed.pcm.length / bytesPerSecond);
+    
+    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Final stitched audio: ${finalWavBytes.length} bytes, ${durationSeconds.toFixed(1)}s at ${finalParsed.sampleRate}Hz`);
 
     const audioPath = isRegeneration
       ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
