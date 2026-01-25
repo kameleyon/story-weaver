@@ -281,6 +281,9 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     costTracking={generationState.costTracking}
                     generationId={generationState.generationId}
                     projectId={generationState.projectId}
+                    onScenesUpdate={(updatedScenes) => {
+                      // Update local state if needed for regeneration
+                    }}
                   />
                 </motion.div>
               ) : (
