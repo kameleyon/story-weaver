@@ -26,7 +26,6 @@ export function useVideoExport() {
   const exportRunIdRef = useRef(0);
 
   const log = useCallback((...args: any[]) => {
-    // Keep a consistent prefix to make filtering easier.
     appendVideoExportLog("log", ["[VideoExport]", ...args]);
     console.log("[VideoExport]", ...args);
   }, []);
@@ -54,32 +53,22 @@ export function useVideoExport() {
 
       log("Run", runId, "Start export", { scenes: scenes.length, format });
 
-      // Access WebCodecs constructors safely via globalThis to prevent ReferenceError on iOS Safari
+      // Access WebCodecs constructors safely via globalThis
       const AudioEncoderCtor = (globalThis as any).AudioEncoder as typeof AudioEncoder | undefined;
       const AudioDataCtor = (globalThis as any).AudioData as typeof AudioData | undefined;
 
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-      // Check for WebCodecs API support (required for video export)
+      // Check for WebCodecs API support
       const supportsVideo =
         typeof VideoEncoder !== "undefined" &&
         typeof VideoFrame !== "undefined";
 
-      // Audio is optional (some mobile browsers have VideoEncoder but no AudioEncoder)
       const supportsAudio = !!AudioEncoderCtor && !!AudioDataCtor;
 
-      log("Run", runId, "Capabilities", {
-        isIOS,
-        hasVideoEncoder: typeof VideoEncoder !== "undefined",
-        hasAudioEncoder: !!AudioEncoderCtor,
-        hasAudioData: !!AudioDataCtor,
-        userAgent: navigator.userAgent.slice(0, 100),
-      });
-
       if (!supportsVideo) {
-        const errorMsg =
-          "Video export is not supported on this device. Please use a desktop browser (Chrome, Edge, or Safari 16.4+) to export videos.";
-        err("Run", runId, "Unsupported device/browser (missing WebCodecs video)");
+        const errorMsg = "Video export is not supported on this device. Please use a desktop browser.";
+        err("Run", runId, "Unsupported device (missing WebCodecs)");
         setState({ status: "error", progress: 0, error: errorMsg });
         throw new Error(errorMsg);
       }
@@ -90,7 +79,7 @@ export function useVideoExport() {
         square: { width: 1080, height: 1080 },
       } as const;
 
-      // iOS Safari often OOMs on 1080p WebCodecs encoding; use a lighter preset.
+      // iOS Safari optimization: use lower resolution to avoid OOM
       const iosDimensions = {
         landscape: { width: 1280, height: 720 },
         portrait: { width: 720, height: 1280 },
@@ -98,218 +87,63 @@ export function useVideoExport() {
       } as const;
 
       const dimensions = isIOS ? iosDimensions : baseDimensions;
-
       const selected = dimensions[format];
-      if (!selected) {
-        throw new Error(`Unsupported export format: ${String(format)}`);
-      }
-
       const { width, height } = selected;
       const fps = isIOS ? 24 : 30;
       const targetBitrate = isIOS ? 2_500_000 : 8_000_000;
 
-      log("Run", runId, "Export settings", { width, height, fps, targetBitrate, isIOS });
-
       setState({ status: "loading", progress: 0 });
 
       try {
-        // Step 1: Preload all images and audio
-        // For scenes with multiple images, load all of them
-        log("Run", runId, "Loading assets for", scenes.length, "scenes");
-        
-        // FIX: Create ONE shared OfflineAudioContext for decoding all audio
-        // Mobile browsers limit active AudioContext instances (usually 4-6).
-        // Using OfflineAudioContext avoids hardware resource locks.
-        const sharedDecodeCtx = new OfflineAudioContext(1, 1, 48000);
-
-        // IMPORTANT (mobile Safari): `decodeAudioData` can be flaky when called concurrently
-        // on the same context. Since we load scenes with `Promise.all`, we serialize the
-        // actual decode step while still allowing fetches/image loads to run in parallel.
-        let decodeChain: Promise<unknown> = Promise.resolve();
-
-        const decodeAudioSequentially = async (buf: ArrayBuffer): Promise<AudioBuffer> => {
-          // Some browsers detach/transfer the underlying buffer during decoding.
-          // Use a copy to be safe.
-          const bufCopy = buf.slice(0);
-
-          const decodePromise = decodeChain.then(() => sharedDecodeCtx.decodeAudioData(bufCopy));
-          // Keep the chain alive even if a decode fails.
-          decodeChain = decodePromise.catch(() => undefined);
-          return decodePromise;
-        };
-        
-        // Build a flat list of all images to load
-        interface SceneAsset {
-          images: HTMLImageElement[];
-          audioBuffer: AudioBuffer | null;
-          duration: number;
-        }
-        
-        const assets: SceneAsset[] = await Promise.all(
-          scenes.map(async (scene, idx) => {
-            if (abortRef.current) throw new Error("Export cancelled");
-
-            // Get all image URLs for this scene
-            const imageUrls = scene.imageUrls && scene.imageUrls.length > 0 
-              ? scene.imageUrls 
-              : scene.imageUrl 
-                ? [scene.imageUrl] 
-                : [];
-            
-            // Load all images for this scene
-            const loadedImages: HTMLImageElement[] = [];
-            for (const url of imageUrls) {
-              try {
-                // Try with CORS first, fallback to no-cors
-                let loadedImg: HTMLImageElement;
-                try {
-                  loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-                    const img = new Image();
-                    img.crossOrigin = "anonymous";
-                    img.onload = () => resolve(img);
-                    img.onerror = () => reject(new Error("CORS load failed"));
-                    img.src = url;
-                  });
-                } catch {
-                  // Retry without crossOrigin
-                  loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => resolve(img);
-                    img.onerror = () => reject(new Error("Image load failed"));
-                    img.src = url;
-                  });
-                }
-                loadedImages.push(loadedImg);
-              } catch (e) {
-                warn("Run", runId, `Scene ${idx + 1}: Failed to load image`, e);
-              }
-            }
-
-            // Load audio using the SHARED context to avoid mobile AudioContext limits
-            let audioBuffer: AudioBuffer | null = null;
-            if (scene.audioUrl) {
-              try {
-                const res = await fetch(scene.audioUrl);
-                const arrayBuf = await res.arrayBuffer();
-                audioBuffer = await decodeAudioSequentially(arrayBuf);
-              } catch (e) {
-                warn("Run", runId, `Failed to load audio for scene ${idx + 1}`, e);
-              }
-            }
-
-            setState((s) => ({
-              ...s,
-              progress: Math.round(((idx + 1) / scenes.length) * 20),
-            }));
-
-            // Use actual audio duration if available (+ small buffer), 
-            // otherwise fall back to scene.duration
-            const actualDuration = audioBuffer 
-              ? audioBuffer.duration + 0.3 
-              : scene.duration;
-            
-            return { 
-              images: loadedImages, 
-              audioBuffer, 
-              duration: actualDuration 
-            };
-          })
-        );
-
-        if (abortRef.current) throw new Error("Export cancelled");
-
-        const totalImagesLoaded = assets.reduce((sum, a) => sum + a.images.length, 0);
-        log("Run", runId, `Loaded ${totalImagesLoaded} total images for ${assets.length} scenes`);
-
-        // Step 2: Setup MP4 muxer and video encoder
-        setState({ status: "rendering", progress: 20 });
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d")!;
-
-        // Calculate total duration and frames
-        const totalDuration = assets.reduce((sum, a) => sum + a.duration, 0);
-        const totalFrames = Math.ceil(totalDuration * fps);
-
-        log("Run", runId, "Timeline", { totalDuration, totalFrames, fps });
-
+        // --- STEP 1: Configure Audio First (Critical for Muxer Setup) ---
         const wantsAudio = scenes.some((s) => !!s.audioUrl);
+        
+        // Priority order for Audio Config:
+        // 1. mp4a.40.2 (Standard AAC LC) - Preferred by mp4-muxer
+        // 2. aac (Generic string) - Required by some Safari versions
+        const audioConfigCandidates: Array<{ codec: string; sampleRate: number; numberOfChannels: number; bitrate: number }> = [
+          { codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: 2, bitrate: 128_000 },
+          { codec: "mp4a.40.2", sampleRate: 44100, numberOfChannels: 2, bitrate: 128_000 },
+          { codec: "aac", sampleRate: 48000, numberOfChannels: 2, bitrate: 128_000 },
+          { codec: "aac", sampleRate: 44100, numberOfChannels: 2, bitrate: 128_000 },
+        ];
 
-        // iOS Safari WebCodecs audio support is inconsistent across versions.
-        // Some builds accept only certain codec strings and/or sample rates.
-        // We'll pick a supported config and use it consistently for:
-        // - AudioEncoder.configure
-        // - OfflineAudioContext rendering sampleRate
-        // - AudioData timestamps/sampleRate
-        // - MP4 muxer audio track sampleRate
-        const audioConfigCandidates = [
-          { codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 },
-          { codec: "mp4a.40.2", sampleRate: 44100, numberOfChannels: 2, bitrate: 128000 },
-          // Safari sometimes accepts "aac" as a codec string even when it rejects mp4a.40.2.
-          { codec: "aac", sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 },
-          { codec: "aac", sampleRate: 44100, numberOfChannels: 2, bitrate: 128000 },
-        ] as const;
-
-        // Preflight audio support (some mobile browsers partially implement WebCodecs)
         let audioEnabled = supportsAudio && wantsAudio;
-        let chosenAudioConfig:
-          | {
-              codec: (typeof audioConfigCandidates)[number]["codec"];
-              sampleRate: (typeof audioConfigCandidates)[number]["sampleRate"];
-              numberOfChannels: 2;
-              bitrate: number;
-            }
-          | null = null;
-
-        if (audioEnabled && typeof AudioEncoderCtor?.isConfigSupported === "function") {
-          try {
-            for (const cfg of audioConfigCandidates) {
-              try {
-                const support = await AudioEncoderCtor.isConfigSupported(cfg);
-                log("Run", runId, "AudioEncoder.isConfigSupported", {
-                  codec: cfg.codec,
-                  sampleRate: cfg.sampleRate,
-                  supported: !!support?.supported,
-                });
-                if (support?.supported) {
-                  chosenAudioConfig = cfg;
-                  break;
-                }
-              } catch {
-                // Ignore and try next.
-              }
-            }
-
-            if (!chosenAudioConfig) audioEnabled = false;
-          } catch {
-            audioEnabled = false;
-          }
-        }
-
-        // If isConfigSupported is not available, we'll still attempt to configure later.
-        if (audioEnabled && !chosenAudioConfig) {
-          chosenAudioConfig = audioConfigCandidates[0];
-        }
-
-        if (wantsAudio && !audioEnabled) {
-          setState((s) => ({
-            ...s,
-            warning: "Audio export isn't supported on this device. Exporting a silent video.",
-          }));
-
-          warn("Run", runId, "Audio requested but disabled; exporting silent video");
-        }
-
-        // We create the muxer AFTER we've confirmed audio encoder construction works.
-        // This prevents creating an MP4 with an audio track on browsers that claim partial support.
-        let muxer!: Muxer<ArrayBufferTarget>;
-
-        // Create audio encoder (optional) - use constructor from globalThis
+        let chosenAudioConfig = audioConfigCandidates[0]; // Default
         let audioEncoder: AudioEncoder | null = null;
+        let muxer!: Muxer<ArrayBufferTarget>;
         let audioChunkCount = 0;
+
         if (audioEnabled && AudioEncoderCtor) {
+          // Attempt to find a supported config
+          let supportedConfigFound = false;
+          if (typeof AudioEncoderCtor.isConfigSupported === "function") {
+             for (const cfg of audioConfigCandidates) {
+               try {
+                 const support = await AudioEncoderCtor.isConfigSupported(cfg);
+                 if (support?.supported) {
+                   chosenAudioConfig = cfg;
+                   supportedConfigFound = true;
+                   break;
+                 }
+               } catch (e) { /* ignore */ }
+             }
+          }
+
+          // Create the muxer NOW using the chosen config sample rate.
+          // mp4-muxer needs the AudioEncoder to be configured with the same settings
+          // it expects, or for the first chunk to contain the description.
+          muxer = new Muxer({
+            target: new ArrayBufferTarget(),
+            video: { codec: "avc", width, height },
+            audio: {
+              codec: "aac", // mp4-muxer expects 'aac' for the track box
+              numberOfChannels: 2,
+              sampleRate: chosenAudioConfig.sampleRate,
+            },
+            fastStart: "in-memory",
+          });
+
           try {
             audioEncoder = new AudioEncoderCtor({
               output: (chunk, meta) => {
@@ -317,444 +151,331 @@ export function useVideoExport() {
                 muxer.addAudioChunk(chunk, meta);
               },
               error: (e) => {
-                err("Run", runId, "Audio encoder error", e);
+                warn("Run", runId, "Audio encoder error", e);
               },
             });
 
-            log("Run", runId, "AudioEncoder instantiated");
-
-            // Configure audio encoder with fallback across candidate configs.
-            // Some iOS builds throw during configure even when isConfigSupported is missing/incorrect.
-            let configured = false;
-            const configureCandidates = chosenAudioConfig
-              ? [
-                  chosenAudioConfig,
-                  ...audioConfigCandidates.filter(
-                    (c) => c.codec !== chosenAudioConfig!.codec || c.sampleRate !== chosenAudioConfig!.sampleRate
-                  ),
-                ]
-              : [...audioConfigCandidates];
-
-            for (const cfg of configureCandidates) {
-              try {
-                audioEncoder.configure(cfg);
-                chosenAudioConfig = cfg;
-                configured = true;
-                log("Run", runId, "AudioEncoder configured", {
-                  codec: cfg.codec,
-                  sampleRate: cfg.sampleRate,
-                  numberOfChannels: cfg.numberOfChannels,
-                  bitrate: cfg.bitrate,
-                });
-                break;
-              } catch (e) {
-                warn("Run", runId, "AudioEncoder.configure failed", {
-                  codec: cfg.codec,
-                  sampleRate: cfg.sampleRate,
-                  message: e instanceof Error ? e.message : String(e),
-                });
-              }
-            }
-
-            if (!configured) {
-              warn("Run", runId, "No supported audio config worked; exporting silent video");
-              audioEnabled = false;
-              audioEncoder.close();
-              audioEncoder = null;
-              chosenAudioConfig = null;
-              setState((s) => ({
-                ...s,
-                warning: "Audio export isn't supported on this device. Exporting a silent video.",
-              }));
-            }
+            audioEncoder.configure(chosenAudioConfig);
+            log("Run", runId, "Audio Configured", chosenAudioConfig);
           } catch (e) {
-            // Some mobile browsers expose the symbol but fail at runtime.
-            warn("Run", runId, "AudioEncoder instantiation failed", e);
+            warn("Run", runId, "Failed to configure AudioEncoder", e);
             audioEnabled = false;
-            audioEncoder = null;
-            chosenAudioConfig = null;
-            setState((s) => ({
-              ...s,
-              warning: "Audio export isn't supported on this device. Exporting a silent video.",
-            }));
-          }
-        }
-
-        // Create MP4 muxer
-        muxer = new Muxer({
-          target: new ArrayBufferTarget(),
-          video: {
-            codec: "avc",
-            width,
-            height,
-          },
-          ...(audioEnabled
-            ? {
-                audio: {
-                  codec: "aac",
-                  numberOfChannels: 2,
-                  sampleRate: chosenAudioConfig?.sampleRate ?? 48000,
-                },
-              }
-            : {}),
-          fastStart: "in-memory",
-        });
-
-        // Create video encoder
-        let videoChunkCount = 0;
-        const videoEncoder = new VideoEncoder({
-          output: (chunk, meta) => {
-            videoChunkCount++;
-            muxer.addVideoChunk(chunk, meta);
-          },
-          error: (e) => {
-            err("Run", runId, "Video encoder error", e);
-            throw e;
-          },
-        });
-
-        // Prefer a widely supported H.264 baseline profile first (esp. on iOS Safari)
-        const videoConfigCandidates = [
-          {
-            // Level 4.0 supports up to 1920x1080 @ 30fps (Level 3.0 only supports ~720x480)
-            codec: "avc1.42E028", // Baseline Profile, Level 4.0
-            width,
-            height,
-            bitrate: targetBitrate,
-            framerate: fps,
-          },
-          {
-            codec: "avc1.4D4028", // Main Profile
-            width,
-            height,
-            bitrate: targetBitrate,
-            framerate: fps,
-          },
-          {
-            codec: "avc1.640028", // High Profile (previous default)
-            width,
-            height,
-            bitrate: targetBitrate,
-            framerate: fps,
-          },
-        ];
-
-        let chosenVideoConfig = videoConfigCandidates[0];
-        if (typeof (VideoEncoder as any).isConfigSupported === "function") {
-          for (const cfg of videoConfigCandidates) {
-            try {
-              const support = await (VideoEncoder as any).isConfigSupported(cfg);
-              log("Run", runId, "VideoEncoder.isConfigSupported", {
-                codec: cfg.codec,
-                supported: !!support?.supported,
-              });
-              if (support?.supported) {
-                chosenVideoConfig = cfg;
-                break;
-              }
-            } catch {
-              // ignore and try next
-            }
-          }
-        }
-
-        log("Run", runId, "Configuring VideoEncoder", chosenVideoConfig);
-        videoEncoder.configure(chosenVideoConfig);
-        log("Run", runId, "VideoEncoder configured");
-
-        if (audioEnabled && audioEncoder && chosenAudioConfig) {
-          // Merge all audio into a single buffer for encoding
-          const audioSampleRate = chosenAudioConfig.sampleRate;
-          const audioCtx = new OfflineAudioContext(
-            2,
-            Math.ceil(totalDuration * audioSampleRate),
-            audioSampleRate
-          );
-          let audioOffset = 0;
-
-          for (const asset of assets) {
-            if (asset.audioBuffer) {
-              const source = audioCtx.createBufferSource();
-              source.buffer = asset.audioBuffer;
-              source.connect(audioCtx.destination);
-              source.start(audioOffset);
-            }
-            audioOffset += asset.duration;
-          }
-
-          const renderedAudio = await audioCtx.startRendering();
-
-          log("Run", runId, "OfflineAudioContext rendered", {
-            length: renderedAudio.length,
-            duration: renderedAudio.duration,
-            sampleRate: renderedAudio.sampleRate,
-          });
-
-          // Encode audio in chunks
-          const audioChunkSize = 1024;
-          const totalAudioSamples = renderedAudio.length;
-          const leftChannel = renderedAudio.getChannelData(0);
-          const rightChannel = renderedAudio.getChannelData(1);
-
-          for (let i = 0; i < totalAudioSamples; i += audioChunkSize) {
-            if (abortRef.current) throw new Error("Export cancelled");
-
-            const remaining = Math.min(audioChunkSize, totalAudioSamples - i);
-
-            // Create interleaved audio data (L0, R0, L1, R1...)
-            // Some mobile WebCodecs implementations (iOS) don't accept planar data.
-            const interleavedData = new Float32Array(remaining * 2);
-            for (let j = 0; j < remaining; j++) {
-              const leftSample = leftChannel[i + j] ?? 0;
-              const rightSample = rightChannel[i + j] ?? leftSample;
-              const baseIndex = j * 2;
-              interleavedData[baseIndex] = leftSample;
-              interleavedData[baseIndex + 1] = rightSample;
-            }
-
-            // Use Math.floor for strict timestamp monotonicity (iOS Safari is strict)
-            const timestampUs = Math.floor((i / audioSampleRate) * 1_000_000);
-            const audioData = new AudioDataCtor!({
-              format: "f32",
-              sampleRate: audioSampleRate,
-              numberOfFrames: remaining,
-              numberOfChannels: 2,
-              timestamp: timestampUs,
-              data: interleavedData,
+            // If audio setup failed, we must recreate muxer without audio track
+            // or it will produce a corrupt file expecting an empty track.
+            muxer = new Muxer({
+              target: new ArrayBufferTarget(),
+              video: { codec: "avc", width, height },
+              fastStart: "in-memory",
             });
-
-            audioEncoder.encode(audioData);
-            audioData.close();
-
-            // Yield every 50 audio chunks to keep UI responsive
-            if ((i / audioChunkSize) % 50 === 0) {
-              await yieldToUI();
-            }
           }
-
-          log("Run", runId, "Audio encoding queued", {
-            totalAudioSamples,
-            audioChunkSize,
+        } else {
+           // No audio support or not requested
+           muxer = new Muxer({
+            target: new ArrayBufferTarget(),
+            video: { codec: "avc", width, height },
+            fastStart: "in-memory",
           });
         }
 
-        // Step 3: Render each frame
-        // For scenes with multiple images, divide the scene duration equally among images
-        let currentFrame = 0;
+        // --- STEP 2: Load Assets ---
+        // Use a shared decoding context matching the ENCODER'S sample rate.
+        // This handles resampling automatically during decode.
+        const decodeSampleRate = audioEnabled ? chosenAudioConfig.sampleRate : 48000;
+        const sharedDecodeCtx = new OfflineAudioContext(1, 1, decodeSampleRate);
 
-        for (let sceneIdx = 0; sceneIdx < assets.length; sceneIdx++) {
-          if (abortRef.current) {
-            videoEncoder.close();
-            audioEncoder?.close();
-            throw new Error("Export cancelled");
-          }
+        // Serialize decoding to avoid concurrency issues on mobile
+        let decodeChain: Promise<unknown> = Promise.resolve();
+        const decodeAudioSequentially = async (buf: ArrayBuffer): Promise<AudioBuffer> => {
+          const bufCopy = buf.slice(0); // clone for safety
+          const p = decodeChain.then(() => sharedDecodeCtx.decodeAudioData(bufCopy));
+          decodeChain = p.catch(() => undefined);
+          return p;
+        };
 
-          const { images, duration } = assets[sceneIdx];
-          const sceneFrames = Math.ceil(duration * fps);
-
-          log("Run", runId, "Render scene", {
-            sceneIdx: sceneIdx + 1,
-            duration,
-            sceneFrames,
-            images: images.length,
-          });
-          
-          // If we have multiple images, divide the scene into segments
-          const imageCount = Math.max(1, images.length);
-          const framesPerImage = Math.ceil(sceneFrames / imageCount);
-
-          for (let frameInScene = 0; frameInScene < sceneFrames; frameInScene++) {
-            if (abortRef.current) throw new Error("Export cancelled");
-
-            // Determine which image to show based on frame position
-            const imageIndex = Math.min(
-              Math.floor(frameInScene / framesPerImage),
-              imageCount - 1
-            );
-            const img = images[imageIndex] || null;
-
-            // Track segment position for keyframe insertion at image transitions
-            const segmentStart = imageIndex * framesPerImage;
-            
-            // Static image (no zoom/Ken Burns effect to keep brand mark stable)
-            const scale = 1;
-
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0, 0, width, height);
-
-            if (img) {
-              const imgAspect = img.width / img.height;
-              const canvasAspect = width / height;
-
-              let drawWidth = width * scale;
-              let drawHeight = height * scale;
-
-              if (imgAspect > canvasAspect) {
-                drawHeight = height * scale;
-                drawWidth = drawHeight * imgAspect;
-              } else {
-                drawWidth = width * scale;
-                drawHeight = drawWidth / imgAspect;
-              }
-
-              const drawX = (width - drawWidth) / 2;
-              const drawY = (height - drawHeight) / 2;
-
-              ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-            }
-
-            // Create video frame
-            const frame = new VideoFrame(canvas, {
-              timestamp: Math.round((currentFrame / fps) * 1_000_000), // microseconds
-              duration: Math.round((1 / fps) * 1_000_000),
-            });
-
-            // Keyframe at start of each scene and at image transitions
-            const isKeyframe = frameInScene === 0 || frameInScene === segmentStart;
-            try {
-              videoEncoder.encode(frame, { keyFrame: isKeyframe });
-            } catch (e) {
-              err("Run", runId, "videoEncoder.encode failed", {
-                sceneIdx: sceneIdx + 1,
-                frameInScene,
-                currentFrame,
-                isKeyframe,
-                message: e instanceof Error ? e.message : String(e),
-              });
-              throw e;
-            }
-            frame.close();
-
-            currentFrame++;
-
-            // Update progress and yield every 5 frames to keep UI responsive
-            const progressPct = 20 + Math.round((currentFrame / totalFrames) * 70);
-            setState((s) => ({ ...s, progress: progressPct }));
-
-            if (currentFrame % 5 === 0) {
-              await yieldToUI();
-            }
-          }
-        }
-
-        // Step 4: Finalize encoding
-        setState((s) => ({ ...s, status: "encoding", progress: 90 }));
-
-        log("Run", runId, "Flushing encoders...");
-
-        await videoEncoder.flush();
-        log("Run", runId, "VideoEncoder flushed", { videoChunkCount });
+        log("Run", runId, "Loading assets...");
         
-        if (audioEncoder) {
-          await audioEncoder.flush();
-          log("Run", runId, "AudioEncoder flushed", { audioChunkCount });
+        const assets = await Promise.all(
+          scenes.map(async (scene, idx) => {
+            if (abortRef.current) throw new Error("Export cancelled");
+
+            // Load Images
+            const imageUrls = scene.imageUrls?.length ? scene.imageUrls : (scene.imageUrl ? [scene.imageUrl] : []);
+            const loadedImages: HTMLImageElement[] = [];
+            
+            for (const url of imageUrls) {
+              try {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = () => {
+                     // Retry without CORS as fallback
+                     img.crossOrigin = null; 
+                     img.src = url; 
+                     img.onload = resolve;
+                     img.onerror = reject;
+                  };
+                  img.src = url;
+                });
+                loadedImages.push(img);
+              } catch (e) {
+                warn(`Scene ${idx}: Image load failed`, url);
+              }
+            }
+
+            // Load Audio
+            let audioBuffer: AudioBuffer | null = null;
+            if (scene.audioUrl) {
+              try {
+                const res = await fetch(scene.audioUrl);
+                const arrayBuf = await res.arrayBuffer();
+                audioBuffer = await decodeAudioSequentially(arrayBuf);
+              } catch (e) {
+                warn(`Scene ${idx}: Audio load failed`, e);
+              }
+            }
+
+            setState((s) => ({ ...s, progress: Math.round(((idx + 1) / scenes.length) * 15) }));
+
+            // Calculate duration: Audio duration (+ padding) OR Scene duration
+            const duration = audioBuffer ? (audioBuffer.duration + 0.3) : scene.duration;
+
+            return { images: loadedImages, audioBuffer, duration };
+          })
+        );
+
+        // --- STEP 3: Encode Audio (Streaming / Sequential) ---
+        // Instead of mixing everything at once (OOM risk), we process scene by scene.
+        if (audioEnabled && audioEncoder && AudioDataCtor) {
+          log("Run", runId, "Encoding Audio...");
+          
+          const sampleRate = chosenAudioConfig.sampleRate;
+          let globalSampleIndex = 0;
+          
+          for (const asset of assets) {
+            if (abortRef.current) break;
+
+            const sceneTotalSamples = Math.ceil(asset.duration * sampleRate);
+            
+            // If we have audio, encode it
+            if (asset.audioBuffer) {
+              const buffer = asset.audioBuffer;
+              const channels = buffer.numberOfChannels;
+              const samples = buffer.length;
+              const channelData = [];
+              for (let c = 0; c < channels; c++) channelData.push(buffer.getChannelData(c));
+              
+              // Process in chunks of 4096 frames (standard-ish size, safer than 1024 for JS loops)
+              const chunkSize = 4096;
+              
+              for (let i = 0; i < samples; i += chunkSize) {
+                const remaining = Math.min(chunkSize, samples - i);
+                
+                // Prepare Interleaved Buffer (L, R, L, R...)
+                const interleaved = new Float32Array(remaining * 2);
+                for (let j = 0; j < remaining; j++) {
+                  const sampleIdx = i + j;
+                  // Mix down to stereo or upmix mono
+                  const left = channelData[0][sampleIdx] || 0;
+                  const right = channels > 1 ? channelData[1][sampleIdx] : left;
+                  
+                  interleaved[j * 2] = left;
+                  interleaved[j * 2 + 1] = right;
+                }
+                
+                // Strictly monotonic timestamp calculation
+                const timestampUs = Math.floor((globalSampleIndex / sampleRate) * 1_000_000);
+                
+                const audioData = new AudioDataCtor({
+                  format: "f32",
+                  sampleRate: sampleRate,
+                  numberOfFrames: remaining,
+                  numberOfChannels: 2,
+                  timestamp: timestampUs,
+                  data: interleaved,
+                });
+                
+                audioEncoder.encode(audioData);
+                audioData.close();
+                
+                globalSampleIndex += remaining;
+              }
+            }
+            
+            // If scene is longer than audio (or no audio), fill with silence
+            // We calculate how many samples the scene *should* occupy
+            const currentSamplesInScene = asset.audioBuffer ? asset.audioBuffer.length : 0;
+            const silenceSamplesNeeded = Math.max(0, sceneTotalSamples - currentSamplesInScene);
+            
+            if (silenceSamplesNeeded > 0) {
+              const chunkSize = 4096;
+              const silenceBuffer = new Float32Array(chunkSize * 2); // Zeros
+              
+              for (let i = 0; i < silenceSamplesNeeded; i += chunkSize) {
+                 const remaining = Math.min(chunkSize, silenceSamplesNeeded - i);
+                 const chunkData = remaining === chunkSize ? silenceBuffer : new Float32Array(remaining * 2);
+                 
+                 const timestampUs = Math.floor((globalSampleIndex / sampleRate) * 1_000_000);
+                 
+                 const audioData = new AudioDataCtor({
+                  format: "f32",
+                  sampleRate: sampleRate,
+                  numberOfFrames: remaining,
+                  numberOfChannels: 2,
+                  timestamp: timestampUs,
+                  data: chunkData,
+                });
+                
+                audioEncoder.encode(audioData);
+                audioData.close();
+                globalSampleIndex += remaining;
+              }
+            }
+            
+            // Yield to UI occassionally
+            await yieldToUI();
+          }
+          
+          // Ensure we don't assume flush happens after video. 
+          // We can let it process in background or await here.
+          // Since VideoEncoder is also async, we'll flush both at the end.
         }
+
+        // --- STEP 4: Render Video ---
+        setState({ status: "rendering", progress: 20 });
+        
+        const videoEncoder = new VideoEncoder({
+          output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+          error: (e) => { throw e; },
+        });
+
+        const videoConfig = {
+          codec: "avc1.42E028", // Baseline Profile (High Compat)
+          width,
+          height,
+          bitrate: targetBitrate,
+          framerate: fps,
+        };
+        videoEncoder.configure(videoConfig);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d", { alpha: false })!;
+        
+        // --- Draw Loop ---
+        let currentFrame = 0;
+        const totalDuration = assets.reduce((sum, a) => sum + a.duration, 0);
+        const totalFrames = Math.ceil(totalDuration * fps);
+        
+        for (let sceneIdx = 0; sceneIdx < assets.length; sceneIdx++) {
+           if (abortRef.current) break;
+           
+           const { images, duration } = assets[sceneIdx];
+           const sceneFrames = Math.ceil(duration * fps);
+           const imageCount = Math.max(1, images.length);
+           const framesPerImage = Math.ceil(sceneFrames / imageCount);
+           
+           for (let frameInScene = 0; frameInScene < sceneFrames; frameInScene++) {
+             // Draw Image
+             const imageIndex = Math.min(Math.floor(frameInScene / framesPerImage), imageCount - 1);
+             const img = images[imageIndex];
+             
+             ctx.fillStyle = "#000";
+             ctx.fillRect(0, 0, width, height);
+             
+             if (img) {
+               const scale = 1;
+               const imgAspect = img.width / img.height;
+               const canvasAspect = width / height;
+               let drawW = width, drawH = height;
+               
+               if (imgAspect > canvasAspect) {
+                 drawH = height;
+                 drawW = drawH * imgAspect;
+               } else {
+                 drawW = width;
+                 drawH = drawW / imgAspect;
+               }
+               
+               ctx.drawImage(img, (width - drawW)/2, (height - drawH)/2, drawW, drawH);
+             }
+             
+             // Encode Frame
+             const timestamp = Math.round((currentFrame / fps) * 1_000_000);
+             const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6/fps) });
+             
+             const isKeyFrame = frameInScene === 0 || (frameInScene % framesPerImage === 0);
+             videoEncoder.encode(frame, { keyFrame: isKeyFrame });
+             frame.close();
+             
+             currentFrame++;
+             
+             // Progress update
+             if (currentFrame % 5 === 0) {
+               const pct = 20 + Math.round((currentFrame / totalFrames) * 70);
+               setState(s => ({ ...s, progress: pct }));
+               await yieldToUI();
+             }
+           }
+        }
+        
+        // --- STEP 5: Finalize ---
+        if (abortRef.current) throw new Error("Cancelled");
+        setState({ status: "encoding", progress: 95 });
+        
+        log("Run", runId, "Flushing encoders...");
+        
+        const flushPromises = [videoEncoder.flush()];
+        if (audioEnabled && audioEncoder) flushPromises.push(audioEncoder.flush());
+        
+        await Promise.all(flushPromises);
         
         videoEncoder.close();
-        audioEncoder?.close();
-
-        log("Run", runId, "Encoders closed", { videoChunkCount, audioChunkCount });
-
-        if (videoChunkCount === 0) {
-          throw new Error(
-            "This browser couldn't encode the video (0 chunks produced). Please try exporting on a desktop browser."
-          );
-        }
-
-        // Warn if audio was expected but no chunks were produced (silent export)
-        if (wantsAudio && audioEnabled && audioChunkCount === 0) {
-          warn("Run", runId, "Audio was requested and encoder configured, but 0 audio chunks were produced. Video will be silent.");
-          setState((s) => ({
-            ...s,
-            warning: "Audio encoding failed on this device. Video exported without sound.",
-          }));
-        }
-
-        try {
-          log("Run", runId, "Finalizing muxer...");
-          muxer.finalize();
-        } catch (e) {
-          err("Run", runId, "muxer.finalize failed", e);
-          throw new Error("Failed to finalize MP4 on this device. Try exporting on desktop.");
-        }
-
+        if (audioEncoder) audioEncoder.close();
+        
+        muxer.finalize();
+        
         const { buffer } = muxer.target as ArrayBufferTarget;
-        log("Run", runId, "Muxed buffer", { byteLength: buffer?.byteLength ?? 0 });
-        if (!buffer || buffer.byteLength < 1024) {
-          throw new Error("Export produced an empty MP4. Try exporting on a desktop browser.");
-        }
-
         const videoBlob = new Blob([buffer], { type: "video/mp4" });
         const videoUrl = URL.createObjectURL(videoBlob);
-
-        log("Run", runId, "Complete", {
-          ms: Math.round(performance.now() - t0),
-          urlCreated: !!videoUrl,
-        });
-        setState((s) => ({ ...s, status: "complete", progress: 100, videoUrl }));
-
+        
+        log("Run", runId, "Export Complete", { size: buffer.byteLength });
+        setState({ status: "complete", progress: 100, videoUrl });
+        
         return videoUrl;
+
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Export failed";
-        err("Run", runId, "Export failed", {
-          message,
-          name: error instanceof Error ? error.name : undefined,
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-        setState({ status: "error", progress: 0, error: message });
+        const msg = error instanceof Error ? error.message : "Export failed";
+        err("Export error", msg);
+        setState({ status: "error", progress: 0, error: msg });
         throw error;
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [log, warn, err]
   );
 
-  // Share video for iOS "Save to Photos" via native share sheet
   const shareVideo = useCallback(async (url: string, filename = "video.mp4") => {
     if (!url) return false;
-
     try {
       const response = await fetch(url);
       const blob = await response.blob();
       const file = new File([blob], filename, { type: "video/mp4" });
-
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: filename,
-        });
+        await navigator.share({ files: [file], title: filename });
         return true;
       }
-    } catch (e) {
-      console.warn("[VideoExport] Sharing failed:", e);
-    }
+    } catch (e) { console.warn(e); }
     return false;
   }, []);
 
   const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
     if (!url) return;
-
-    // FIX: Removed iOS-specific window.open workaround.
-    // Modern iOS Safari supports standard download attributes better.
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
-    a.style.display = "none";
-
-    document.body.appendChild(a);
-
-    // Some browsers are flaky unless the click happens on the next frame.
-    requestAnimationFrame(() => {
-      a.click();
-      document.body.removeChild(a);
-    });
+    a.click();
   }, []);
 
-  return {
-    state,
-    exportVideo,
-    downloadVideo,
-    shareVideo,
-    reset,
-  };
+  return { state, exportVideo, downloadVideo, shareVideo, reset };
 }
