@@ -76,13 +76,13 @@ interface AppSidebarProps {
   onOpenProject: (projectId: string) => void;
 }
 
-const PREMIUM_PERKS = [
-  "20 Videos per month",
-  "All visual styles included",
-  "Priority rendering",
-  "Custom branding",
-  "HD exports",
-  "Email support",
+const STARTER_PERKS = [
+  "30 credits per month",
+  "Short + Brief videos",
+  "1080p HD quality",
+  "10 visual styles",
+  "Standard narration voices",
+  "No watermark",
 ];
 
 export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
@@ -99,17 +99,18 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
-  // Show upgrade modal for freemium or cancelled users (once per session)
+  // Show upgrade modal for free tier or cancelled users (once per session per tier version)
   useEffect(() => {
     if (subscriptionLoading) return;
     
-    const hasSeenModal = sessionStorage.getItem("upgrade-modal-shown");
+    const modalKey = "upgrade-modal-shown-v2"; // Reset key for new tiers
+    const hasSeenModal = sessionStorage.getItem(modalKey);
     const shouldShowModal = (plan === "free" || cancelAtPeriodEnd) && !hasSeenModal;
     
     if (shouldShowModal) {
       const timer = setTimeout(() => {
         setUpgradeModalOpen(true);
-        sessionStorage.setItem("upgrade-modal-shown", "true");
+        sessionStorage.setItem(modalKey, "true");
       }, 2000);
       return () => clearTimeout(timer);
     }
@@ -479,7 +480,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Upgrade to Premium Modal */}
+      {/* Upgrade to Starter Modal */}
       <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
         <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader className="text-center sm:text-center">
@@ -487,15 +488,15 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               <Crown className="h-6 w-6 text-primary" />
             </div>
             <DialogTitle className="text-lg font-semibold">
-              Upgrade to Premium
+              Upgrade to Starter
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Unlock the full potential of AudioMax
+              Unlock more credits and features
             </DialogDescription>
           </DialogHeader>
           
           <div className="my-3 space-y-2">
-            {PREMIUM_PERKS.map((perk, index) => (
+            {STARTER_PERKS.map((perk, index) => (
               <div key={index} className="flex items-center gap-2">
                 <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
                   <Check className="h-2.5 w-2.5 text-primary" />
@@ -507,7 +508,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
           <div className="rounded-lg bg-muted/50 p-2.5 text-center">
             <div className="flex items-baseline justify-center gap-1">
-              <span className="text-xl font-bold">$7.99</span>
+              <span className="text-xl font-bold">$14.99</span>
               <span className="text-xs text-muted-foreground">/month</span>
             </div>
           </div>
