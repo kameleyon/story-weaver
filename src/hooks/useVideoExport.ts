@@ -16,6 +16,24 @@ interface ExportState {
 // Yield to the event loop to allow UI updates
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
+// Helper: Check if MediaRecorder supports a given mimeType
+const getMediaRecorderMimeType = (): string | null => {
+  if (typeof MediaRecorder === "undefined") return null;
+  const types = [
+    "video/mp4;codecs=avc1,mp4a.40.2",
+    "video/mp4",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+  ];
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return null;
+};
+
 /**
  * Client-side MP4 export using Canvas + VideoEncoder + mp4-muxer.
  * Renders scene images with audio into a downloadable MP4 video.
@@ -237,7 +255,235 @@ export function useVideoExport() {
           }
         }
 
-        if (wantsAudio && !audioEnabled) {
+        // If WebCodecs audio not available but user wants audio, try MediaRecorder fallback
+        const shouldTryMediaRecorder = wantsAudio && !audioEnabled && typeof MediaRecorder !== "undefined" && getMediaRecorderMimeType() !== null;
+
+        if (shouldTryMediaRecorder) {
+          log("Run", runId, "WebCodecs audio not available, attempting MediaRecorder fallback");
+
+          try {
+            setState({ status: "rendering", progress: 20 });
+
+            // Prepare audio buffers with their start times
+            const audioBuffersWithTiming: { buffer: AudioBuffer; startTime: number }[] = [];
+            let audioOffset = 0;
+            for (const asset of assets) {
+              if (asset.audioBuffer) {
+                audioBuffersWithTiming.push({ buffer: asset.audioBuffer, startTime: audioOffset });
+              }
+              audioOffset += asset.duration;
+            }
+
+            // Setup canvas with first frame
+            const firstImg = assets[0]?.images[0];
+            if (firstImg) {
+              ctx.fillStyle = "#000";
+              ctx.fillRect(0, 0, width, height);
+              const imgAspect = firstImg.width / firstImg.height;
+              const canvasAspect = width / height;
+              let drawWidth = width;
+              let drawHeight = height;
+              if (imgAspect > canvasAspect) {
+                drawWidth = height * imgAspect;
+              } else {
+                drawHeight = width / imgAspect;
+              }
+              const drawX = (width - drawWidth) / 2;
+              const drawY = (height - drawHeight) / 2;
+              ctx.drawImage(firstImg, drawX, drawY, drawWidth, drawHeight);
+            }
+
+            // Frame rendering function based on elapsed time
+            const renderCurrentFrame = (elapsedTime: number) => {
+              let timeAccum = 0;
+              let currentSceneIdx = 0;
+              let sceneStartTime = 0;
+              
+              for (let i = 0; i < assets.length; i++) {
+                if (elapsedTime < timeAccum + assets[i].duration) {
+                  currentSceneIdx = i;
+                  sceneStartTime = timeAccum;
+                  break;
+                }
+                timeAccum += assets[i].duration;
+              }
+
+              const asset = assets[currentSceneIdx];
+              if (!asset) return;
+
+              const sceneElapsed = elapsedTime - sceneStartTime;
+              const imageCount = Math.max(1, asset.images.length);
+              const timePerImage = asset.duration / imageCount;
+              const currentImageIdx = Math.min(Math.floor(sceneElapsed / timePerImage), imageCount - 1);
+
+              const img = asset.images[currentImageIdx];
+              if (!img) return;
+
+              ctx.fillStyle = "#000";
+              ctx.fillRect(0, 0, width, height);
+
+              const imgAspect = img.width / img.height;
+              const canvasAspect = width / height;
+              let drawWidth = width;
+              let drawHeight = height;
+              if (imgAspect > canvasAspect) {
+                drawWidth = height * imgAspect;
+              } else {
+                drawHeight = width / imgAspect;
+              }
+              const drawX = (width - drawWidth) / 2;
+              const drawY = (height - drawHeight) / 2;
+              ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+            };
+
+            // Create audio context for real-time playback
+            const audioCtx = new AudioContext();
+            const audioDestination = audioCtx.createMediaStreamDestination();
+
+            // Get canvas stream
+            const canvasStream = canvas.captureStream(fps);
+
+            // Combine video and audio tracks
+            const combinedStream = new MediaStream([
+              ...canvasStream.getVideoTracks(),
+              ...audioDestination.stream.getAudioTracks(),
+            ]);
+
+            // Schedule all audio buffers
+            const audioSources: AudioBufferSourceNode[] = [];
+            for (const { buffer, startTime } of audioBuffersWithTiming) {
+              const source = audioCtx.createBufferSource();
+              source.buffer = buffer;
+              source.connect(audioDestination);
+              audioSources.push(source);
+            }
+
+            // Determine best mimeType
+            const mimeType = getMediaRecorderMimeType()!;
+            log("Run", runId, "MediaRecorder using mimeType:", mimeType);
+
+            // Setup MediaRecorder
+            const chunks: Blob[] = [];
+            const recorder = new MediaRecorder(combinedStream, {
+              mimeType,
+              videoBitsPerSecond: targetBitrate,
+              audioBitsPerSecond: 128_000,
+            });
+
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) {
+                chunks.push(e.data);
+              }
+            };
+
+            const recordingPromise = new Promise<Blob>((resolve, reject) => {
+              recorder.onerror = (e) => {
+                warn("Run", runId, "MediaRecorder error", e);
+                reject(new Error("MediaRecorder failed"));
+              };
+
+              recorder.onstop = () => {
+                log("Run", runId, "MediaRecorder stopped, chunks:", chunks.length);
+                const blob = new Blob(chunks, { type: mimeType });
+                resolve(blob);
+              };
+            });
+
+            // Start recording
+            recorder.start(100);
+
+            // Start audio at scheduled times
+            const recordingStartTime = audioCtx.currentTime;
+            for (let i = 0; i < audioBuffersWithTiming.length; i++) {
+              const { startTime } = audioBuffersWithTiming[i];
+              audioSources[i].start(recordingStartTime + startTime);
+            }
+
+            log("Run", runId, "MediaRecorder: Recording started, duration:", totalDuration);
+
+            // Show warning that this will take real-time
+            setState((s) => ({
+              ...s,
+              warning: `Exporting with audio takes ~${Math.ceil(totalDuration)}s. Please keep the app open.`,
+            }));
+
+            // Render frames in real-time using requestAnimationFrame
+            const recordingStartWallTime = performance.now();
+            let animationFrameId: number;
+            let lastProgressUpdate = 0;
+
+            const renderLoop = () => {
+              if (abortRef.current) {
+                if (recorder.state === "recording") {
+                  recorder.stop();
+                }
+                return;
+              }
+
+              const elapsed = (performance.now() - recordingStartWallTime) / 1000;
+
+              // Update canvas with current frame based on actual elapsed time
+              renderCurrentFrame(elapsed);
+
+              // Update progress every 200ms
+              if (elapsed - lastProgressUpdate > 0.2) {
+                const pct = Math.min(90, 20 + (elapsed / totalDuration) * 70);
+                setState((s) => ({ ...s, progress: pct }));
+                lastProgressUpdate = elapsed;
+              }
+
+              if (elapsed >= totalDuration) {
+                // Give a small buffer for final audio, then stop
+                setTimeout(() => {
+                  if (recorder.state === "recording") {
+                    recorder.stop();
+                  }
+                }, 300);
+                return;
+              }
+
+              animationFrameId = requestAnimationFrame(renderLoop);
+            };
+
+            // Start the render loop
+            animationFrameId = requestAnimationFrame(renderLoop);
+
+            let videoBlob: Blob;
+            try {
+              videoBlob = await recordingPromise;
+            } finally {
+              // Clean up animation frame if still running
+              if (typeof animationFrameId !== "undefined") {
+                cancelAnimationFrame(animationFrameId);
+              }
+              await audioCtx.close();
+            }
+
+            setState((s) => ({ ...s, status: "encoding", progress: 95, warning: undefined }));
+
+            log("Run", runId, "MediaRecorder export complete", { blobSize: videoBlob.size });
+
+            if (videoBlob.size < 1024) {
+              throw new Error("MediaRecorder produced empty video");
+            }
+
+            const videoUrl = URL.createObjectURL(videoBlob);
+
+            log("Run", runId, "Complete (MediaRecorder)", {
+              ms: Math.round(performance.now() - t0),
+            });
+            setState({ status: "complete", progress: 100, videoUrl });
+
+            return videoUrl;
+          } catch (mediaRecorderError) {
+            warn("Run", runId, "MediaRecorder fallback failed, continuing with silent WebCodecs export", mediaRecorderError);
+            // Fall through to WebCodecs silent export
+            setState((s) => ({
+              ...s,
+              warning: "Audio export failed on this device. Exporting a silent video.",
+            }));
+          }
+        } else if (wantsAudio && !audioEnabled) {
           setState((s) => ({
             ...s,
             warning: "Audio export isn't supported on this device. Exporting a silent video.",
@@ -596,12 +842,29 @@ export function useVideoExport() {
     try {
       const response = await fetch(url);
       const blob = await response.blob();
-      const file = new File([blob], filename, { type: "video/mp4" });
+      
+      // Detect format from blob type and adjust filename/mime accordingly
+      let mimeType = blob.type || "video/mp4";
+      let adjustedFilename = filename;
+      
+      if (mimeType.includes("webm") && !filename.endsWith(".webm")) {
+        adjustedFilename = filename.replace(/\.(mp4|mov)$/i, ".webm");
+        if (!adjustedFilename.endsWith(".webm")) {
+          adjustedFilename += ".webm";
+        }
+      } else if (mimeType.includes("mp4") && !filename.endsWith(".mp4")) {
+        adjustedFilename = filename.replace(/\.(webm|mov)$/i, ".mp4");
+        if (!adjustedFilename.endsWith(".mp4")) {
+          adjustedFilename += ".mp4";
+        }
+      }
+      
+      const file = new File([blob], adjustedFilename, { type: mimeType });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: filename,
+          title: adjustedFilename,
         });
         return true;
       }
@@ -611,23 +874,52 @@ export function useVideoExport() {
     return false;
   }, []);
 
-  const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
+  const downloadVideo = useCallback(async (url: string, filename = "video.mp4") => {
     if (!url) return;
 
-    // FIX: Removed iOS-specific window.open workaround.
-    // Modern iOS Safari supports standard download attributes better.
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.style.display = "none";
+    try {
+      // Fetch the blob to detect its actual type
+      const response = await fetch(url);
+      const blob = await response.blob();
+      
+      // Adjust filename based on actual blob type
+      let adjustedFilename = filename;
+      if (blob.type.includes("webm") && !filename.endsWith(".webm")) {
+        adjustedFilename = filename.replace(/\.(mp4|mov)$/i, ".webm");
+        if (!adjustedFilename.endsWith(".webm")) {
+          adjustedFilename = filename.replace(/\.[^.]+$/, "") + ".webm";
+        }
+      }
+      
+      // Create a new object URL from the blob for download
+      const downloadUrl = URL.createObjectURL(blob);
+      
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = adjustedFilename;
+      a.style.display = "none";
 
-    document.body.appendChild(a);
+      document.body.appendChild(a);
 
-    // Some browsers are flaky unless the click happens on the next frame.
-    requestAnimationFrame(() => {
-      a.click();
-      document.body.removeChild(a);
-    });
+      requestAnimationFrame(() => {
+        a.click();
+        document.body.removeChild(a);
+        // Clean up the temporary URL after download
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      });
+    } catch (e) {
+      // Fallback to direct download if fetch fails
+      console.warn("[VideoExport] Download detection failed, using direct link:", e);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      requestAnimationFrame(() => {
+        a.click();
+        document.body.removeChild(a);
+      });
+    }
   }, []);
 
   return {
