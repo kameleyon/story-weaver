@@ -57,6 +57,7 @@ export interface GenerationState {
   costTracking?: CostTracking;
   phaseTimings?: PhaseTimings;
   totalTimeMs?: number;
+  projectType?: "doc2video" | "storytelling" | "smartflow";
 }
 
 interface GenerationParams {
@@ -230,6 +231,7 @@ export function useGenerationPipeline() {
         statusMessage: "Starting generation...",
         costTracking: undefined,
         phaseTimings: undefined,
+        projectType: params.projectType,
       });
 
       try {
