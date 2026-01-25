@@ -22,6 +22,7 @@ import {
   FolderOpen,
   Video,
   Clapperboard,
+  Wallpaper,
   LayoutGrid,
   List,
   Wand2,
@@ -551,6 +552,8 @@ export default function Projects() {
                         <div className="p-2 rounded-lg bg-background/80 backdrop-blur-sm">
                           {project.project_type === "storytelling" ? (
                             <Clapperboard className="h-4 w-4 text-primary" />
+                          ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
+                            <Wallpaper className="h-4 w-4 text-primary" />
                           ) : (
                             <Video className="h-4 w-4 text-primary" />
                           )}
@@ -657,6 +660,8 @@ export default function Projects() {
                           )}>
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-4 w-4 text-primary" />
+                            ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
+                              <Wallpaper className="h-4 w-4 text-primary" />
                             ) : (
                               <Video className="h-4 w-4 text-primary" />
                             )}
@@ -668,7 +673,11 @@ export default function Projects() {
                       </TableCell>
                       <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
                         <Badge variant="outline" className="capitalize text-xs">
-                          {project.project_type === "storytelling" ? "Story" : "Doc2Video"}
+                          {project.project_type === "storytelling" 
+                            ? "Story" 
+                            : project.project_type === "smartflow" || project.project_type === "smart-flow"
+                              ? "Smart Flow"
+                              : "Explainer"}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
