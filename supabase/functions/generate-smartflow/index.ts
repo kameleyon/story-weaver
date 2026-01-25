@@ -8,7 +8,7 @@ const corsHeaders = {
 
 // ============= INPUT VALIDATION =============
 const INPUT_LIMITS = {
-  dataSource: 250000, // Max 250K characters for data
+  dataSource: 250000,
   extractionPrompt: 2000,
   style: 50,
   customStyle: 2000,
@@ -18,8 +18,8 @@ const INPUT_LIMITS = {
   voiceName: 200,
 };
 
-const ALLOWED_FORMATS = ["landscape", "portrait", "square"];
-const ALLOWED_STYLES = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "sketch", "crayon", "custom"];
+const ALLOWED_FORMATS = ["landscape", "portrait", "square"] as const;
+const ALLOWED_STYLES = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "sketch", "crayon", "custom"] as const;
 
 function validateString(value: unknown, fieldName: string, maxLength: number): string | null {
   if (value === undefined || value === null) return null;
@@ -37,7 +37,7 @@ function validateEnum<T extends string>(value: unknown, fieldName: string, allow
   return lower as T;
 }
 
-// ============= STYLE DESCRIPTIONS =============
+// ============= STYLE DESCRIPTIONS (consistent with generate-video) =============
 const STYLE_DESCRIPTIONS: Record<string, string> = {
   minimalist: "Clean, modern minimalist design with simple shapes, flat colors, and ample white space. Professional corporate aesthetic.",
   doodle: "Hand-drawn doodle style with sketchy lines, playful icons, and a casual, approachable feel.",
@@ -50,12 +50,128 @@ const STYLE_DESCRIPTIONS: Record<string, string> = {
   custom: "",
 };
 
-// ============= FORMAT MAPPING =============
-const FORMAT_SPECS: Record<string, { width: number; height: number; aspect: string }> = {
-  portrait: { width: 1080, height: 1920, aspect: "9:16 vertical" },
-  square: { width: 1080, height: 1080, aspect: "1:1 square" },
-  landscape: { width: 1920, height: 1080, aspect: "16:9 horizontal" },
+// ============= FORMAT MAPPING (consistent with generate-video) =============
+const FORMAT_SPECS: Record<string, { aspectRatio: string; description: string }> = {
+  portrait: { aspectRatio: "9:16", description: "VERTICAL 9:16 portrait orientation - tall and narrow like a phone screen" },
+  square: { aspectRatio: "1:1", description: "SQUARE 1:1 orientation - equal width and height" },
+  landscape: { aspectRatio: "16:9", description: "HORIZONTAL 16:9 landscape orientation - wide like a TV screen" },
 };
+
+// ============= IMAGE GENERATION VIA REPLICATE (consistent with generate-video) =============
+async function generateImageWithReplicate(
+  prompt: string,
+  replicateApiKey: string,
+  format: string,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  const aspectRatio = FORMAT_SPECS[format]?.aspectRatio || "1:1";
+
+  try {
+    console.log(`[SMARTFLOW-IMG] Generating image with Replicate nano-banana, aspect_ratio: ${aspectRatio}`);
+
+    const createResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana/predictions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          prompt,
+          aspect_ratio: aspectRatio,
+          output_format: "png",
+        },
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errText = await createResponse.text().catch(() => "");
+      console.error(`[SMARTFLOW-IMG] Replicate create failed: ${createResponse.status} - ${errText}`);
+      return { ok: false, error: `Replicate failed: ${createResponse.status}` };
+    }
+
+    const result = await createResponse.json();
+    const outputUrl = result.output;
+
+    if (!outputUrl) {
+      console.error("[SMARTFLOW-IMG] No output URL in response");
+      return { ok: false, error: "No image URL returned" };
+    }
+
+    // Fetch the actual image bytes
+    const imageResponse = await fetch(outputUrl);
+    if (!imageResponse.ok) {
+      return { ok: false, error: "Failed to fetch generated image" };
+    }
+
+    const bytes = new Uint8Array(await imageResponse.arrayBuffer());
+    console.log(`[SMARTFLOW-IMG] Image generated successfully, ${bytes.length} bytes`);
+    return { ok: true, bytes };
+  } catch (err) {
+    console.error("[SMARTFLOW-IMG] Error:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// ============= TTS VIA REPLICATE CHATTERBOX (consistent with generate-video) =============
+async function generateAudioWithReplicate(
+  text: string,
+  replicateApiKey: string,
+  voiceGender: string,
+): Promise<{ ok: true; bytes: Uint8Array; durationSeconds: number } | { ok: false; error: string }> {
+  // Use speaker names that work with chatterbox-turbo
+  const speakerText = voiceGender === "male" ? "Aaron" : "Marisol";
+
+  try {
+    console.log(`[SMARTFLOW-TTS] Generating audio with Replicate chatterbox, voice: ${speakerText}`);
+
+    const response = await fetch("https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          text,
+          speaker: speakerText,
+          exaggeration: 0.4,
+          cfg_weight: 0.5,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      console.error(`[SMARTFLOW-TTS] Replicate TTS failed: ${response.status} - ${errText}`);
+      return { ok: false, error: `TTS failed: ${response.status}` };
+    }
+
+    const result = await response.json();
+    const audioUrl = result.output;
+
+    if (!audioUrl) {
+      return { ok: false, error: "No audio URL returned" };
+    }
+
+    // Fetch the actual audio bytes
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) {
+      return { ok: false, error: "Failed to fetch generated audio" };
+    }
+
+    const bytes = new Uint8Array(await audioResponse.arrayBuffer());
+    // Estimate duration (MP3 at ~128kbps ≈ 16KB/sec)
+    const durationSeconds = Math.max(1, Math.round(bytes.length / 16000));
+    
+    console.log(`[SMARTFLOW-TTS] Audio generated successfully, ${bytes.length} bytes, ~${durationSeconds}s`);
+    return { ok: true, bytes, durationSeconds };
+  } catch (err) {
+    console.error("[SMARTFLOW-TTS] Error:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -88,16 +204,28 @@ serve(async (req) => {
 
     console.log("[SMARTFLOW] User authenticated:", user.id);
 
+    // Get Replicate API key (same as generate-video)
+    const replicateApiKey = Deno.env.get("REPLICATE_TTS_API_KEY");
+    if (!replicateApiKey) {
+      return new Response(JSON.stringify({ error: "REPLICATE_TTS_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
     // Parse and validate request body
     const body = await req.json();
-    const phase = body.phase || "generate"; // "generate" or "regenerate-image"
-    
-    // Handle image regeneration
+    const phase = body.phase || "generate";
+
+    // ============= REGENERATE IMAGE =============
     if (phase === "regenerate-image") {
       const generationId = body.generationId;
       const imagePromptOverride = validateString(body.imagePrompt, "imagePrompt", 5000);
-      const format = validateEnum(body.format, "format", ALLOWED_FORMATS as unknown as readonly string[]) || "square";
-      const style = validateEnum(body.style, "style", ALLOWED_STYLES as unknown as readonly string[]) || "minimalist";
+      const format = validateEnum(body.format, "format", ALLOWED_FORMATS) || "square";
+      const style = validateEnum(body.style, "style", ALLOWED_STYLES) || "minimalist";
       const customStyle = validateString(body.customStyle, "customStyle", INPUT_LIMITS.customStyle);
       const brandMark = validateString(body.brandMark, "brandMark", INPUT_LIMITS.brandMark);
 
@@ -113,74 +241,35 @@ serve(async (req) => {
       const styleDesc = style === "custom" ? customStyle : STYLE_DESCRIPTIONS[style] || STYLE_DESCRIPTIONS.minimalist;
       const formatSpec = FORMAT_SPECS[format] || FORMAT_SPECS.square;
 
-      const imagePrompt = `Create a professional infographic image.
+      const imagePrompt = `Create a professional infographic visualization.
 
-CRITICAL FORMAT REQUIREMENT: This image MUST be ${formatSpec.aspect} orientation with dimensions ${formatSpec.width}x${formatSpec.height} pixels.
-${format === "portrait" ? "This is a VERTICAL/TALL image (height is greater than width). The image should be taller than it is wide, like a phone screen in portrait mode." : ""}
-${format === "landscape" ? "This is a HORIZONTAL/WIDE image (width is greater than height). The image should be wider than it is tall, like a TV screen." : ""}
-${format === "square" ? "This is a SQUARE image with equal width and height." : ""}
+${formatSpec.description}
 
 STYLE: ${styleDesc}
 
 USER'S MODIFICATION REQUEST:
 ${imagePromptOverride}
 
-${brandMark ? `WATERMARK: Add "${brandMark}" as a subtle brand mark in the bottom center of the image.` : ""}
+${brandMark ? `Include subtle brand watermark: "${brandMark}" in the bottom center.` : ""}
 
-Create a visually stunning, professional infographic that clearly communicates these insights. Use icons, charts, and visual elements appropriate for the style. Ensure text is readable and the layout is balanced.`;
+Create a stunning, professional infographic with clear visual hierarchy, readable text, and balanced composition.`;
 
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) {
-        throw new Error("LOVABLE_API_KEY not configured");
+      // Generate with Replicate nano-banana
+      const imageResult = await generateImageWithReplicate(imagePrompt, replicateApiKey, format);
+      
+      if (!imageResult.ok) {
+        throw new Error(imageResult.error);
       }
 
-      const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
-          messages: [{ role: "user", content: imagePrompt }],
-          modalities: ["image", "text"],
-        }),
-      });
-
-      if (!imageResponse.ok) {
-        const errorText = await imageResponse.text();
-        console.error("[SMARTFLOW] Image regeneration error:", imageResponse.status, errorText);
-        throw new Error(`Image regeneration failed: ${imageResponse.status}`);
-      }
-
-      const imageData = await imageResponse.json();
-      const imageBase64 = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-      if (!imageBase64) {
-        throw new Error("No image generated");
-      }
-
-      // Upload new image
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-      const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
       const imagePath = `${user.id}/${generationId}/infographic.png`;
-
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
       const { error: uploadError } = await adminClient.storage
         .from("audio")
-        .upload(imagePath, imageBytes, {
-          contentType: "image/png",
-          upsert: true,
-        });
+        .upload(imagePath, imageResult.bytes, { contentType: "image/png", upsert: true });
 
       if (uploadError) {
         throw new Error("Failed to upload regenerated image");
       }
 
-      // Create signed URL
       const { data: signedUrlData, error: signedUrlError } = await adminClient.storage
         .from("audio")
         .createSignedUrl(imagePath, 60 * 60 * 24 * 365);
@@ -192,18 +281,12 @@ Create a visually stunning, professional infographic that clearly communicates t
       console.log("[SMARTFLOW] Image regenerated successfully:", signedUrlData.signedUrl);
 
       return new Response(
-        JSON.stringify({
-          success: true,
-          imageUrl: signedUrlData.signedUrl,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ success: true, imageUrl: signedUrlData.signedUrl }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Handle audio regeneration
+    // ============= REGENERATE AUDIO =============
     if (phase === "regenerate-audio") {
       const generationId = body.generationId;
       const script = validateString(body.script, "script", 10000);
@@ -218,61 +301,16 @@ Create a visually stunning, professional infographic that clearly communicates t
 
       console.log("[SMARTFLOW] Regenerating audio for generation:", generationId);
 
-      const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
-      if (!GOOGLE_TTS_API_KEY) {
-        throw new Error("GOOGLE_TTS_API_KEY not configured");
+      const audioResult = await generateAudioWithReplicate(script, replicateApiKey, voiceGender);
+      
+      if (!audioResult.ok) {
+        throw new Error(audioResult.error);
       }
 
-      const voiceMap: Record<string, string> = {
-        male: "Enceladus",
-        female: "Kore",
-      };
-
-      const ttsResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GOOGLE_TTS_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: script }] }],
-            generationConfig: {
-              responseModalities: ["AUDIO"],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: voiceMap[voiceGender] || "Kore" },
-                },
-              },
-            },
-          }),
-        }
-      );
-
-      if (!ttsResponse.ok) {
-        const errorText = await ttsResponse.text();
-        console.error("[SMARTFLOW] TTS error:", ttsResponse.status, errorText);
-        throw new Error(`Audio generation failed: ${ttsResponse.status}`);
-      }
-
-      const ttsData = await ttsResponse.json();
-      const audioBase64 = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-      if (!audioBase64) {
-        throw new Error("No audio generated");
-      }
-
-      const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
       const audioPath = `${user.id}/${generationId}/narration.mp3`;
-
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
       const { error: audioUploadError } = await adminClient.storage
         .from("audio")
-        .upload(audioPath, audioBytes, {
-          contentType: "audio/mpeg",
-          upsert: true,
-        });
+        .upload(audioPath, audioResult.bytes, { contentType: "audio/mpeg", upsert: true });
 
       if (audioUploadError) {
         throw new Error("Failed to upload regenerated audio");
@@ -286,7 +324,7 @@ Create a visually stunning, professional infographic that clearly communicates t
         throw new Error("Failed to create signed URL for audio");
       }
 
-      // Update generation record with new script
+      // Update generation record
       await supabase
         .from("generations")
         .update({ script, audio_url: audioSignedData.signedUrl })
@@ -296,23 +334,17 @@ Create a visually stunning, professional infographic that clearly communicates t
       console.log("[SMARTFLOW] Audio regenerated successfully:", audioSignedData.signedUrl);
 
       return new Response(
-        JSON.stringify({
-          success: true,
-          audioUrl: audioSignedData.signedUrl,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ success: true, audioUrl: audioSignedData.signedUrl }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // ============= NORMAL GENERATION FLOW =============
     const dataSource = validateString(body.dataSource, "dataSource", INPUT_LIMITS.dataSource);
     const extractionPrompt = validateString(body.extractionPrompt, "extractionPrompt", INPUT_LIMITS.extractionPrompt);
-    const style = validateEnum(body.style, "style", ALLOWED_STYLES as unknown as readonly string[]) || "minimalist";
+    const style = validateEnum(body.style, "style", ALLOWED_STYLES) || "minimalist";
     const customStyle = validateString(body.customStyle, "customStyle", INPUT_LIMITS.customStyle);
-    const format = validateEnum(body.format, "format", ALLOWED_FORMATS as unknown as readonly string[]) || "square";
+    const format = validateEnum(body.format, "format", ALLOWED_FORMATS) || "square";
     const brandMark = validateString(body.brandMark, "brandMark", INPUT_LIMITS.brandMark);
     const enableVoice = Boolean(body.enableVoice);
     const voiceType = body.voiceType || "standard";
@@ -389,7 +421,7 @@ Create a visually stunning, professional infographic that clearly communicates t
 
     console.log("[SMARTFLOW] Generation created:", generation.id);
 
-    // ============= STEP 1: Analyze data and create infographic content =============
+    // ============= STEP 1: Analyze data with Lovable AI =============
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY not configured");
@@ -413,7 +445,7 @@ Your task:
 4. Write a short narration script explaining the infographic (60-90 seconds when read aloud)
 
 The infographic should be:
-- Format: ${formatSpec.aspect} (${formatSpec.width}x${formatSpec.height}px)
+- Format: ${formatSpec.description}
 - Style: ${styleDesc}
 ${brandMark ? `- Include brand mark: "${brandMark}" in bottom center` : ""}
 
@@ -421,7 +453,7 @@ Respond with a JSON object containing:
 {
   "title": "Infographic title",
   "keyInsights": ["insight 1", "insight 2", ...],
-  "imagePrompt": "Detailed prompt for image generation...",
+  "imagePrompt": "Detailed prompt for image generation describing layout, visual elements, icons, colors, and composition...",
   "narrationScript": "Script for voice narration..."
 }`;
 
@@ -468,13 +500,10 @@ Respond with a JSON object containing:
       .eq("id", generation.id)
       .eq("user_id", user.id);
 
-    // ============= STEP 2: Generate infographic image =============
-    const imagePrompt = `Create a professional infographic image.
+    // ============= STEP 2: Generate infographic image with Replicate =============
+    const imagePrompt = `Create a professional infographic visualization.
 
-CRITICAL FORMAT REQUIREMENT: This image MUST be ${formatSpec.aspect} orientation with dimensions ${formatSpec.width}x${formatSpec.height} pixels.
-${format === "portrait" ? "This is a VERTICAL/TALL image (height is greater than width). The image should be taller than it is wide, like a phone screen in portrait mode." : ""}
-${format === "landscape" ? "This is a HORIZONTAL/WIDE image (width is greater than height). The image should be wider than it is tall, like a TV screen." : ""}
-${format === "square" ? "This is a SQUARE image with equal width and height." : ""}
+${formatSpec.description}
 
 STYLE: ${styleDesc}
 
@@ -486,62 +515,33 @@ ${analysisResult.keyInsights?.map((i: string, idx: number) => `${idx + 1}. ${i}`
 DESIGN REQUIREMENTS:
 ${analysisResult.imagePrompt}
 
-${brandMark ? `WATERMARK: Add "${brandMark}" as a subtle brand mark in the bottom center of the image.` : ""}
+${brandMark ? `Include subtle brand watermark: "${brandMark}" in the bottom center.` : ""}
 
-Create a visually stunning, professional infographic that clearly communicates these insights. Use icons, charts, and visual elements appropriate for the style. Ensure text is readable and the layout is balanced.`;
+Create a stunning, professional infographic with clear visual hierarchy, readable text, icons, charts, and balanced composition.`;
 
-    console.log("[SMARTFLOW] Generating infographic image...");
+    console.log("[SMARTFLOW] Generating infographic image with Replicate...");
 
-    const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: imagePrompt }],
-        modalities: ["image", "text"],
-      }),
-    });
+    const imageResult = await generateImageWithReplicate(imagePrompt, replicateApiKey, format);
 
-    if (!imageResponse.ok) {
-      const errorText = await imageResponse.text();
-      console.error("[SMARTFLOW] Image generation error:", imageResponse.status, errorText);
-      throw new Error(`Image generation failed: ${imageResponse.status}`);
-    }
-
-    const imageData = await imageResponse.json();
-    const imageBase64 = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!imageBase64) {
-      console.error("[SMARTFLOW] No image in response");
-      throw new Error("No image generated");
+    if (!imageResult.ok) {
+      console.error("[SMARTFLOW] Image generation failed:", imageResult.error);
+      throw new Error(imageResult.error);
     }
 
     console.log("[SMARTFLOW] Image generated successfully");
 
     // Upload image to storage
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-    const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
     const imagePath = `${user.id}/${generation.id}/infographic.png`;
-
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
     const { error: uploadError } = await adminClient.storage
       .from("audio")
-      .upload(imagePath, imageBytes, {
-        contentType: "image/png",
-        upsert: true,
-      });
+      .upload(imagePath, imageResult.bytes, { contentType: "image/png", upsert: true });
 
     if (uploadError) {
       console.error("[SMARTFLOW] Image upload error:", uploadError);
       throw new Error("Failed to upload image");
     }
 
-    // Create signed URL for private bucket (valid for 1 year)
+    // Create signed URL
     const { data: signedUrlData, error: signedUrlError } = await adminClient.storage
       .from("audio")
       .createSignedUrl(imagePath, 60 * 60 * 24 * 365);
@@ -552,7 +552,6 @@ Create a visually stunning, professional infographic that clearly communicates t
     }
 
     const imageUrl = signedUrlData.signedUrl;
-
     console.log("[SMARTFLOW] Image uploaded:", imageUrl);
 
     // Update progress
@@ -562,75 +561,38 @@ Create a visually stunning, professional infographic that clearly communicates t
       .eq("id", generation.id)
       .eq("user_id", user.id);
 
-    // ============= STEP 3: Generate narration audio (if enabled) =============
+    // ============= STEP 3: Generate narration audio with Replicate (if enabled) =============
     let audioUrl: string | null = null;
     let duration = 0;
 
     if (enableVoice && analysisResult.narrationScript) {
-      console.log("[SMARTFLOW] Generating narration audio...");
+      console.log("[SMARTFLOW] Generating narration audio with Replicate...");
 
       try {
-        // Use Gemini TTS for narration
-        const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
-        if (!GOOGLE_TTS_API_KEY) {
-          throw new Error("GOOGLE_TTS_API_KEY not configured");
-        }
-
-        const voiceMap: Record<string, string> = {
-          male: "Enceladus",
-          female: "Kore",
-        };
-
-        const ttsResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GOOGLE_TTS_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: analysisResult.narrationScript }] }],
-              generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName: voiceMap[voiceGender] || "Kore" },
-                  },
-                },
-              },
-            }),
-          }
+        const audioResult = await generateAudioWithReplicate(
+          analysisResult.narrationScript,
+          replicateApiKey,
+          voiceGender
         );
 
-        if (ttsResponse.ok) {
-          const ttsData = await ttsResponse.json();
-          const audioBase64 = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (audioResult.ok) {
+          const audioPath = `${user.id}/${generation.id}/narration.mp3`;
+          const { error: audioUploadError } = await adminClient.storage
+            .from("audio")
+            .upload(audioPath, audioResult.bytes, { contentType: "audio/mpeg", upsert: true });
 
-          if (audioBase64) {
-            // Decode and upload audio
-            const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
-            const audioPath = `${user.id}/${generation.id}/narration.mp3`;
-
-            const { error: audioUploadError } = await adminClient.storage
+          if (!audioUploadError) {
+            const { data: audioSignedData } = await adminClient.storage
               .from("audio")
-              .upload(audioPath, audioBytes, {
-                contentType: "audio/mpeg",
-                upsert: true,
-              });
+              .createSignedUrl(audioPath, 60 * 60 * 24 * 365);
 
-            if (!audioUploadError) {
-              // Create signed URL for audio (valid for 1 year)
-              const { data: audioSignedData } = await adminClient.storage
-                .from("audio")
-                .createSignedUrl(audioPath, 60 * 60 * 24 * 365);
-              
-              audioUrl = audioSignedData?.signedUrl || null;
-              
-              // Estimate duration (roughly 150 words per minute)
-              const wordCount = analysisResult.narrationScript.split(/\s+/).length;
-              duration = Math.min(120, Math.ceil((wordCount / 150) * 60));
-              
-              console.log("[SMARTFLOW] Audio uploaded:", audioUrl, "duration:", duration);
-            }
+            audioUrl = audioSignedData?.signedUrl || null;
+            duration = audioResult.durationSeconds;
+
+            console.log("[SMARTFLOW] Audio uploaded:", audioUrl, "duration:", duration);
           }
+        } else {
+          console.error("[SMARTFLOW] Audio generation failed:", audioResult.error);
         }
       } catch (audioError) {
         console.error("[SMARTFLOW] Audio generation error:", audioError);
@@ -696,19 +658,13 @@ Create a visually stunning, professional infographic that clearly communicates t
         keyInsights: analysisResult.keyInsights,
         scenes,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("[SMARTFLOW] Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
