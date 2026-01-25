@@ -39,12 +39,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Plan limits configuration
+// Plan limits configuration - Updated tiers
 const planLimits = {
-  free: { videos: 5, label: "Freemium", color: "bg-muted" },
-  premium: { videos: 50, label: "Premium", color: "bg-primary/20" },
-  pro: { videos: 200, label: "Pro", color: "bg-primary/30" },
-  platinum: { videos: Infinity, label: "Platinum", color: "bg-primary/40" },
+  free: { credits: 5, label: "Free", color: "bg-muted" },
+  starter: { credits: 30, label: "Starter", color: "bg-primary/20" },
+  creator: { credits: 100, label: "Creator", color: "bg-primary/30" },
+  professional: { credits: 300, label: "Professional", color: "bg-primary/40" },
 };
 
 export default function Usage() {
@@ -179,9 +179,9 @@ export default function Usage() {
   }, [allActivity, selectedMonth]);
 
   const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
-  const videosLimit = planInfo.videos;
+  const creditsLimit = planInfo.credits;
   const videosCreated = usageData?.videosCreated || 0;
-  const videosPercentage = videosLimit === Infinity ? 0 : (videosCreated / videosLimit) * 100;
+  const creditsPercentage = creditsLimit === Infinity ? 0 : (videosCreated / creditsLimit) * 100;
 
   // Calculate renewal date
   const renewalDate = subscriptionEnd 
@@ -315,14 +315,14 @@ export default function Usage() {
                     {isLoadingUsage ? "..." : videosCreated}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    / {videosLimit === Infinity ? "∞" : videosLimit}
+                    / {creditsLimit === Infinity ? "∞" : creditsLimit}
                   </span>
                 </div>
-                <Progress value={videosPercentage} className="mt-3 h-2" />
+                <Progress value={creditsPercentage} className="mt-3 h-2" />
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {videosLimit === Infinity 
-                    ? "Unlimited videos with your plan" 
-                    : `${Math.max(0, videosLimit - videosCreated)} videos remaining this cycle`}
+                  {creditsLimit === Infinity 
+                    ? "Unlimited credits with your plan" 
+                    : `${Math.max(0, creditsLimit - videosCreated)} credits remaining this cycle`}
                 </p>
               </CardContent>
             </Card>

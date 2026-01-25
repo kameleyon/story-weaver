@@ -12,18 +12,27 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
-// Credit pack product IDs
+// Credit pack product IDs - Updated pricing
 const creditPackProducts: Record<string, number> = {
-  "prod_TnzLJDYSV45eEF": 10,   // 10 credits
-  "prod_TnzL0a9nwvoZKm": 50,   // 50 credits
-  "prod_TnzL2ewLWIt1hD": 150,  // 150 credits
+  "prod_TqznJ5NkfAEdUY": 15,   // 15 credits - $11.99
+  "prod_TqznSfnDazIjj2": 50,   // 50 credits - $34.99
+  "prod_Tqznn5NHeJnhS6": 150,  // 150 credits - $89.99
+  "prod_Tqznoknz2TmraQ": 500,  // 500 credits - $249.99
+  // Legacy packs (keep for existing purchases)
+  "prod_TnzLJDYSV45eEF": 10,   // 10 credits (legacy)
+  "prod_TnzL0a9nwvoZKm": 50,   // 50 credits (legacy)
+  "prod_TnzL2ewLWIt1hD": 150,  // 150 credits (legacy)
 };
 
-// Subscription plan product IDs
+// Subscription plan product IDs - Updated tiers
 const subscriptionProducts: Record<string, string> = {
-  "prod_TnzLdHWPkqAiqr": "premium",
-  "prod_TnzLCasreSakEb": "pro",
-  "prod_TnzLP4tQINtak9": "platinum",
+  "prod_TqznNZmUhevHh4": "starter",
+  "prod_TqznlgT1Jl6Re7": "creator",
+  "prod_TqznqQYYG4UUY8": "professional",
+  // Legacy plans (keep for existing subscriptions)
+  "prod_TnzLdHWPkqAiqr": "starter",   // old premium -> starter
+  "prod_TnzLCasreSakEb": "creator",    // old pro -> creator
+  "prod_TnzLP4tQINtak9": "professional", // old platinum -> professional
 };
 
 serve(async (req) => {
@@ -145,7 +154,7 @@ serve(async (req) => {
           const subscriptionId = session.subscription as string;
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
           const productId = subscription.items.data[0].price.product as string;
-          const planName = subscriptionProducts[productId] || "premium";
+          const planName = subscriptionProducts[productId] || "starter";
 
           logStep("Creating subscription record", { userId, planName, subscriptionId });
 
@@ -195,7 +204,7 @@ serve(async (req) => {
 
         if (subData) {
           const productId = subscription.items.data[0].price.product as string;
-          const planName = subscriptionProducts[productId] || "premium";
+          const planName = subscriptionProducts[productId] || "starter";
 
           await supabaseAdmin
             .from("subscriptions")

@@ -130,13 +130,18 @@ serve(async (req) => {
       const productId = subscription.items.data[0].price.product as string;
       logStep("Active subscription found", { subscriptionId: subscription.id, productId, periodEnd: periodEndRaw });
 
-      // Map product IDs to plans
+      // Map product IDs to plans - Updated tier names
       const productToPlan: Record<string, string> = {
-        "prod_TnzLdHWPkqAiqr": "premium",
-        "prod_TnzLCasreSakEb": "pro",
-        "prod_TnzLP4tQINtak9": "platinum",
+        // New tiers
+        "prod_TqznNZmUhevHh4": "starter",
+        "prod_TqznlgT1Jl6Re7": "creator",
+        "prod_TqznqQYYG4UUY8": "professional",
+        // Legacy tiers (map to new names)
+        "prod_TnzLdHWPkqAiqr": "starter",    // old premium -> starter
+        "prod_TnzLCasreSakEb": "creator",     // old pro -> creator
+        "prod_TnzLP4tQINtak9": "professional", // old platinum -> professional
       };
-      plan = productToPlan[productId] || "premium";
+      plan = productToPlan[productId] || "starter";
     }
 
     // Get credits balance
