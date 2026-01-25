@@ -37,16 +37,16 @@ function validateEnum<T extends string>(value: unknown, fieldName: string, allow
   return lower as T;
 }
 
-// ============= STYLE DESCRIPTIONS (consistent with generate-video) =============
-const STYLE_DESCRIPTIONS: Record<string, string> = {
-  minimalist: "Clean, modern minimalist design with simple shapes, flat colors, and ample white space. Professional corporate aesthetic.",
-  doodle: "Hand-drawn doodle style with sketchy lines, playful icons, and a casual, approachable feel.",
-  stick: "Simple stick figure illustrations with basic shapes, clean lines, and easy-to-understand visual metaphors.",
-  realistic: "Photorealistic 3D renders with professional lighting, detailed textures, and polished corporate look.",
-  storybook: "Warm, illustrated storybook aesthetic with soft colors, gentle gradients, and charming character designs.",
-  caricature: "Exaggerated caricature style with bold expressions, dynamic poses, and humorous visual elements.",
-  sketch: "Pencil sketch aesthetic with cross-hatching, artistic shading, and an elegant hand-drawn quality.",
-  crayon: "Colorful crayon-drawn style with textured strokes, vibrant colors, and a playful, childlike charm.",
+// ============= STYLE PROMPTS (synced with generate-video) =============
+const STYLE_PROMPTS: Record<string, string> = {
+  minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
+  doodle: `Urban Minimalist Doodle style characterized by a flat 2D vector illustration technique with a distinct indie comic aesthetic. Make the artwork detailed, dynamic and filling up the entire page. Cinematic centered framing of the canvas. Add Words to illustrate the artwork. The artwork features bold, consistent-weight monoline black outlines that feel hand-drawn yet clean, with slightly rounded terminals to ensure a friendly, approachable feel. The color palette is strictly limited to muted primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured cream or off-white background reminiscent of recycled newsprint. 'Object' surrealism, with symbolic objects to create an instant iconographic look. To achieve a vintage screen-printed quality, the image includes subtle lo-fi distressing, light paper grain, tiny ink flecks, and occasional print misalignments. The composition is centralized, featuring a grounded main subject surrounded by a 'halo' of smaller floating thematic icons like coins, arrows, or charts.`,
+  stick: `Hand-drawn stick figure comic style. CRITICAL BACKGROUND REQUIREMENT: The background MUST be solid pure white (#FFFFFF)—just clean solid white. Crude expressive black marker lines for the drawing only. Extremely simple character designs (circles for heads, single lines for limbs). Strictly black ink on pure white—NO SKIN COLOR, NO FLESH TONES. Rough sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines. High resolution on completely blank white canvas.`,
+  realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
+  storybook: `Whimsical storybook hand-drawn ink style. Hand-drawn black ink outlines with visible rough sketch construction lines, slightly uneven strokes, and occasional line overlap (imperfect but intentional). Bold vivid natural color palette. Crosshatching and scribbly pen shading for depth and texture, especially in shadows and on fabric folds. Watercolor + gouache-like washes: layered, semi-opaque paint with soft gradients. Edges slightly loose (not crisp), with gentle paint bleed and dry-brush texture in places. Cartoon-proportioned character design: slightly exaggerated features (large eyes, long limbs, expressive faces), but grounded in believable anatomy and posture. Background detailed but painterly: textured walls, props with sketchy detail, and atmospheric depth. Subtle grain + ink flecks for a handmade print feel. Cinematic framing, shallow depth cues, soft focus in far background. Editorial illustration / indie animation concept art aesthetic. Charming, cozy, slightly messy, richly textured, high detail, UHD.`,
+  caricature: `Humorous caricature illustration. Highly exaggerated facial features and distorted body proportions (oversized heads, tiny bodies) designed to emphasize personality quirks or famous traits. Stylized digital painting with expressive, thick brushwork and vibrant, slightly saturated colors. Playful, satirical, and expressive rendering. The look of high-quality political cartoons or MAD magazine cover art.`,
+  sketch: `Traditional graphite pencil sketch on textured paper with a gritty 'film noir' aesthetic. High contrast black and white rendering with dramatic, theatrical lighting—think deep shadows, stark highlights, and venetian blind patterns. Visible, aggressive pencil strokes, cross-hatching for shading, and intentional graphite smudges. Raw, hand-drawn quality showing the paper tooth. Cinematic composition reminiscent of a vintage detective graphic novel like Sin City.`,
+  crayon: `Cute childlike crayon illustration on clean white paper background. Waxy crayon / oil pastel scribble texture with visible stroke marks and uneven fill (messy on purpose). Simple rounded shapes, thick hand-drawn outlines, minimal details, playful proportions (big head, small body). Bright limited palette like orange + blue + yellow, rough shading and light smudges like real crayons on paper. Simple cheerful scene, lots of white space, friendly smiley faces. Looks like kindergarten drawing scanned into computer. High resolution.`,
   custom: "",
 };
 
@@ -238,7 +238,7 @@ serve(async (req) => {
 
       console.log("[SMARTFLOW] Regenerating image for generation:", generationId);
 
-      const styleDesc = style === "custom" ? customStyle : STYLE_DESCRIPTIONS[style] || STYLE_DESCRIPTIONS.minimalist;
+      const styleDesc = style === "custom" ? customStyle : STYLE_PROMPTS[style] || STYLE_PROMPTS.minimalist;
       const formatSpec = FORMAT_SPECS[format] || FORMAT_SPECS.square;
 
       const imagePrompt = `Create a professional infographic visualization.
@@ -427,7 +427,7 @@ Create a stunning, professional infographic with clear visual hierarchy, readabl
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const styleDesc = style === "custom" ? customStyle : STYLE_DESCRIPTIONS[style] || STYLE_DESCRIPTIONS.minimalist;
+    const styleDesc = style === "custom" ? customStyle : STYLE_PROMPTS[style] || STYLE_PROMPTS.minimalist;
     const formatSpec = FORMAT_SPECS[format] || FORMAT_SPECS.square;
 
     const analysisPrompt = `You are an expert data analyst and infographic designer. Analyze the following data and create content for a single, stunning infographic image.
