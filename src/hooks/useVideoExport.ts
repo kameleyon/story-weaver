@@ -278,16 +278,37 @@ export function useVideoExport() {
              const sampleRate = audioTrackConfig.sampleRate;
              const renderLen = Math.ceil(sceneDuration * sampleRate);
              
-             // Create a mini-mix for this scene
+             // Create a mini-mix for this scene (stereo output)
              const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(
                 2, renderLen, sampleRate
              );
              
              if (sceneAudioBuffer) {
-               const source = offlineCtx.createBufferSource();
-               source.buffer = sceneAudioBuffer;
-               source.connect(offlineCtx.destination);
-               source.start(0);
+               // Handle mono-to-stereo conversion properly
+               // Create a stereo buffer and copy mono to both channels
+               if (sceneAudioBuffer.numberOfChannels === 1) {
+                 log("Run", runId, `Scene ${i+1} converting mono audio to stereo`);
+                 
+                 // Create a new stereo buffer with the same data on both channels
+                 const stereoBuffer = offlineCtx.createBuffer(
+                   2, 
+                   sceneAudioBuffer.length, 
+                   sceneAudioBuffer.sampleRate
+                 );
+                 const monoData = sceneAudioBuffer.getChannelData(0);
+                 stereoBuffer.getChannelData(0).set(monoData);
+                 stereoBuffer.getChannelData(1).set(monoData);
+                 
+                 const source = offlineCtx.createBufferSource();
+                 source.buffer = stereoBuffer;
+                 source.connect(offlineCtx.destination);
+                 source.start(0);
+               } else {
+                 const source = offlineCtx.createBufferSource();
+                 source.buffer = sceneAudioBuffer;
+                 source.connect(offlineCtx.destination);
+                 source.start(0);
+               }
              }
              
              const renderedBuf = await offlineCtx.startRendering();
@@ -297,7 +318,7 @@ export function useVideoExport() {
              const left = renderedBuf.getChannelData(0);
              const right = renderedBuf.numberOfChannels > 1 ? renderedBuf.getChannelData(1) : left;
              
-             // Interleave
+             // Interleave stereo samples
              for (let s = 0; s < renderedBuf.length; s++) {
                rawData[s*2] = left[s];
                rawData[s*2+1] = right[s];
