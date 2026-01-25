@@ -427,7 +427,7 @@ export default function Usage() {
                 </Button>
                 <Button 
                   variant="ghost" 
-                  className="justify-start gap-2 h-auto py-3 text-sm"
+                  className="justify-start gap-2 h-auto py-3 text-sm bg-primary/25 hover:bg-primary/35"
                   onClick={handleOpenPortal}
                   disabled={!subscribed || isOpeningPortal}
                 >
