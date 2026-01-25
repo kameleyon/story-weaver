@@ -51,7 +51,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
 
-    const MAX_DATA_SOURCE_LENGTH = 100000;
+    const MAX_DATA_SOURCE_LENGTH = 250000;
     const dataSourceLength = dataSource.length;
     const isDataSourceTooLong = dataSourceLength > MAX_DATA_SOURCE_LENGTH;
     const canGenerate = dataSource.trim().length > 10 && extractionPrompt.trim().length > 5 && !isDataSourceTooLong;
