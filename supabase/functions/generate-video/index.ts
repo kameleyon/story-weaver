@@ -413,6 +413,9 @@ function pcmToWav(
   numChannels: number = 1,
   bitsPerSample: number = 16,
 ): Uint8Array {
+  // 32-bit audio from Replicate is IEEE float (format 3), not integer PCM (format 1)
+  const audioFormat = bitsPerSample === 32 ? 3 : 1;
+  
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
   const blockAlign = numChannels * (bitsPerSample / 8);
   const dataSize = pcmData.length;
@@ -439,7 +442,7 @@ function pcmToWav(
   view.setUint8(14, 0x74); // t
   view.setUint8(15, 0x20); // (space)
   view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
-  view.setUint16(20, 1, true); // AudioFormat (1 = PCM)
+  view.setUint16(20, audioFormat, true); // AudioFormat (1 = PCM integer, 3 = IEEE float)
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, byteRate, true);
