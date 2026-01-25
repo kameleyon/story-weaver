@@ -11,7 +11,8 @@ import {
   Sparkles,
   Plus,
   Loader2,
-  Info
+  Info,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,115 +37,155 @@ import {
 const plans = [
   {
     id: "free",
-    name: "Freemium",
+    name: "Free",
     price: "$0",
+    yearlyPrice: "$0",
     period: "/month",
     description: "Get started with basic features",
     icon: Sparkles,
     features: [
-      "5 video generations/month",
-      "720p video quality",
-      "Basic visual styles",
-      "Community support",
+      "5 credits/month",
+      "Short videos only (<2 min)",
+      "720p quality",
+      "5 basic visual styles",
+      "Landscape format only",
+      "No narration (silent/captions)",
       "Watermark on exports",
+    ],
+    excluded: [
+      "Voice cloning",
+      "Infographics",
+      "Brand mark",
     ],
     cta: "Current Plan",
     popular: false,
-    disabled: true,
     priceId: null,
   },
   {
-    id: "premium",
-    name: "Premium",
-    price: "$7.99",
+    id: "starter",
+    name: "Starter",
+    price: "$14.99",
+    yearlyPrice: "$11.99",
     period: "/month",
-    description: "Perfect for content creators",
+    description: "Hobbyists & social creators",
     icon: Zap,
     features: [
-      "50 video generations/month",
-      "1080p video quality",
-      "All visual styles",
-      "Priority support",
+      "30 credits/month",
+      "Short + Brief videos",
+      "1080p quality",
+      "10 visual styles",
+      "All formats (16:9, 9:16, 1:1)",
+      "Standard narration voices",
+      "10 infographics/month",
       "No watermark",
-      "Custom branding",
+      "Email support (48h)",
     ],
-    cta: "Upgrade to Premium",
+    excluded: [
+      "Voice cloning",
+      "Brand mark",
+    ],
+    cta: "Upgrade to Starter",
     popular: false,
-    disabled: false,
-    priceId: STRIPE_PLANS.premium.monthly.priceId,
+    priceId: STRIPE_PLANS.starter.monthly.priceId,
   },
   {
-    id: "pro",
-    name: "Pro",
-    price: "$34.99",
+    id: "creator",
+    name: "Creator",
+    price: "$39.99",
+    yearlyPrice: "$31.99",
     period: "/month",
-    description: "For professionals and teams",
+    description: "Content creators & small biz",
     icon: Crown,
     features: [
-      "200 video generations/month",
-      "4K video quality",
-      "All visual styles + custom",
-      "Priority support (24h response)",
-      "No watermark",
-      "Custom branding",
-      "API access",
-      "Advanced analytics",
+      "100 credits/month",
+      "All video lengths",
+      "1080p quality",
+      "All 13 styles + Custom",
+      "All formats",
+      "Full narration + voice effects",
+      "1 voice clone",
+      "50 infographics/month",
+      "Brand mark",
+      "Basic analytics",
+      "Priority support (24h)",
     ],
-    cta: "Upgrade to Pro",
+    excluded: [],
+    cta: "Upgrade to Creator",
     popular: true,
-    disabled: false,
-    priceId: STRIPE_PLANS.pro.monthly.priceId,
+    priceId: STRIPE_PLANS.creator.monthly.priceId,
   },
   {
-    id: "platinum",
-    name: "Platinum",
-    price: "$99.99",
+    id: "professional",
+    name: "Professional",
+    price: "$89.99",
+    yearlyPrice: "$71.99",
     period: "/month",
-    description: "Unlimited power for agencies",
+    description: "Agencies & marketing teams",
     icon: Gem,
     features: [
-      "Unlimited video generations",
-      "4K+ video quality",
-      "All features included",
-      "Dedicated account manager",
-      "Custom integrations",
-      "White-label solution",
-      "SLA guarantee",
-      "Team collaboration",
+      "300 credits/month",
+      "All video lengths",
+      "4K quality",
+      "All styles + premium effects",
+      "Full narration + multilingual",
+      "3 voice clones",
+      "Unlimited infographics",
+      "Full brand kit",
+      "Advanced analytics",
+      "API access (5K requests/mo)",
+      "Batch export",
+      "3 team seats",
+      "Priority support (12h)",
     ],
-    cta: "Upgrade to Platinum",
+    excluded: [],
+    cta: "Upgrade to Professional",
     popular: false,
-    disabled: false,
-    priceId: STRIPE_PLANS.platinum.monthly.priceId,
+    priceId: STRIPE_PLANS.professional.monthly.priceId,
   },
   {
     id: "enterprise",
     name: "Enterprise",
     price: "Custom",
+    yearlyPrice: "Custom",
     period: "",
-    description: "Tailored solutions for large organizations",
+    description: "Large organizations",
     icon: Building2,
     features: [
-      "Everything in Platinum",
-      "Custom volume pricing",
-      "On-premise deployment option",
-      "SSO & SAML integration",
-      "Dedicated infrastructure",
-      "Custom SLA",
-      "Training & onboarding",
+      "Unlimited credits (fair use)",
+      "4K+ quality (up to 8K)",
+      "Custom style development",
+      "Custom voice training",
+      "Unlimited voice clones",
+      "White-label solution",
+      "Unlimited API access",
+      "Unlimited team seats",
+      "SSO/SAML integration",
+      "On-premise available",
+      "Custom SLA guarantee",
+      "Dedicated manager",
       "24/7 premium support",
+      "Onboarding training",
     ],
+    excluded: [],
     cta: "Contact Sales",
     popular: false,
-    disabled: false,
     priceId: null,
   },
 ];
 
 const creditPackages = [
-  { credits: 10 as const, price: "$4.99", perCredit: "$0.50", priceId: CREDIT_PACKS[10].priceId },
-  { credits: 50 as const, price: "$14.99", perCredit: "$0.30", popular: true, priceId: CREDIT_PACKS[50].priceId },
-  { credits: 150 as const, price: "$39.99", perCredit: "$0.27", priceId: CREDIT_PACKS[150].priceId },
+  { credits: 15 as const, price: "$11.99", perCredit: "$0.80", priceId: CREDIT_PACKS[15].priceId },
+  { credits: 50 as const, price: "$34.99", perCredit: "$0.70", priceId: CREDIT_PACKS[50].priceId },
+  { credits: 150 as const, price: "$89.99", perCredit: "$0.60", popular: true, priceId: CREDIT_PACKS[150].priceId },
+  { credits: 500 as const, price: "$249.99", perCredit: "$0.50", bestValue: true, priceId: CREDIT_PACKS[500].priceId },
+];
+
+// Credit usage info
+const creditInfo = [
+  { type: "Short Video (<2 min)", credits: 1 },
+  { type: "Brief Video (<5 min)", credits: 2 },
+  { type: "Presentation (<10 min)", credits: 4 },
+  { type: "Infographic", credits: 1 },
 ];
 
 export default function Pricing() {
@@ -200,7 +241,7 @@ export default function Pricing() {
     }
   };
 
-  const handleBuyCredits = async (credits: 10 | 50 | 150, priceId: string) => {
+  const handleBuyCredits = async (credits: 15 | 50 | 150 | 500, priceId: string) => {
     if (!user) {
       toast({
         title: "Sign in required",
@@ -229,7 +270,6 @@ export default function Pricing() {
     if (plan.id === currentPlan) {
       return "Current Plan";
     }
-    // Downgrade to free (cancel subscription)
     if (plan.id === "free" && currentPlan !== "free") {
       return "Downgrade to Free";
     }
@@ -237,20 +277,25 @@ export default function Pricing() {
   };
 
   const isPlanDisabled = (plan: typeof plans[0]) => {
-    // Free plan: disabled only if already on free
     if (plan.id === "free") return currentPlan === "free";
-    // Current plan is always disabled (already subscribed)
     if (plan.id === currentPlan) return true;
-    // Enterprise is never disabled (contact sales)
     if (plan.id === "enterprise") return false;
     return false;
+  };
+
+  const getDisplayPrice = (plan: typeof plans[0]) => {
+    if (plan.price === "Custom") return plan.price;
+    if (billingCycle === "yearly" && plan.yearlyPrice !== "$0") {
+      return plan.yearlyPrice;
+    }
+    return plan.price;
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3 sm:gap-4">
             <Button
               variant="ghost"
@@ -267,7 +312,7 @@ export default function Pricing() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-12">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -279,7 +324,7 @@ export default function Pricing() {
               Choose Your Plan
             </h1>
             <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
-              Start free and scale as you grow. All plans include our core features.
+              Start free and scale as you grow. All plans include core features with images and narration.
             </p>
 
             {/* Billing Toggle */}
@@ -311,7 +356,7 @@ export default function Pricing() {
           </div>
 
           {/* Pricing Cards */}
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {plans.map((plan, index) => {
               const Icon = plan.icon;
               const isCurrentPlan = plan.id === currentPlan;
@@ -327,7 +372,7 @@ export default function Pricing() {
                 >
                   <Card
                     className={cn(
-                      "relative h-full border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md",
+                      "relative h-full border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md flex flex-col",
                       plan.popular && "border-primary/50 bg-gradient-to-b from-primary/5 to-transparent",
                       isCurrentPlan && "ring-2 ring-primary"
                     )}
@@ -342,7 +387,7 @@ export default function Pricing() {
                         <Badge className="bg-primary text-primary-foreground">Your Plan</Badge>
                       </div>
                     )}
-                    <CardHeader className="pb-4">
+                    <CardHeader className="pb-3">
                       <div className="flex items-center gap-2 mb-2">
                         <div className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-lg",
@@ -357,66 +402,72 @@ export default function Pricing() {
                       </div>
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl sm:text-3xl font-bold">
-                          {plan.price === "Custom" 
-                            ? plan.price 
-                            : billingCycle === "yearly" && plan.price !== "$0"
-                              ? `$${(parseFloat(plan.price.replace("$", "")) * 0.8 * 12).toFixed(0)}`
-                              : plan.price
-                          }
+                          {getDisplayPrice(plan)}
                         </span>
                         {plan.period && (
                           <span className="text-sm text-muted-foreground">
-                            {billingCycle === "yearly" && plan.price !== "$0" ? "/year" : plan.period}
+                            {plan.period}
                           </span>
                         )}
                       </div>
+                      {billingCycle === "yearly" && plan.price !== "$0" && plan.price !== "Custom" && (
+                        <p className="text-xs text-muted-foreground">
+                          Billed yearly (${(parseFloat(plan.yearlyPrice.replace("$", "")) * 12).toFixed(0)}/yr)
+                        </p>
+                      )}
                       <CardDescription className="text-xs sm:text-sm">{plan.description}</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <ul className="space-y-2">
+                    <CardContent className="space-y-3 flex-1 flex flex-col">
+                      <ul className="space-y-1.5 flex-1">
                         {plan.features.map((feature) => (
-                          <li key={feature} className="flex items-start gap-2 text-xs sm:text-sm">
-                            <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                          <li key={feature} className="flex items-start gap-2 text-xs">
+                            <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
                             <span className="text-muted-foreground">{feature}</span>
                           </li>
                         ))}
+                        {plan.excluded.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2 text-xs">
+                            <X className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
+                            <span className="text-muted-foreground/50 line-through">{feature}</span>
+                          </li>
+                        ))}
                       </ul>
-                      <Button
-                        className={cn(
-                          "w-full rounded-full text-sm",
-                          plan.popular || isCurrentPlan
-                            ? "bg-primary text-primary-foreground" 
-                            : isDisabled 
-                              ? "bg-muted text-muted-foreground cursor-not-allowed"
-                              : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
-                        )}
-                        disabled={isDisabled || isLoading}
-                        onClick={() => {
-                          if (plan.id === "enterprise") {
-                            window.open("mailto:sales@audiomax.com?subject=Enterprise%20Inquiry", "_blank");
-                          } else if (plan.id === "free" && currentPlan !== "free") {
-                            // Show confirmation dialog before downgrade
-                            setShowDowngradeDialog(true);
-                          } else if (plan.priceId) {
-                            handleSubscribe(plan.id, plan.priceId);
-                          }
-                        }}
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            Processing...
-                          </>
-                        ) : (
-                          getPlanCta(plan)
-                        )}
-                      </Button>
-                      {/* Downgrade policy note - show only on Freemium card when user is on paid plan */}
+                      <div className="pt-2">
+                        <Button
+                          className={cn(
+                            "w-full rounded-full text-sm",
+                            plan.popular || isCurrentPlan
+                              ? "bg-primary text-primary-foreground" 
+                              : isDisabled 
+                                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                                : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
+                          )}
+                          disabled={isDisabled || isLoading}
+                          onClick={() => {
+                            if (plan.id === "enterprise") {
+                              window.open("mailto:sales@audiomax.com?subject=Enterprise%20Inquiry", "_blank");
+                            } else if (plan.id === "free" && currentPlan !== "free") {
+                              setShowDowngradeDialog(true);
+                            } else if (plan.priceId) {
+                              handleSubscribe(plan.id, plan.priceId);
+                            }
+                          }}
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              Processing...
+                            </>
+                          ) : (
+                            getPlanCta(plan)
+                          )}
+                        </Button>
+                      </div>
                       {plan.id === "free" && currentPlan !== "free" && (
-                        <div className="flex items-start gap-1.5 mt-2 p-2 rounded-md bg-muted/50">
+                        <div className="flex items-start gap-1.5 p-2 rounded-md bg-muted/50">
                           <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">
-                            When downgrading, you keep your remaining credits until your billing period ends or credits run out, whichever comes first. No refunds.
+                          <p className="text-[10px] text-muted-foreground leading-tight">
+                            When downgrading, you keep remaining credits until billing period ends. No refunds.
                           </p>
                         </div>
                       )}
@@ -427,26 +478,60 @@ export default function Pricing() {
             })}
           </div>
 
+          {/* Credit System Info */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="mt-10 sm:mt-14"
+          >
+            <div className="text-center mb-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-foreground">
+                How Credits Work
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Each content type uses a different amount of credits
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3 max-w-2xl mx-auto">
+              {creditInfo.map((item) => (
+                <div
+                  key={item.type}
+                  className="flex items-center gap-2 px-3 py-2 rounded-full bg-muted/50 border border-border/50"
+                >
+                  <span className="text-xs text-muted-foreground">{item.type}</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {item.credits} {item.credits === 1 ? "credit" : "credits"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
           {/* Credit Top-Up Section */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="mt-12 sm:mt-16"
+            className="mt-10 sm:mt-14"
           >
             <div className="text-center mb-6 sm:mb-8">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
                 <Plus className="h-5 w-5 text-primary" />
-                Credit Top-Up
+                Credit Top-Up Packs
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Need more credits? Purchase additional credits anytime.
+                Need more credits? Purchase additional packs anytime. Credits never expire.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Available for Starter tier and above
               </p>
             </div>
 
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3 max-w-2xl mx-auto">
+            <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4 max-w-3xl mx-auto">
               {creditPackages.map((pkg, index) => {
                 const isLoading = loadingCredits === pkg.credits;
+                const canBuy = currentPlan !== "free";
                 
                 return (
                   <motion.div
@@ -457,25 +542,49 @@ export default function Pricing() {
                   >
                     <Card
                       className={cn(
-                        "relative cursor-pointer border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md hover:border-primary/50",
-                        pkg.popular && "border-primary/50 ring-1 ring-primary/20"
+                        "relative border-border/50 bg-card/50 shadow-sm transition-all hover:shadow-md",
+                        canBuy && "cursor-pointer hover:border-primary/50",
+                        !canBuy && "opacity-60",
+                        pkg.popular && "border-primary/50 ring-1 ring-primary/20",
+                        pkg.bestValue && "border-primary ring-2 ring-primary/30"
                       )}
-                      onClick={() => !isLoading && handleBuyCredits(pkg.credits, pkg.priceId)}
+                      onClick={() => canBuy && !isLoading && handleBuyCredits(pkg.credits, pkg.priceId)}
                     >
                       {pkg.popular && (
                         <div className="absolute -top-2 right-2">
-                          <Badge variant="secondary" className="text-[10px]">Best Value</Badge>
+                          <Badge variant="secondary" className="text-[10px]">Popular</Badge>
+                        </div>
+                      )}
+                      {pkg.bestValue && (
+                        <div className="absolute -top-2 right-2">
+                          <Badge className="bg-primary text-primary-foreground text-[10px]">Best Value</Badge>
                         </div>
                       )}
                       <CardContent className="p-4 text-center">
                         {isLoading ? (
-                          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                          <div className="py-4 flex flex-col items-center gap-2">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">Processing...</span>
+                          </div>
                         ) : (
-                          <p className="text-2xl sm:text-3xl font-bold text-primary">{pkg.credits}</p>
+                          <>
+                            <div className="text-2xl sm:text-3xl font-bold text-foreground">
+                              {pkg.credits}
+                            </div>
+                            <div className="text-xs text-muted-foreground">credits</div>
+                            <div className="mt-2 text-lg font-semibold text-foreground">
+                              {pkg.price}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {pkg.perCredit}/credit
+                            </div>
+                            {!canBuy && (
+                              <p className="mt-2 text-[10px] text-muted-foreground">
+                                Upgrade to Starter+
+                              </p>
+                            )}
+                          </>
                         )}
-                        <p className="text-xs text-muted-foreground">credits</p>
-                        <p className="mt-2 text-lg font-semibold">{pkg.price}</p>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground">{pkg.perCredit}/credit</p>
                       </CardContent>
                     </Card>
                   </motion.div>
@@ -484,17 +593,21 @@ export default function Pricing() {
             </div>
           </motion.div>
 
-          {/* FAQ or Additional Info */}
+          {/* FAQ Link */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
-            className="mt-12 sm:mt-16 text-center"
+            transition={{ delay: 0.7 }}
+            className="text-center mt-10 sm:mt-14"
           >
             <p className="text-sm text-muted-foreground">
-              All plans include a 7-day money-back guarantee. Questions?{" "}
+              Have questions? Check our{" "}
               <a href="mailto:support@audiomax.com" className="text-primary hover:underline">
-                Contact our team
+                FAQ
+              </a>{" "}
+              or{" "}
+              <a href="mailto:support@audiomax.com" className="text-primary hover:underline">
+                contact support
               </a>
             </p>
           </motion.div>
@@ -505,33 +618,20 @@ export default function Pricing() {
       <AlertDialog open={showDowngradeDialog} onOpenChange={setShowDowngradeDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Downgrade to Freemium?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
+            <AlertDialogTitle>Downgrade to Free Plan?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
               <p>
-                Are you sure you want to downgrade to the free plan? Here's what will happen:
+                When you downgrade, you'll keep your remaining credits and access until your current billing period ends or credits run out, whichever comes first.
               </p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Your current plan benefits will remain active until your billing period ends</li>
-                <li>You'll keep your remaining credits until your billing period ends or credits run out, whichever comes first</li>
-                <li>No refunds will be issued for the unused portion of your subscription</li>
-                <li>After downgrade, you'll have access to 5 video generations per month with watermarks</li>
-              </ul>
-              <p className="text-sm font-medium">
-                You'll be redirected to the billing portal to complete the cancellation.
+              <p className="font-medium text-foreground">
+                No refunds will be provided for unused subscription time.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep My Plan</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDowngrade} className="bg-muted text-foreground hover:bg-muted/80">
-              {loadingPlan === "free" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Processing...
-                </>
-              ) : (
-                "Downgrade"
-              )}
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDowngrade}>
+              Proceed to Billing Portal
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

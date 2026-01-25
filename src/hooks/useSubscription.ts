@@ -2,31 +2,32 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-// Stripe product/price mappings
+// Stripe product/price mappings - Updated pricing structure
 export const STRIPE_PLANS = {
-  premium: {
-    monthly: { priceId: "price_1SqNMMGAnMJbBpYYWDNwqgIy", productId: "prod_TnzLdHWPkqAiqr" },
-    yearly: { priceId: "price_1SqNMMGAnMJbBpYYWDNwqgIy", productId: "prod_TnzLdHWPkqAiqr" },
+  starter: {
+    monthly: { priceId: "price_1StHnZGAnMJbBpYY1MvGw8gO", productId: "prod_TqznNZmUhevHh4" },
+    yearly: { priceId: "price_1StHnZGAnMJbBpYY1MvGw8gO", productId: "prod_TqznNZmUhevHh4" },
   },
-  pro: {
-    monthly: { priceId: "price_1SqNMSGAnMJbBpYYZyRMcn4u", productId: "prod_TnzLCasreSakEb" },
-    yearly: { priceId: "price_1SqNMSGAnMJbBpYYZyRMcn4u", productId: "prod_TnzLCasreSakEb" },
+  creator: {
+    monthly: { priceId: "price_1StHnaGAnMJbBpYYBqST0fKp", productId: "prod_TqznlgT1Jl6Re7" },
+    yearly: { priceId: "price_1StHnaGAnMJbBpYYBqST0fKp", productId: "prod_TqznlgT1Jl6Re7" },
   },
-  platinum: {
-    monthly: { priceId: "price_1SqNMUGAnMJbBpYYkDOyTmWo", productId: "prod_TnzLP4tQINtak9" },
-    yearly: { priceId: "price_1SqNMUGAnMJbBpYYkDOyTmWo", productId: "prod_TnzLP4tQINtak9" },
+  professional: {
+    monthly: { priceId: "price_1StHncGAnMJbBpYYjz8ywAKx", productId: "prod_TqznqQYYG4UUY8" },
+    yearly: { priceId: "price_1StHncGAnMJbBpYYjz8ywAKx", productId: "prod_TqznqQYYG4UUY8" },
   },
 } as const;
 
 export const CREDIT_PACKS = {
-  10: { priceId: "price_1SqNMVGAnMJbBpYY7WeJFkiO", productId: "prod_TnzLJDYSV45eEF", price: 4.99 },
-  50: { priceId: "price_1SqNMWGAnMJbBpYYd3SU5e7B", productId: "prod_TnzL0a9nwvoZKm", price: 14.99 },
-  150: { priceId: "price_1SqNMYGAnMJbBpYYlwqZdhSJ", productId: "prod_TnzL2ewLWIt1hD", price: 39.99 },
+  15: { priceId: "price_1StHndGAnMJbBpYY74IT1rX0", productId: "prod_TqznJ5NkfAEdUY", price: 11.99 },
+  50: { priceId: "price_1StHnjGAnMJbBpYYXjshZvI3", productId: "prod_TqznSfnDazIjj2", price: 34.99 },
+  150: { priceId: "price_1StHnkGAnMJbBpYYF8irO0od", productId: "prod_Tqznn5NHeJnhS6", price: 89.99 },
+  500: { priceId: "price_1StHneGAnMJbBpYYwcUd93aN", productId: "prod_Tqznoknz2TmraQ", price: 249.99 },
 } as const;
 
 export interface SubscriptionState {
   subscribed: boolean;
-  plan: "free" | "premium" | "pro" | "platinum";
+  plan: "free" | "starter" | "creator" | "professional";
   subscriptionEnd: string | null;
   cancelAtPeriodEnd: boolean;
   creditsBalance: number;

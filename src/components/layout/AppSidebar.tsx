@@ -118,7 +118,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const handleUpgradeNow = async () => {
     try {
       setUpgradeLoading(true);
-      await createCheckout(STRIPE_PLANS.premium.monthly.priceId, "subscription");
+      await createCheckout(STRIPE_PLANS.starter.monthly.priceId, "subscription");
       setUpgradeModalOpen(false);
     } catch (error) {
       toast.error("Failed to start checkout. Please try again.");
@@ -130,9 +130,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const getPlanDisplayName = () => {
     if (cancelAtPeriodEnd) return "Cancelled";
     switch (plan) {
-      case "premium": return "Premium";
-      case "pro": return "Pro";
-      case "platinum": return "Platinum";
+      case "starter": return "Starter";
+      case "creator": return "Creator";
+      case "professional": return "Professional";
       default: return "Free Plan";
     }
   };
