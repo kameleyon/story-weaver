@@ -371,34 +371,37 @@ export function useVideoExport() {
               const channelData = [];
               for (let c = 0; c < channels; c++) channelData.push(buffer.getChannelData(c));
               
-              // Process in chunks of 4096 frames (standard-ish size, safer than 1024 for JS loops)
-              const chunkSize = 4096;
+              // Process in chunks of 1024 frames (AAC frame size)
+              // Use smaller chunks for better encoder compatibility
+              const chunkSize = 1024;
               
               for (let i = 0; i < samples; i += chunkSize) {
                 const remaining = Math.min(chunkSize, samples - i);
                 
-                // Prepare Interleaved Buffer (L, R, L, R...)
-                const interleaved = new Float32Array(remaining * 2);
+                // Use PLANAR format: [L0, L1, L2...] then [R0, R1, R2...]
+                // iOS Safari AudioEncoder works better with planar data
+                const planarData = new Float32Array(remaining * 2);
                 for (let j = 0; j < remaining; j++) {
                   const sampleIdx = i + j;
                   // Mix down to stereo or upmix mono
                   const left = channelData[0][sampleIdx] || 0;
                   const right = channels > 1 ? channelData[1][sampleIdx] : left;
                   
-                  interleaved[j * 2] = left;
-                  interleaved[j * 2 + 1] = right;
+                  // Planar layout: all left samples first, then all right samples
+                  planarData[j] = left;
+                  planarData[remaining + j] = right;
                 }
                 
                 // Strictly monotonic timestamp calculation
                 const timestampUs = Math.floor((globalSampleIndex / sampleRate) * 1_000_000);
                 
                 const audioData = new AudioDataCtor({
-                  format: "f32",
+                  format: "f32-planar",  // Use planar format for iOS compatibility
                   sampleRate: sampleRate,
                   numberOfFrames: remaining,
                   numberOfChannels: 2,
                   timestamp: timestampUs,
-                  data: interleaved,
+                  data: planarData,
                 });
                 
                 audioEncoder.encode(audioData);
@@ -406,7 +409,7 @@ export function useVideoExport() {
                 
                 globalSampleIndex += remaining;
 
-                if (globalSampleIndex % (sampleRate * 5) < 4096) {
+                if (globalSampleIndex % (sampleRate * 5) < chunkSize) {
                   // Roughly every ~5s of audio written, emit a heartbeat.
                   log("Run", runId, "Audio encode heartbeat", {
                     writtenSamples: globalSampleIndex,
@@ -428,8 +431,8 @@ export function useVideoExport() {
                 silenceSamplesNeeded,
                 silenceSeconds: Math.round((silenceSamplesNeeded / sampleRate) * 10) / 10,
               });
-              const chunkSize = 4096;
-              const silenceBuffer = new Float32Array(chunkSize * 2); // Zeros
+              const chunkSize = 1024;
+              const silenceBuffer = new Float32Array(chunkSize * 2); // Zeros (planar format)
               
               for (let i = 0; i < silenceSamplesNeeded; i += chunkSize) {
                  const remaining = Math.min(chunkSize, silenceSamplesNeeded - i);
@@ -438,7 +441,7 @@ export function useVideoExport() {
                  const timestampUs = Math.floor((globalSampleIndex / sampleRate) * 1_000_000);
                  
                  const audioData = new AudioDataCtor({
-                  format: "f32",
+                  format: "f32-planar",  // Use planar format for iOS compatibility
                   sampleRate: sampleRate,
                   numberOfFrames: remaining,
                   numberOfChannels: 2,
