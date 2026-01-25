@@ -57,7 +57,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           style,
           length: "short", // Fixed for Smart Flow - single scene
           brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
-          projectType: "doc2video", // Smart Flow uses doc2video backend with special handling
+          projectType: "smartflow", // Smart Flow uses dedicated single-scene backend
           // Voice selection (only if enabled)
           voiceType: enableVoice ? voice.type : undefined,
           voiceId: enableVoice ? voice.voiceId : undefined,
