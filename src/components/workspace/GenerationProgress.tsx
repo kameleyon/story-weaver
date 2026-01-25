@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Loader2, Wand2, Clock, DollarSign } from "lucide-react";
+import { Loader2, Wand2, Wallpaper } from "lucide-react";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
@@ -7,6 +7,8 @@ interface GenerationProgressProps {
 }
 
 export function GenerationProgress({ state }: GenerationProgressProps) {
+  const isSmartFlow = state.projectType === "smartflow";
+  
   // Build verbose status message based on current step and progress
   const getStatusMessage = (): string => {
     // If we have a custom status message from the backend, use it
@@ -19,16 +21,28 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
     switch (step) {
       case "analysis":
         if (progress < 5) return "Starting generation...";
-        if (progress < 10) return "Analyzing your content...";
-        return "Preparing script generation...";
+        if (progress < 10) return isSmartFlow ? "Analyzing your data..." : "Analyzing your content...";
+        return isSmartFlow ? "Preparing infographic layout..." : "Preparing script generation...";
       
       case "scripting":
+        if (isSmartFlow) {
+          if (progress < 15) return "AI is extracting key insights...";
+          if (progress < 20) return "Designing infographic concept...";
+          if (progress < 30) return "Crafting visual narrative...";
+          return "Finalizing infographic design...";
+        }
         if (progress < 15) return "AI is writing your script...";
         if (progress < 20) return "Creating scenes and dialogue...";
         if (progress < 30) return "Generating voiceover content...";
         return "Finalizing script structure...";
       
       case "visuals":
+        if (isSmartFlow) {
+          if (progress < 45) {
+            return "Generating narration audio...";
+          }
+          return "Creating your infographic...";
+        }
         if (progress < 45) {
           // Audio phase (40-45% is audio)
           const audioProgress = currentScene || 1;
@@ -41,7 +55,7 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
         return `Generating scene images... (${currentScene}/${sceneCount})`;
       
       case "rendering":
-        return "Compiling your video...";
+        return isSmartFlow ? "Finalizing infographic..." : "Compiling your video...";
       
       case "complete":
         return "Generation complete!";
@@ -56,6 +70,25 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
 
   // Get step label for the header
   const getStepLabel = (): string => {
+    if (isSmartFlow) {
+      switch (state.step) {
+        case "analysis":
+          return "Step 1 of 3 • Analysis";
+        case "scripting":
+          return "Step 2 of 3 • Content Extraction";
+        case "visuals":
+          return state.progress < 45 
+            ? "Step 2 of 3 • Audio Generation" 
+            : "Step 3 of 3 • Image Generation";
+        case "rendering":
+          return "Step 3 of 3 • Finalizing";
+        case "complete":
+          return "Complete";
+        default:
+          return "Processing";
+      }
+    }
+    
     switch (state.step) {
       case "analysis":
         return "Step 1 of 4 • Analysis";
@@ -89,13 +122,15 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
         >
           {state.isGenerating ? (
             <Loader2 className="h-6 w-6 text-primary animate-spin" />
+          ) : isSmartFlow ? (
+            <Wallpaper className="h-6 w-6 text-primary" />
           ) : (
             <Wand2 className="h-6 w-6 text-primary" />
           )}
         </motion.div>
         <div>
           <h3 className="text-xl font-semibold text-foreground">
-            Creating Your Video
+            {isSmartFlow ? "Creating Your Infographic" : "Creating Your Video"}
           </h3>
           <p className="text-sm text-muted-foreground">
             {getStepLabel()}
@@ -147,8 +182,8 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
         </div>
       </div>
 
-      {/* Scene/Image breakdown when in visuals step */}
-      {state.step === "visuals" && state.sceneCount > 0 && (
+      {/* Scene/Image breakdown when in visuals step - hide for Smart Flow since it's always 1 */}
+      {state.step === "visuals" && state.sceneCount > 0 && !isSmartFlow && (
         <div className="grid grid-cols-2 gap-4 text-center">
           <div className="rounded-lg bg-muted/10 px-3 py-2">
             <p className="text-lg font-semibold text-foreground">{state.sceneCount}</p>
