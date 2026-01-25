@@ -90,6 +90,116 @@ serve(async (req) => {
 
     // Parse and validate request body
     const body = await req.json();
+    const phase = body.phase || "generate"; // "generate" or "regenerate-image"
+    
+    // Handle image regeneration
+    if (phase === "regenerate-image") {
+      const generationId = body.generationId;
+      const imagePromptOverride = validateString(body.imagePrompt, "imagePrompt", 5000);
+      const format = validateEnum(body.format, "format", ALLOWED_FORMATS as unknown as readonly string[]) || "square";
+      const style = validateEnum(body.style, "style", ALLOWED_STYLES as unknown as readonly string[]) || "minimalist";
+      const customStyle = validateString(body.customStyle, "customStyle", INPUT_LIMITS.customStyle);
+      const brandMark = validateString(body.brandMark, "brandMark", INPUT_LIMITS.brandMark);
+
+      if (!generationId || !imagePromptOverride) {
+        return new Response(JSON.stringify({ error: "Missing generationId or imagePrompt" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log("[SMARTFLOW] Regenerating image for generation:", generationId);
+
+      const styleDesc = style === "custom" ? customStyle : STYLE_DESCRIPTIONS[style] || STYLE_DESCRIPTIONS.minimalist;
+      const formatSpec = FORMAT_SPECS[format] || FORMAT_SPECS.square;
+
+      const imagePrompt = `Create a professional infographic image.
+
+STYLE: ${styleDesc}
+FORMAT: ${formatSpec.aspect} orientation, ${formatSpec.width}x${formatSpec.height}px
+
+USER'S MODIFICATION REQUEST:
+${imagePromptOverride}
+
+${brandMark ? `WATERMARK: Add "${brandMark}" as a subtle brand mark in the bottom center of the image.` : ""}
+
+Create a visually stunning, professional infographic that clearly communicates these insights. Use icons, charts, and visual elements appropriate for the style. Ensure text is readable and the layout is balanced.`;
+
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) {
+        throw new Error("LOVABLE_API_KEY not configured");
+      }
+
+      const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-image",
+          messages: [{ role: "user", content: imagePrompt }],
+          modalities: ["image", "text"],
+        }),
+      });
+
+      if (!imageResponse.ok) {
+        const errorText = await imageResponse.text();
+        console.error("[SMARTFLOW] Image regeneration error:", imageResponse.status, errorText);
+        throw new Error(`Image regeneration failed: ${imageResponse.status}`);
+      }
+
+      const imageData = await imageResponse.json();
+      const imageBase64 = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+      if (!imageBase64) {
+        throw new Error("No image generated");
+      }
+
+      // Upload new image
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+      const imagePath = `${user.id}/${generationId}/infographic.png`;
+
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+      const { error: uploadError } = await adminClient.storage
+        .from("audio")
+        .upload(imagePath, imageBytes, {
+          contentType: "image/png",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new Error("Failed to upload regenerated image");
+      }
+
+      // Create signed URL
+      const { data: signedUrlData, error: signedUrlError } = await adminClient.storage
+        .from("audio")
+        .createSignedUrl(imagePath, 60 * 60 * 24 * 365);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        throw new Error("Failed to create signed URL");
+      }
+
+      console.log("[SMARTFLOW] Image regenerated successfully:", signedUrlData.signedUrl);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          imageUrl: signedUrlData.signedUrl,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // ============= NORMAL GENERATION FLOW =============
     const dataSource = validateString(body.dataSource, "dataSource", INPUT_LIMITS.dataSource);
     const extractionPrompt = validateString(body.extractionPrompt, "extractionPrompt", INPUT_LIMITS.extractionPrompt);
     const style = validateEnum(body.style, "style", ALLOWED_STYLES as unknown as readonly string[]) || "minimalist";
