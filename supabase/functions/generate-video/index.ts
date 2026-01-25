@@ -3103,7 +3103,8 @@ serve(async (req) => {
         });
       }
       
-      // Check daily generation limit (3 per day)
+      // Check daily generation limit (Enterprise: 999/day)
+      const DAILY_LIMIT = 999;
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       
@@ -3115,17 +3116,17 @@ serve(async (req) => {
       
       if (countError) {
         console.error("[generate-video] Error checking daily limit:", countError);
-      } else if ((todayGenerations ?? 0) >= 3) {
-        console.log(`[generate-video] User ${user.id} has reached daily limit: ${todayGenerations}/3`);
+      } else if ((todayGenerations ?? 0) >= DAILY_LIMIT) {
+        console.log(`[generate-video] User ${user.id} has reached daily limit: ${todayGenerations}/${DAILY_LIMIT}`);
         return new Response(JSON.stringify({ 
-          error: "Daily limit reached. You can only create 3 videos per day. Please try again tomorrow." 
+          error: `Daily limit reached. You can only create ${DAILY_LIMIT} videos per day. Please try again tomorrow.` 
         }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       
-      console.log(`[generate-video] User daily usage: ${todayGenerations ?? 0}/3`);
+      console.log(`[generate-video] User daily usage: ${todayGenerations ?? 0}/${DAILY_LIMIT}`);
       
       // Route based on project type
       if (body.projectType === "storytelling") {
