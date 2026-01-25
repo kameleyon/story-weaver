@@ -26,7 +26,12 @@ import type { Scene, CostTracking, PhaseTimings } from "@/hooks/useGenerationPip
 import { useVideoExport } from "@/hooks/useVideoExport";
 import { useSceneRegeneration } from "@/hooks/useSceneRegeneration";
 import { useImagesZipDownload } from "@/hooks/useImagesZipDownload";
-import { clearVideoExportLogs, formatVideoExportLogs, getVideoExportLogs } from "@/lib/videoExportDebug";
+import {
+  appendVideoExportLog,
+  clearVideoExportLogs,
+  formatVideoExportLogs,
+  getVideoExportLogs,
+} from "@/lib/videoExportDebug";
 import { SceneEditModal } from "./SceneEditModal";
 import { Clock, DollarSign } from "lucide-react";
 
@@ -703,8 +708,31 @@ export function GenerationResult({
           <Button
             className="flex-1 gap-2"
             onClick={() => {
+              // Ensure logs aren't empty even if iOS fails before the hook logs anything.
+              clearVideoExportLogs();
+              appendVideoExportLog("log", [
+                "[UI] Export button pressed",
+                {
+                  scenes: scenes.length,
+                  format,
+                  userAgent:
+                    typeof navigator !== "undefined"
+                      ? navigator.userAgent.slice(0, 120)
+                      : "unknown",
+                  isIOS:
+                    typeof navigator !== "undefined"
+                      ? /iPad|iPhone|iPod/.test(navigator.userAgent)
+                      : false,
+                },
+              ]);
+              setExportLogsVersion((v) => v + 1);
+
               shouldAutoDownloadRef.current = true;
-              exportVideo(scenes, format);
+
+              // Prevent unhandled promise rejection from hiding useful details.
+              void exportVideo(scenes, format).catch(() => {
+                setExportLogsVersion((v) => v + 1);
+              });
             }}
             disabled={
               exportState.status === "loading" ||
@@ -730,7 +758,10 @@ export function GenerationResult({
         <Button
           variant="outline"
           className="gap-2"
-          onClick={() => setShowExportLogs(true)}
+          onClick={() => {
+            setExportLogsVersion((v) => v + 1);
+            setShowExportLogs(true);
+          }}
         >
           <Terminal className="h-4 w-4" />
           Export Logs
