@@ -121,6 +121,22 @@ export function useVideoExport() {
         // Mobile browsers limit active AudioContext instances (usually 4-6).
         // Using OfflineAudioContext avoids hardware resource locks.
         const sharedDecodeCtx = new OfflineAudioContext(1, 1, 48000);
+
+        // IMPORTANT (mobile Safari): `decodeAudioData` can be flaky when called concurrently
+        // on the same context. Since we load scenes with `Promise.all`, we serialize the
+        // actual decode step while still allowing fetches/image loads to run in parallel.
+        let decodeChain: Promise<unknown> = Promise.resolve();
+
+        const decodeAudioSequentially = async (buf: ArrayBuffer): Promise<AudioBuffer> => {
+          // Some browsers detach/transfer the underlying buffer during decoding.
+          // Use a copy to be safe.
+          const bufCopy = buf.slice(0);
+
+          const decodePromise = decodeChain.then(() => sharedDecodeCtx.decodeAudioData(bufCopy));
+          // Keep the chain alive even if a decode fails.
+          decodeChain = decodePromise.catch(() => undefined);
+          return decodePromise;
+        };
         
         // Build a flat list of all images to load
         interface SceneAsset {
@@ -175,7 +191,7 @@ export function useVideoExport() {
               try {
                 const res = await fetch(scene.audioUrl);
                 const arrayBuf = await res.arrayBuffer();
-                audioBuffer = await sharedDecodeCtx.decodeAudioData(arrayBuf);
+                audioBuffer = await decodeAudioSequentially(arrayBuf);
               } catch (e) {
                 warn("Run", runId, `Failed to load audio for scene ${idx + 1}`, e);
               }
