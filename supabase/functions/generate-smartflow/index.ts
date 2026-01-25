@@ -115,8 +115,12 @@ serve(async (req) => {
 
       const imagePrompt = `Create a professional infographic image.
 
+CRITICAL FORMAT REQUIREMENT: This image MUST be ${formatSpec.aspect} orientation with dimensions ${formatSpec.width}x${formatSpec.height} pixels.
+${format === "portrait" ? "This is a VERTICAL/TALL image (height is greater than width). The image should be taller than it is wide, like a phone screen in portrait mode." : ""}
+${format === "landscape" ? "This is a HORIZONTAL/WIDE image (width is greater than height). The image should be wider than it is tall, like a TV screen." : ""}
+${format === "square" ? "This is a SQUARE image with equal width and height." : ""}
+
 STYLE: ${styleDesc}
-FORMAT: ${formatSpec.aspect} orientation, ${formatSpec.width}x${formatSpec.height}px
 
 USER'S MODIFICATION REQUEST:
 ${imagePromptOverride}
@@ -191,6 +195,110 @@ Create a visually stunning, professional infographic that clearly communicates t
         JSON.stringify({
           success: true,
           imageUrl: signedUrlData.signedUrl,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Handle audio regeneration
+    if (phase === "regenerate-audio") {
+      const generationId = body.generationId;
+      const script = validateString(body.script, "script", 10000);
+      const voiceGender = body.voiceGender || "female";
+
+      if (!generationId || !script) {
+        return new Response(JSON.stringify({ error: "Missing generationId or script" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log("[SMARTFLOW] Regenerating audio for generation:", generationId);
+
+      const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
+      if (!GOOGLE_TTS_API_KEY) {
+        throw new Error("GOOGLE_TTS_API_KEY not configured");
+      }
+
+      const voiceMap: Record<string, string> = {
+        male: "Enceladus",
+        female: "Kore",
+      };
+
+      const ttsResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GOOGLE_TTS_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: script }] }],
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: voiceMap[voiceGender] || "Kore" },
+                },
+              },
+            },
+          }),
+        }
+      );
+
+      if (!ttsResponse.ok) {
+        const errorText = await ttsResponse.text();
+        console.error("[SMARTFLOW] TTS error:", ttsResponse.status, errorText);
+        throw new Error(`Audio generation failed: ${ttsResponse.status}`);
+      }
+
+      const ttsData = await ttsResponse.json();
+      const audioBase64 = ttsData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+      if (!audioBase64) {
+        throw new Error("No audio generated");
+      }
+
+      const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
+      const audioPath = `${user.id}/${generationId}/narration.mp3`;
+
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+      const { error: audioUploadError } = await adminClient.storage
+        .from("audio")
+        .upload(audioPath, audioBytes, {
+          contentType: "audio/mpeg",
+          upsert: true,
+        });
+
+      if (audioUploadError) {
+        throw new Error("Failed to upload regenerated audio");
+      }
+
+      const { data: audioSignedData, error: audioSignedError } = await adminClient.storage
+        .from("audio")
+        .createSignedUrl(audioPath, 60 * 60 * 24 * 365);
+
+      if (audioSignedError || !audioSignedData?.signedUrl) {
+        throw new Error("Failed to create signed URL for audio");
+      }
+
+      // Update generation record with new script
+      await supabase
+        .from("generations")
+        .update({ script, audio_url: audioSignedData.signedUrl })
+        .eq("id", generationId)
+        .eq("user_id", user.id);
+
+      console.log("[SMARTFLOW] Audio regenerated successfully:", audioSignedData.signedUrl);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          audioUrl: audioSignedData.signedUrl,
         }),
         {
           status: 200,
@@ -363,8 +471,12 @@ Respond with a JSON object containing:
     // ============= STEP 2: Generate infographic image =============
     const imagePrompt = `Create a professional infographic image.
 
+CRITICAL FORMAT REQUIREMENT: This image MUST be ${formatSpec.aspect} orientation with dimensions ${formatSpec.width}x${formatSpec.height} pixels.
+${format === "portrait" ? "This is a VERTICAL/TALL image (height is greater than width). The image should be taller than it is wide, like a phone screen in portrait mode." : ""}
+${format === "landscape" ? "This is a HORIZONTAL/WIDE image (width is greater than height). The image should be wider than it is tall, like a TV screen." : ""}
+${format === "square" ? "This is a SQUARE image with equal width and height." : ""}
+
 STYLE: ${styleDesc}
-FORMAT: ${formatSpec.aspect} orientation, ${formatSpec.width}x${formatSpec.height}px
 
 CONTENT TO VISUALIZE:
 Title: ${analysisResult.title}
