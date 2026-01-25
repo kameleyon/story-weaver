@@ -415,7 +415,7 @@ export default function Usage() {
               <div className="mt-4 sm:mt-6 grid gap-3 grid-cols-1 sm:grid-cols-2">
                 <Button 
                   variant="ghost" 
-                  className="justify-start gap-2 h-auto py-3 text-sm"
+                  className="justify-start gap-2 h-auto py-3 text-sm bg-primary/25 hover:bg-primary/35"
                   onClick={() => navigate("/pricing")}
                 >
                   <Zap className="h-4 w-4 text-primary" />
