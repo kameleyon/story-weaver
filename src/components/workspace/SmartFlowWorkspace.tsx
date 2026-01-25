@@ -91,27 +91,6 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       const savedStyle = (project.style ?? "minimalist") as SmartFlowStyle;
       const validStyles: SmartFlowStyle[] = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "sketch", "crayon"];
       setStyle(validStyles.includes(savedStyle) ? savedStyle : "minimalist");
-     
-     // Restore voice settings from project
-     const projectVoiceType = project.voice_type as "standard" | "custom" | null;
-     const hasVoiceSettings = projectVoiceType && (projectVoiceType === "custom" ? project.voice_id : true);
-     
-     if (hasVoiceSettings) {
-       setEnableVoice(true);
-       if (projectVoiceType === "custom" && project.voice_id && project.voice_name) {
-         setVoice({
-           type: "custom",
-           voiceId: project.voice_id,
-           voiceName: project.voice_name,
-         });
-       } else if (projectVoiceType === "standard") {
-         // For standard voices, we don't have gender stored, default to female
-         setVoice({ type: "standard", gender: "female" });
-       }
-     } else {
-       setEnableVoice(false);
-       setVoice({ type: "standard", gender: "female" });
-     }
     };
 
     useImperativeHandle(ref, () => ({
