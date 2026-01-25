@@ -1,12 +1,13 @@
 import { forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp, Download, RotateCcw } from "lucide-react";
+import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp, Download, RotateCcw, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSidebar } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { useNavigate } from "react-router-dom";
@@ -48,8 +49,13 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
 
     // Generation state
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
+    
+    // Edit modal state
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editPrompt, setEditPrompt] = useState("");
 
     const MAX_DATA_SOURCE_LENGTH = 250000;
     const dataSourceLength = dataSource.length;
@@ -164,6 +170,43 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       navigate("/app/create?mode=smartflow");
     };
 
+    const handleRegenerateImage = async () => {
+      if (!result?.generationId || !editPrompt.trim()) return;
+      
+      setIsRegenerating(true);
+      try {
+        const { data, error: invokeError } = await supabase.functions.invoke("generate-smartflow", {
+          body: {
+            phase: "regenerate-image",
+            generationId: result.generationId,
+            imagePrompt: editPrompt.trim(),
+            format,
+            style,
+            customStyle: customStyle || undefined,
+            brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+          },
+        });
+
+        if (invokeError) throw new Error(invokeError.message);
+        if (data?.error) throw new Error(data.error);
+
+        setResult((prev: any) => ({ ...prev, imageUrl: data.imageUrl }));
+        setShowEditModal(false);
+        setEditPrompt("");
+        
+        toast({ title: "Image regenerated!" });
+      } catch (err) {
+        console.error("Image regeneration error:", err);
+        toast({
+          title: "Regeneration failed",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      } finally {
+        setIsRegenerating(false);
+      }
+    };
+
     return (
       <div className="flex h-full flex-col overflow-hidden bg-background">
         {/* Top Bar */}
@@ -223,8 +266,8 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   exit={{ opacity: 0, y: -20 }}
                   className="space-y-4"
                 >
-                  {/* Infographic Image */}
-                  <div className="rounded-xl border border-border/50 overflow-hidden bg-muted/20">
+                  {/* Infographic Image with Edit Button */}
+                  <div className="relative rounded-xl border border-border/50 overflow-hidden bg-muted/20 group">
                     <img 
                       src={result.imageUrl} 
                       alt="Generated infographic" 
@@ -233,6 +276,16 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                         console.error("Image failed to load:", result.imageUrl);
                       }}
                     />
+                    {/* Edit overlay */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Button 
+                        onClick={() => setShowEditModal(true)}
+                        className="bg-primary hover:bg-primary/90 gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit Image
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Audio Player (if voice was enabled) */}
@@ -255,6 +308,10 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     <Button variant="outline" onClick={handleNewProject} className="flex-1 gap-2">
                       <RotateCcw className="h-4 w-4" />
                       New Project
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowEditModal(true)} className="gap-2">
+                      <Pencil className="h-4 w-4" />
+                      Edit
                     </Button>
                     <Button onClick={handleDownload} className="flex-1 bg-primary hover:bg-primary/90 gap-2">
                       <Download className="h-4 w-4" />
@@ -428,9 +485,75 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
         </div>
       </div>
+
+      {/* Edit Image Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Infographic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Current Image Preview */}
+            {result?.imageUrl && (
+              <div className="rounded-lg border border-border/50 overflow-hidden">
+                <img 
+                  src={result.imageUrl} 
+                  alt="Current infographic" 
+                  className="w-full max-h-48 object-contain bg-muted/20"
+                />
+              </div>
+            )}
+            
+            {/* Edit Prompt */}
+            <div className="space-y-2">
+              <Label>Describe your changes</Label>
+              <Textarea
+                placeholder="e.g., Make the colors more vibrant, add a chart showing the data, change the title to..."
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                className="min-h-[100px] resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Describe how you want to modify the infographic
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditPrompt("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRegenerateImage}
+                disabled={!editPrompt.trim() || isRegenerating}
+                className="flex-1 bg-primary hover:bg-primary/90 gap-2"
+              >
+                {isRegenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="h-4 w-4" />
+                    Regenerate Image
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
     );
   }
 );
