@@ -61,7 +61,11 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           // Voice selection (only if enabled)
           voiceType: enableVoice ? voice.type : undefined,
           voiceId: enableVoice ? voice.voiceId : undefined,
-          voiceName: enableVoice ? voice.voiceName : undefined,
+          // For standard voices, pass gender as voiceName (e.g., "male" or "female")
+          // For custom voices, pass the actual voice name
+          voiceName: enableVoice 
+            ? (voice.type === "custom" ? voice.voiceName : voice.gender) 
+            : undefined,
         });
       }
     };

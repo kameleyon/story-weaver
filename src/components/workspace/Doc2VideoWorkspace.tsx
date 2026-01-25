@@ -76,10 +76,10 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
           characterDescription: characterDescription.trim() || undefined,
           disableExpressions,
           projectType: "doc2video",
-          // Voice selection
+          // Voice selection - pass gender for standard voices, voiceName for custom
           voiceType: voice.type,
           voiceId: voice.voiceId,
-          voiceName: voice.voiceName,
+          voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
         });
       }
     };
