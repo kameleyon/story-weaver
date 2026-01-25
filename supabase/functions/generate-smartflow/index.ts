@@ -485,9 +485,26 @@ Respond with a JSON object containing:
     let analysisResult;
     try {
       const content = analysisData.choices?.[0]?.message?.content || "";
-      analysisResult = JSON.parse(content);
+      
+      // Robust JSON extraction - handle cases where AI adds text after JSON
+      let jsonContent = content.trim();
+      
+      // Find the first { and last } to extract just the JSON object
+      const firstBrace = jsonContent.indexOf("{");
+      const lastBrace = jsonContent.lastIndexOf("}");
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
+      }
+      
+      // Remove any markdown code block markers
+      jsonContent = jsonContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
+      
+      console.log("[SMARTFLOW] Extracted JSON length:", jsonContent.length);
+      analysisResult = JSON.parse(jsonContent);
     } catch (e) {
       console.error("[SMARTFLOW] Failed to parse analysis result:", e);
+      console.error("[SMARTFLOW] Raw content preview:", analysisData.choices?.[0]?.message?.content?.substring(0, 500));
       throw new Error("Failed to parse AI analysis");
     }
 
