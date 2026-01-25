@@ -288,7 +288,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
-              {/* SmartFlow (Coming Soon) */}
+              {/* Smart Flow (Coming Soon) */}
               <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -301,13 +301,13 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       <Wallpaper className="h-4 w-4 shrink-0" />
                       {!isCollapsed && (
                         <span className="text-sm flex items-center gap-2">
-                          SmartFlow
+                          Smart Flow
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Soon</span>
                         </span>
                       )}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  <TooltipContent side="right">SmartFlow – Turn data into visual insights (Coming Soon)</TooltipContent>
+                  <TooltipContent side="right">Smart Flow – Turn data into visual insights (Coming Soon)</TooltipContent>
                 </Tooltip>
               </SidebarMenuItem>
 
