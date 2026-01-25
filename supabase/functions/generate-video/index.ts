@@ -1670,7 +1670,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: SCRIPT - Generating via OpenRouter with GPT-5.2...");
+  console.log("Phase: SCRIPT - Generating via OpenRouter with Claude Sonnet 4.5...");
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
@@ -1684,7 +1684,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "X-Title": "AudioMax Video Generator",
     },
     body: JSON.stringify({
-      model: "openai/gpt-5.2",
+      model: "anthropic/claude-sonnet-4.5",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.7,
       max_tokens: 8192,
@@ -2009,7 +2009,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with GPT-5.2...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with Claude Sonnet 4.5...");
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
@@ -2023,7 +2023,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "X-Title": "AudioMax Storytelling",
     },
     body: JSON.stringify({
-      model: "openai/gpt-5.2",
+      model: "anthropic/claude-sonnet-4.5",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.8, // Slightly higher for creative storytelling
       max_tokens: 12000, // More tokens for longer narratives
