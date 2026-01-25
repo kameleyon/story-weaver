@@ -589,8 +589,13 @@ async function callReplicateTTSChunk(
   text: string,
   replicateApiKey: string,
   chunkIndex: number,
+  voiceGender: string = "female", // "male" or "female"
 ): Promise<Uint8Array> {
   console.log(`[TTS-Chunk] Chunk ${chunkIndex + 1}: ${text.substring(0, 60)}... (${text.length} chars)`);
+
+  // Map gender to Replicate voice names: male = Aaron, female = Marisol
+  const voiceName = voiceGender === "male" ? "Aaron" : "Marisol";
+  console.log(`[TTS-Chunk] Using voice: ${voiceName} (gender: ${voiceGender})`);
 
   const createResponse = await fetch(
     "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions",
@@ -604,7 +609,7 @@ async function callReplicateTTSChunk(
       body: JSON.stringify({
         input: {
           text: text,
-          voice: "Marisol",
+          voice: voiceName,
           temperature: 1,
           top_p: 0.9,
           top_k: 1800,
@@ -653,6 +658,7 @@ async function generateSceneAudioReplicateChunked(
   userId: string,
   projectId: string,
   isRegeneration: boolean = false,
+  voiceGender: string = "female", // "male" or "female"
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
 
@@ -668,7 +674,7 @@ async function generateSceneAudioReplicateChunked(
     if (chunks.length === 1) {
       // Short text - use regular single-call TTS
       console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Single chunk, using direct call`);
-      const audioBuffer = await callReplicateTTSChunk(chunks[0], replicateApiKey, 0);
+      const audioBuffer = await callReplicateTTSChunk(chunks[0], replicateApiKey, 0, voiceGender);
       
       const durationSeconds = Math.max(1, audioBuffer.length / (44100 * 2));
       
@@ -697,7 +703,7 @@ async function generateSceneAudioReplicateChunked(
     console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Generating ${chunks.length} chunks in parallel...`);
     
     const chunkPromises = chunks.map((chunk, idx) =>
-      callReplicateTTSChunk(chunk, replicateApiKey, idx)
+      callReplicateTTSChunk(chunk, replicateApiKey, idx, voiceGender)
         .catch((err) => {
           console.error(`[TTS-Chunked] Chunk ${idx + 1} failed:`, err.message);
           throw err;
@@ -1426,6 +1432,7 @@ async function generateSceneAudio(
   projectId: string,
   isRegeneration: boolean = false,
   customVoiceId?: string,
+  voiceGender: string = "female", // "male" or "female" - used for standard Replicate voices
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
   const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
@@ -1557,7 +1564,7 @@ async function generateSceneAudio(
 
   // ========== CASE 4: Default (English/other languages) ==========
   // Use Replicate Chatterbox with Chunk & Stitch for long scripts
-  const result = await generateSceneAudioReplicateChunked(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration);
+  const result = await generateSceneAudioReplicateChunked(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration, voiceGender);
   if (result.url) {
     console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox (Chunked)`);
     return { ...result, provider: "Replicate Chatterbox" };
@@ -1827,15 +1834,20 @@ ${extractionPrompt || "Extract the most important insights and present them in a
 
 === REFERENCE: NOTEBOOKLM INFOGRAPHIC STYLE ===
 Study this structure used by professional infographics:
-- **Main Headline**: Bold, catchy title at top (e.g., "3 of Spades: Your Business Power-Ups")
+- **Main Headline**: Bold, catchy title at top DIRECTLY BASED ON THE USER'S EXTRACTION GOAL
 - **Central Visual**: A character, object, or symbol as the focal anchor
 - **2-4 Content Sections** each containing:
-  - Section Title: Bold (e.g., "THE CREATIVE MULTIPLIER")
-  - Subtitle/Label: Short context (e.g., "+ 3 of Clubs")
+  - Section Title: Bold label for the insight
+  - Subtitle/Label: Short context or category
   - Description: 2-3 sentence explanation paragraph
   - Supporting Icons: Small illustrations around the text
-- **Optional Stats/Metrics**: Numbers with labels (e.g., "1.5x-3x Multiplier")
+- **Optional Stats/Metrics**: Numbers with labels (e.g., "2x Growth", "Top 5%")
 - **Thematic Border Icons**: Small floating elements around edges (gears, lightbulbs, coins, etc.)
+
+CRITICAL: BASE YOUR OUTPUT ENTIRELY ON THE USER'S "EXTRACTION GOAL" ABOVE.
+- If they ask for "top 3 combinations", show exactly the TOP 3 combinations from the data.
+- If they ask for "key insights about X", focus ONLY on X.
+- Do NOT invent your own topic - STRICTLY follow the user's extraction request.
 
 === YOUR TASK ===
 1. **Analyze**: Identify 2-4 KEY INSIGHTS that tell a complete story.
@@ -2713,7 +2725,8 @@ async function handleAudioPhase(
   // Get voice settings from project
   const voiceType = generation.projects?.voice_type || "standard";
   const customVoiceId = voiceType === "custom" ? generation.projects?.voice_id : undefined;
-  console.log(`[Audio] Voice settings: type=${voiceType}, voiceId=${customVoiceId || "none"}`);
+  const voiceGender = generation.projects?.voice_name || "female"; // "male" or "female" for standard voices
+  console.log(`[Audio] Voice settings: type=${voiceType}, voiceId=${customVoiceId || "none"}, gender=${voiceGender}`);
 
   // Keep any audio already generated (chunked calls)
   const audioUrls: (string | null)[] = scenes.map((s) => (s as any).audioUrl ?? null);
@@ -2748,7 +2761,7 @@ async function handleAudioPhase(
     if (audioUrls[i]) continue;
 
     batchPromises.push(
-      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId, false, customVoiceId).then((result) => ({
+      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId, false, customVoiceId, voiceGender).then((result) => ({
         index: i,
         result,
       })),

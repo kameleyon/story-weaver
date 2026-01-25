@@ -81,6 +81,10 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
           storyGenre: genre,
           disableExpressions: disableVoiceExpressions,
           brandName: brandName.trim() || undefined,
+          // Voice selection - pass gender for standard voices, voiceName for custom
+          voiceType: voice.type,
+          voiceId: voice.voiceId,
+          voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
         });
       }
     };
