@@ -288,23 +288,26 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
-              {/* Smart Flow */}
+              {/* Smart Flow (Coming Soon) */}
               <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
-                      onClick={() => navigate("/app/create?mode=smartflow")}
-                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
-                        isCreateRoute && currentMode === "smartflow" 
-                          ? "bg-primary/10 text-primary" 
-                          : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                      disabled
+                      className={`cursor-not-allowed rounded-lg py-2.5 transition-colors opacity-50 ${
+                        isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"
+                      }`}
                     >
                       <Wallpaper className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm">Smart Flow</span>}
+                      {!isCollapsed && (
+                        <span className="text-sm flex items-center gap-2">
+                          Smart Flow
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Soon</span>
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Smart Flow – Turn data into visual insights</TooltipContent>}
+                  <TooltipContent side="right">Smart Flow – Turn data into visual insights (Coming Soon)</TooltipContent>
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -391,7 +394,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   <div className="px-3 py-2 text-xs sm:text-sm text-foreground/50 dark:text-white/50">No projects yet</div>
                 ) : (
                   recentProjects.map((project) => {
-                    const projectMode = project.project_type === "storytelling" ? "storytelling" : project.project_type === "smartflow" ? "smartflow" : "doc2video";
+                    const projectMode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
                     const currentProjectId = new URLSearchParams(location.search).get("project");
                     const isActiveProject = currentProjectId === project.id;
                     
@@ -410,8 +413,6 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                         >
                           {project.project_type === "storytelling" ? (
                             <Clapperboard className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
-                          ) : project.project_type === "smartflow" ? (
-                            <Wallpaper className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
                           ) : (
                             <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
                           )}

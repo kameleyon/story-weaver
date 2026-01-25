@@ -27,7 +27,6 @@ import {
   Wand2,
   Clock,
   Calendar,
-  Wallpaper,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -250,8 +249,7 @@ export default function Projects() {
 
   // Action handlers
   const handleView = (project: Project) => {
-    const mode = project.project_type === "storytelling" ? "storytelling" : project.project_type === "smartflow" ? "smartflow" : "doc2video";
-    navigate(`/app/create?mode=${mode}&project=${project.id}`);
+    navigate(`/app/create?project=${project.id}`);
   };
 
   const handleRename = (project: Project) => {
@@ -553,8 +551,6 @@ export default function Projects() {
                         <div className="p-2 rounded-lg bg-background/80 backdrop-blur-sm">
                           {project.project_type === "storytelling" ? (
                             <Clapperboard className="h-4 w-4 text-primary" />
-                          ) : project.project_type === "smartflow" ? (
-                            <Wallpaper className="h-4 w-4 text-primary" />
                           ) : (
                             <Video className="h-4 w-4 text-primary" />
                           )}
@@ -661,8 +657,6 @@ export default function Projects() {
                           )}>
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-4 w-4 text-primary" />
-                            ) : project.project_type === "smartflow" ? (
-                              <Wallpaper className="h-4 w-4 text-primary" />
                             ) : (
                               <Video className="h-4 w-4 text-primary" />
                             )}
@@ -673,12 +667,8 @@ export default function Projects() {
                         </div>
                       </TableCell>
                       <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
-                        <Badge variant="outline" className="text-xs">
-                          {project.project_type === "storytelling" 
-                            ? "Visual Stories" 
-                            : project.project_type === "smartflow" 
-                              ? "Smart Flow" 
-                              : "Explainers"}
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {project.project_type === "storytelling" ? "Story" : "Doc2Video"}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
@@ -747,15 +737,11 @@ export default function Projects() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <Video className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type === "doc2video" || !p.project_type).length} explainers</span>
+                <span>{filteredProjects.filter(p => p.project_type !== "storytelling").length} videos</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Clapperboard className="h-3.5 w-3.5" />
                 <span>{filteredProjects.filter(p => p.project_type === "storytelling").length} stories</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Wallpaper className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type === "smartflow").length} infographics</span>
               </div>
             </div>
           )}

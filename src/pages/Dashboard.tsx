@@ -12,8 +12,7 @@ import {
   Lightbulb,
   Clapperboard,
   Wand2,
-  Menu,
-  Wallpaper
+  Menu
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -300,13 +299,11 @@ export default function Dashboard() {
                     {recentProjects.map((project) => (
                       <button
                         key={project.id}
-                        onClick={() => navigate(`/app/create?mode=${project.project_type === "storytelling" ? "storytelling" : project.project_type === "smartflow" ? "smartflow" : "doc2video"}&project=${project.id}`)}
+                        onClick={() => navigate(`/app/create?project=${project.id}`)}
                         className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
                       >
                         {project.project_type === "storytelling" ? (
                           <Clapperboard className="h-4 w-4 text-muted-foreground shrink-0" />
-                        ) : project.project_type === "smartflow" ? (
-                          <Wallpaper className="h-4 w-4 text-muted-foreground shrink-0" />
                         ) : (
                           <Video className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}

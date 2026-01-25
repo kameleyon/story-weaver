@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff, Video } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -182,10 +182,9 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                 >
                   {/* Hero */}
                   <div className="text-center space-y-3">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                      <Video className="h-3.5 w-3.5" />
-                      Explainers
-                    </div>
+                    <span className="inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                      Doc2Video Mode
+                    </span>
                     <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                       What would you like to create?
                     </h1>

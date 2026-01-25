@@ -3,9 +3,6 @@ project_id = "hesnceozbedzrgvylqrm"
 [functions.generate-video]
 verify_jwt = false
 
-[functions.generate-smartflow]
-verify_jwt = false
-
 [functions.create-checkout]
 verify_jwt = false
 
