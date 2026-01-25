@@ -442,7 +442,7 @@ Your task:
 1. Extract the key insights, statistics, or information the user requested
 2. Structure this information for a visually compelling infographic
 3. Create a detailed image generation prompt for the infographic
-4. Write a short narration script explaining the infographic (60-90 seconds when read aloud)
+4. Write a comprehensive, engaging narration script explaining the infographic in depth (aim for 3-5 minutes when read aloud, approximately 500-800 words). Cover all key insights with context, examples, and actionable takeaways.
 
 The infographic should be:
 - Format: ${formatSpec.description}
