@@ -95,8 +95,71 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     };
 
     const handleOpenProject = async (id: string) => {
-      // TODO: Load existing Smart Flow project
-      console.log("Loading Smart Flow project:", id);
+      try {
+        // Fetch project data
+        const { data: project, error: projectError } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (projectError) throw projectError;
+        if (!project) {
+          toast({ title: "Project not found", variant: "destructive" });
+          return;
+        }
+
+        // Fetch latest generation
+        const { data: generation, error: genError } = await supabase
+          .from("generations")
+          .select("*")
+          .eq("project_id", id)
+          .order("created_at", { ascending: false })
+          .maybeSingle();
+
+        if (genError) throw genError;
+
+        // Restore form state from project
+        setDataSource(project.content || "");
+        setExtractionPrompt(project.description || "");
+        setStyle((project.style as SmartFlowStyle) || "minimalist");
+        setFormat((project.format as VideoFormat) || "square");
+        setBrandMarkEnabled(!!project.brand_mark);
+        setBrandMarkText(project.brand_mark || "");
+        setEnableVoice(!!project.voice_type && project.voice_type !== "none");
+        setVoice({
+          type: (project.voice_type === "custom" ? "custom" : "standard") as "standard" | "custom",
+          gender: (project.voice_inclination as "male" | "female") || "female",
+          voiceId: project.voice_id || undefined,
+          voiceName: project.voice_name || undefined,
+        });
+
+        // If generation exists and is complete, show result
+        if (generation && generation.status === "complete" && generation.scenes) {
+          const scenes = generation.scenes as any[];
+          const scene = scenes[0];
+          
+          setResult({
+            projectId: project.id,
+            generationId: generation.id,
+            title: project.title,
+            imageUrl: scene?.imageUrl || "",
+            audioUrl: scene?.audioUrl || generation.audio_url,
+            script: generation.script || scene?.text || "",
+            keyInsights: scene?.keyInsights || [],
+            audioDuration: scene?.duration || undefined,
+          });
+        }
+
+        toast({ title: "Project loaded", description: project.title });
+      } catch (err) {
+        console.error("Error loading Smart Flow project:", err);
+        toast({
+          title: "Failed to load project",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      }
     };
 
     useImperativeHandle(ref, () => ({
