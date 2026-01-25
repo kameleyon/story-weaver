@@ -16,8 +16,10 @@ import {
   Check,
   Sparkles,
   Home,
-  Headphones,
+  Clapperboard,
   Mic,
+  BarChart3,
+  Presentation,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -246,7 +248,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
-              {/* Doc-to-Video */}
+              {/* Explainers (formerly Doc-to-Video) */}
               <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -259,10 +261,76 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                     >
                       <Video className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm">Doc-to-Video</span>}
+                      {!isCollapsed && <span className="text-sm">Explainers</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Doc-to-Video</TooltipContent>}
+                  {isCollapsed && <TooltipContent side="right">Explainers – Turn text into education</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
+
+              {/* Visual Stories (formerly Storytelling) */}
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/app/create?mode=storytelling")}
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
+                        isCreateRoute && currentMode === "storytelling" 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                    >
+                      <Clapperboard className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && <span className="text-sm">Visual Stories</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">Visual Stories – Turn ideas into cinema</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
+
+              {/* SmartFlow (Coming Soon) */}
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      disabled
+                      className={`cursor-not-allowed rounded-lg py-2.5 transition-colors opacity-50 ${
+                        isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"
+                      }`}
+                    >
+                      <BarChart3 className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && (
+                        <span className="text-sm flex items-center gap-2">
+                          SmartFlow
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Soon</span>
+                        </span>
+                      )}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">SmartFlow – Turn data into visual insights (Coming Soon)</TooltipContent>
+                </Tooltip>
+              </SidebarMenuItem>
+
+              {/* Presenter (Coming Soon) */}
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      disabled
+                      className={`cursor-not-allowed rounded-lg py-2.5 transition-colors opacity-50 ${
+                        isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"
+                      }`}
+                    >
+                      <Presentation className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && (
+                        <span className="text-sm flex items-center gap-2">
+                          Presenter
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Soon</span>
+                        </span>
+                      )}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Presenter – Turn media into a guided presentation (Coming Soon)</TooltipContent>
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -282,27 +350,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       {!isCollapsed && <span className="text-sm">Voice Lab</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Voice Lab</TooltipContent>}
-                </Tooltip>
-              </SidebarMenuItem>
-
-              {/* Storytelling */}
-              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton
-                      onClick={() => navigate("/app/create?mode=storytelling")}
-                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
-                        isCreateRoute && currentMode === "storytelling" 
-                          ? "bg-primary/10 text-primary" 
-                          : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
-                    >
-                      <Headphones className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm">Storytelling</span>}
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Storytelling</TooltipContent>}
+                  {isCollapsed && <TooltipContent side="right">Voice Lab – Clone and manage your digital voice</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -352,7 +400,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     
                     return (
                       <SidebarMenuItem key={project.id} className="group relative">
-                        <SidebarMenuButton
+                      <SidebarMenuButton
                           onClick={() => {
                             navigate(`/app/create?mode=${projectMode}&project=${project.id}`);
                             onOpenProject(project.id);
@@ -364,7 +412,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           }`}
                         >
                           {project.project_type === "storytelling" ? (
-                            <Headphones className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
+                            <Clapperboard className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
                           ) : (
                             <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
                           )}
