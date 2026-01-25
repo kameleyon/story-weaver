@@ -258,7 +258,7 @@ export default function VoiceLab() {
               {/* Hero */}
               <div className="text-center space-y-3">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                  <MicVocal className="h-3.5 w-3.5" />
+                  <Mic className="h-3.5 w-3.5" />
                   Voice Lab
                 </div>
                 <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
