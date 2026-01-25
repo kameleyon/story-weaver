@@ -1,12 +1,11 @@
-import { forwardRef, useImperativeHandle, useState, useEffect } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, ChevronDown, ChevronUp, Download, RotateCcw, Pencil, X, Mic } from "lucide-react";
+import { Wallpaper, Loader2, AlertCircle, Volume2, VolumeX, Pencil, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSidebar } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
@@ -19,6 +18,7 @@ import { FormatSelector, VideoFormat } from "./FormatSelector";
 import { VoiceSelector, VoiceSelection } from "./VoiceSelector";
 import { SmartFlowStyleSelector, SmartFlowStyle } from "./SmartFlowStyleSelector";
 import { GenerationProgress } from "./GenerationProgress";
+import { SmartFlowResult } from "./SmartFlowResult";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 export interface WorkspaceHandle {
@@ -209,27 +209,6 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       }
     };
 
-    const handleDownload = async () => {
-      if (!result?.imageUrl) return;
-      
-      try {
-        const response = await fetch(result.imageUrl);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${result.title || "infographic"}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        toast({ title: "Download started!" });
-      } catch (err) {
-        toast({ title: "Download failed", variant: "destructive" });
-      }
-    };
-
     const handleNewProject = () => {
       resetWorkspace();
       navigate("/app/create?mode=smartflow");
@@ -365,71 +344,20 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="space-y-4"
                 >
-                  {/* Infographic Image with Edit Button */}
-                  <div className="relative rounded-xl border border-border/50 overflow-hidden bg-muted/20 group">
-                    <img 
-                      src={result.imageUrl} 
-                      alt="Generated infographic" 
-                      className="w-full"
-                      onError={(e) => {
-                        console.error("Image failed to load:", result.imageUrl);
-                      }}
-                    />
-                    {/* Edit overlay */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Button 
-                        onClick={() => setShowEditModal(true)}
-                        className="bg-primary hover:bg-primary/90 gap-2"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit Image
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Audio Player (if voice was enabled) */}
-                  {result.audioUrl && (
-                    <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
-                      <div className="flex items-center gap-3">
-                        <Volume2 className="h-5 w-5 text-primary" />
-                        <audio 
-                          controls 
-                          src={result.audioUrl} 
-                          className="flex-1 h-10"
-                          style={{ colorScheme: 'dark' }}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setAudioEditScript(result.script || "");
-                            setShowAudioEditModal(true);
-                          }}
-                          className="h-8 w-8"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3">
-                    <Button variant="outline" onClick={handleNewProject} className="flex-1 gap-2">
-                      <RotateCcw className="h-4 w-4" />
-                      New Project
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowEditModal(true)} className="gap-2">
-                      <Pencil className="h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button onClick={handleDownload} className="flex-1 bg-primary hover:bg-primary/90 gap-2">
-                      <Download className="h-4 w-4" />
-                      Download
-                    </Button>
-                  </div>
+                  <SmartFlowResult
+                    title={result.title || "Smart Flow Infographic"}
+                    imageUrl={result.imageUrl}
+                    audioUrl={result.audioUrl}
+                    script={result.script}
+                    format={format}
+                    onNewProject={handleNewProject}
+                    onEditImage={() => setShowEditModal(true)}
+                    onEditAudio={() => {
+                      setAudioEditScript(result.script || "");
+                      setShowAudioEditModal(true);
+                    }}
+                  />
                 </motion.div>
               ) : isGenerating ? (
                 <motion.div
