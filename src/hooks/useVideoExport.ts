@@ -237,20 +237,60 @@ export function useVideoExport() {
 
         const wantsAudio = scenes.some((s) => !!s.audioUrl);
 
+        // iOS Safari WebCodecs audio support is inconsistent across versions.
+        // Some builds accept only certain codec strings and/or sample rates.
+        // We'll pick a supported config and use it consistently for:
+        // - AudioEncoder.configure
+        // - OfflineAudioContext rendering sampleRate
+        // - AudioData timestamps/sampleRate
+        // - MP4 muxer audio track sampleRate
+        const audioConfigCandidates = [
+          { codec: "mp4a.40.2", sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 },
+          { codec: "mp4a.40.2", sampleRate: 44100, numberOfChannels: 2, bitrate: 128000 },
+          // Safari sometimes accepts "aac" as a codec string even when it rejects mp4a.40.2.
+          { codec: "aac", sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 },
+          { codec: "aac", sampleRate: 44100, numberOfChannels: 2, bitrate: 128000 },
+        ] as const;
+
         // Preflight audio support (some mobile browsers partially implement WebCodecs)
         let audioEnabled = supportsAudio && wantsAudio;
+        let chosenAudioConfig:
+          | {
+              codec: (typeof audioConfigCandidates)[number]["codec"];
+              sampleRate: (typeof audioConfigCandidates)[number]["sampleRate"];
+              numberOfChannels: 2;
+              bitrate: number;
+            }
+          | null = null;
+
         if (audioEnabled && typeof AudioEncoderCtor?.isConfigSupported === "function") {
           try {
-            const support = await AudioEncoderCtor.isConfigSupported({
-              codec: "mp4a.40.2",
-              numberOfChannels: 2,
-              sampleRate: 48000,
-              bitrate: 128000,
-            });
-            if (!support?.supported) audioEnabled = false;
+            for (const cfg of audioConfigCandidates) {
+              try {
+                const support = await AudioEncoderCtor.isConfigSupported(cfg);
+                log("Run", runId, "AudioEncoder.isConfigSupported", {
+                  codec: cfg.codec,
+                  sampleRate: cfg.sampleRate,
+                  supported: !!support?.supported,
+                });
+                if (support?.supported) {
+                  chosenAudioConfig = cfg;
+                  break;
+                }
+              } catch {
+                // Ignore and try next.
+              }
+            }
+
+            if (!chosenAudioConfig) audioEnabled = false;
           } catch {
             audioEnabled = false;
           }
+        }
+
+        // If isConfigSupported is not available, we'll still attempt to configure later.
+        if (audioEnabled && !chosenAudioConfig) {
+          chosenAudioConfig = audioConfigCandidates[0];
         }
 
         if (wantsAudio && !audioEnabled) {
@@ -282,11 +322,57 @@ export function useVideoExport() {
             });
 
             log("Run", runId, "AudioEncoder instantiated");
+
+            // Configure audio encoder with fallback across candidate configs.
+            // Some iOS builds throw during configure even when isConfigSupported is missing/incorrect.
+            let configured = false;
+            const configureCandidates = chosenAudioConfig
+              ? [
+                  chosenAudioConfig,
+                  ...audioConfigCandidates.filter(
+                    (c) => c.codec !== chosenAudioConfig!.codec || c.sampleRate !== chosenAudioConfig!.sampleRate
+                  ),
+                ]
+              : [...audioConfigCandidates];
+
+            for (const cfg of configureCandidates) {
+              try {
+                audioEncoder.configure(cfg);
+                chosenAudioConfig = cfg;
+                configured = true;
+                log("Run", runId, "AudioEncoder configured", {
+                  codec: cfg.codec,
+                  sampleRate: cfg.sampleRate,
+                  numberOfChannels: cfg.numberOfChannels,
+                  bitrate: cfg.bitrate,
+                });
+                break;
+              } catch (e) {
+                warn("Run", runId, "AudioEncoder.configure failed", {
+                  codec: cfg.codec,
+                  sampleRate: cfg.sampleRate,
+                  message: e instanceof Error ? e.message : String(e),
+                });
+              }
+            }
+
+            if (!configured) {
+              warn("Run", runId, "No supported audio config worked; exporting silent video");
+              audioEnabled = false;
+              audioEncoder.close();
+              audioEncoder = null;
+              chosenAudioConfig = null;
+              setState((s) => ({
+                ...s,
+                warning: "Audio export isn't supported on this device. Exporting a silent video.",
+              }));
+            }
           } catch (e) {
             // Some mobile browsers expose the symbol but fail at runtime.
             warn("Run", runId, "AudioEncoder instantiation failed", e);
             audioEnabled = false;
             audioEncoder = null;
+            chosenAudioConfig = null;
             setState((s) => ({
               ...s,
               warning: "Audio export isn't supported on this device. Exporting a silent video.",
@@ -307,7 +393,7 @@ export function useVideoExport() {
                 audio: {
                   codec: "aac",
                   numberOfChannels: 2,
-                  sampleRate: 48000,
+                  sampleRate: chosenAudioConfig?.sampleRate ?? 48000,
                 },
               }
             : {}),
@@ -376,18 +462,14 @@ export function useVideoExport() {
         videoEncoder.configure(chosenVideoConfig);
         log("Run", runId, "VideoEncoder configured");
 
-        if (audioEnabled && audioEncoder) {
-          audioEncoder.configure({
-            codec: "mp4a.40.2", // AAC-LC
-            numberOfChannels: 2,
-            sampleRate: 48000,
-            bitrate: 128000,
-          });
-
-          log("Run", runId, "AudioEncoder configured");
-
+        if (audioEnabled && audioEncoder && chosenAudioConfig) {
           // Merge all audio into a single buffer for encoding
-          const audioCtx = new OfflineAudioContext(2, Math.ceil(totalDuration * 48000), 48000);
+          const audioSampleRate = chosenAudioConfig.sampleRate;
+          const audioCtx = new OfflineAudioContext(
+            2,
+            Math.ceil(totalDuration * audioSampleRate),
+            audioSampleRate
+          );
           let audioOffset = 0;
 
           for (const asset of assets) {
@@ -431,10 +513,10 @@ export function useVideoExport() {
             }
 
             // Use Math.floor for strict timestamp monotonicity (iOS Safari is strict)
-            const timestampUs = Math.floor((i / 48000) * 1_000_000);
+            const timestampUs = Math.floor((i / audioSampleRate) * 1_000_000);
             const audioData = new AudioDataCtor!({
               format: "f32",
-              sampleRate: 48000,
+              sampleRate: audioSampleRate,
               numberOfFrames: remaining,
               numberOfChannels: 2,
               timestamp: timestampUs,
