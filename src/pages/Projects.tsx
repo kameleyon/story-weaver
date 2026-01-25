@@ -27,6 +27,7 @@ import {
   Wand2,
   Clock,
   Calendar,
+  Wallpaper,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -249,7 +250,8 @@ export default function Projects() {
 
   // Action handlers
   const handleView = (project: Project) => {
-    navigate(`/app/create?project=${project.id}`);
+    const mode = project.project_type === "storytelling" ? "storytelling" : project.project_type === "smartflow" ? "smartflow" : "doc2video";
+    navigate(`/app/create?mode=${mode}&project=${project.id}`);
   };
 
   const handleRename = (project: Project) => {
@@ -551,6 +553,8 @@ export default function Projects() {
                         <div className="p-2 rounded-lg bg-background/80 backdrop-blur-sm">
                           {project.project_type === "storytelling" ? (
                             <Clapperboard className="h-4 w-4 text-primary" />
+                          ) : project.project_type === "smartflow" ? (
+                            <Wallpaper className="h-4 w-4 text-primary" />
                           ) : (
                             <Video className="h-4 w-4 text-primary" />
                           )}
@@ -657,6 +661,8 @@ export default function Projects() {
                           )}>
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-4 w-4 text-primary" />
+                            ) : project.project_type === "smartflow" ? (
+                              <Wallpaper className="h-4 w-4 text-primary" />
                             ) : (
                               <Video className="h-4 w-4 text-primary" />
                             )}
@@ -737,11 +743,15 @@ export default function Projects() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <Video className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type !== "storytelling").length} videos</span>
+                <span>{filteredProjects.filter(p => p.project_type === "doc2video" || !p.project_type).length} explainers</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Clapperboard className="h-3.5 w-3.5" />
                 <span>{filteredProjects.filter(p => p.project_type === "storytelling").length} stories</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Wallpaper className="h-3.5 w-3.5" />
+                <span>{filteredProjects.filter(p => p.project_type === "smartflow").length} infographics</span>
               </div>
             </div>
           )}
