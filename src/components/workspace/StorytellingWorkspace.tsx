@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Users, Headphones } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Users, Clapperboard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -197,8 +197,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                   {/* Hero */}
                   <div className="text-center">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
-                      <Headphones className="h-3.5 w-3.5" />
-                      Storytelling Mode
+                      <Clapperboard className="h-3.5 w-3.5" />
+                      Visual Story Mode
                     </div>
                     <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                       Create Your Story
