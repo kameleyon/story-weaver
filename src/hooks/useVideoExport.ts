@@ -268,10 +268,12 @@ export function useVideoExport() {
 
         // Create audio encoder (optional) - use constructor from globalThis
         let audioEncoder: AudioEncoder | null = null;
+        let audioChunkCount = 0;
         if (audioEnabled && AudioEncoderCtor) {
           try {
             audioEncoder = new AudioEncoderCtor({
               output: (chunk, meta) => {
+                audioChunkCount++;
                 muxer.addAudioChunk(chunk, meta);
               },
               error: (e) => {
@@ -425,12 +427,14 @@ export function useVideoExport() {
               planarData[remaining + j] = rightChannel[i + j]; // Right channel after
             }
 
+            // Use Math.floor for strict timestamp monotonicity (iOS Safari is strict)
+            const timestampUs = Math.floor((i / 48000) * 1_000_000);
             const audioData = new AudioDataCtor!({
               format: "f32-planar",
               sampleRate: 48000,
               numberOfFrames: remaining,
               numberOfChannels: 2,
-              timestamp: Math.round((i / 48000) * 1_000_000), // microseconds
+              timestamp: timestampUs,
               data: planarData,
             });
 
@@ -554,16 +558,31 @@ export function useVideoExport() {
         log("Run", runId, "Flushing encoders...");
 
         await videoEncoder.flush();
-        if (audioEncoder) await audioEncoder.flush();
+        log("Run", runId, "VideoEncoder flushed", { videoChunkCount });
+        
+        if (audioEncoder) {
+          await audioEncoder.flush();
+          log("Run", runId, "AudioEncoder flushed", { audioChunkCount });
+        }
+        
         videoEncoder.close();
         audioEncoder?.close();
 
-        log("Run", runId, "Encoders flushed/closed", { videoChunkCount });
+        log("Run", runId, "Encoders closed", { videoChunkCount, audioChunkCount });
 
         if (videoChunkCount === 0) {
           throw new Error(
             "This browser couldn't encode the video (0 chunks produced). Please try exporting on a desktop browser."
           );
+        }
+
+        // Warn if audio was expected but no chunks were produced (silent export)
+        if (wantsAudio && audioEnabled && audioChunkCount === 0) {
+          warn("Run", runId, "Audio was requested and encoder configured, but 0 audio chunks were produced. Video will be silent.");
+          setState((s) => ({
+            ...s,
+            warning: "Audio encoding failed on this device. Video exported without sound.",
+          }));
         }
 
         try {
