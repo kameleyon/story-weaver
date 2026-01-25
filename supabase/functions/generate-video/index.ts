@@ -1517,51 +1517,64 @@ async function handleSmartFlowScriptPhase(
   voiceName?: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
-  console.log(`[generate-video] Starting SMART FLOW pipeline - single infographic`);
+  console.log(`[generate-video] Starting SMART FLOW pipeline - text-rich infographic`);
 
   const styleDescription = getStylePrompt(style, undefined);
   const dimensions = getImageDimensions(format);
+  const DEFAULT_DURATION = 15;
 
-  // Smart Flow prompt: single scene infographic
-  const scriptPrompt = `You are an Expert Data Analyst and Visual Communicator.
-Your goal is to synthesize the user's data into a SINGLE clear infographic concept.
+  // Smart Flow prompt: Text-Rich Diagrammatic Layouts (Nano Banana can render text!)
+  const scriptPrompt = `You are an Elite Data Visualization Architect.
+Your goal is to design a SINGLE, HIGH-IMPACT INFOGRAPHIC that combines clear text, data, and visuals.
 
 === DATA SOURCE ===
 ${content}
 
-=== EXTRACTION INSTRUCTION ===
+=== EXTRACTION GOAL ===
 ${extractionPrompt || "Extract the most important insight or summary from this data."}
 
 === VISUAL STYLE ===
-Art Style: ${styleDescription}
-Aspect Ratio: ${format} (${dimensions.width}x${dimensions.height})
-${brandMark ? `Brand Mark: Include "${brandMark}" as a subtle watermark in bottom-center` : ""}
+- Art Style: ${styleDescription}
+- Format: ${format} (${dimensions.width}x${dimensions.height})
+- BRANDING: ${brandMark ? `Include the text "${brandMark}" as a small footer.` : "None"}
 
 === YOUR TASK ===
-1. Analyze the data based on the extraction instruction
-2. Create a concise title (max 8 words) that captures the key insight
-3. Write a brief narration script (MAX 180 words, ~90 seconds) explaining the insight
-4. Write ONE detailed image prompt for a conceptual infographic visualization
+1. **Analyze**: Identify the CORE insight (The "Aha!" moment).
+2. **Script**: Write a 180-word narration script (professional, insightful).
+3. **Design the Visual**:
+   - The image generator CAN render text. You MUST use this capability.
+   - Plan a specific layout (Flowchart, Comparison/Split Screen, Pyramid, Cycle, Hub-and-Spoke, or List).
+   - Select 3-5 key text elements (Headlines, Stats, Labels) to render.
+   - *Constraint:* Keep text short (1-3 words per label) to ensure perfect rendering.
+
+4. **Write the Image Prompt**:
+   - Start with: "A professional infographic illustration..."
+   - **SPECIFY TEXT**: Use the format: 'text "YOUR TEXT HERE"'.
+   - Example: 'A central circle containing the bold text "CORE VALUE".'
+   - Example: 'Three steps labeled "1. PLAN", "2. ACT", "3. REVIEW".'
+   - **SPECIFY LAYOUT**: "Split screen composition...", "Vertical flowchart...", "Hub-and-spoke diagram..."
+   - **SPECIFY STYLE**: Ensure the style (${style}) is maintained (e.g. "hand drawn lines", "vector flat style", "realistic 3D").
 
 === OUTPUT FORMAT (STRICT JSON) ===
+Return ONLY valid JSON:
 {
   "title": "Clear, impactful title",
   "scenes": [{
     "number": 1,
     "voiceover": "Your narration script explaining the insight...",
-    "visualPrompt": "Detailed infographic image prompt. Use visual metaphors, iconic layouts, flow diagrams. Do NOT attempt to render complex text. Style: ${styleDescription}. ${brandMark ? `Include subtle watermark: ${brandMark}` : ""} Aspect ratio: ${format}.",
-    "duration": 15
+    "visualPrompt": "A professional infographic in ${styleDescription} style. LAYOUT: [Specific Layout Type]. TEXT ELEMENTS: Large title text '[TITLE]' at the top. KEY VISUALS: [Describe icons/charts/shapes]. LABELS: [Describe specific text labels near visual elements using 'text \"LABEL\"' format]. COMPOSITION: Balanced, clear hierarchy, ample negative space. COLOR: [Color palette]. ${brandMark ? `FOOTER: Small text "${brandMark}" at bottom-center.` : ""}",
+    "duration": ${DEFAULT_DURATION}
   }]
 }
 
 === CONSTRAINTS ===
 - ONLY produce 1 scene (single infographic)
-- Focus on visual metaphors and iconic representations
-- Do NOT try to render complex text or data tables in the image
-- Keep narration under 180 words
-- Use engaging, clear language`;
+- The image generator CAN render legible text - USE IT
+- Keep each text label to 1-3 words for perfect rendering
+- Use engaging, professional language
+- Keep narration under 180 words`;
 
-  // Call LLM for script generation via OpenRouter
+  // Call LLM for script generation via OpenRouter (Claude Sonnet 4.5)
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is not configured");
@@ -1576,7 +1589,7 @@ ${brandMark ? `Brand Mark: Include "${brandMark}" as a subtle watermark in botto
       "X-Title": "AudioMax Smart Flow",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4",
+      model: "anthropic/claude-sonnet-4.5",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.7,
       max_tokens: 4000,
