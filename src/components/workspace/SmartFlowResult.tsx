@@ -243,24 +243,16 @@ export function SmartFlowResult({
             </Button>
           </div>
           
-          {/* Narration section */}
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              {hasAudio ? (
+          {/* Narration section - only show when audio exists */}
+          {hasAudio && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
                 <Volume2 className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
-              ) : (
-                <VolumeX className="h-4 w-4 text-muted-foreground/50 mt-1 shrink-0" />
-              )}
-              <p className={cn(
-                "text-sm leading-relaxed",
-                hasAudio ? "text-muted-foreground" : "text-muted-foreground/50 italic"
-              )}>
-                {script || (hasAudio ? "No script available" : "No narration generated")}
-              </p>
-            </div>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {script || "No script available"}
+                </p>
+              </div>
 
-            {/* Audio player or grayed out placeholder */}
-            {hasAudio ? (
               <div className="flex items-center gap-2">
                 <audio
                   controls
@@ -277,14 +269,8 @@ export function SmartFlowResult({
                   <Pencil className="h-4 w-4" />
                 </Button>
               </div>
-            ) : (
-              <div className="flex items-center gap-2 opacity-50">
-                <div className="flex-1 h-10 rounded-md bg-muted/50 border border-border/30 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">No audio</span>
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Card>
 
