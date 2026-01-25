@@ -1897,22 +1897,20 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Create magazine-editorial quality that looks professional
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
-  // Call LLM for script generation via OpenRouter (Claude Sonnet 4.5)
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  if (!OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not configured");
+  // Call LLM for script generation via Lovable AI (Gemini 3 Flash Preview)
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://audiomax.lovable.app",
-      "X-Title": "AudioMax Smart Flow",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4.5",
+      model: "google/gemini-3-flash-preview",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.7,
       max_tokens: 4000,
@@ -2213,21 +2211,19 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: SCRIPT - Generating via OpenRouter with Claude Sonnet 4.5...");
+  console.log("Phase: SCRIPT - Generating via Lovable AI with Gemini 3 Flash Preview...");
 
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://audiomax.lovable.app",
-      "X-Title": "AudioMax Video Generator",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4.5",
+      model: "google/gemini-3-flash-preview",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.7,
       max_tokens: 8192,
@@ -2552,21 +2548,19 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with Claude Sonnet 4.5...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via Lovable AI with Gemini 3 Flash Preview...");
 
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://audiomax.lovable.app",
-      "X-Title": "AudioMax Storytelling",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4.5",
+      model: "google/gemini-3-flash-preview",
       messages: [{ role: "user", content: scriptPrompt }],
       temperature: 0.8, // Slightly higher for creative storytelling
       max_tokens: 12000, // More tokens for longer narratives
