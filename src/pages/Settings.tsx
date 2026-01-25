@@ -1,17 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, 
   User, 
-  Key, 
   Bell, 
   Shield,
-  Eye,
-  EyeOff,
-  Save,
   Loader2,
-  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,15 +24,6 @@ export default function Settings() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  
-  // API Keys state
-  const [geminiKey, setGeminiKey] = useState("");
-  const [replicateKey, setReplicateKey] = useState("");
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
-  const [showReplicateKey, setShowReplicateKey] = useState(false);
-  const [isSavingKeys, setIsSavingKeys] = useState(false);
-  const [isLoadingKeys, setIsLoadingKeys] = useState(true);
-  const [keysSaved, setKeysSaved] = useState(false);
 
   // Password change state
   const [newPassword, setNewPassword] = useState("");
@@ -48,115 +34,6 @@ export default function Settings() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [projectUpdates, setProjectUpdates] = useState(true);
   const [marketingEmails, setMarketingEmails] = useState(false);
-
-  // Track if keys exist (for masked display)
-  const [hasGemini, setHasGemini] = useState(false);
-  const [hasReplicate, setHasReplicate] = useState(false);
-
-  // Load existing API keys on mount (via encrypted edge function)
-  useEffect(() => {
-    const loadApiKeys = async () => {
-      if (!user) return;
-      
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        
-        if (!token) {
-          setIsLoadingKeys(false);
-          return;
-        }
-
-        const { data, error } = await supabase.functions.invoke("manage-api-keys", {
-          method: "GET",
-        });
-
-        if (error) {
-          console.error("Error loading API keys:", error);
-          return;
-        }
-
-        if (data) {
-          // Display masked keys if they exist
-          setGeminiKey(data.gemini_api_key || "");
-          setReplicateKey(data.replicate_api_token || "");
-          setHasGemini(data.has_gemini || false);
-          setHasReplicate(data.has_replicate || false);
-        }
-      } catch (err) {
-        console.error("Failed to load API keys:", err);
-      } finally {
-        setIsLoadingKeys(false);
-      }
-    };
-
-    loadApiKeys();
-  }, [user]);
-
-  const handleSaveApiKeys = async () => {
-    if (!user) return;
-    
-    // Don't save if user hasn't entered new keys (just viewing masked values)
-    const isGeminiMasked = geminiKey.startsWith("••••");
-    const isReplicateMasked = replicateKey.startsWith("••••");
-    
-    if (isGeminiMasked && isReplicateMasked) {
-      toast({
-        title: "No changes to save",
-        description: "Enter new API keys to update them.",
-      });
-      return;
-    }
-    
-    setIsSavingKeys(true);
-    
-    try {
-      // Build payload with only non-masked keys
-      const payload: { gemini_api_key?: string; replicate_api_token?: string } = {};
-      
-      if (!isGeminiMasked) {
-        payload.gemini_api_key = geminiKey || "";
-      }
-      if (!isReplicateMasked) {
-        payload.replicate_api_token = replicateKey || "";
-      }
-
-      const { error } = await supabase.functions.invoke("manage-api-keys", {
-        method: "POST",
-        body: payload,
-      });
-
-      if (error) throw error;
-
-      setKeysSaved(true);
-      setHasGemini(!!payload.gemini_api_key || hasGemini);
-      setHasReplicate(!!payload.replicate_api_token || hasReplicate);
-      
-      toast({
-        title: "API keys saved",
-        description: "Your API keys have been encrypted and securely stored.",
-      });
-      setTimeout(() => setKeysSaved(false), 2000);
-      
-      // Reload to show masked version
-      const { data } = await supabase.functions.invoke("manage-api-keys", {
-        method: "GET",
-      });
-      if (data) {
-        setGeminiKey(data.gemini_api_key || "");
-        setReplicateKey(data.replicate_api_token || "");
-      }
-    } catch (error) {
-      console.error("Error saving API keys:", error);
-      toast({
-        title: "Error saving API keys",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSavingKeys(false);
-    }
-  };
 
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) {
@@ -244,14 +121,10 @@ export default function Settings() {
           <p className="mt-1 text-muted-foreground">Manage your account and preferences</p>
 
           <Tabs defaultValue="account" className="mt-8">
-            <TabsList className="grid w-full grid-cols-4 rounded-xl bg-muted/50 p-1">
+            <TabsList className="grid w-full grid-cols-3 rounded-xl bg-muted/50 p-1">
               <TabsTrigger value="account" className="gap-2 rounded-lg data-[state=active]:bg-background">
                 <User className="h-4 w-4" />
                 <span className="hidden sm:inline">Account</span>
-              </TabsTrigger>
-              <TabsTrigger value="api-keys" className="gap-2 rounded-lg data-[state=active]:bg-background">
-                <Key className="h-4 w-4" />
-                <span className="hidden sm:inline">API Keys</span>
               </TabsTrigger>
               <TabsTrigger value="notifications" className="gap-2 rounded-lg data-[state=active]:bg-background">
                 <Bell className="h-4 w-4" />
@@ -292,108 +165,6 @@ export default function Settings() {
                   <Button className="rounded-full">Save Changes</Button>
                 </CardContent>
               </Card>
-            </TabsContent>
-
-            {/* API Keys Tab */}
-            <TabsContent value="api-keys" className="mt-6 space-y-6">
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle>Google Gemini API</CardTitle>
-                  <CardDescription>
-                    Required for script generation and text-to-speech
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>API Key</Label>
-                    <div className="relative">
-                      <Input
-                        type={showGeminiKey ? "text" : "password"}
-                        placeholder={isLoadingKeys ? "Loading..." : "Enter your Gemini API key"}
-                        value={geminiKey}
-                        onChange={(e) => setGeminiKey(e.target.value)}
-                        className="pr-10"
-                        disabled={isLoadingKeys}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowGeminiKey(!showGeminiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showGeminiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Get your API key from{" "}
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      Google AI Studio
-                    </a>
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle>Replicate API</CardTitle>
-                  <CardDescription>
-                    Required for AI image generation (Flux 1.1 Pro)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>API Token</Label>
-                    <div className="relative">
-                      <Input
-                        type={showReplicateKey ? "text" : "password"}
-                        placeholder={isLoadingKeys ? "Loading..." : "Enter your Replicate API token"}
-                        value={replicateKey}
-                        onChange={(e) => setReplicateKey(e.target.value)}
-                        className="pr-10"
-                        disabled={isLoadingKeys}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowReplicateKey(!showReplicateKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showReplicateKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Get your API token from{" "}
-                    <a
-                      href="https://replicate.com/account/api-tokens"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      Replicate Dashboard
-                    </a>
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Button 
-                onClick={handleSaveApiKeys} 
-                className="gap-2 rounded-full"
-                disabled={isSavingKeys || isLoadingKeys}
-              >
-                {isSavingKeys ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : keysSaved ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                {keysSaved ? "Saved" : "Save API Keys"}
-              </Button>
             </TabsContent>
 
             {/* Notifications Tab */}
@@ -465,23 +236,19 @@ export default function Settings() {
                     />
                     <Input 
                       type="password" 
-                      placeholder="Confirm new password" 
+                      placeholder="Confirm new password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
+                    <Button 
+                      onClick={handleChangePassword}
+                      disabled={isChangingPassword}
+                      className="gap-2 rounded-full"
+                    >
+                      {isChangingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Update Password
+                    </Button>
                   </div>
-                  <Button 
-                    className="gap-2 rounded-full"
-                    onClick={handleChangePassword}
-                    disabled={isChangingPassword || !newPassword || !confirmPassword}
-                  >
-                    {isChangingPassword ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Shield className="h-4 w-4" />
-                    )}
-                    {isChangingPassword ? "Updating..." : "Update Password"}
-                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
