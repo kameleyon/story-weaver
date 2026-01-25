@@ -221,41 +221,36 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
-                  {/* Result display */}
-                  <div className="rounded-xl border border-border/50 overflow-hidden">
+                  {/* Infographic Image */}
+                  <div className="rounded-xl border border-border/50 overflow-hidden bg-muted/20">
                     <img 
                       src={result.imageUrl} 
                       alt="Generated infographic" 
                       className="w-full"
+                      onError={(e) => {
+                        console.error("Image failed to load:", result.imageUrl);
+                      }}
                     />
                   </div>
 
-                  {result.script && (
+                  {/* Audio Player (if voice was enabled) */}
+                  {result.audioUrl && (
                     <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
-                      <h4 className="text-sm font-medium mb-2">Script</h4>
-                      <p className="text-sm text-muted-foreground">{result.script}</p>
+                      <div className="flex items-center gap-3">
+                        <Volume2 className="h-5 w-5 text-primary" />
+                        <audio 
+                          controls 
+                          src={result.audioUrl} 
+                          className="flex-1 h-10"
+                          style={{ colorScheme: 'dark' }}
+                        />
+                      </div>
                     </div>
                   )}
 
-                  {/* Key Insights */}
-                  {result.keyInsights && result.keyInsights.length > 0 && (
-                    <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
-                      <h4 className="text-sm font-medium mb-3">Key Insights</h4>
-                      <ul className="space-y-2">
-                        {result.keyInsights.map((insight: string, idx: number) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
-                            <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium">
-                              {idx + 1}
-                            </span>
-                            {insight}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
+                  {/* Action Buttons */}
                   <div className="flex gap-3">
                     <Button variant="outline" onClick={handleNewProject} className="flex-1 gap-2">
                       <RotateCcw className="h-4 w-4" />
