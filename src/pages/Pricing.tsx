@@ -8,7 +8,7 @@ import {
   Crown,
   Gem,
   Building2,
-  Sparkles,
+  Wand2,
   Plus,
   Loader2,
   Info,
@@ -42,7 +42,7 @@ const plans = [
     yearlyPrice: "$0",
     period: "/month",
     description: "Get started with basic features",
-    icon: Sparkles,
+    icon: Wand2,
     features: [
       "5 credits/month",
       "Short videos only (<2 min)",

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Headphones, Presentation, Mic, ArrowRight, Play, Check, Zap, Crown, Gem, Building2, Sparkles } from "lucide-react";
+import { FileText, Headphones, Presentation, Mic, ArrowRight, Play, Check, Zap, Crown, Gem, Building2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +37,7 @@ const pricingPlans = [
     name: "Free",
     price: "$0",
     description: "Get started free",
-    icon: Sparkles,
+    icon: Wand2,
     features: ["5 credits/month", "720p quality", "5 basic styles"],
     popular: false,
   },

@@ -14,12 +14,12 @@ import {
   FolderOpen,
   Crown,
   Check,
-  Sparkles,
+  Wand2,
   Home,
   Clapperboard,
   Mic,
-  BarChart3,
-  Presentation,
+  Wallpaper,
+  MicVocal,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -298,7 +298,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                         isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"
                       }`}
                     >
-                      <BarChart3 className="h-4 w-4 shrink-0" />
+                      <Wallpaper className="h-4 w-4 shrink-0" />
                       {!isCollapsed && (
                         <span className="text-sm flex items-center gap-2">
                           SmartFlow
@@ -321,7 +321,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                         isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"
                       }`}
                     >
-                      <Presentation className="h-4 w-4 shrink-0" />
+                      <MicVocal className="h-4 w-4 shrink-0" />
                       {!isCollapsed && (
                         <span className="text-sm flex items-center gap-2">
                           Presenter
@@ -570,7 +570,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               {upgradeLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Wand2 className="h-4 w-4" />
               )}
               Upgrade Now
             </Button>
