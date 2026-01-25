@@ -184,7 +184,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                   <div className="text-center space-y-3">
                     <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                       <Video className="h-3.5 w-3.5" />
-                      Explainer Mode
+                      Explainer
                     </span>
                     <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                       What would you like to create?
