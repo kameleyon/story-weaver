@@ -183,6 +183,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           audioUrl: data.audioUrl,
           script: data.script,
           keyInsights: data.keyInsights,
+          audioDuration: data.scenes?.[0]?.duration || undefined,
         });
 
         toast({
@@ -351,6 +352,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     audioUrl={result.audioUrl}
                     script={result.script}
                     format={format}
+                    audioDuration={result.audioDuration}
                     onNewProject={handleNewProject}
                     onEditImage={() => setShowEditModal(true)}
                     onEditAudio={() => {
