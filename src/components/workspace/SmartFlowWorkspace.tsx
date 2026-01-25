@@ -127,11 +127,6 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-              Smart Flow
-            </span>
-          </div>
         </div>
 
         {/* Main Content */}
@@ -213,6 +208,20 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   exit={{ opacity: 0 }}
                   className="space-y-6"
                 >
+                  {/* Hero */}
+                  <div className="text-center space-y-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                      <Wallpaper className="h-3.5 w-3.5" />
+                      Smart Flow
+                    </div>
+                    <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+                      Create Your Infographic
+                    </h1>
+                    <p className="text-sm text-muted-foreground/70">
+                      Turn data into beautiful visual insights
+                    </p>
+                  </div>
+
                   {/* Data Source Input */}
                   <div className="space-y-2">
                     <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
