@@ -673,8 +673,12 @@ export default function Projects() {
                         </div>
                       </TableCell>
                       <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
-                        <Badge variant="outline" className="capitalize text-xs">
-                          {project.project_type === "storytelling" ? "Story" : "Doc2Video"}
+                        <Badge variant="outline" className="text-xs">
+                          {project.project_type === "storytelling" 
+                            ? "Visual Stories" 
+                            : project.project_type === "smartflow" 
+                              ? "Smart Flow" 
+                              : "Explainers"}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
