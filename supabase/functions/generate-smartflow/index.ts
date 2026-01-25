@@ -319,9 +319,17 @@ Create a visually stunning, professional infographic that clearly communicates t
       throw new Error("Failed to upload image");
     }
 
-    const { data: { publicUrl: imageUrl } } = adminClient.storage
+    // Create signed URL for private bucket (valid for 1 year)
+    const { data: signedUrlData, error: signedUrlError } = await adminClient.storage
       .from("audio")
-      .getPublicUrl(imagePath);
+      .createSignedUrl(imagePath, 60 * 60 * 24 * 365);
+
+    if (signedUrlError || !signedUrlData?.signedUrl) {
+      console.error("[SMARTFLOW] Signed URL error:", signedUrlError);
+      throw new Error("Failed to create signed URL");
+    }
+
+    const imageUrl = signedUrlData.signedUrl;
 
     console.log("[SMARTFLOW] Image uploaded:", imageUrl);
 
@@ -387,10 +395,12 @@ Create a visually stunning, professional infographic that clearly communicates t
               });
 
             if (!audioUploadError) {
-              const { data: { publicUrl } } = adminClient.storage
+              // Create signed URL for audio (valid for 1 year)
+              const { data: audioSignedData } = await adminClient.storage
                 .from("audio")
-                .getPublicUrl(audioPath);
-              audioUrl = publicUrl;
+                .createSignedUrl(audioPath, 60 * 60 * 24 * 365);
+              
+              audioUrl = audioSignedData?.signedUrl || null;
               
               // Estimate duration (roughly 150 words per minute)
               const wordCount = analysisResult.narrationScript.split(/\s+/).length;
