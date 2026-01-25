@@ -24,7 +24,7 @@ interface SmartFlowWorkspaceProps {
   projectId?: string | null;
 }
 
-const MAX_DATA_LENGTH = 250000; // 250k characters
+const MAX_DATA_LENGTH = 500000; // 500k characters
 
 export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspaceProps>(
   function SmartFlowWorkspace({ projectId: initialProjectId }, ref) {
