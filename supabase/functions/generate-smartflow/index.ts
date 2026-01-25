@@ -8,7 +8,7 @@ const corsHeaders = {
 
 // ============= INPUT VALIDATION =============
 const INPUT_LIMITS = {
-  dataSource: 100000, // Max 100K characters for data
+  dataSource: 250000, // Max 250K characters for data
   extractionPrompt: 2000,
   style: 50,
   customStyle: 2000,
