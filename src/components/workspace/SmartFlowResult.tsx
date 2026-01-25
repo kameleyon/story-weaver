@@ -1,22 +1,26 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import {
-  ChevronLeft,
-  ChevronRight,
   Download,
+  FolderArchive,
   Loader2,
   Pause,
   Pencil,
   Play,
   Plus,
+  Share2,
   Square,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { useVideoExport } from "@/hooks/useVideoExport";
+import type { Scene } from "@/hooks/useGenerationPipeline";
 
 interface SmartFlowResultProps {
   title: string;
@@ -24,6 +28,7 @@ interface SmartFlowResultProps {
   audioUrl?: string | null;
   script?: string | null;
   format: "landscape" | "portrait" | "square";
+  audioDuration?: number;
   onNewProject: () => void;
   onEditImage: () => void;
   onEditAudio: () => void;
@@ -35,14 +40,18 @@ export function SmartFlowResult({
   audioUrl,
   script,
   format,
+  audioDuration,
   onNewProject,
   onEditImage,
   onEditAudio,
 }: SmartFlowResultProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Video export hook
+  const { state: exportState, exportVideo, downloadVideo, shareVideo, reset: resetExport } = useVideoExport();
 
   const hasAudio = !!audioUrl;
 
@@ -73,9 +82,9 @@ export function SmartFlowResult({
     setAudioProgress(0);
   };
 
-  const handleDownload = async () => {
+  const handleDownloadImage = async () => {
     if (!imageUrl) return;
-    setIsDownloading(true);
+    setIsDownloadingImage(true);
     
     try {
       const response = await fetch(imageUrl);
@@ -89,21 +98,42 @@ export function SmartFlowResult({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      toast({ title: "Download started!" });
+      toast({ title: "Image downloaded!" });
     } catch (err) {
       toast({ title: "Download failed", variant: "destructive" });
     } finally {
-      setIsDownloading(false);
+      setIsDownloadingImage(false);
     }
   };
 
+  const handleExportVideo = async () => {
+    // Create a single "scene" from the infographic data
+    const scene: Scene = {
+      number: 1,
+      voiceover: script || "",
+      visualPrompt: title, // Required by Scene interface
+      imageUrl: imageUrl,
+      audioUrl: audioUrl || undefined,
+      duration: audioDuration || 30, // Default to 30s if no duration
+    };
+    
+    try {
+      await exportVideo([scene], format);
+    } catch (err) {
+      console.error("Video export error:", err);
+    }
+  };
+
+  const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "infographic";
+
   return (
     <div className="space-y-8">
-      {/* Hidden audio element */}
+      {/* Hidden audio element with preload for better playback */}
       {hasAudio && (
         <audio
           ref={audioRef}
           src={audioUrl!}
+          preload="auto"
           onEnded={() => {
             setIsPlaying(false);
             setAudioProgress(0);
@@ -197,6 +227,11 @@ export function SmartFlowResult({
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-foreground">
               Infographic
+              {audioDuration && (
+                <span className="text-muted-foreground ml-2 text-sm font-normal">
+                  ({Math.round(audioDuration)}s)
+                </span>
+              )}
             </h3>
             <Button
               size="sm"
@@ -229,7 +264,7 @@ export function SmartFlowResult({
               <div className="flex items-center gap-2">
                 <audio
                   controls
-                  preload="none"
+                  preload="auto"
                   src={audioUrl!}
                   className="w-full flex-1"
                 />
@@ -253,25 +288,156 @@ export function SmartFlowResult({
         </div>
       </Card>
 
+      {/* Export Progress Modal */}
+      {exportState.status !== "idle" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">
+                {exportState.status === "error"
+                  ? "Export Failed"
+                  : exportState.status === "complete"
+                  ? "Export Complete!"
+                  : "Exporting Video..."}
+              </h3>
+              {(exportState.status === "error" || exportState.status === "complete") && (
+                <Button variant="ghost" size="icon" onClick={resetExport}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {exportState.status === "error" ? (
+              <>
+                <p className="text-sm text-muted-foreground">{exportState.error}</p>
+                <Button onClick={resetExport} variant="outline" className="w-full mt-4">
+                  Close
+                </Button>
+              </>
+            ) : exportState.status === "complete" ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Your video is ready.
+                </p>
+                <div className="space-y-2">
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => downloadVideo(exportState.videoUrl!, `${safeName}.mp4`)}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download to Files
+                  </Button>
+                  {typeof navigator !== "undefined" && navigator.canShare && (
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => shareVideo(exportState.videoUrl!, `${safeName}.mp4`)}
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share / Save to Photos
+                    </Button>
+                  )}
+                </div>
+                <Button variant="ghost" onClick={resetExport} className="w-full">
+                  Close
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>
+                      {exportState.status === "loading" && "Loading assets..."}
+                      {exportState.status === "rendering" && "Rendering video..."}
+                      {exportState.status === "encoding" && "Encoding..."}
+                    </span>
+                    <span>{exportState.progress}%</span>
+                  </div>
+                  <Progress value={exportState.progress} className="h-2" />
+                </div>
+
+                {exportState.warning && (
+                  <p className="text-xs text-muted-foreground">{exportState.warning}</p>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  Please keep this tab open. The video is being rendered in your browser.
+                </p>
+              </>
+            )}
+          </Card>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3">
+        {/* Export Video Button (primary if audio exists) */}
+        {hasAudio ? (
+          exportState.status === "complete" && exportState.videoUrl ? (
+            <>
+              <Button
+                className="flex-1 gap-2"
+                onClick={() => downloadVideo(exportState.videoUrl!, `${safeName}.mp4`)}
+              >
+                <Download className="h-4 w-4" />
+                Download Video
+              </Button>
+              {typeof navigator !== "undefined" && navigator.canShare && (
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => shareVideo(exportState.videoUrl!, `${safeName}.mp4`)}
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button
+              className="flex-1 gap-2"
+              onClick={handleExportVideo}
+              disabled={
+                exportState.status === "loading" ||
+                exportState.status === "rendering" ||
+                exportState.status === "encoding"
+              }
+            >
+              {exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Export Video
+                </>
+              )}
+            </Button>
+          )
+        ) : null}
+
+        {/* Download Image Button */}
         <Button
-          className="flex-1 gap-2"
-          onClick={handleDownload}
-          disabled={isDownloading}
+          variant={hasAudio ? "outline" : "default"}
+          className={cn("gap-2", !hasAudio && "flex-1")}
+          onClick={handleDownloadImage}
+          disabled={isDownloadingImage}
         >
-          {isDownloading ? (
+          {isDownloadingImage ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               Downloading...
             </>
           ) : (
             <>
-              <Download className="h-4 w-4" />
+              <FolderArchive className="h-4 w-4" />
               Download Image
             </>
           )}
         </Button>
+
         <Button variant="outline" onClick={onNewProject} className="gap-2">
           <Plus className="h-4 w-4" />
           Create Another
