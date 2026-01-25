@@ -6,6 +6,8 @@ import {
   ArrowLeft, 
   Zap, 
   Video,
+  Clapperboard,
+  Wallpaper,
   TrendingUp,
   Calendar,
   CreditCard,
@@ -141,7 +143,7 @@ export default function Usage() {
           completed_at,
           status,
           scenes,
-          project:projects(title)
+          project:projects(title, project_type)
         `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -499,14 +501,24 @@ export default function Usage() {
                         key={activity.id}
                         className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-3 py-2.5"
                       >
-                        {/* Icon */}
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                          <Video className="h-4 w-4 text-primary" />
-                        </div>
+                        {/* Icon - based on project type */}
+                        {(() => {
+                          const projectType = (activity.project as any)?.project_type;
+                          const IconComponent = projectType === "storytelling" 
+                            ? Clapperboard 
+                            : projectType === "smartflow" || projectType === "smart-flow"
+                              ? Wallpaper
+                              : Video;
+                          return (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                              <IconComponent className="h-4 w-4 text-primary" />
+                            </div>
+                          );
+                        })()}
                         
                         {/* Title & Status */}
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">
+                          <p className="text-sm font-normal opacity-85 truncate">
                             {(activity.project as any)?.title || "Untitled Video"}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">

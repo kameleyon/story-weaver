@@ -11,6 +11,7 @@ import {
   Play,
   Lightbulb,
   Clapperboard,
+  Wallpaper,
   Wand2,
   Menu
 } from "lucide-react";
@@ -296,21 +297,26 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {recentProjects.map((project) => (
-                      <button
-                        key={project.id}
-                        onClick={() => navigate(`/app/create?project=${project.id}`)}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
-                      >
-                        {project.project_type === "storytelling" ? (
-                          <Clapperboard className="h-4 w-4 text-muted-foreground shrink-0" />
-                        ) : (
-                          <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-                        )}
-                        <p className="flex-1 text-sm font-medium truncate">{project.title}</p>
-                        <Play className="h-4 w-4 text-muted-foreground shrink-0" />
-                      </button>
-                    ))}
+                    {recentProjects.map((project) => {
+                      // Get appropriate icon for project type
+                      const ProjectIcon = project.project_type === "storytelling" 
+                        ? Clapperboard 
+                        : project.project_type === "smartflow" || project.project_type === "smart-flow"
+                          ? Wallpaper
+                          : Video;
+                      
+                      return (
+                        <button
+                          key={project.id}
+                          onClick={() => navigate(`/app/create?project=${project.id}`)}
+                          className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
+                          <ProjectIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <p className="flex-1 text-sm font-normal opacity-85 truncate">{project.title}</p>
+                          <Play className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

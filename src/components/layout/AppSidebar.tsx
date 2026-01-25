@@ -391,9 +391,20 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   <div className="px-3 py-2 text-xs sm:text-sm text-foreground/50 dark:text-white/50">No projects yet</div>
                 ) : (
                   recentProjects.map((project) => {
-                    const projectMode = project.project_type === "storytelling" ? "storytelling" : "doc2video";
+                    const projectMode = project.project_type === "storytelling" 
+                      ? "storytelling" 
+                      : project.project_type === "smartflow" || project.project_type === "smart-flow"
+                        ? "smartflow"
+                        : "doc2video";
                     const currentProjectId = new URLSearchParams(location.search).get("project");
                     const isActiveProject = currentProjectId === project.id;
+                    
+                    // Get appropriate icon for project type
+                    const ProjectIcon = project.project_type === "storytelling" 
+                      ? Clapperboard 
+                      : project.project_type === "smartflow" || project.project_type === "smart-flow"
+                        ? Wallpaper
+                        : Video;
                     
                     return (
                       <SidebarMenuItem key={project.id} className="group relative">
@@ -408,12 +419,8 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                               : "hover:bg-sidebar-accent/50"
                           }`}
                         >
-                          {project.project_type === "storytelling" ? (
-                            <Clapperboard className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
-                          ) : (
-                            <Video className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
-                          )}
-                          <span className="truncate text-xs sm:text-sm">{project.title}</span>
+                          <ProjectIcon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isActiveProject ? "text-primary" : "text-foreground/60 dark:text-white/60"}`} />
+                          <span className="truncate text-xs sm:text-sm font-normal opacity-85">{project.title}</span>
                         </SidebarMenuButton>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
