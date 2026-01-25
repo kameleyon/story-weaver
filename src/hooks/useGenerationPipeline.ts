@@ -90,6 +90,9 @@ type ProjectRow = {
   format: string;
   length: string;
   style: string;
+  voice_type?: string | null;
+  voice_id?: string | null;
+  voice_name?: string | null;
 };
 
 const normalizeScenes = (raw: unknown): Scene[] | undefined => {
@@ -457,7 +460,7 @@ export function useGenerationPipeline() {
 
       const { data: project, error: projectError } = await supabase
         .from("projects")
-        .select("id,title,content,format,length,style")
+       .select("id,title,content,format,length,style,voice_type,voice_id,voice_name")
         .eq("id", projectId)
         .eq("user_id", userId)
         .maybeSingle();
