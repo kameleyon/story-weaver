@@ -1,4 +1,4 @@
-import { Sparkles, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, Wand2, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon } from "lucide-react";
+import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ interface StyleSelectorProps {
 }
 
 const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview: string }[] = [
-  { id: "minimalist", label: "Minimalist", icon: Sparkles, preview: minimalistPreview },
+  { id: "minimalist", label: "Minimalist", icon: Wand2, preview: minimalistPreview },
   { id: "doodle", label: "Urban Doodle", icon: Pencil, preview: doodlePreview },
   { id: "stick", label: "Stick Figure", icon: Users, preview: stickPreview },
   { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },

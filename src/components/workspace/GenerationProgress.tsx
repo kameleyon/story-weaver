@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Loader2, Sparkles, Clock, DollarSign } from "lucide-react";
+import { Loader2, Wand2, Clock, DollarSign } from "lucide-react";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
@@ -90,7 +90,7 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
           {state.isGenerating ? (
             <Loader2 className="h-6 w-6 text-primary animate-spin" />
           ) : (
-            <Sparkles className="h-6 w-6 text-primary" />
+            <Wand2 className="h-6 w-6 text-primary" />
           )}
         </motion.div>
         <div>

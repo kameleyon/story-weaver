@@ -21,10 +21,10 @@ import {
   Loader2,
   FolderOpen,
   Video,
-  Headphones,
+  Clapperboard,
   LayoutGrid,
   List,
-  Sparkles,
+  Wand2,
   Clock,
   Calendar,
 } from "lucide-react";
@@ -447,7 +447,7 @@ export default function Projects() {
             </p>
             {!searchQuery && (
               <Button onClick={() => navigate("/app/create?mode=doc2video")} className="gap-2">
-                <Sparkles className="h-4 w-4" />
+                <Wand2 className="h-4 w-4" />
                 Create Project
               </Button>
             )}
@@ -550,7 +550,7 @@ export default function Projects() {
                       <div className="absolute bottom-2 left-3">
                         <div className="p-2 rounded-lg bg-background/80 backdrop-blur-sm">
                           {project.project_type === "storytelling" ? (
-                            <Headphones className="h-4 w-4 text-primary" />
+                            <Clapperboard className="h-4 w-4 text-primary" />
                           ) : (
                             <Video className="h-4 w-4 text-primary" />
                           )}
@@ -656,7 +656,7 @@ export default function Projects() {
                             getStyleGradient(project.style)
                           )}>
                             {project.project_type === "storytelling" ? (
-                              <Headphones className="h-4 w-4 text-primary" />
+                              <Clapperboard className="h-4 w-4 text-primary" />
                             ) : (
                               <Video className="h-4 w-4 text-primary" />
                             )}
@@ -740,7 +740,7 @@ export default function Projects() {
                 <span>{filteredProjects.filter(p => p.project_type !== "storytelling").length} videos</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Headphones className="h-3.5 w-3.5" />
+                <Clapperboard className="h-3.5 w-3.5" />
                 <span>{filteredProjects.filter(p => p.project_type === "storytelling").length} stories</span>
               </div>
             </div>

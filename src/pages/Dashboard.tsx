@@ -10,8 +10,8 @@ import {
   ChevronRight,
   Play,
   Lightbulb,
-  Headphones,
-  Sparkles,
+  Clapperboard,
+  Wand2,
   Menu
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,10 +38,10 @@ const HERO_SLIDES = [
   },
   {
     id: 2,
-    title: "Storytelling Mode",
+    title: "Visual Stories",
     subtitle: "Create visual narratives from your story ideas",
     gradient: "from-accent/20 via-accent/10 to-background",
-    icon: Headphones,
+    icon: Clapperboard,
     image: slideStorytelling,
   },
   {
@@ -49,7 +49,7 @@ const HERO_SLIDES = [
     title: "Multiple Visual Styles",
     subtitle: "Choose from 12+ unique artistic styles for your videos",
     gradient: "from-secondary/30 via-secondary/10 to-background",
-    icon: Sparkles,
+    icon: Wand2,
     image: slideStyles,
   },
 ];
@@ -303,7 +303,7 @@ export default function Dashboard() {
                         className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
                       >
                         {project.project_type === "storytelling" ? (
-                          <Headphones className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Clapperboard className="h-4 w-4 text-muted-foreground shrink-0" />
                         ) : (
                           <Video className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
