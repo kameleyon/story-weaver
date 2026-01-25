@@ -1871,8 +1871,8 @@ CRITICAL: BASE YOUR OUTPUT ENTIRELY ON THE USER'S "EXTRACTION GOAL" ABOVE.
    'Section 1: Bold title text "THE POWER BROKER" with subtitle text "+ 8 of Diamonds". Below it, description paragraph text "Add Executive energy to command respect, negotiate from strength, and turn your craft into a high-value enterprise." with a briefcase icon to the left.'
    
    - **SPECIFY LAYOUT**: "Magazine editorial layout...", "Multi-panel composition with central focus...", "Grid of content blocks..."
-   - **SPECIFY STYLE**: Maintain the ${style} aesthetic throughout
    - **SPECIFY ICONS**: Describe thematic icons around each section (handshake, crown, coins, lightbulb, etc.)
+   - **DO NOT describe the art style** - the style will be appended automatically
 
 === OUTPUT FORMAT (STRICT JSON) ===
 Return ONLY valid JSON:
@@ -1881,10 +1881,12 @@ Return ONLY valid JSON:
   "scenes": [{
     "number": 1,
     "voiceover": "Optional narration script - but the visual is the star here...",
-    "visualPrompt": "A professional editorial infographic in ${styleDescription} style. LAYOUT: [Magazine/Panel layout]. MAIN TITLE: Bold text '[YOUR TITLE]' at top center. CENTRAL VISUAL: [Describe the anchor image - a character, object, or symbol]. SECTION 1: Title text '[TITLE 1]' with subtitle '[SUBTITLE]' and description paragraph text '[Full 15-25 word explanation]'. Accompanied by [icon description]. SECTION 2: Title text '[TITLE 2]' with description paragraph text '[explanation]'. [Continue for all sections]. FLOATING ICONS: [List thematic icons around edges]. COLOR PALETTE: [Specify colors]. ${brandMark ? `FOOTER: Small text "${brandMark}" at bottom-center.` : ""} STYLE: ${style} aesthetic with warm textured background.",
+    "visualPrompt": "A professional editorial infographic illustration. LAYOUT: [Magazine/Panel layout]. MAIN TITLE: Bold text '[YOUR TITLE]' at top center. CENTRAL VISUAL: [Describe the anchor image - a character, object, or symbol]. SECTION 1: Title text '[TITLE 1]' with subtitle '[SUBTITLE]' and description paragraph text '[Full 15-25 word explanation]'. Accompanied by [icon description]. SECTION 2: Title text '[TITLE 2]' with description paragraph text '[explanation]'. [Continue for all sections]. FLOATING ICONS: [List thematic icons around edges]. COLOR PALETTE: [Specify colors matching content theme]. ${brandMark ? `FOOTER: Small text "${brandMark}" at bottom-center.` : ""}",
     "duration": ${DEFAULT_DURATION}
   }]
 }
+
+IMPORTANT: Do NOT include any style description in visualPrompt - the system will append the full art style specification automatically.
 
 === CRITICAL REQUIREMENTS ===
 - ONLY produce 1 scene (single infographic)
@@ -1892,7 +1894,8 @@ Return ONLY valid JSON:
 - Include 2-4 content sections, each with TITLE + DESCRIPTION PARAGRAPH
 - Text can be 15-25 words per description - the generator handles this well
 - Include supporting icons and visual elements around text
-- Create magazine-editorial quality that looks professional`;
+- Create magazine-editorial quality that looks professional
+- Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
   // Call LLM for script generation via OpenRouter (Claude Sonnet 4.5)
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
@@ -1957,6 +1960,11 @@ Return ONLY valid JSON:
   parsedScript.scenes = [parsedScript.scenes[0]]; // Take only first scene
   parsedScript.scenes[0].number = 1;
   parsedScript.scenes[0].duration = parsedScript.scenes[0].duration || 15;
+  
+  // CRITICAL: Append the full STYLE_PROMPTS specification to the visualPrompt
+  // This ensures consistent style application without AI reinterpretation
+  const currentVisualPrompt = parsedScript.scenes[0].visualPrompt || "";
+  parsedScript.scenes[0].visualPrompt = `${currentVisualPrompt}\n\nART STYLE: ${styleDescription}`;
 
   // Total images = 1 (single infographic)
   const totalImages = 1;
