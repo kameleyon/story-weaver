@@ -92,7 +92,7 @@ export default function Landing() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 sm:h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <ThemedLogo className="h-8 sm:h-10 w-auto" />
+            {/* Logo removed from header - appears in hero section */}
           </div>
           <nav className="hidden items-center gap-6 lg:gap-8 md:flex">
             <a href="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
