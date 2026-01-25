@@ -198,7 +198,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                   <div className="text-center">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
                       <Clapperboard className="h-3.5 w-3.5" />
-                      Visual Story Mode
+                      Visual Story
                     </div>
                     <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                       Create Your Story
