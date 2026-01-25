@@ -74,7 +74,7 @@ interface GenerationParams {
   voiceId?: string;
   voiceName?: string;
   // New storytelling fields
-  projectType?: "doc2video" | "storytelling";
+  projectType?: "doc2video" | "storytelling" | "smartflow";
   inspirationStyle?: string;
   storyTone?: string;
   storyGenre?: string;

@@ -33,7 +33,7 @@ const INPUT_LIMITS = {
 const ALLOWED_FORMATS = ["landscape", "portrait", "square"];
 const ALLOWED_LENGTHS = ["short", "brief", "presentation"];
 const ALLOWED_PHASES = ["script", "audio", "images", "finalize", "regenerate-audio", "regenerate-image"];
-const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling"];
+const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling", "smartflow"];
 const ALLOWED_VOICE_TYPES = ["standard", "custom"] as const;
 
 // Validate and sanitize string input
@@ -185,7 +185,7 @@ interface GenerationRequest {
   voiceId?: string;
   voiceName?: string;
   // Storytelling-specific fields
-  projectType?: "doc2video" | "storytelling";
+  projectType?: "doc2video" | "storytelling" | "smartflow";
   inspirationStyle?: string;
   storyTone?: string;
   storyGenre?: string;
@@ -1502,6 +1502,208 @@ STYLE CONTEXT: ${styleDescription}`;
 }
 
 // ============= PHASE HANDLERS =============
+
+// ============= SMART FLOW SCRIPT PHASE (SINGLE SCENE INFOGRAPHIC) =============
+async function handleSmartFlowScriptPhase(
+  supabase: any,
+  user: any,
+  content: string,
+  format: string,
+  style: string,
+  brandMark?: string,
+  extractionPrompt?: string,
+  voiceType?: string,
+  voiceId?: string,
+  voiceName?: string,
+): Promise<Response> {
+  const phaseStart = Date.now();
+  console.log(`[generate-video] Starting SMART FLOW pipeline - single infographic`);
+
+  const styleDescription = getStylePrompt(style, undefined);
+  const dimensions = getImageDimensions(format);
+
+  // Smart Flow prompt: single scene infographic
+  const scriptPrompt = `You are an Expert Data Analyst and Visual Communicator.
+Your goal is to synthesize the user's data into a SINGLE clear infographic concept.
+
+=== DATA SOURCE ===
+${content}
+
+=== EXTRACTION INSTRUCTION ===
+${extractionPrompt || "Extract the most important insight or summary from this data."}
+
+=== VISUAL STYLE ===
+Art Style: ${styleDescription}
+Aspect Ratio: ${format} (${dimensions.width}x${dimensions.height})
+${brandMark ? `Brand Mark: Include "${brandMark}" as a subtle watermark in bottom-center` : ""}
+
+=== YOUR TASK ===
+1. Analyze the data based on the extraction instruction
+2. Create a concise title (max 8 words) that captures the key insight
+3. Write a brief narration script (MAX 180 words, ~90 seconds) explaining the insight
+4. Write ONE detailed image prompt for a conceptual infographic visualization
+
+=== OUTPUT FORMAT (STRICT JSON) ===
+{
+  "title": "Clear, impactful title",
+  "scenes": [{
+    "number": 1,
+    "voiceover": "Your narration script explaining the insight...",
+    "visualPrompt": "Detailed infographic image prompt. Use visual metaphors, iconic layouts, flow diagrams. Do NOT attempt to render complex text. Style: ${styleDescription}. ${brandMark ? `Include subtle watermark: ${brandMark}` : ""} Aspect ratio: ${format}.",
+    "duration": 15
+  }]
+}
+
+=== CONSTRAINTS ===
+- ONLY produce 1 scene (single infographic)
+- Focus on visual metaphors and iconic representations
+- Do NOT try to render complex text or data tables in the image
+- Keep narration under 180 words
+- Use engaging, clear language`;
+
+  // Call LLM for script generation via OpenRouter
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not configured");
+  }
+
+  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://audiomax.lovable.app",
+      "X-Title": "AudioMax Smart Flow",
+    },
+    body: JSON.stringify({
+      model: "anthropic/claude-sonnet-4",
+      messages: [{ role: "user", content: scriptPrompt }],
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!scriptResponse.ok) {
+    const errorText = await scriptResponse.text();
+    console.error("[generate-video] Smart Flow LLM error:", errorText);
+    throw new Error("Failed to generate Smart Flow script");
+  }
+
+  const scriptData = await scriptResponse.json();
+  const scriptContent = scriptData.choices?.[0]?.message?.content;
+  const tokensUsed = scriptData.usage?.total_tokens || 1000;
+
+  if (!scriptContent) {
+    throw new Error("No script content received from LLM");
+  }
+
+  // Parse the script
+  let parsedScript: { title: string; scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }> };
+  try {
+    // Strip markdown code blocks if present
+    let cleanedContent = scriptContent.trim();
+    if (cleanedContent.startsWith("```")) {
+      cleanedContent = cleanedContent.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+    }
+    // Extract JSON between first { and last }
+    const firstBrace = cleanedContent.indexOf("{");
+    const lastBrace = cleanedContent.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleanedContent = cleanedContent.slice(firstBrace, lastBrace + 1);
+    }
+    parsedScript = JSON.parse(cleanedContent);
+  } catch (parseError) {
+    console.error("[generate-video] Smart Flow script parsing failed:", parseError);
+    throw new Error("Failed to parse Smart Flow script - invalid JSON response");
+  }
+
+  // Force exactly 1 scene
+  if (!parsedScript.scenes || parsedScript.scenes.length === 0) {
+    throw new Error("Smart Flow script must contain at least 1 scene");
+  }
+  parsedScript.scenes = [parsedScript.scenes[0]]; // Take only first scene
+  parsedScript.scenes[0].number = 1;
+  parsedScript.scenes[0].duration = parsedScript.scenes[0].duration || 15;
+
+  // Total images = 1 (single infographic)
+  const totalImages = 1;
+
+  // Create project with smartflow type
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .insert({
+      user_id: user.id,
+      title: parsedScript.title || "Smart Flow Infographic",
+      content,
+      format,
+      length: "short",
+      style,
+      brand_mark: brandMark || null,
+      presenter_focus: extractionPrompt || null,
+      project_type: "smartflow",
+      voice_type: voiceType || "standard",
+      voice_id: voiceId || null,
+      voice_name: voiceName || null,
+      status: "generating",
+    })
+    .select()
+    .single();
+
+  if (projectError) throw new Error("Failed to create project");
+
+  const phaseTime = Date.now() - phaseStart;
+  const costTracking: CostTracking = {
+    scriptTokens: tokensUsed,
+    audioSeconds: 0,
+    imagesGenerated: 0,
+    estimatedCostUsd: tokensUsed * PRICING.scriptPerToken,
+  };
+
+  // Create generation record
+  const { data: generation, error: genError } = await supabase
+    .from("generations")
+    .insert({
+      project_id: project.id,
+      user_id: user.id,
+      status: "generating",
+      progress: 10,
+      script: scriptContent,
+      scenes: parsedScript.scenes.map((s, idx) => ({
+        ...s,
+        _meta: {
+          statusMessage: "Script complete. Ready for audio/image generation.",
+          totalImages,
+          completedImages: 0,
+          sceneIndex: idx,
+          costTracking,
+          phaseTimings: { script: phaseTime },
+        },
+      })),
+      started_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (genError) throw new Error("Failed to create generation");
+
+  console.log(`[generate-video] SMART FLOW script complete in ${phaseTime}ms - 1 scene, 1 image planned`);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      phase: "script",
+      projectId: project.id,
+      generationId: generation.id,
+      title: parsedScript.title,
+      sceneCount: 1,
+      totalImages: 1,
+      progress: 10,
+      costTracking,
+      phaseTime,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
 
 async function handleScriptPhase(
   supabase: any,
@@ -3129,6 +3331,22 @@ serve(async (req) => {
       console.log(`[generate-video] User daily usage: ${todayGenerations ?? 0}/${DAILY_LIMIT}`);
       
       // Route based on project type
+      if (body.projectType === "smartflow") {
+        console.log(`[generate-video] Routing to SMART FLOW pipeline (single infographic)`);
+        return await handleSmartFlowScriptPhase(
+          supabase,
+          user,
+          content,
+          format,
+          style,
+          body.brandMark,
+          body.presenterFocus, // Used as extraction prompt
+          body.voiceType,
+          body.voiceId,
+          body.voiceName,
+        );
+      }
+      
       if (body.projectType === "storytelling") {
         console.log(`[generate-video] Routing to STORYTELLING pipeline`);
         return await handleStorytellingScriptPhase(
