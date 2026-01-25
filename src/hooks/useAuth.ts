@@ -44,6 +44,8 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Clear session storage to reset upgrade modal and other session-based states
+    sessionStorage.clear();
     const { error } = await supabase.auth.signOut();
     return { error };
   }, []);
