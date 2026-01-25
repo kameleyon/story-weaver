@@ -25,7 +25,7 @@ const INPUT_LIMITS = {
   voiceInclination: 100,
   brandName: 200,
   newVoiceover: 5000,
-  imageModification: 1000,
+ imageModification: 5000, // Increased from 1000 to allow detailed image modification prompts
   generationId: 50,
   projectId: 50,
 };
