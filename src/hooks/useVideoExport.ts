@@ -53,6 +53,17 @@ export function useVideoExport() {
 
       log("Run", runId, "Start export", { scenes: scenes.length, format });
 
+      const stage = (name: string, extra?: Record<string, unknown>) => {
+        log("Run", runId, "Stage", name, extra ?? {});
+      };
+
+      const safeErrorSummary = (e: unknown) => {
+        if (e instanceof Error) {
+          return { name: e.name, message: e.message, stack: e.stack };
+        }
+        return { message: String(e) };
+      };
+
       // Access WebCodecs constructors safely via globalThis
       const AudioEncoderCtor = (globalThis as any).AudioEncoder as typeof AudioEncoder | undefined;
       const AudioDataCtor = (globalThis as any).AudioData as typeof AudioData | undefined;
@@ -65,6 +76,13 @@ export function useVideoExport() {
         typeof VideoFrame !== "undefined";
 
       const supportsAudio = !!AudioEncoderCtor && !!AudioDataCtor;
+
+      stage("capabilities", {
+        isIOS,
+        supportsVideo,
+        supportsAudio,
+        ua: navigator.userAgent,
+      });
 
       if (!supportsVideo) {
         const errorMsg = "Video export is not supported on this device. Please use a desktop browser.";
@@ -92,11 +110,17 @@ export function useVideoExport() {
       const fps = isIOS ? 24 : 30;
       const targetBitrate = isIOS ? 2_500_000 : 8_000_000;
 
+      stage("video-config", { width, height, fps, targetBitrate });
+
       setState({ status: "loading", progress: 0 });
 
       try {
         // --- STEP 1: Configure Audio First (Critical for Muxer Setup) ---
         const wantsAudio = scenes.some((s) => !!s.audioUrl);
+        stage("audio-detect", {
+          wantsAudio,
+          scenesWithAudio: scenes.filter((s) => !!s.audioUrl).length,
+        });
         
         // Priority order for Audio Config:
         // 1. mp4a.40.2 (Standard AAC LC) - Preferred by mp4-muxer
@@ -113,11 +137,14 @@ export function useVideoExport() {
         let audioEncoder: AudioEncoder | null = null;
         let muxer!: Muxer<ArrayBufferTarget>;
         let audioChunkCount = 0;
+        let audioFirstChunkMetaLogged = false;
+        let audioConfigSupportChecked = false;
 
         if (audioEnabled && AudioEncoderCtor) {
           // Attempt to find a supported config
           let supportedConfigFound = false;
           if (typeof AudioEncoderCtor.isConfigSupported === "function") {
+             audioConfigSupportChecked = true;
              for (const cfg of audioConfigCandidates) {
                try {
                  const support = await AudioEncoderCtor.isConfigSupported(cfg);
@@ -129,6 +156,13 @@ export function useVideoExport() {
                } catch (e) { /* ignore */ }
              }
           }
+
+          stage("audio-config", {
+            audioEnabled,
+            audioConfigSupportChecked,
+            supportedConfigFound,
+            chosenAudioConfig,
+          });
 
           // Create the muxer NOW using the chosen config sample rate.
           // mp4-muxer needs the AudioEncoder to be configured with the same settings
@@ -148,7 +182,30 @@ export function useVideoExport() {
             audioEncoder = new AudioEncoderCtor({
               output: (chunk, meta) => {
                 audioChunkCount++;
-                muxer.addAudioChunk(chunk, meta);
+
+                if (!audioFirstChunkMetaLogged) {
+                  audioFirstChunkMetaLogged = true;
+                  log("Run", runId, "Audio first chunk", {
+                    type: (chunk as any)?.type,
+                    timestamp: (chunk as any)?.timestamp,
+                    duration: (chunk as any)?.duration,
+                    byteLength: (chunk as any)?.byteLength,
+                    metaKeys: meta ? Object.keys(meta as any) : [],
+                    hasDecoderConfig: !!(meta as any)?.decoderConfig,
+                    decoderConfigCodec: (meta as any)?.decoderConfig?.codec,
+                    descriptionBytes: (meta as any)?.decoderConfig?.description
+                      ? (meta as any).decoderConfig.description.byteLength
+                      : 0,
+                  });
+                } else if (audioChunkCount % 100 === 0) {
+                  log("Run", runId, "Audio chunks", { audioChunkCount });
+                }
+
+                try {
+                  muxer.addAudioChunk(chunk, meta);
+                } catch (e) {
+                  warn("Run", runId, "muxer.addAudioChunk failed", safeErrorSummary(e));
+                }
               },
               error: (e) => {
                 warn("Run", runId, "Audio encoder error", e);
@@ -177,11 +234,15 @@ export function useVideoExport() {
           });
         }
 
+        stage("audio-enabled", { audioEnabled, chosenAudioConfig, audioChunkCount });
+
         // --- STEP 2: Load Assets ---
         // Use a shared decoding context matching the ENCODER'S sample rate.
         // This handles resampling automatically during decode.
         const decodeSampleRate = audioEnabled ? chosenAudioConfig.sampleRate : 48000;
         const sharedDecodeCtx = new OfflineAudioContext(1, 1, decodeSampleRate);
+
+        stage("audio-decode-context", { decodeSampleRate });
 
         // Serialize decoding to avoid concurrency issues on mobile
         let decodeChain: Promise<unknown> = Promise.resolve();
@@ -192,11 +253,19 @@ export function useVideoExport() {
           return p;
         };
 
-        log("Run", runId, "Loading assets...");
+        stage("assets-load-start", { scenes: scenes.length });
         
         const assets = await Promise.all(
           scenes.map(async (scene, idx) => {
             if (abortRef.current) throw new Error("Export cancelled");
+
+            log("Run", runId, "Scene asset start", {
+              idx,
+              hasAudioUrl: !!scene.audioUrl,
+              hasImageUrl: !!scene.imageUrl,
+              imageUrlsCount: scene.imageUrls?.length ?? 0,
+              sceneDuration: scene.duration,
+            });
 
             // Load Images
             const imageUrls = scene.imageUrls?.length ? scene.imageUrls : (scene.imageUrl ? [scene.imageUrl] : []);
@@ -228,10 +297,29 @@ export function useVideoExport() {
             if (scene.audioUrl) {
               try {
                 const res = await fetch(scene.audioUrl);
+                const contentType = res.headers.get("content-type");
+                if (!res.ok) {
+                  warn("Run", runId, `Scene ${idx}: audio fetch not ok`, {
+                    status: res.status,
+                    statusText: res.statusText,
+                    contentType,
+                  });
+                }
                 const arrayBuf = await res.arrayBuffer();
+                log("Run", runId, `Scene ${idx}: audio fetched`, {
+                  bytes: arrayBuf.byteLength,
+                  contentType,
+                });
                 audioBuffer = await decodeAudioSequentially(arrayBuf);
+
+                log("Run", runId, `Scene ${idx}: audio decoded`, {
+                  duration: audioBuffer.duration,
+                  length: audioBuffer.length,
+                  sampleRate: audioBuffer.sampleRate,
+                  numberOfChannels: audioBuffer.numberOfChannels,
+                });
               } catch (e) {
-                warn(`Scene ${idx}: Audio load failed`, e);
+                warn("Run", runId, `Scene ${idx}: Audio load/decode failed`, safeErrorSummary(e));
               }
             }
 
@@ -240,22 +328,40 @@ export function useVideoExport() {
             // Calculate duration: Audio duration (+ padding) OR Scene duration
             const duration = audioBuffer ? (audioBuffer.duration + 0.3) : scene.duration;
 
+            log("Run", runId, "Scene asset done", {
+              idx,
+              imagesLoaded: loadedImages.length,
+              audioDecoded: !!audioBuffer,
+              resolvedDuration: duration,
+            });
+
             return { images: loadedImages, audioBuffer, duration };
           })
         );
 
+        stage("assets-load-done", {
+          totalDuration: assets.reduce((sum, a) => sum + a.duration, 0),
+          scenesWithDecodedAudio: assets.filter((a) => !!a.audioBuffer).length,
+        });
+
         // --- STEP 3: Encode Audio (Streaming / Sequential) ---
         // Instead of mixing everything at once (OOM risk), we process scene by scene.
         if (audioEnabled && audioEncoder && AudioDataCtor) {
-          log("Run", runId, "Encoding Audio...");
+          stage("audio-encode-start", {
+            sampleRate: chosenAudioConfig.sampleRate,
+            numberOfChannels: chosenAudioConfig.numberOfChannels,
+            codec: chosenAudioConfig.codec,
+          });
           
           const sampleRate = chosenAudioConfig.sampleRate;
           let globalSampleIndex = 0;
           
-          for (const asset of assets) {
+          for (let assetIdx = 0; assetIdx < assets.length; assetIdx++) {
+            const asset = assets[assetIdx];
             if (abortRef.current) break;
 
             const sceneTotalSamples = Math.ceil(asset.duration * sampleRate);
+            const startedAtSample = globalSampleIndex;
             
             // If we have audio, encode it
             if (asset.audioBuffer) {
@@ -299,6 +405,15 @@ export function useVideoExport() {
                 audioData.close();
                 
                 globalSampleIndex += remaining;
+
+                if (globalSampleIndex % (sampleRate * 5) < 4096) {
+                  // Roughly every ~5s of audio written, emit a heartbeat.
+                  log("Run", runId, "Audio encode heartbeat", {
+                    writtenSamples: globalSampleIndex,
+                    writtenSeconds: Math.round((globalSampleIndex / sampleRate) * 10) / 10,
+                    audioChunkCount,
+                  });
+                }
               }
             }
             
@@ -308,6 +423,11 @@ export function useVideoExport() {
             const silenceSamplesNeeded = Math.max(0, sceneTotalSamples - currentSamplesInScene);
             
             if (silenceSamplesNeeded > 0) {
+              log("Run", runId, "Audio silence fill", {
+                assetIdx,
+                silenceSamplesNeeded,
+                silenceSeconds: Math.round((silenceSamplesNeeded / sampleRate) * 10) / 10,
+              });
               const chunkSize = 4096;
               const silenceBuffer = new Float32Array(chunkSize * 2); // Zeros
               
@@ -331,6 +451,15 @@ export function useVideoExport() {
                 globalSampleIndex += remaining;
               }
             }
+
+            log("Run", runId, "Audio scene done", {
+              assetIdx,
+              startedAtSample,
+              endedAtSample: globalSampleIndex,
+              wroteSamples: globalSampleIndex - startedAtSample,
+              expectedSceneSamples: sceneTotalSamples,
+              audioChunkCount,
+            });
             
             // Yield to UI occassionally
             await yieldToUI();
@@ -341,8 +470,16 @@ export function useVideoExport() {
           // Since VideoEncoder is also async, we'll flush both at the end.
         }
 
+        stage("audio-encode-done", {
+          audioEnabled,
+          wantsAudio,
+          audioChunkCount,
+        });
+
         // --- STEP 4: Render Video ---
         setState({ status: "rendering", progress: 20 });
+
+        stage("video-encode-start", { fps, width, height });
         
         const videoEncoder = new VideoEncoder({
           output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -418,18 +555,33 @@ export function useVideoExport() {
                await yieldToUI();
              }
            }
+
+            log("Run", runId, "Video scene done", {
+              sceneIdx,
+              sceneFrames,
+              images: assets[sceneIdx].images.length,
+              currentFrame,
+              totalFrames,
+            });
         }
+
+        stage("video-encode-done", { currentFrame, totalFrames });
         
         // --- STEP 5: Finalize ---
         if (abortRef.current) throw new Error("Cancelled");
         setState({ status: "encoding", progress: 95 });
         
-        log("Run", runId, "Flushing encoders...");
+        stage("flush-start", { audioEnabled });
         
         const flushPromises = [videoEncoder.flush()];
         if (audioEnabled && audioEncoder) flushPromises.push(audioEncoder.flush());
         
         await Promise.all(flushPromises);
+
+        stage("flush-done", {
+          audioChunkCount,
+          audioEnabled,
+        });
         
         videoEncoder.close();
         if (audioEncoder) audioEncoder.close();
@@ -440,14 +592,29 @@ export function useVideoExport() {
         const videoBlob = new Blob([buffer], { type: "video/mp4" });
         const videoUrl = URL.createObjectURL(videoBlob);
         
-        log("Run", runId, "Export Complete", { size: buffer.byteLength });
+        const totalMs = Math.round(performance.now() - t0);
+        if (wantsAudio && audioEnabled && audioChunkCount === 0) {
+          warn("Run", runId, "Audio appears to be missing (0 encoded chunks)", {
+            wantsAudio,
+            audioEnabled,
+            chosenAudioConfig,
+          });
+        }
+
+        log("Run", runId, "Export Complete", {
+          size: buffer.byteLength,
+          ms: totalMs,
+          audioEnabled,
+          wantsAudio,
+          audioChunkCount,
+        });
         setState({ status: "complete", progress: 100, videoUrl });
         
         return videoUrl;
 
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Export failed";
-        err("Export error", msg);
+        err("Run", runId, "Export error", msg, safeErrorSummary(error));
         setState({ status: "error", progress: 0, error: msg });
         throw error;
       }
