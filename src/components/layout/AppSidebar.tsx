@@ -481,38 +481,38 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
       {/* Upgrade to Premium Modal */}
       <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-              <Crown className="h-7 w-7 text-primary" />
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+              <Crown className="h-6 w-6 text-primary" />
             </div>
-            <DialogTitle className="text-xl font-semibold">
+            <DialogTitle className="text-lg font-semibold">
               Upgrade to Premium
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Unlock the full potential of AudioMax with Premium features
+            <DialogDescription className="text-sm text-muted-foreground">
+              Unlock the full potential of AudioMax
             </DialogDescription>
           </DialogHeader>
           
-          <div className="my-4 space-y-3">
+          <div className="my-3 space-y-2">
             {PREMIUM_PERKS.map((perk, index) => (
-              <div key={index} className="flex items-center gap-3">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
-                  <Check className="h-3 w-3 text-primary" />
+              <div key={index} className="flex items-center gap-2">
+                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
+                  <Check className="h-2.5 w-2.5 text-primary" />
                 </div>
                 <span className="text-sm">{perk}</span>
               </div>
             ))}
           </div>
 
-          <div className="mt-2 rounded-lg bg-muted/50 p-3 text-center">
+          <div className="rounded-lg bg-muted/50 p-2.5 text-center">
             <div className="flex items-baseline justify-center gap-1">
-              <span className="text-2xl font-bold">$7.99</span>
-              <span className="text-sm text-muted-foreground">/month</span>
+              <span className="text-xl font-bold">$7.99</span>
+              <span className="text-xs text-muted-foreground">/month</span>
             </div>
           </div>
 
-          <DialogFooter className="mt-4 flex-col gap-2 sm:flex-col sm:space-x-0">
+          <DialogFooter className="mt-3 flex-col gap-2 sm:flex-col sm:space-x-0">
             <Button 
               onClick={handleUpgradeNow}
               disabled={upgradeLoading}
