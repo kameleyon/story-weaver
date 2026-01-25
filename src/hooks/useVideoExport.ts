@@ -117,6 +117,11 @@ export function useVideoExport() {
         // For scenes with multiple images, load all of them
         log("Run", runId, "Loading assets for", scenes.length, "scenes");
         
+        // FIX: Create ONE shared OfflineAudioContext for decoding all audio
+        // Mobile browsers limit active AudioContext instances (usually 4-6).
+        // Using OfflineAudioContext avoids hardware resource locks.
+        const sharedDecodeCtx = new OfflineAudioContext(1, 1, 48000);
+        
         // Build a flat list of all images to load
         interface SceneAsset {
           images: HTMLImageElement[];
@@ -164,14 +169,13 @@ export function useVideoExport() {
               }
             }
 
+            // Load audio using the SHARED context to avoid mobile AudioContext limits
             let audioBuffer: AudioBuffer | null = null;
             if (scene.audioUrl) {
               try {
-                const audioCtx = new AudioContext();
                 const res = await fetch(scene.audioUrl);
                 const arrayBuf = await res.arrayBuffer();
-                audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
-                await audioCtx.close();
+                audioBuffer = await sharedDecodeCtx.decodeAudioData(arrayBuf);
               } catch (e) {
                 warn("Run", runId, `Failed to load audio for scene ${idx + 1}`, e);
               }
