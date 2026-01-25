@@ -2974,10 +2974,17 @@ FORMAT REQUIREMENT: ${formatDescription}. The image MUST be composed for this ex
 VISUAL STYLE: ${styleDescription}
 
 GENERATION REQUIREMENTS:
-- Make the image ULTRA DETAILED with rich textures, accurate lighting, and proper shadows
+- You have an in-depth knowledge about visual content and how to reach the target population for the topic discussed
+- You are highly creative, with a touch of boldness, elegant and wow-factor
+- Your style is dynamic, detailed with catchy, smart choices of illustration and presentation
+- You are modern and an avant-garde when it comes to content presentation
+- You set the tone, turn heads, and keep the eyes on your art generated
+- Create a modern, ULTRA DETAILED image with rich textures, accurate lighting, and proper shadows
 - Ensure ANATOMICAL ACCURACY for any humans, animals, or creatures depicted
 - If depicting real public figures or celebrities, research their actual appearance to generate someone who looks similar or close to them
-- Pay attention to CONTEXT and SETTING - ensure background elements match the scene's mood and location
+- Pay attention to CONTEXT and SETTING - assess the content to understand the scene's environment, mood, and location
+- Establish and maintain CHARACTER CONSISTENCY - keep physical traits, clothing styles, and appearances coherent throughout
+- Establish and maintain ENVIRONMENT CONSISTENCY - backgrounds, lighting, weather, and setting elements must feel cohesive
 - Include PRECISE DETAILS: fabric textures, skin details, environmental elements, atmospheric effects
 - Ensure COMPOSITIONAL BALANCE appropriate for the ${format} format
 - Make the scene feel NATURAL and BELIEVABLE within the chosen style
@@ -2990,7 +2997,7 @@ ${textInstructions}
 ${brandMarkInstructions}
 ${characterInstructions}
 
-OUTPUT: Ultra high resolution, professional illustration with dynamic composition, clear visual hierarchy, cinematic quality, and meticulous attention to detail.`;
+OUTPUT: Ultra high resolution, professional illustration with dynamic composition, clear visual hierarchy, cinematic quality, bold creativity, and meticulous attention to detail.`;
   };
 
   let taskIndex = 0;
