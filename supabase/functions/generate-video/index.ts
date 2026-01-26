@@ -2190,7 +2190,8 @@ When generating the 'visualPrompt' for each scene, you MUST:
 3. Define the SETTING (background, lighting, weather, environment)
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
 5. NO TEXT in images unless specifically requested
-${brandMark ? `6. End with: "Small subtle brand watermark '${brandMark}' in bottom-center with semi-transparent black background (25% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
+6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera).
+${brandMark ? `7. End with: "Small subtle brand watermark '${brandMark}' in bottom-center with semi-transparent black background (25% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
