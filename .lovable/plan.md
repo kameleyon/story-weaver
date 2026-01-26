@@ -1,201 +1,72 @@
 
-# Smart Flow Result: Feature Parity Implementation
+# Fix Dead Space/Pauses Between Scenes
 
-## Problem
-The Smart Flow output view (`SmartFlowResult.tsx`) is completely different from the Explainer and Visual Stories result view (`GenerationResult.tsx`). Users expect a consistent experience across all products.
+## Problem Analysis
+The video export has noticeable pauses between scenes caused by:
+- A 0.5-second buffer added to each scene's duration after audio generation
+- Math.ceil rounding adding additional padding (up to 0.9s more)
+- No visual transition between scenes (only between images within a scene)
 
-## Key Missing Features
-
-| Feature | GenerationResult | SmartFlowResult |
-|---------|------------------|-----------------|
-| "Generation Complete" badge | Yes | No |
-| Stats panel (time, cost) | Yes | Partial (different layout) |
-| Edit button → SceneEditModal | Yes | No |
-| Image regeneration with prompt | Yes | No |
-| Audio regeneration | Yes | No |
-| Export Video (useVideoExport) | Yes | Broken (non-functional button) |
-| Download Images (zip) | Yes | Simple image download only |
-| Export Logs modal | Yes | No |
-| Script hidden when no audio | No (always shown) | Shows always |
-| Play Preview button | Yes | Simple audio play |
+For a 6-scene video, this creates approximately **3-8 seconds of total dead time**.
 
 ## Solution
 
-**Replace SmartFlowResult.tsx** with a streamlined version of GenerationResult that:
-1. Uses the exact same layout and components
-2. Handles the single-scene case elegantly (no scene navigation arrows, simplified "All Scenes" grid)
-3. Conditionally hides script/audio sections when voice is disabled
-4. Integrates all existing hooks: `useVideoExport`, `useSceneRegeneration`, `useImagesZipDownload`
+### 1. Reduce Backend Duration Buffer
+**File:** `supabase/functions/generate-video/index.ts`
 
----
+Change the duration calculation to use minimal padding:
+- Remove the 0.5s buffer
+- Use `Math.round` instead of `Math.ceil` for tighter timing
 
-## Implementation Steps
+```text
+Before:
+scenes[index].duration = Math.ceil(result.durationSeconds + 0.5);
 
-### Step 1: Rewrite SmartFlowResult.tsx
-
-Replace the current implementation with one that mirrors GenerationResult:
-
-**Structure:**
-```
-Header Section
-├── "Generation Complete" badge (animated)
-├── Stats panel (time + cost badges)
-├── Title
-├── "1 scene • 1 image generated"
-└── Play Preview button (only if audio exists)
-
-Image Preview Card
-├── Aspect-ratio image container
-├── No scene navigation (single scene)
-├── Edit button → opens SceneEditModal
-└── Script display (only if audio enabled)
-    └── Audio player (only if audio exists)
-
-Action Buttons
-├── Export Video (if audio enabled)
-├── Export Logs
-├── Download Image (single file, not zip since only 1 image)
-└── Create Another
-
-Export Modal (from useVideoExport)
-├── Progress display
-├── Download to Files button
-└── Share / Save to Photos button (iOS)
-
-Scene Edit Modal
-├── Image with edit prompt textarea
-├── Apply Edit / Regenerate New Image
-├── Script textarea with Save & Regenerate Audio
-└── Visual prompt reference
+After:
+scenes[index].duration = Math.round(result.durationSeconds * 10) / 10; // Round to 0.1s precision
 ```
 
-### Step 2: Import Required Hooks
+### 2. Use Actual Audio Duration in Video Export
+**File:** `src/hooks/useVideoExport.ts`
 
-Add these to SmartFlowResult:
-```typescript
-import { useVideoExport } from "@/hooks/useVideoExport";
-import { useSceneRegeneration } from "@/hooks/useSceneRegeneration";
-import { SceneEditModal } from "./SceneEditModal";
+Update the scene duration calculation to prefer the actual decoded audio length over the stored duration:
+
+```text
+Before:
+const sceneDuration = Math.max(audioDur, scene.duration || 3);
+
+After:
+// Use actual audio duration if available, otherwise fall back to scene duration
+const sceneDuration = audioDur > 0 ? audioDur : (scene.duration || 3);
 ```
 
-### Step 3: Conditional Script/Audio Display
+### 3. Add Crossfade Between Scenes
+**File:** `src/hooks/useVideoExport.ts`
 
-When `enableVoice === false`:
-- Hide the script section entirely
-- Hide the Play Preview button
-- Hide the Export Video button (only Download Image available)
-- Change subtitle to "1 scene • 1 image generated • No audio"
+Add a visual crossfade between the last frame of one scene and the first frame of the next:
 
-When `enableVoice === true` but no audio URL yet:
-- Show "Generating audio..." state
-
-### Step 4: Update SmartFlowWorkspace Integration
-
-Pass required props to SmartFlowResult:
-- `onScenesUpdate` callback for regeneration
-- Ensure `generationId` and `projectId` are passed correctly
-
-### Step 5: Single Image Download
-
-Since Smart Flow produces exactly 1 image:
-- Keep simple "Download Image" button (not zip)
-- Direct download via anchor element
-
----
-
-## Visual Comparison
-
-**Before (Current SmartFlowResult):**
-```
-┌─────────────────────────────────────────┐
-│ Title               [New Infographic]   │
-│ "Generated in X:XX • 1 credit used"     │
-├─────────────────────────────────────────┤
-│  ┌─────────┐  │  Audio Player (card)    │
-│  │         │  │  ─────────────────────  │
-│  │  IMAGE  │  │  Narration Script       │
-│  │         │  │  ┌─────────────────┐    │
-│  └─────────┘  │  │ Script text...  │    │
-│  [Download]   │  └─────────────────┘    │
-│               │  [Export Video]         │
-└─────────────────────────────────────────┘
-```
-
-**After (Matching GenerationResult):**
-```
-┌─────────────────────────────────────────┐
-│     ● Generation Complete               │
-│     ┌────────┐  ┌────────┐              │
-│     │ 2m 15s │  │ $0.12  │              │
-│     └────────┘  └────────┘              │
-│           Infographic Title             │
-│     1 scene • 1 image generated         │
-│         [▶ Play Preview]                │
-├─────────────────────────────────────────┤
-│  ┌──────────────────────────────────┐   │
-│  │                                  │   │
-│  │         IMAGE PREVIEW            │   │
-│  │    (with Edit overlay button)    │   │
-│  │                                  │   │
-│  └──────────────────────────────────┘   │
-│  Scene 1                    10s [Edit]  │
-│  🔊 Script text here...                 │
-│  [Audio player controls]                │
-├─────────────────────────────────────────┤
-│ [Export Video] [Logs] [Download] [New]  │
-└─────────────────────────────────────────┘
-```
-
----
+- Pre-load the first image of the next scene
+- During the last 0.3-0.5 seconds of the current scene, fade in the next scene's first image
+- This creates seamless visual transitions between scenes
 
 ## Technical Details
 
-### Props Update
-```typescript
-interface SmartFlowResultProps {
-  title: string;
-  scenes: Scene[];
-  format: VideoFormat;
-  enableVoice: boolean;  // Controls audio/script visibility
-  onNewProject: () => void;
-  totalTimeMs?: number;
-  costTracking?: CostTracking;
-  generationId?: string;
-  projectId?: string;
-  onScenesUpdate?: (scenes: Scene[]) => void;  // NEW: for regeneration
-}
-```
+### Duration Fix
+- Removes artificial padding that creates silence
+- Keeps audio-to-video sync tight
+- Falls back to minimal duration (3s) only when no audio exists
 
-### Key Conditional Logic
-```typescript
-// Only show audio-related UI if voice is enabled
-const hasAudio = enableVoice && scene?.audioUrl;
-
-// Stats subtitle adapts
-const subtitle = enableVoice 
-  ? "1 scene • 1 image generated"
-  : "1 scene • 1 image generated • No audio";
-
-// Hide Play Preview, Export Video when no audio
-{hasAudio && (
-  <Button>Play Preview</Button>
-)}
-
-// Hide entire script section when voice disabled
-{enableVoice && (
-  <ScriptSection />
-)}
-```
-
----
+### Scene Crossfade Implementation
+- Fade window: 0.3 seconds (9-12 frames depending on FPS)
+- During fade: blend current scene's last image with next scene's first image
+- Maintains existing intra-scene image transitions
 
 ## Files to Modify
+1. `supabase/functions/generate-video/index.ts` - Reduce duration padding
+2. `src/hooks/useVideoExport.ts` - Use actual audio duration and add scene crossfades
 
-| File | Changes |
-|------|---------|
-| `src/components/workspace/SmartFlowResult.tsx` | Complete rewrite to match GenerationResult pattern |
-| `src/components/workspace/SmartFlowWorkspace.tsx` | Pass `onScenesUpdate` prop to SmartFlowResult |
-
-## Credits
-- Remains fixed at 1 credit per Smart Flow generation
-- Displayed as "$X.XX" in cost badge (consistent with other products)
+## Expected Outcome
+- Eliminates 0.5-1.4 seconds of dead space per scene
+- Smooth visual transitions between all scenes
+- Total video length reduced by ~3-8 seconds for a typical project
+- More professional, broadcast-quality output
