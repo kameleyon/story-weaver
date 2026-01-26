@@ -91,10 +91,10 @@ function sanitizeContent(content: string): string {
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/javascript:/gi, "")
     .replace(/on\w+\s*=/gi, "");
-  
+
   // Remove excessive whitespace while preserving structure
   sanitized = sanitized.replace(/\s{10,}/g, "    ");
-  
+
   return sanitized.trim();
 }
 
@@ -103,51 +103,58 @@ function validateGenerationRequest(body: unknown): GenerationRequest {
   if (!body || typeof body !== "object") {
     throw new Error("Request body must be a JSON object");
   }
-  
+
   const raw = body as Record<string, unknown>;
-  
+
   const validated: GenerationRequest = {};
-  
+
   // Validate phase
   if (raw.phase !== undefined) {
     validated.phase = validateEnum(raw.phase, "phase", ALLOWED_PHASES) as GenerationRequest["phase"];
   }
-  
+
   // Validate content with sanitization
   const content = validateString(raw.content, "content", INPUT_LIMITS.content);
   if (content) {
     validated.content = sanitizeContent(content);
   }
-  
+
   // Validate format
   validated.format = validateEnum(raw.format, "format", ALLOWED_FORMATS) ?? undefined;
-  
+
   // Validate length
   validated.length = validateEnum(raw.length, "length", ALLOWED_LENGTHS) ?? undefined;
-  
+
   // Validate style
   validated.style = validateString(raw.style, "style", INPUT_LIMITS.style) ?? undefined;
-  
+
   // Validate optional string fields
   validated.customStyle = validateString(raw.customStyle, "customStyle", INPUT_LIMITS.customStyle) ?? undefined;
   validated.brandMark = validateString(raw.brandMark, "brandMark", INPUT_LIMITS.brandMark) ?? undefined;
-  validated.presenterFocus = validateString(raw.presenterFocus, "presenterFocus", INPUT_LIMITS.presenterFocus) ?? undefined;
-  validated.characterDescription = validateString(raw.characterDescription, "characterDescription", INPUT_LIMITS.characterDescription) ?? undefined;
-  validated.inspirationStyle = validateString(raw.inspirationStyle, "inspirationStyle", INPUT_LIMITS.inspirationStyle) ?? undefined;
+  validated.presenterFocus =
+    validateString(raw.presenterFocus, "presenterFocus", INPUT_LIMITS.presenterFocus) ?? undefined;
+  validated.characterDescription =
+    validateString(raw.characterDescription, "characterDescription", INPUT_LIMITS.characterDescription) ?? undefined;
+  validated.inspirationStyle =
+    validateString(raw.inspirationStyle, "inspirationStyle", INPUT_LIMITS.inspirationStyle) ?? undefined;
   validated.storyTone = validateString(raw.storyTone, "storyTone", INPUT_LIMITS.storyTone) ?? undefined;
   validated.storyGenre = validateString(raw.storyGenre, "storyGenre", INPUT_LIMITS.storyGenre) ?? undefined;
-  validated.voiceInclination = validateString(raw.voiceInclination, "voiceInclination", INPUT_LIMITS.voiceInclination) ?? undefined;
+  validated.voiceInclination =
+    validateString(raw.voiceInclination, "voiceInclination", INPUT_LIMITS.voiceInclination) ?? undefined;
   validated.brandName = validateString(raw.brandName, "brandName", INPUT_LIMITS.brandName) ?? undefined;
   validated.newVoiceover = validateString(raw.newVoiceover, "newVoiceover", INPUT_LIMITS.newVoiceover) ?? undefined;
-  validated.imageModification = validateString(raw.imageModification, "imageModification", INPUT_LIMITS.imageModification) ?? undefined;
-  
+  validated.imageModification =
+    validateString(raw.imageModification, "imageModification", INPUT_LIMITS.imageModification) ?? undefined;
+
   // Validate project type
-  validated.projectType = validateEnum(raw.projectType, "projectType", ALLOWED_PROJECT_TYPES) as GenerationRequest["projectType"] ?? undefined;
-  
+  validated.projectType =
+    (validateEnum(raw.projectType, "projectType", ALLOWED_PROJECT_TYPES) as GenerationRequest["projectType"]) ??
+    undefined;
+
   // Validate UUIDs
   validated.generationId = validateUUID(raw.generationId, "generationId") ?? undefined;
   validated.projectId = validateUUID(raw.projectId, "projectId") ?? undefined;
-  
+
   // Validate boolean
   if (raw.disableExpressions !== undefined) {
     if (typeof raw.disableExpressions !== "boolean") {
@@ -161,10 +168,10 @@ function validateGenerationRequest(body: unknown): GenerationRequest {
     (validateEnum(raw.voiceType, "voiceType", ALLOWED_VOICE_TYPES) as GenerationRequest["voiceType"]) ?? undefined;
   validated.voiceId = validateString(raw.voiceId, "voiceId", INPUT_LIMITS.voiceId) ?? undefined;
   validated.voiceName = validateString(raw.voiceName, "voiceName", INPUT_LIMITS.voiceName) ?? undefined;
-  
+
   // Validate numeric fields
   validated.sceneIndex = validateNonNegativeInt(raw.sceneIndex, "sceneIndex") ?? undefined;
-  
+
   return validated;
 }
 
@@ -252,7 +259,7 @@ const PRICING = {
 const STYLE_PROMPTS: Record<string, string> = {
   minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
   doodle: `Urban Minimalist Doodle style. Creative, Dynamic, and Catchy Flat 2D vector illustration with indie comic aesthetic. Make the artwork detailed, highly dynamic, catchy and captivating, and filling up the entire page. Add Words to illustrate the artwork. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured background. CHARACTER DESIGN: Object-Head surrealism with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
-  stick: `The background MUST be solid pure white (#FFFFFF)—just clean solid white. Crude expressive black marker lines for the drawing only. Extremely simple character designs (circles for heads, single lines for limbs). Strictly black ink on pure white—NO SKIN COLOR, NO FLESH TONES. Rough sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines. High resolution on completely blank white canvas.`,
+  stick: `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality. The background MUST be solid pure white (#FFFFFF)—just clean solid white. Crude expressive black marker lines for the drawing only. Extremely simple character designs (circles for heads, single lines for limbs). Strictly black ink on pure white—NO SKIN COLOR, NO FLESH TONES. Rough sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines. High resolution on completely blank white canvas.`,
   realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
   anime: `Expressive Modern Manga-Style Sketchbook. An expressive modern manga-style sketchbook illustration. Anatomy: Large-eye expressive anime/manga influence focusing on high emotional impact and kawaii but relatable proportions. Line Work: Very loose, visible rough sketch lines—looks like a final drawing made over a messy pencil draft. Coloring: Natural tones with focus on skin-glow, painterly approach with visible thick brush strokes. Vibe: Cozy, chaotic, and sentimental slice-of-life moments. Features loose sketchy digital pencil lines and painterly slice-of-life aesthetic. High-detail facial expressions with large emotive eyes. Visible brush strokes. Set in detailed, slightly messy environment that feels lived-in. Cozy, relatable, and artistically sophisticated.`,
   "3d-pixar": `Cinematic 3D Animation. A stunning 3D cinematic animation-style render in the aesthetic of modern Disney-Pixar films. Surface Geometry: Squash and Stretch—appealing rounded shapes with soft exaggerated features, avoiding sharp angles unless part of mechanical design. Material Science: Subsurface Scattering—that Disney glow where light slightly penetrates the surface like real skin or wax, textures are stylized realism with soft fur, knit fabrics, or polished plastic. Lighting Design: Three-Point Cinematic—strong key light, soft fill light to eliminate harsh shadows, bright rim light (backlight) creating glowing silhouette separating from background. Eyes: The Soul Focal Point—large, highly detailed eyes with realistic specular highlights and deep iris colors making character feel sentient and emotive. Atmosphere: Volumetric Depth—light fog, dust motes, or god rays creating sense of physical space, background has soft bokeh blur keeping focus on subject. High-detail textures, expressive large eyes, soft rounded features. Vibrant saturated colors with high-end subsurface scattering on all surfaces. Rendered in 8k using Octane, shallow depth of field, whimsical softly blurred background. Masterpiece quality, charming, tactile, and highly emotive.`,
@@ -415,7 +422,7 @@ function pcmToWav(
 ): Uint8Array {
   // 32-bit audio from Replicate is IEEE float (format 3), not integer PCM (format 1)
   const audioFormat = bitsPerSample === 32 ? 3 : 1;
-  
+
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
   const blockAlign = numChannels * (bitsPerSample / 8);
   const dataSize = pcmData.length;
@@ -495,7 +502,12 @@ function splitTextIntoChunks(text: string, maxChars: number = 400): string[] {
 }
 
 // Extract raw PCM data from a WAV file (strip header)
-function extractPcmFromWav(wavBytes: Uint8Array): { pcm: Uint8Array; sampleRate: number; numChannels: number; bitsPerSample: number } {
+function extractPcmFromWav(wavBytes: Uint8Array): {
+  pcm: Uint8Array;
+  sampleRate: number;
+  numChannels: number;
+  bitsPerSample: number;
+} {
   // CRITICAL: Create a fresh ArrayBuffer copy to avoid byteOffset issues
   const freshBuffer = new Uint8Array(wavBytes).buffer;
   const view = new DataView(freshBuffer);
@@ -559,12 +571,14 @@ function stitchWavBuffers(buffers: Uint8Array[]): Uint8Array {
   for (let i = 1; i < parsedBuffers.length; i++) {
     const p = parsedBuffers[i];
     if (p.sampleRate !== sampleRate || p.numChannels !== numChannels || p.bitsPerSample !== bitsPerSample) {
-      console.warn(`[WAV-Stitch] Buffer ${i + 1} mismatch: ${p.sampleRate}Hz vs ${sampleRate}Hz - may cause audio artifacts`);
+      console.warn(
+        `[WAV-Stitch] Buffer ${i + 1} mismatch: ${p.sampleRate}Hz vs ${sampleRate}Hz - may cause audio artifacts`,
+      );
     }
   }
 
   // Extract PCM parts
-  const pcmParts = parsedBuffers.map(p => p.pcm);
+  const pcmParts = parsedBuffers.map((p) => p.pcm);
 
   // Calculate total PCM length
   const totalLength = pcmParts.reduce((acc, part) => acc + part.length, 0);
@@ -597,27 +611,24 @@ async function callReplicateTTSChunk(
   const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
   console.log(`[TTS-Chunk] Using voice: ${voiceName} (gender: ${voiceGender})`);
 
-  const createResponse = await fetch(
-    "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${replicateApiKey}`,
-        "Content-Type": "application/json",
-        Prefer: "wait",
-      },
-      body: JSON.stringify({
-        input: {
-          text: text,
-          voice: voiceName,
-          temperature: 1,
-          top_p: 0.9,
-          top_k: 1800,
-          repetition_penalty: 1.5,
-        },
-      }),
+  const createResponse = await fetch("https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${replicateApiKey}`,
+      "Content-Type": "application/json",
+      Prefer: "wait",
     },
-  );
+    body: JSON.stringify({
+      input: {
+        text: text,
+        voice: voiceName,
+        temperature: 1,
+        top_p: 0.9,
+        top_k: 1800,
+        repetition_penalty: 1.5,
+      },
+    }),
+  });
 
   if (!createResponse.ok) {
     const errText = await createResponse.text();
@@ -669,19 +680,21 @@ async function generateSceneAudioReplicateChunked(
   try {
     // Split text into chunks to bypass ~30s limit
     const chunks = splitTextIntoChunks(voiceoverText, 400);
-    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Splitting into ${chunks.length} chunks (${voiceoverText.length} total chars)`);
+    console.log(
+      `[TTS-Chunked] Scene ${sceneIndex + 1}: Splitting into ${chunks.length} chunks (${voiceoverText.length} total chars)`,
+    );
 
     if (chunks.length === 1) {
       // Short text - use regular single-call TTS
       console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Single chunk, using direct call`);
       const audioBuffer = await callReplicateTTSChunk(chunks[0], replicateApiKey, 0, voiceGender);
-      
+
       const durationSeconds = Math.max(1, audioBuffer.length / (44100 * 2));
-      
+
       const audioPath = isRegeneration
         ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
         : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
-        
+
       const { error: uploadError } = await supabase.storage
         .from("audio")
         .upload(audioPath, audioBuffer, { contentType: "audio/wav", upsert: true });
@@ -701,13 +714,12 @@ async function generateSceneAudioReplicateChunked(
 
     // Multiple chunks - generate in parallel and stitch
     console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Generating ${chunks.length} chunks in parallel...`);
-    
+
     const chunkPromises = chunks.map((chunk, idx) =>
-      callReplicateTTSChunk(chunk, replicateApiKey, idx, voiceGender)
-        .catch((err) => {
-          console.error(`[TTS-Chunked] Chunk ${idx + 1} failed:`, err.message);
-          throw err;
-        })
+      callReplicateTTSChunk(chunk, replicateApiKey, idx, voiceGender).catch((err) => {
+        console.error(`[TTS-Chunked] Chunk ${idx + 1} failed:`, err.message);
+        throw err;
+      }),
     );
 
     const audioBuffers = await Promise.all(chunkPromises);
@@ -715,19 +727,21 @@ async function generateSceneAudioReplicateChunked(
 
     // Stitch all chunks together
     const finalWavBytes = stitchWavBuffers(audioBuffers);
-    
+
     // Parse the final WAV to get actual sample rate for duration calculation
     const finalParsed = extractPcmFromWav(finalWavBytes);
     const bytesPerSample = finalParsed.bitsPerSample / 8;
     const bytesPerSecond = finalParsed.sampleRate * finalParsed.numChannels * bytesPerSample;
     const durationSeconds = Math.max(1, finalParsed.pcm.length / bytesPerSecond);
-    
-    console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: Final stitched audio: ${finalWavBytes.length} bytes, ${durationSeconds.toFixed(1)}s at ${finalParsed.sampleRate}Hz`);
+
+    console.log(
+      `[TTS-Chunked] Scene ${sceneIndex + 1}: Final stitched audio: ${finalWavBytes.length} bytes, ${durationSeconds.toFixed(1)}s at ${finalParsed.sampleRate}Hz`,
+    );
 
     const audioPath = isRegeneration
       ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
       : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
-      
+
     const { error: uploadError } = await supabase.storage
       .from("audio")
       .upload(audioPath, finalWavBytes, { contentType: "audio/wav", upsert: true });
@@ -744,7 +758,6 @@ async function generateSceneAudioReplicateChunked(
 
     console.log(`[TTS-Chunked] Scene ${sceneIndex + 1}: ✅ Stitched audio uploaded (${durationSeconds.toFixed(1)}s)`);
     return { url: signedData.signedUrl, durationSeconds };
-
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown TTS chunking error";
     console.error(`[TTS-Chunked] Scene ${sceneIndex + 1} error:`, errorMsg);
@@ -787,7 +800,7 @@ function sanitizeForGeminiTTS(text: string): string {
 }
 
 // ============= GEMINI TTS MODELS (with fallback chain) =============
-// Only preview models work - the non-preview models (gemini-2.5-flash-tts, gemini-2.5-pro-tts) 
+// Only preview models work - the non-preview models (gemini-2.5-flash-tts, gemini-2.5-pro-tts)
 // return 404 errors as they no longer exist in the API
 const GEMINI_TTS_MODELS = [
   { name: "gemini-2.5-flash-preview-tts", label: "Flash Preview TTS" },
@@ -820,16 +833,16 @@ async function generateSceneAudioGeminiWithModel(
     /\.\s*(swiv|like|pataje|share|follow)[^.]*$/gi,
   ];
   for (const pattern of promotionalPatterns) {
-    voiceoverText = voiceoverText.replace(pattern, '.');
+    voiceoverText = voiceoverText.replace(pattern, ".");
   }
-  voiceoverText = voiceoverText.replace(/\.+/g, '.').replace(/\s+/g, ' ').trim();
-  
+  voiceoverText = voiceoverText.replace(/\.+/g, ".").replace(/\s+/g, " ").trim();
+
   // On retries, add text variations to bypass content filtering
   // The content filter seems triggered by certain text patterns, so we vary the input
   if (retryAttempt > 0) {
     // Strip any remaining promotional content on retries
-    voiceoverText = voiceoverText.replace(/[Ss]wiv[^.]*\./g, '').trim();
-    
+    voiceoverText = voiceoverText.replace(/[Ss]wiv[^.]*\./g, "").trim();
+
     const variations = [
       voiceoverText, // Try clean text first
       "Please narrate the following: " + voiceoverText,
@@ -838,8 +851,8 @@ async function generateSceneAudioGeminiWithModel(
       "Educational content: " + voiceoverText,
       "Documentary narration: " + voiceoverText,
       "Story segment: " + voiceoverText,
-      voiceoverText.replace(/\./g, ';').replace(/;([^;]*)$/, '.$1'), // Replace periods with semicolons except last
-      voiceoverText.split('.').slice(0, -1).join('.') + ".", // Remove last sentence
+      voiceoverText.replace(/\./g, ";").replace(/;([^;]*)$/, ".$1"), // Replace periods with semicolons except last
+      voiceoverText.split(".").slice(0, -1).join(".") + ".", // Remove last sentence
       "In this segment: " + voiceoverText,
     ];
     voiceoverText = variations[retryAttempt % variations.length];
@@ -895,13 +908,13 @@ async function generateSceneAudioGeminiWithModel(
     }
 
     const candidate = data.candidates[0];
-    
+
     // Check for finishReason: OTHER which indicates content filtering
     if (candidate.finishReason === "OTHER") {
       console.warn(`[TTS-Gemini] ${modelLabel} returned finishReason: OTHER (content filter)`);
       throw new Error(`${modelLabel} content filter triggered (finishReason: OTHER)`);
     }
-    
+
     const content = candidate?.content;
     const parts = content?.parts;
 
@@ -937,7 +950,9 @@ async function generateSceneAudioGeminiWithModel(
     }
 
     if (trimEnd < pcmBytes.length) {
-      console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`);
+      console.log(
+        `[TTS-Gemini] Scene ${sceneIndex + 1} trimmed ${pcmBytes.length - trimEnd} bytes of trailing silence`,
+      );
       pcmBytes = pcmBytes.slice(0, trimEnd);
     }
 
@@ -948,7 +963,7 @@ async function generateSceneAudioGeminiWithModel(
     // Calculate accurate duration
     const durationSeconds = Math.max(1, pcmBytes.length / (24000 * 2));
 
-    const audioPath = isRegeneration 
+    const audioPath = isRegeneration
       ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
       : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
     const { error: uploadError } = await supabase.storage
@@ -961,7 +976,7 @@ async function generateSceneAudioGeminiWithModel(
     const { data: signedData, error: signError } = await supabase.storage
       .from("audio")
       .createSignedUrl(audioPath, 604800); // 7 days in seconds
-    
+
     if (signError || !signedData?.signedUrl) {
       throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
     }
@@ -988,7 +1003,7 @@ async function generateSceneAudioGemini(
   // Try each Gemini TTS model in order
   for (const model of GEMINI_TTS_MODELS) {
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - Trying ${model.label}...`);
-    
+
     const result = await generateSceneAudioGeminiWithModel(
       scene,
       sceneIndex,
@@ -1001,15 +1016,15 @@ async function generateSceneAudioGemini(
       retryAttempt,
       isRegeneration,
     );
-    
+
     if (result.url) {
       console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - SUCCESS with ${model.label}`);
       return result;
     }
-    
+
     console.log(`[TTS-Gemini] Scene ${sceneIndex + 1} - ${model.label} failed: ${result.error}, trying next model...`);
   }
-  
+
   // All models failed
   return { url: null, error: "All Gemini TTS models failed" };
 }
@@ -1069,7 +1084,10 @@ async function generateSceneAudioOpenRouter(
     // Extract audio from response
     const message = data.choices?.[0]?.message;
     if (!message?.audio?.data) {
-      console.error(`[TTS-OpenRouter] ${modelLabel} no audio data in response:`, JSON.stringify(data).substring(0, 500));
+      console.error(
+        `[TTS-OpenRouter] ${modelLabel} no audio data in response:`,
+        JSON.stringify(data).substring(0, 500),
+      );
       throw new Error(`No audio data in ${modelLabel} response`);
     }
 
@@ -1149,7 +1167,7 @@ async function generateSceneAudioElevenLabs(
             use_speaker_boost: true,
           },
         }),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -1205,7 +1223,7 @@ async function transformAudioWithElevenLabsSTS(
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
   try {
     console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} - Downloading source audio for voice transformation...`);
-    
+
     // Download the source audio
     const sourceResponse = await fetch(sourceAudioUrl);
     if (!sourceResponse.ok) {
@@ -1216,31 +1234,33 @@ async function transformAudioWithElevenLabsSTS(
 
     // Prepare multipart form data for Speech-to-Speech API
     const boundary = `----ElevenLabsSTS${Date.now()}`;
-    
+
     // Build multipart body
     const parts: Uint8Array[] = [];
     const encoder = new TextEncoder();
-    
+
     // Add audio file part
     parts.push(encoder.encode(`--${boundary}\r\n`));
     parts.push(encoder.encode(`Content-Disposition: form-data; name="audio"; filename="source.wav"\r\n`));
     parts.push(encoder.encode(`Content-Type: audio/wav\r\n\r\n`));
     parts.push(sourceAudioBytes);
     parts.push(encoder.encode(`\r\n`));
-    
+
     // Add model_id part
     parts.push(encoder.encode(`--${boundary}\r\n`));
     parts.push(encoder.encode(`Content-Disposition: form-data; name="model_id"\r\n\r\n`));
     parts.push(encoder.encode(`eleven_multilingual_sts_v2\r\n`));
-    
+
     // Add voice_settings part (optional but recommended for consistency)
     parts.push(encoder.encode(`--${boundary}\r\n`));
     parts.push(encoder.encode(`Content-Disposition: form-data; name="voice_settings"\r\n\r\n`));
-    parts.push(encoder.encode(`{"stability": 0.5, "similarity_boost": 0.8, "style": 0.5, "use_speaker_boost": true}\r\n`));
-    
+    parts.push(
+      encoder.encode(`{"stability": 0.5, "similarity_boost": 0.8, "style": 0.5, "use_speaker_boost": true}\r\n`),
+    );
+
     // End boundary
     parts.push(encoder.encode(`--${boundary}--\r\n`));
-    
+
     // Combine all parts
     const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
     const body = new Uint8Array(totalLength);
@@ -1249,9 +1269,9 @@ async function transformAudioWithElevenLabsSTS(
       body.set(part, offset);
       offset += part.length;
     }
-    
+
     console.log(`[STS-ElevenLabs] Scene ${sceneIndex + 1} - Calling Speech-to-Speech API with voice: ${targetVoiceId}`);
-    
+
     const response = await fetch(
       `https://api.elevenlabs.io/v1/speech-to-speech/${targetVoiceId}?output_format=mp3_44100_128`,
       {
@@ -1261,7 +1281,7 @@ async function transformAudioWithElevenLabsSTS(
           "Content-Type": `multipart/form-data; boundary=${boundary}`,
         },
         body: body,
-      }
+      },
     );
 
     if (!response.ok) {
@@ -1401,7 +1421,7 @@ async function generateSceneAudioReplicate(
       const { data: signedData, error: signError } = await supabase.storage
         .from("audio")
         .createSignedUrl(audioPath, 604800); // 7 days in seconds
-      
+
       if (signError || !signedData?.signedUrl) {
         throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
       }
@@ -1443,10 +1463,10 @@ async function generateSceneAudio(
   if (isHC && customVoiceId && ELEVENLABS_API_KEY && googleApiKey) {
     console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole + Cloned Voice workflow`);
     console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS`);
-    
+
     const MAX_GEMINI_RETRIES = 3;
     let geminiAudioUrl: string | null = null;
-    
+
     for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
       if (retry > 0) {
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
@@ -1494,7 +1514,7 @@ async function generateSceneAudio(
       console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS → ElevenLabs STS (Voice Cloned)`);
       return stsResult;
     }
-    
+
     console.error(`[TTS] Scene ${sceneIndex + 1} - Voice transformation failed: ${stsResult.error}`);
     return stsResult;
   }
@@ -1528,7 +1548,7 @@ async function generateSceneAudio(
 
     if (googleApiKey) {
       const MAX_GEMINI_RETRIES = 3;
-      
+
       for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
         if (retry > 0) {
           console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
@@ -1564,7 +1584,16 @@ async function generateSceneAudio(
 
   // ========== CASE 4: Default (English/other languages) ==========
   // Use Replicate Chatterbox with Chunk & Stitch for long scripts
-  const result = await generateSceneAudioReplicateChunked(scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration, voiceGender);
+  const result = await generateSceneAudioReplicateChunked(
+    scene,
+    sceneIndex,
+    replicateApiKey,
+    supabase,
+    userId,
+    projectId,
+    isRegeneration,
+    voiceGender,
+  );
   if (result.url) {
     console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox (Chunked)`);
     return { ...result, provider: "Replicate Chatterbox" };
@@ -1587,7 +1616,7 @@ async function generateImageWithReplicate(
     // Using Google Nano Banana model via Replicate
     // Docs: https://replicate.com/google/nano-banana
     console.log(`[IMG] Generating image with Nano Banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
-    
+
     const createResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana/predictions", {
       method: "POST",
       headers: {
@@ -1649,7 +1678,7 @@ async function generateImageWithReplicate(
     }
 
     console.log(`[IMG] Nano Banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
-    
+
     const imgResponse = await fetch(imageUrl);
     if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
 
@@ -1738,14 +1767,14 @@ STYLE CONTEXT: ${styleDescription}`;
       const status = response.status;
       const errText = await response.text().catch(() => "");
       console.error(`[editImage] Nano Banana API error: ${status} - ${errText}`);
-      
+
       if (status === 429) {
         return { ok: false, error: "Rate limit exceeded. Please try again later." };
       }
       if (status === 402) {
         return { ok: false, error: "Payment required. Please add credits to your workspace." };
       }
-      
+
       return {
         ok: false,
         error: `Nano Banana edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
@@ -1757,7 +1786,7 @@ STYLE CONTEXT: ${styleDescription}`;
 
     // Extract the generated image from the response
     const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    
+
     if (!imageData) {
       console.error(`[editImage] No image in response:`, JSON.stringify(data).substring(0, 500));
       return { ok: false, error: "No image returned from Nano Banana" };
@@ -1770,7 +1799,7 @@ STYLE CONTEXT: ${styleDescription}`;
       if (!base64Data) {
         return { ok: false, error: "Invalid base64 image data" };
       }
-      
+
       const bytes = base64Decode(base64Data);
       console.log(`[editImage] Success! Decoded ${bytes.length} bytes from base64`);
       return { ok: true, bytes };
@@ -1781,7 +1810,7 @@ STYLE CONTEXT: ${styleDescription}`;
       if (!imgResponse.ok) {
         return { ok: false, error: "Failed to download edited image" };
       }
-      
+
       const bytes = new Uint8Array(await imgResponse.arrayBuffer());
       console.log(`[editImage] Success! Downloaded ${bytes.length} bytes`);
       return { ok: true, bytes };
@@ -1933,12 +1962,18 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
   }
 
   // Parse the script
-  let parsedScript: { title: string; scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }> };
+  let parsedScript: {
+    title: string;
+    scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }>;
+  };
   try {
     // Strip markdown code blocks if present
     let cleanedContent = scriptContent.trim();
     if (cleanedContent.startsWith("```")) {
-      cleanedContent = cleanedContent.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+      cleanedContent = cleanedContent
+        .replace(/^```[a-z]*\n?/i, "")
+        .replace(/\n?```$/i, "")
+        .trim();
     }
     // Extract JSON between first { and last }
     const firstBrace = cleanedContent.indexOf("{");
@@ -1959,7 +1994,7 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
   parsedScript.scenes = [parsedScript.scenes[0]]; // Take only first scene
   parsedScript.scenes[0].number = 1;
   parsedScript.scenes[0].duration = parsedScript.scenes[0].duration || 15;
-  
+
   // CRITICAL: Append the full STYLE_PROMPTS specification to the visualPrompt
   // This ensures consistent style application without AI reinterpretation
   const currentVisualPrompt = parsedScript.scenes[0].visualPrompt || "";
@@ -2093,7 +2128,7 @@ Include these character details in EVERY visualPrompt that features people.
 `
     : "";
 
-const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
+  const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
 
 === LANGUAGE REQUIREMENT (CRITICAL) ===
 ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
@@ -2380,8 +2415,8 @@ async function handleStorytellingScriptPhase(
 
   // Map storytelling lengths to scene counts
   const lengthConfig: Record<string, { count: number; targetDuration: number; avgSceneDuration: number }> = {
-    short: { count: 4, targetDuration: 90, avgSceneDuration: 22 },      // <3 min
-    brief: { count: 8, targetDuration: 210, avgSceneDuration: 26 },     // <7 min  
+    short: { count: 4, targetDuration: 90, avgSceneDuration: 22 }, // <3 min
+    brief: { count: 8, targetDuration: 210, avgSceneDuration: 26 }, // <7 min
     extended: { count: 16, targetDuration: 480, avgSceneDuration: 30 }, // <15 min
     presentation: { count: 16, targetDuration: 480, avgSceneDuration: 30 }, // alias
   };
@@ -2395,14 +2430,22 @@ async function handleStorytellingScriptPhase(
 
   // Build inspiration guidance
   const inspirationGuide: Record<string, string> = {
-    "aaron-sorkin": "Write with sharp, rapid-fire dialogue. Use walk-and-talk energy, overlapping ideas, and intellectual sparring. Build momentum through rhythm and wit.",
-    "quentin-tarantino": "Bold, unconventional narrative structure. Pop culture references, memorable monologues, and unexpected tonal shifts. Make every scene electric.",
-    "nora-ephron": "Warm, romantic wit with observational humor. Relatable inner monologue, cozy settings, and heartfelt emotional beats.",
-    "david-mamet": "Terse, rhythmic dialogue with staccato pacing. Subtext over text. Characters speak in fragments, interruptions, and loaded silences.",
-    "agatha-christie": "Mystery and suspense with careful misdirection. Plant clues subtly, build tension, and deliver satisfying reveals.",
-    "neil-gaiman": "Mythical storytelling blending the mundane with the magical. Lyrical prose, archetypal characters, and a sense of wonder.",
-    "maya-angelou": "Poetic, uplifting prose with dignity and grace. Personal yet universal themes. The rhythm of spoken word.",
-    "ernest-hemingway": "Sparse, powerful minimalism. Short sentences. Strong verbs. Let the emotion live in what's unsaid.",
+    "aaron-sorkin":
+      "Write with sharp, rapid-fire dialogue. Use walk-and-talk energy, overlapping ideas, and intellectual sparring. Build momentum through rhythm and wit.",
+    "quentin-tarantino":
+      "Bold, unconventional narrative structure. Pop culture references, memorable monologues, and unexpected tonal shifts. Make every scene electric.",
+    "nora-ephron":
+      "Warm, romantic wit with observational humor. Relatable inner monologue, cozy settings, and heartfelt emotional beats.",
+    "david-mamet":
+      "Terse, rhythmic dialogue with staccato pacing. Subtext over text. Characters speak in fragments, interruptions, and loaded silences.",
+    "agatha-christie":
+      "Mystery and suspense with careful misdirection. Plant clues subtly, build tension, and deliver satisfying reveals.",
+    "neil-gaiman":
+      "Mythical storytelling blending the mundane with the magical. Lyrical prose, archetypal characters, and a sense of wonder.",
+    "maya-angelou":
+      "Poetic, uplifting prose with dignity and grace. Personal yet universal themes. The rhythm of spoken word.",
+    "ernest-hemingway":
+      "Sparse, powerful minimalism. Short sentences. Strong verbs. Let the emotion live in what's unsaid.",
   };
 
   const toneGuide: Record<string, string> = {
@@ -2424,17 +2467,18 @@ async function handleStorytellingScriptPhase(
     "news-report": "Objective journalism style. Who, what, when, where, why. Credible and timely.",
   };
 
-  const inspirationSection = inspirationStyle && inspirationStyle !== "none" && inspirationGuide[inspirationStyle]
-    ? `\n=== WRITING INSPIRATION: ${inspirationStyle.toUpperCase().replace(/-/g, " ")} ===\n${inspirationGuide[inspirationStyle]}`
-    : "";
+  const inspirationSection =
+    inspirationStyle && inspirationStyle !== "none" && inspirationGuide[inspirationStyle]
+      ? `\n=== WRITING INSPIRATION: ${inspirationStyle.toUpperCase().replace(/-/g, " ")} ===\n${inspirationGuide[inspirationStyle]}`
+      : "";
 
-  const toneSection = storyTone && toneGuide[storyTone]
-    ? `\n=== TONE: ${storyTone.toUpperCase()} ===\n${toneGuide[storyTone]}`
-    : "";
+  const toneSection =
+    storyTone && toneGuide[storyTone] ? `\n=== TONE: ${storyTone.toUpperCase()} ===\n${toneGuide[storyTone]}` : "";
 
-  const genreSection = storyGenre && genreGuide[storyGenre]
-    ? `\n=== GENRE: ${storyGenre.toUpperCase().replace(/-/g, " ")} ===\n${genreGuide[storyGenre]}`
-    : "";
+  const genreSection =
+    storyGenre && genreGuide[storyGenre]
+      ? `\n=== GENRE: ${storyGenre.toUpperCase().replace(/-/g, " ")} ===\n${genreGuide[storyGenre]}`
+      : "";
 
   const characterGuidance = characterDescription
     ? `\n=== CHARACTER APPEARANCE ===\nAll human characters in visual prompts MUST match this description:\n${characterDescription}\nInclude these character details in EVERY visualPrompt that features people.`
@@ -2444,7 +2488,7 @@ async function handleStorytellingScriptPhase(
     ? `\n=== BRAND ATTRIBUTION ===\nSubtly weave "${brandName}" into the narrative as the source or presenter of this story.`
     : "";
 
-const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
+  const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
 
 === LANGUAGE REQUIREMENT (CRITICAL) ===
 ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
@@ -2783,14 +2827,28 @@ async function handleAudioPhase(
     })
     .eq("id", generationId);
 
-  const batchPromises: Promise<{ index: number; result: { url: string | null; durationSeconds?: number; provider?: string } }>[] = [];
+  const batchPromises: Promise<{
+    index: number;
+    result: { url: string | null; durationSeconds?: number; provider?: string };
+  }>[] = [];
 
   for (let i = batchStart; i < batchEnd; i++) {
     // Skip scenes that already have audio
     if (audioUrls[i]) continue;
 
     batchPromises.push(
-      generateSceneAudio(scenes[i], i, replicateApiKey, googleApiKey, supabase, user.id, projectId, false, customVoiceId, voiceGender).then((result) => ({
+      generateSceneAudio(
+        scenes[i],
+        i,
+        replicateApiKey,
+        googleApiKey,
+        supabase,
+        user.id,
+        projectId,
+        false,
+        customVoiceId,
+        voiceGender,
+      ).then((result) => ({
         index: i,
         result,
       })),
@@ -2949,11 +3007,12 @@ async function handleImagesPhase(
   const allImageTasks: ImageTask[] = [];
 
   // Format description for aspect ratio clarity
-  const formatDescription = format === "portrait" 
-    ? "VERTICAL 9:16 portrait orientation (tall, like a phone screen)" 
-    : format === "square" 
-      ? "SQUARE 1:1 aspect ratio (equal width and height)" 
-      : "HORIZONTAL 16:9 landscape orientation (wide, like a TV screen)";
+  const formatDescription =
+    format === "portrait"
+      ? "VERTICAL 9:16 portrait orientation (tall, like a phone screen)"
+      : format === "square"
+        ? "SQUARE 1:1 aspect ratio (equal width and height)"
+        : "HORIZONTAL 16:9 landscape orientation (wide, like a TV screen)";
 
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
     let textInstructions = "";
@@ -3127,7 +3186,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               const { data: signedData, error: signError } = await supabase.storage
                 .from("audio")
                 .createSignedUrl(path, 604800); // 7 days in seconds
-              
+
               if (signError || !signedData?.signedUrl) {
                 console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
                 return { task, url: null };
@@ -3347,11 +3406,13 @@ async function handleRegenerateAudio(
   const voiceType = generation.projects?.voice_type;
   const voiceId = generation.projects?.voice_id;
   const voiceName = generation.projects?.voice_name;
-  
+
   // Determine if custom voice should be used
   const customVoiceId = voiceType === "custom" && voiceId ? voiceId : undefined;
-  
-  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings: type=${voiceType}, id=${voiceId}, name=${voiceName}`);
+
+  console.log(
+    `[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings: type=${voiceType}, id=${voiceId}, name=${voiceName}`,
+  );
   if (customVoiceId) {
     console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using custom cloned voice: ${customVoiceId}`);
   }
@@ -3367,7 +3428,7 @@ async function handleRegenerateAudio(
   // - Non-HC + Standard Voice: Replicate Chatterbox
   // Determine voice gender for standard voices (voiceName stores "male" or "female")
   const voiceGender = voiceName || "female";
-  
+
   const audioResult = await generateSceneAudio(
     scenes[sceneIndex],
     sceneIndex,
@@ -3392,13 +3453,11 @@ async function handleRegenerateAudio(
   }
 
   // Save to database
-  await supabase
-    .from("generations")
-    .update({ scenes })
-    .eq("id", generationId)
-    .eq("user_id", user.id);
+  await supabase.from("generations").update({ scenes }).eq("id", generationId).eq("user_id", user.id);
 
-  console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully with voiceover: "${newVoiceover.substring(0, 50)}..."`);
+  console.log(
+    `[regenerate-audio] Scene ${sceneIndex + 1} - Audio regenerated successfully with voiceover: "${newVoiceover.substring(0, 50)}..."`,
+  );
   if (audioResult.provider) {
     console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Provider used: ${audioResult.provider}`);
   }
@@ -3429,7 +3488,9 @@ async function handleRegenerateImage(
   imageIndex?: number, // Optional index for multi-image scenes
 ): Promise<Response> {
   const targetImageIndex = imageIndex ?? 0;
-  console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Starting image regeneration...`);
+  console.log(
+    `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Starting image regeneration...`,
+  );
 
   // Fetch generation with project format and style
   const { data: generation } = await supabase
@@ -3452,11 +3513,7 @@ async function handleRegenerateImage(
   const scene = scenes[sceneIndex];
 
   // Get existing imageUrls or create from single imageUrl
-  const existingImageUrls = scene.imageUrls?.length 
-    ? [...scene.imageUrls] 
-    : scene.imageUrl 
-      ? [scene.imageUrl] 
-      : [];
+  const existingImageUrls = scene.imageUrls?.length ? [...scene.imageUrls] : scene.imageUrl ? [scene.imageUrl] : [];
 
   // Determine the source image URL for editing
   const sourceImageUrl = existingImageUrls[targetImageIndex] || scene.imageUrl;
@@ -3466,7 +3523,9 @@ async function handleRegenerateImage(
   // Check if we should do a full regeneration (empty imageModification) or edit
   if (!imageModification) {
     // Full regeneration from original visual prompt
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Full regeneration from original prompt`);
+    console.log(
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Full regeneration from original prompt`,
+    );
     const fullPrompt = `${scene.visualPrompt}
 
 STYLE: ${styleDescription}
@@ -3476,16 +3535,18 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
     imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
   } else if (sourceImageUrl) {
     // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using true image editing with Nano Banana`);
-    imageResult = await editImageWithNanoBanana(
-      sourceImageUrl,
-      imageModification,
-      styleDescription,
-      { title: scene.title, subtitle: scene.subtitle }
+    console.log(
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using true image editing with Nano Banana`,
     );
+    imageResult = await editImageWithNanoBanana(sourceImageUrl, imageModification, styleDescription, {
+      title: scene.title,
+      subtitle: scene.subtitle,
+    });
   } else {
     // Fallback to prompt-based generation if no source image
-    console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - No source image, falling back to prompt-based generation`);
+    console.log(
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - No source image, falling back to prompt-based generation`,
+    );
     const modifiedPrompt = `${scene.visualPrompt}
 
 USER MODIFICATION REQUEST: ${imageModification}
@@ -3513,7 +3574,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
   const { data: signedData, error: signError } = await supabase.storage
     .from("audio")
     .createSignedUrl(imagePath, 604800); // 7 days in seconds
-  
+
   if (signError || !signedData?.signedUrl) {
     throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
   }
@@ -3534,13 +3595,11 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
   }
 
   // Save to database
-  await supabase
-    .from("generations")
-    .update({ scenes })
-    .eq("id", generationId)
-    .eq("user_id", user.id);
+  await supabase.from("generations").update({ scenes }).eq("id", generationId).eq("user_id", user.id);
 
-  console.log(`[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Image regenerated successfully`);
+  console.log(
+    `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Image regenerated successfully`,
+  );
 
   return new Response(
     JSON.stringify({
@@ -3575,42 +3634,48 @@ serve(async (req) => {
 
     // Use service role for all DB operations (bypasses RLS, handles long-running tasks)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
+
     const token = authHeader.replace("Bearer ", "");
     let user: { id: string; email?: string };
-    
+
     try {
       const { data, error: claimsError } = await supabase.auth.getClaims(token);
-      
+
       if (claimsError) {
         // Check if it's an expiration error - provide helpful message
         if (claimsError.message?.includes("expired")) {
-          return new Response(JSON.stringify({ 
-            error: "Session expired. Please refresh the page and try again." 
-          }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({
+              error: "Session expired. Please refresh the page and try again.",
+            }),
+            {
+              status: 401,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
         throw claimsError;
       }
-      
+
       if (!data?.claims?.sub) {
         return new Response(JSON.stringify({ error: "Invalid token" }), {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
+
       user = { id: data.claims.sub, email: data.claims.email as string | undefined };
     } catch (authError) {
       console.error("Auth validation error:", authError);
-      return new Response(JSON.stringify({ 
-        error: "Authentication failed. Please refresh and try again." 
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Authentication failed. Please refresh and try again.",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const REPLICATE_API_KEY = Deno.env.get("REPLICATE_TTS_API_KEY");
@@ -3633,7 +3698,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    
+
     let body: GenerationRequest & { imageStartIndex?: number; audioStartIndex?: number; imageIndex?: number };
     try {
       body = validateGenerationRequest(rawBody) as typeof body;
@@ -3644,14 +3709,17 @@ serve(async (req) => {
       body.imageIndex = validateNonNegativeInt(rawObj.imageIndex, "imageIndex") ?? undefined;
     } catch (validationError) {
       console.error("[generate-video] Input validation failed:", validationError);
-      return new Response(JSON.stringify({ 
-        error: validationError instanceof Error ? validationError.message : "Invalid input" 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: validationError instanceof Error ? validationError.message : "Invalid input",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-    
+
     const {
       phase,
       generationId,
@@ -3669,7 +3737,9 @@ serve(async (req) => {
       imageIndex, // Index of specific image within a multi-image scene
     } = body;
 
-    console.log(`[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}, User: ${user.id}`);
+    console.log(
+      `[generate-video] Phase: ${phase || "script"}, GenerationId: ${generationId || "new"}, User: ${user.id}`,
+    );
 
     // Route to appropriate phase handler
     if (!phase || phase === "script") {
@@ -3679,32 +3749,35 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
+
       // Check daily generation limit (Enterprise: 999/day)
       const DAILY_LIMIT = 999;
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      
+
       const { count: todayGenerations, error: countError } = await supabase
         .from("generations")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
         .gte("created_at", todayStart.toISOString());
-      
+
       if (countError) {
         console.error("[generate-video] Error checking daily limit:", countError);
       } else if ((todayGenerations ?? 0) >= DAILY_LIMIT) {
         console.log(`[generate-video] User ${user.id} has reached daily limit: ${todayGenerations}/${DAILY_LIMIT}`);
-        return new Response(JSON.stringify({ 
-          error: `Daily limit reached. You can only create ${DAILY_LIMIT} videos per day. Please try again tomorrow.` 
-        }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: `Daily limit reached. You can only create ${DAILY_LIMIT} videos per day. Please try again tomorrow.`,
+          }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-      
+
       console.log(`[generate-video] User daily usage: ${todayGenerations ?? 0}/${DAILY_LIMIT}`);
-      
+
       // Route based on project type
       if (body.projectType === "smartflow") {
         console.log(`[generate-video] Routing to SMART FLOW pipeline (single infographic)`);
@@ -3721,17 +3794,17 @@ serve(async (req) => {
           body.voiceName,
         );
       }
-      
+
       if (body.projectType === "storytelling") {
         console.log(`[generate-video] Routing to STORYTELLING pipeline`);
         return await handleStorytellingScriptPhase(
-          supabase, 
-          user, 
-          content, 
-          format, 
-          length, 
-          style, 
-          customStyle, 
+          supabase,
+          user,
+          content,
+          format,
+          length,
+          style,
+          customStyle,
           body.brandMark,
           body.inspirationStyle,
           body.storyTone,
@@ -3744,9 +3817,24 @@ serve(async (req) => {
           body.voiceName,
         );
       }
-      
+
       // Default: Doc2Video pipeline
-      return await handleScriptPhase(supabase, user, content, format, length, style, customStyle, body.brandMark, body.presenterFocus, body.characterDescription, body.disableExpressions, body.voiceType, body.voiceId, body.voiceName);
+      return await handleScriptPhase(
+        supabase,
+        user,
+        content,
+        format,
+        length,
+        style,
+        customStyle,
+        body.brandMark,
+        body.presenterFocus,
+        body.characterDescription,
+        body.disableExpressions,
+        body.voiceType,
+        body.voiceId,
+        body.voiceName,
+      );
     }
 
     if (!generationId || !projectId) {
