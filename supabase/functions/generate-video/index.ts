@@ -593,8 +593,8 @@ async function callReplicateTTSChunk(
 ): Promise<Uint8Array> {
   console.log(`[TTS-Chunk] Chunk ${chunkIndex + 1}: ${text.substring(0, 60)}... (${text.length} chars)`);
 
-  // Map gender to Replicate voice names: male = Aaron, female = Marisol
-  const voiceName = voiceGender === "male" ? "Aaron" : "Marisol";
+  // Map gender to Replicate voice names: male = Ethan, female = Marisol
+  const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
   console.log(`[TTS-Chunk] Using voice: ${voiceName} (gender: ${voiceGender})`);
 
   const createResponse = await fetch(
