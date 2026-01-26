@@ -254,7 +254,7 @@ export default function VoiceLab() {
           {/* Content */}
           <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
             <div className="max-w-4xl mx-auto space-y-8">
-              {/* Title */}
+              {/* Hero */}
               <div className="text-center space-y-3">
                 <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                   <Mic className="h-3.5 w-3.5" />
