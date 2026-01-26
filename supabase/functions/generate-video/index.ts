@@ -3365,6 +3365,9 @@ async function handleRegenerateAudio(
   // - HC + Standard Voice: Gemini TTS only (3 retries)
   // - Non-HC + Cloned Voice: ElevenLabs TTS directly
   // - Non-HC + Standard Voice: Replicate Chatterbox
+  // Determine voice gender for standard voices (voiceName stores "male" or "female")
+  const voiceGender = voiceName || "female";
+  
   const audioResult = await generateSceneAudio(
     scenes[sceneIndex],
     sceneIndex,
@@ -3375,6 +3378,7 @@ async function handleRegenerateAudio(
     projectId,
     true, // isRegeneration - creates unique filename to bypass browser cache
     customVoiceId, // Pass custom voice ID for proper routing
+    voiceGender, // Pass voice gender for standard Replicate voices (Ethan/Marisol)
   );
 
   if (!audioResult.url) {
