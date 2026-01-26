@@ -2460,13 +2460,13 @@ Before writing the story, carefully analyze the story idea to identify:
 ${content}
 ${inspirationSection}${toneSection}${genreSection}${characterGuidance}${brandSection}
 
-=== VISUAL PROMPT RULES (IMPORTANT) ===
-The "visualPrompt" fields you output are **SCENE DESCRIPTIONS ONLY**.
-- Do NOT include any art style, illustration style, medium, or aesthetics.
-- Do NOT include any quality/resolution terms (8K, ultra-detailed, cinematic, etc.).
-- Do NOT include aspect ratio or format.
-- Keep prompts concrete: characters (with full character bible details), action, setting, lighting, mood, and camera angle.
-NOTE: Visual style + quality + composition rules will be injected later at image-generation time.
+=== VISUAL STYLE & ART DIRECTION ===
+All image prompts must adhere to this style:
+- ART STYLE: ${styleDescription}
+- ASPECT RATIO: ${format} (${dimensions.width}x${dimensions.height})
+- QUALITY: Cinematic, ultra-detailed, 8K resolution, dramatic lighting
+- CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
+${brandName ? `- BRANDING: Every image prompt must include instructions to overlay the brand mark "${brandName}" in the bottom-center as a floating digital watermark` : ""}
 
 === TIMING REQUIREMENTS ===
 - Target duration: ${config.targetDuration} seconds
@@ -2533,12 +2533,6 @@ When generating the 'visualPrompt' for each scene, you MUST:
 3. Define the SETTING (background, lighting, weather, environment)
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
 5. NO TEXT in images unless specifically requested
-
-CRITICAL - DO NOT INCLUDE IN visualPrompt:
-- DO NOT mention art style, artistic style, or visual style (e.g., "stick figure", "anime", "realistic", "XKCD", "comic style")
-- DO NOT mention resolution, quality, or technical specs (e.g., "8K", "high resolution", "ultra detailed")
-- DO NOT mention aspect ratio or format requirements
-- The style and quality will be added separately - focus ONLY on the SCENE CONTENT (who, what, where, how)
 ${brandName ? `6. End with: "Small subtle brand watermark '${brandName}' in bottom-center with semi-transparent black background (25% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
@@ -2608,45 +2602,10 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     throw new Error("Failed to parse script JSON");
   }
 
-  // Hard-strip style/quality/format artifacts from stored prompts to prevent duplication.
-  // The final image-generation prompt always injects style + quality separately.
-  const stripStyleArtifacts = (input: unknown): string => {
-    const raw = typeof input === "string" ? input : "";
-    let s = raw;
-
-    const patterns: RegExp[] = [
-      // Common style keywords we never want in the stored scene description
-      /\b(stick[- ]?figure|xkcd|comic(\s+strip)?|comic\s+style|black\s+ink|crude\s+marker\s+lines?|marker\s+lines?|line\s+art|monochrome|black\s+and\s+white)\b/gi,
-      // Quality / tech specs
-      /\b(high\s+resolution|ultra[- ]?detailed|8k|4k|cinematic|hdr|ray\s+tracing)\b/gi,
-      // Format / aspect ratio
-      /\b(portrait|landscape|square)\s*(aspect\s*ratio|format)\b/gi,
-      /\b(aspect\s*ratio|9:16|16:9|1:1)\b/gi,
-    ];
-
-    for (const re of patterns) s = s.replace(re, "");
-
-    // Cleanup punctuation/whitespace
-    s = s
-      .replace(/\s{2,}/g, " ")
-      .replace(/\s+,/g, ",")
-      .replace(/,\s*,/g, ",")
-      .replace(/\s+-\s+/g, " ")
-      .trim();
-
-    // Trim leftover leading/trailing separators
-    s = s.replace(/^[,;:\-–—\s]+/, "").replace(/[,;:\-–—\s]+$/, "");
-    return s;
-  };
-
-  // Sanitize voiceovers + prompts
+  // Sanitize voiceovers
   parsedScript.scenes = parsedScript.scenes.map((s) => ({
     ...s,
     voiceover: sanitizeVoiceover(s.voiceover),
-    visualPrompt: stripStyleArtifacts((s as any).visualPrompt),
-    subVisuals: Array.isArray((s as any).subVisuals)
-      ? (s as any).subVisuals.map((v: unknown) => stripStyleArtifacts(v)).filter(Boolean)
-      : (s as any).subVisuals,
   }));
 
   // Calculate total images needed (3-4 images per scene for dynamic visuals)
@@ -2706,9 +2665,6 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       script: scriptContent,
       scenes: parsedScript.scenes.map((s, idx) => ({
         ...s,
-        // Expose the style prompt used at image-generation time so the UI can show it.
-        // (visualPrompt remains scene-content-only.)
-        stylePrompt: styleDescription,
         _meta: {
           statusMessage: "Story script complete. Ready for audio narration.",
           totalImages,
