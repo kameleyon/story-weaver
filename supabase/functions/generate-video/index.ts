@@ -2790,8 +2790,8 @@ async function handleAudioPhase(
     audioUrls[index] = result.url;
     if (result.durationSeconds) {
       totalAudioSeconds += result.durationSeconds;
-      // Update scene duration with actual audio length + small buffer
-      scenes[index].duration = Math.ceil(result.durationSeconds + 0.5);
+      // Update scene duration with actual audio length (0.1s precision, no padding)
+      scenes[index].duration = Math.round(result.durationSeconds * 10) / 10;
     }
   }
 

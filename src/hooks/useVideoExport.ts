@@ -221,11 +221,12 @@ export function useVideoExport() {
         for (let i = 0; i < scenes.length; i++) {
           if (abortRef.current) break;
           const scene = scenes[i];
+          const nextScene = scenes[i + 1];
           
           log("Run", runId, `Processing Scene ${i + 1}/${scenes.length}`);
           setState({ status: "rendering", progress: Math.floor((i / scenes.length) * 80) });
 
-          // A. Load Images
+          // A. Load Images for current scene
           const imageUrls = scene.imageUrls?.length ? scene.imageUrls : [scene.imageUrl || ""];
           const loadedImages: HTMLImageElement[] = [];
           
@@ -250,6 +251,32 @@ export function useVideoExport() {
             }
           }
 
+          // A2. Pre-load first image of next scene for crossfade transition
+          let nextSceneFirstImage: HTMLImageElement | null = null;
+          if (nextScene) {
+            const nextImageUrls = nextScene.imageUrls?.length ? nextScene.imageUrls : [nextScene.imageUrl || ""];
+            const nextFirstUrl = nextImageUrls[0];
+            if (nextFirstUrl) {
+              try {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = () => {
+                    img.crossOrigin = null;
+                    img.src = nextFirstUrl;
+                    img.onload = resolve;
+                    img.onerror = reject;
+                  };
+                  img.src = nextFirstUrl;
+                });
+                nextSceneFirstImage = img;
+              } catch (e) {
+                warn(`Failed to pre-load next scene image`, e);
+              }
+            }
+          }
+
           // B. Decode Audio
           let sceneAudioBuffer: AudioBuffer | null = null;
           if (scene.audioUrl && audioTrackConfig) {
@@ -270,7 +297,8 @@ export function useVideoExport() {
           }
 
           const audioDur = sceneAudioBuffer ? sceneAudioBuffer.duration : 0;
-          const sceneDuration = Math.max(audioDur, scene.duration || 3);
+          // Use actual audio duration if available, otherwise fall back to scene duration
+          const sceneDuration = audioDur > 0 ? audioDur : (scene.duration || 3);
           const sceneFrames = Math.ceil(sceneDuration * fps);
 
           // C. Mix & Encode Audio
@@ -330,6 +358,7 @@ export function useVideoExport() {
           const imagesPerScene = Math.max(1, loadedImages.length);
           const framesPerImage = Math.ceil(sceneFrames / imagesPerScene);
           const fadeFrames = Math.min(Math.floor(fps * 0.5), Math.floor(framesPerImage * 0.2)); // 0.5s or 20% of image duration
+          const sceneCrossfadeFrames = Math.floor(fps * 0.3); // 0.3s crossfade between scenes
 
           for (let f = 0; f < sceneFrames; f++) {
              const imgIndex = Math.min(Math.floor(f / framesPerImage), imagesPerScene - 1);
@@ -342,17 +371,38 @@ export function useVideoExport() {
              ctx.fillStyle = "#000";
              ctx.fillRect(0, 0, dim.w, dim.h);
 
-             // Calculate fade-out transition
+             // Calculate intra-scene fade (between images within scene)
              const framesUntilSwitch = framesPerImage - frameInImage;
-             const shouldFade = imagesPerScene > 1 && imgIndex < imagesPerScene - 1 && framesUntilSwitch <= fadeFrames;
+             const shouldFadeIntraScene = imagesPerScene > 1 && imgIndex < imagesPerScene - 1 && framesUntilSwitch <= fadeFrames;
+             
+             // Calculate inter-scene crossfade (between scenes)
+             const framesUntilSceneEnd = sceneFrames - f;
+             const isOnLastImage = imgIndex === imagesPerScene - 1;
+             const shouldFadeInterScene = nextSceneFirstImage && isOnLastImage && framesUntilSceneEnd <= sceneCrossfadeFrames;
              
              if (img) {
                const scale = Math.min(dim.w / img.width, dim.h / img.height);
                const dw = img.width * scale;
                const dh = img.height * scale;
                
-               if (shouldFade && nextImg) {
-                 // Fade transition: blend current and next image
+               if (shouldFadeInterScene && nextSceneFirstImage) {
+                 // Inter-scene crossfade: blend current scene's last image with next scene's first image
+                 const fadeProgress = 1 - (framesUntilSceneEnd / sceneCrossfadeFrames); // 0 to 1
+                 
+                 // Draw current scene's image with decreasing opacity
+                 ctx.globalAlpha = 1 - fadeProgress;
+                 ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
+                 
+                 // Draw next scene's first image with increasing opacity
+                 const nextScale = Math.min(dim.w / nextSceneFirstImage.width, dim.h / nextSceneFirstImage.height);
+                 const nextDw = nextSceneFirstImage.width * nextScale;
+                 const nextDh = nextSceneFirstImage.height * nextScale;
+                 ctx.globalAlpha = fadeProgress;
+                 ctx.drawImage(nextSceneFirstImage, (dim.w - nextDw) / 2, (dim.h - nextDh) / 2, nextDw, nextDh);
+                 
+                 ctx.globalAlpha = 1; // Reset
+               } else if (shouldFadeIntraScene && nextImg) {
+                 // Intra-scene fade: blend current and next image within scene
                  const fadeProgress = 1 - (framesUntilSwitch / fadeFrames); // 0 to 1
                  
                  // Draw current image with decreasing opacity
