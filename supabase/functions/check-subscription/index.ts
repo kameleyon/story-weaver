@@ -47,9 +47,14 @@ serve(async (req) => {
     // Use getClaims to verify the JWT
     const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
     if (claimsError || !claimsData?.claims) {
-      // Check if it's an expired token
-      if (claimsError?.message?.includes("expired")) {
-        throw new Error("Session expired. Please refresh the page.");
+      // Check if it's an expired token - return 401 to trigger refresh
+      if (claimsError?.message?.toLowerCase().includes("expired") || 
+          claimsError?.message?.toLowerCase().includes("jwt")) {
+        logStep("Token expired, returning 401");
+        return new Response(JSON.stringify({ error: "Token expired", code: "TOKEN_EXPIRED" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 401,
+        });
       }
       throw new Error("Authentication error: Invalid session");
     }
