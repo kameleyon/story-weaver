@@ -223,7 +223,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         )}
       </SidebarHeader>
 
-      <SidebarContent className="px-2">
+      <SidebarContent className="px-2 overflow-hidden flex flex-col">
         {/* Main Navigation - flat list */}
         <SidebarGroup className="mt-2">
           <SidebarGroupContent>
@@ -376,12 +376,12 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
         {/* Recent Projects Section - only show when expanded */}
         {!isCollapsed && (
-          <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-white/50 px-3 py-2 flex items-center gap-2">
+          <SidebarGroup className="mt-4 flex-1 min-h-0 flex flex-col">
+            <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-white/50 px-3 py-2 flex items-center gap-2 flex-shrink-0">
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
-            <SidebarGroupContent className="mt-1 ml-3">
+            <SidebarGroupContent className="mt-1 ml-3 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar">
               <SidebarMenu className="space-y-0.5 sm:space-y-1 border-l border-foreground/10 dark:border-white/10 pl-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
