@@ -2191,7 +2191,7 @@ When generating the 'visualPrompt' for each scene, you MUST:
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera).
-${brandMark ? `7. End with: "Small subtle brand watermark '${brandMark}' in bottom-center with semi-transparent black background (25% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
+${brandMark ? `7. End with: "Small subtle brand watermark '${brandMark}' in bottom-center with semi-transparent black background (15% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -2372,6 +2372,9 @@ async function handleStorytellingScriptPhase(
   disableExpressions?: boolean,
   brandName?: string,
   characterDescription?: string,
+  voiceType?: string,
+  voiceId?: string,
+  voiceName?: string,
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -2537,7 +2540,7 @@ When generating the 'visualPrompt' for each scene, you MUST:
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera).
-${brandName ? `7. End with: "Small subtle brand watermark '${brandName}' in bottom-center with semi-transparent black background (25% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
+${brandName ? `7. End with: "Small subtle brand watermark '${brandName}' in bottom-center with semi-transparent black background (15% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -2625,7 +2628,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     }
   }
 
-  // Create project with storytelling metadata
+  // Create project with storytelling metadata and voice settings
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .insert({
@@ -2642,6 +2645,9 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       story_tone: storyTone || null,
       story_genre: storyGenre || null,
       voice_inclination: disableExpressions ? "disabled" : null,
+      voice_type: voiceType || "standard",
+      voice_id: voiceId || null,
+      voice_name: voiceName || null,
       status: "generating",
     })
     .select()
@@ -2961,7 +2967,7 @@ Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-BRANDING: Overlay the text "${brandMark}" as a SMALL, SUBTLE watermark in the bottom-center of the image. Place it on a semi-transparent black background pill (25% opacity, rounded corners). Use the font "Inter" in LIGHT weight (thin, not bold)—small font size approximately 2-3% of the image height. The text must be white at 90% opacity for visibility against any background. Keep it understated like a professional media trademark, NOT large or prominent. Consistently placed at the very bottom edge with minimal visual impact.`;
+BRANDING: Overlay the text "${brandMark}" as a SMALL, SUBTLE watermark in the bottom-center of the image. Place it on a semi-transparent black background pill (15% opacity, rounded corners). Use the font "Inter" in LIGHT weight (thin, not bold)—small font size approximately 2-3% of the image height. The text must be white at 90% opacity for visibility against any background. Keep it understated like a professional media trademark, NOT large or prominent. Consistently placed at the very bottom edge with minimal visual impact.`;
     }
 
     // Add character consistency instructions if we have a character bible
@@ -3729,6 +3735,9 @@ serve(async (req) => {
           body.disableExpressions,
           body.brandName,
           body.characterDescription,
+          body.voiceType,
+          body.voiceId,
+          body.voiceName,
         );
       }
       
