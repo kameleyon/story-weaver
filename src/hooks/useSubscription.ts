@@ -62,6 +62,19 @@ export function useSubscription() {
         },
       });
 
+      // Handle token expiration - try to refresh the session
+      if (error?.message?.includes("401") || data?.code === "TOKEN_EXPIRED") {
+        console.log("Token expired, attempting session refresh...");
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.session) {
+          // Refresh failed, user needs to re-login
+          setState(prev => ({ ...prev, isLoading: false, error: "Session expired. Please log in again." }));
+          return;
+        }
+        // Retry with new token - will be picked up on next interval or manual call
+        return;
+      }
+
       if (error) throw error;
 
       setState({
