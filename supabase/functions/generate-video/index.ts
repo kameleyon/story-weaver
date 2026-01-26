@@ -2257,10 +2257,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     throw new Error("Failed to parse script");
   }
 
-  // Sanitize voiceovers
+  // Sanitize voiceovers and append style to visualPrompts for visibility
   parsedScript.scenes = parsedScript.scenes.map((s) => ({
     ...s,
     voiceover: sanitizeVoiceover(s.voiceover),
+    visualPrompt: `${s.visualPrompt || ""}\n\nSTYLE: ${styleDescription}`,
+    subVisuals: s.subVisuals?.map((sv: string) => `${sv}\n\nSTYLE: ${styleDescription}`) || [],
   }));
 
   // Calculate total images needed (3-4 images per scene for dynamic visuals)
@@ -2604,10 +2606,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     throw new Error("Failed to parse script JSON");
   }
 
-  // Sanitize voiceovers
+  // Sanitize voiceovers and append style to visualPrompts for visibility
   parsedScript.scenes = parsedScript.scenes.map((s) => ({
     ...s,
     voiceover: sanitizeVoiceover(s.voiceover),
+    visualPrompt: `${s.visualPrompt || ""}\n\nSTYLE: ${styleDescription}`,
+    subVisuals: s.subVisuals?.map((sv: string) => `${sv}\n\nSTYLE: ${styleDescription}`) || [],
   }));
 
   // Calculate total images needed (3-4 images per scene for dynamic visuals)
