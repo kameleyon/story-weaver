@@ -2152,6 +2152,12 @@ ${
 - Example: "Oh, that's interesting! [chuckle] Let me explain why..."`
 }
 
+=== SUB-VISUALS (REQUIRED FOR DYNAMIC PACING) ===
+- EVERY scene MUST include 2-3 subVisuals (additional visual moments)
+- subVisuals create variety and dynamic visual pacing within each scene
+- Each subVisual should show a different angle, moment, or detail of the scene
+- These create smooth transitions and keep viewers engaged
+
 ${
   includeTextOverlay
     ? `=== TEXT OVERLAY ===
@@ -2200,8 +2206,8 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "narrativeBeat": "hook",
       "voiceover": "Script text here...",
       "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
-      "subVisuals": ["Optional additional visual..."],
-      "duration": 18${
+      "subVisuals": ["Second visual moment for variety...", "Third visual moment for dynamic pacing..."],
+      "duration": 15${
         includeTextOverlay
           ? `,
       "title": "Headline",
@@ -2256,13 +2262,14 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     voiceover: sanitizeVoiceover(s.voiceover),
   }));
 
-  // Calculate total images needed
+  // Calculate total images needed (3-4 images per scene for dynamic visuals)
   let totalImages = 0;
   for (const scene of parsedScript.scenes) {
     totalImages += 1; // Primary
-    if (scene.subVisuals && scene.duration >= 12) {
-      const maxSub = scene.duration >= 19 ? 2 : 1;
-      totalImages += Math.min(scene.subVisuals.length, maxSub);
+    if (scene.subVisuals && scene.subVisuals.length > 0) {
+      // Always include up to 3 sub-visuals for variety (total 4 images per scene max)
+      const maxSub = Math.min(scene.subVisuals.length, 3);
+      totalImages += maxSub;
     }
   }
 
@@ -2488,6 +2495,12 @@ ${
 - Use them only at key emotional moments, not every scene`
 }
 
+=== SUB-VISUALS (REQUIRED FOR DYNAMIC PACING) ===
+- EVERY scene MUST include 2-3 subVisuals (additional visual moments)
+- subVisuals create variety and dynamic visual pacing within each scene
+- Each subVisual should show a different angle, moment, or detail of the scene
+- These create smooth transitions and keep viewers engaged
+
 ${
   includeTextOverlay
     ? `=== TEXT OVERLAY ===
@@ -2537,8 +2550,8 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "narrativeBeat": "opening",
       "voiceover": "Flowing narrative text...",
       "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
-      "subVisuals": ["Optional additional visual moment..."],
-      "duration": 25${
+      "subVisuals": ["Second visual moment for variety...", "Third visual moment for dynamic pacing..."],
+      "duration": 20${
         includeTextOverlay
           ? `,
       "title": "Evocative Headline",
@@ -2595,13 +2608,14 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     voiceover: sanitizeVoiceover(s.voiceover),
   }));
 
-  // Calculate total images needed
+  // Calculate total images needed (3-4 images per scene for dynamic visuals)
   let totalImages = 0;
   for (const scene of parsedScript.scenes) {
     totalImages += 1; // Primary
-    if (scene.subVisuals && scene.duration >= 15) {
-      const maxSub = scene.duration >= 25 ? 2 : 1;
-      totalImages += Math.min(scene.subVisuals.length, maxSub);
+    if (scene.subVisuals && scene.subVisuals.length > 0) {
+      // Always include up to 3 sub-visuals for variety (total 4 images per scene max)
+      const maxSub = Math.min(scene.subVisuals.length, 3);
+      totalImages += maxSub;
     }
   }
 
@@ -3010,9 +3024,10 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       taskIndex: taskIndex++,
     });
 
-    if (scene.subVisuals && scene.duration >= 12) {
-      const maxSub = scene.duration >= 19 ? 2 : 1;
-      for (let j = 0; j < Math.min(scene.subVisuals.length, maxSub); j++) {
+    // Always generate up to 3 sub-visuals for variety (total 4 images per scene max)
+    if (scene.subVisuals && scene.subVisuals.length > 0) {
+      const maxSub = Math.min(scene.subVisuals.length, 3);
+      for (let j = 0; j < maxSub; j++) {
         allImageTasks.push({
           sceneIndex: i,
           subIndex: j + 1,
