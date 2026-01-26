@@ -326,22 +326,50 @@ export function useVideoExport() {
              }
           }
 
-          // D. Render Video
+          // D. Render Video with Fade Transitions
           const imagesPerScene = Math.max(1, loadedImages.length);
           const framesPerImage = Math.ceil(sceneFrames / imagesPerScene);
+          const fadeFrames = Math.min(Math.floor(fps * 0.5), Math.floor(framesPerImage * 0.2)); // 0.5s or 20% of image duration
 
           for (let f = 0; f < sceneFrames; f++) {
              const imgIndex = Math.min(Math.floor(f / framesPerImage), imagesPerScene - 1);
+             const nextImgIndex = Math.min(imgIndex + 1, imagesPerScene - 1);
+             const frameInImage = f % framesPerImage;
+             
              const img = loadedImages[imgIndex];
+             const nextImg = loadedImages[nextImgIndex];
 
              ctx.fillStyle = "#000";
              ctx.fillRect(0, 0, dim.w, dim.h);
 
+             // Calculate fade-out transition
+             const framesUntilSwitch = framesPerImage - frameInImage;
+             const shouldFade = imagesPerScene > 1 && imgIndex < imagesPerScene - 1 && framesUntilSwitch <= fadeFrames;
+             
              if (img) {
                const scale = Math.min(dim.w / img.width, dim.h / img.height);
                const dw = img.width * scale;
                const dh = img.height * scale;
-               ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
+               
+               if (shouldFade && nextImg) {
+                 // Fade transition: blend current and next image
+                 const fadeProgress = 1 - (framesUntilSwitch / fadeFrames); // 0 to 1
+                 
+                 // Draw current image with decreasing opacity
+                 ctx.globalAlpha = 1 - fadeProgress;
+                 ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
+                 
+                 // Draw next image with increasing opacity
+                 const nextScale = Math.min(dim.w / nextImg.width, dim.h / nextImg.height);
+                 const nextDw = nextImg.width * nextScale;
+                 const nextDh = nextImg.height * nextScale;
+                 ctx.globalAlpha = fadeProgress;
+                 ctx.drawImage(nextImg, (dim.w - nextDw) / 2, (dim.h - nextDh) / 2, nextDw, nextDh);
+                 
+                 ctx.globalAlpha = 1; // Reset
+               } else {
+                 ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
+               }
              }
 
              const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
