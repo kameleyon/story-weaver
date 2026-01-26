@@ -329,6 +329,10 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                     scenes={generationState.scenes}
                     format={generationState.format || format}
                     onNewProject={handleNewProject}
+                    onRegenerateAll={() => {
+                      reset();
+                      handleGenerate();
+                    }}
                     totalTimeMs={generationState.totalTimeMs}
                     costTracking={generationState.costTracking}
                     generationId={generationState.generationId}

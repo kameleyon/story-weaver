@@ -11,6 +11,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   Share2,
   Square,
   Terminal,
@@ -40,6 +41,7 @@ interface GenerationResultProps {
   scenes: Scene[];
   format: "landscape" | "portrait" | "square";
   onNewProject: () => void;
+  onRegenerateAll?: () => void;
   totalTimeMs?: number;
   costTracking?: CostTracking;
   generationId?: string;
@@ -51,7 +53,8 @@ export function GenerationResult({
   title, 
   scenes: initialScenes, 
   format, 
-  onNewProject, 
+  onNewProject,
+  onRegenerateAll, 
   totalTimeMs, 
   costTracking,
   generationId,
@@ -793,6 +796,12 @@ export function GenerationResult({
           <Plus className="h-4 w-4" />
           Create Another
         </Button>
+        {onRegenerateAll && (
+          <Button variant="outline" onClick={onRegenerateAll} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Regenerate All
+          </Button>
+        )}
       </div>
 
       {/* Export Logs Modal */}

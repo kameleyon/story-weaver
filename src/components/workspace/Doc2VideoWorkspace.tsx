@@ -320,6 +320,10 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                     scenes={generationState.scenes}
                     format={generationState.format || format}
                     onNewProject={handleNewProject}
+                    onRegenerateAll={() => {
+                      reset();
+                      handleGenerate();
+                    }}
                     totalTimeMs={generationState.totalTimeMs}
                     costTracking={generationState.costTracking}
                     generationId={generationState.generationId}
