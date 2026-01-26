@@ -15,6 +15,8 @@ export interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
+  // The full style prompt applied at image-generation time (stored for transparency).
+  stylePrompt?: string;
   subVisuals?: string[];
   duration: number;
   narrativeBeat?: "hook" | "conflict" | "choice" | "solution" | "formula";
@@ -98,6 +100,7 @@ const normalizeScenes = (raw: unknown): Scene[] | undefined => {
     number: s?.number ?? idx + 1,
     voiceover: s?.voiceover ?? s?.narration ?? "",
     visualPrompt: s?.visualPrompt ?? s?.visual_prompt ?? "",
+    stylePrompt: s?.stylePrompt ?? s?.style_prompt,
     subVisuals: Array.isArray(s?.subVisuals) ? s.subVisuals : undefined,
     duration: typeof s?.duration === "number" ? s.duration : 8,
     imageUrl: s?.imageUrl ?? s?.image_url,
