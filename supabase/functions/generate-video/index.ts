@@ -2533,6 +2533,12 @@ When generating the 'visualPrompt' for each scene, you MUST:
 3. Define the SETTING (background, lighting, weather, environment)
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
 5. NO TEXT in images unless specifically requested
+
+CRITICAL - DO NOT INCLUDE IN visualPrompt:
+- DO NOT mention art style, artistic style, or visual style (e.g., "stick figure", "anime", "realistic", "XKCD", "comic style")
+- DO NOT mention resolution, quality, or technical specs (e.g., "8K", "high resolution", "ultra detailed")
+- DO NOT mention aspect ratio or format requirements
+- The style and quality will be added separately - focus ONLY on the SCENE CONTENT (who, what, where, how)
 ${brandName ? `6. End with: "Small subtle brand watermark '${brandName}' in bottom-center with semi-transparent black background (25% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
