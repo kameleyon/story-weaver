@@ -489,15 +489,17 @@ export function useVideoExport() {
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOSChrome = isIOS && /CriOS/i.test(navigator.userAgent);
 
-    // iOS Safari: blob URLs don't work across tabs and anchor downloads often fail.
-    // The ONLY reliable method is Web Share API.
+    // iOS (Safari & Chrome): blob URLs don't work across tabs and anchor downloads often fail.
+    // For iOS Chrome specifically, we need to open the blob URL in a new window for the user to save manually.
     if (isIOS) {
       try {
         const response = await fetch(url);
         const blob = await response.blob();
         const file = new File([blob], filename, { type: "video/mp4" });
 
+        // Try Web Share API first (works better on Safari than Chrome)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: filename });
           return;
@@ -506,8 +508,25 @@ export function useVideoExport() {
         console.warn("iOS share failed:", e);
       }
 
-      // Last resort for iOS: Create a data URL and trigger download
-      // This is slow for large files but works when Share API fails
+      // For iOS Chrome: Open video in new tab for manual save (long-press to save)
+      // This avoids the page refresh issue entirely
+      if (isIOSChrome) {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // Open in same window to avoid popup blockers, user can save from there
+          window.location.href = blobUrl;
+          return;
+        } catch (e) {
+          console.warn("iOS Chrome blob navigation failed:", e);
+          alert("To save the video: Long-press on the video above and select 'Save Video'");
+          return;
+        }
+      }
+
+      // iOS Safari fallback: Create a data URL and trigger download
       try {
         const response = await fetch(url);
         const blob = await response.blob();
@@ -524,7 +543,6 @@ export function useVideoExport() {
         return;
       } catch (e) {
         console.warn("iOS data URL download failed:", e);
-        // If all else fails, at least alert the user
         alert("To save the video: Long-press on the video above and select 'Save Video'");
         return;
       }
