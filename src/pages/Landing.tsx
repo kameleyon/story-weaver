@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FileText, Volume2, Headphones, ArrowRight } from "lucide-react";
+import { FileText, Volume2, Headphones, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -192,6 +192,150 @@ export default function Landing() {
                 </motion.div>
               );
             })}
+          </div>
+      </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 sm:py-32 border-t border-border/30">
+        <div className="mx-auto max-w-6xl px-6 sm:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
+              Simple, transparent pricing
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Start free, upgrade when you need more.
+            </p>
+          </motion.div>
+
+          <div className="grid gap-6 md:grid-cols-3 lg:gap-8">
+            {/* Free Plan */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0 }}
+              className="rounded-2xl border border-border/50 bg-card p-8"
+            >
+              <h3 className="text-lg font-semibold text-foreground">Free</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Perfect for trying out</p>
+              <div className="mt-6">
+                <span className="text-4xl font-bold text-foreground">$0</span>
+                <span className="text-muted-foreground">/month</span>
+              </div>
+              <ul className="mt-8 space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  5 credits per month
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  Standard voices
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  720p export
+                </li>
+              </ul>
+              <Button
+                variant="outline"
+                className="mt-8 w-full"
+                onClick={() => navigate("/auth")}
+              >
+                Get Started
+              </Button>
+            </motion.div>
+
+            {/* Starter Plan */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="rounded-2xl border-2 border-primary bg-card p-8 relative"
+            >
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-primary text-primary-foreground text-xs font-medium px-3 py-1 rounded-full">
+                  Popular
+                </span>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Starter</h3>
+              <p className="mt-2 text-sm text-muted-foreground">For regular creators</p>
+              <div className="mt-6">
+                <span className="text-4xl font-bold text-foreground">$14.99</span>
+                <span className="text-muted-foreground">/month</span>
+              </div>
+              <ul className="mt-8 space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  30 credits per month
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  Premium voices
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  1080p export
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  Voice cloning
+                </li>
+              </ul>
+              <Button
+                className="mt-8 w-full"
+                onClick={() => navigate("/auth")}
+              >
+                Start Free Trial
+              </Button>
+            </motion.div>
+
+            {/* Creator Plan */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="rounded-2xl border border-border/50 bg-card p-8"
+            >
+              <h3 className="text-lg font-semibold text-foreground">Creator</h3>
+              <p className="mt-2 text-sm text-muted-foreground">For power users</p>
+              <div className="mt-6">
+                <span className="text-4xl font-bold text-foreground">$39.99</span>
+                <span className="text-muted-foreground">/month</span>
+              </div>
+              <ul className="mt-8 space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  100 credits per month
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  All premium features
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  Priority support
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" />
+                  API access
+                </li>
+              </ul>
+              <Button
+                variant="outline"
+                className="mt-8 w-full"
+                onClick={() => navigate("/auth")}
+              >
+                Get Started
+              </Button>
+            </motion.div>
           </div>
         </div>
       </section>
