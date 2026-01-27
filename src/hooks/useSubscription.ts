@@ -140,6 +140,12 @@ export function useSubscription() {
     });
 
     if (error) throw error;
+    
+    // Handle manual enterprise subscriptions
+    if (data?.error === "MANUAL_SUBSCRIPTION") {
+      throw new Error(data.message || "Your subscription is managed directly. Please contact support for billing inquiries.");
+    }
+    
     if (!data?.url) throw new Error("Failed to open billing portal");
 
     window.open(data.url, "_blank");
