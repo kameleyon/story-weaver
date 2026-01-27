@@ -105,7 +105,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[hsl(185,30%,95%)] via-[hsl(185,25%,97%)] to-[hsl(180,20%,98%)] dark:from-[hsl(185,15%,12%)] dark:via-[hsl(185,12%,14%)] dark:to-[hsl(180,10%,16%)]">
+    <div className="min-h-screen bg-gradient-to-br from-[hsl(185,30%,95%)] via-[hsl(185,25%,97%)] to-[hsl(180,20%,98%)] dark:from-[hsl(200,10%,10%)] dark:via-[hsl(200,10%,10%)] dark:to-[hsl(200,10%,10%)]">
       {/* Navigation with frosted glass effect */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/30">
         <div className="mx-auto flex h-16 sm:h-20 max-w-6xl items-center justify-between px-6 sm:px-8">
@@ -151,14 +151,16 @@ export default function Landing() {
               transition={{ duration: 0.6 }}
               className="max-w-xl"
             >
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-normal tracking-tight text-foreground leading-[1.1]">
-                Transform Text into
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.1]">
+                <span className="text-foreground/70 font-normal">THINK.</span>
                 <br />
-                <span className="text-foreground">Engaging Audio.</span>
+                <span className="text-[hsl(45,80%,55%)]/85 font-medium">CREATE.</span>
+                <br />
+                <span className="text-[hsl(173,58%,50%)]/90 font-semibold">AND SHARE.</span>
               </h1>
               
               <p className="mt-6 text-lg text-muted-foreground">
-                Elevate your content with life-like voiceovers.
+                Turn topics into engaging visual contents.
               </p>
               
               <Button
