@@ -346,7 +346,7 @@ export function SmartFlowResult({
                   : "Exporting Video..."}
               </h3>
               {(exportState.status === "error" || exportState.status === "complete") && (
-                <Button variant="ghost" size="icon" onClick={resetExport}>
+                <Button type="button" variant="ghost" size="icon" onClick={resetExport}>
                   <X className="h-4 w-4" />
                 </Button>
               )}
@@ -355,7 +355,7 @@ export function SmartFlowResult({
             {exportState.status === "error" ? (
               <>
                 <p className="text-sm text-muted-foreground">{exportState.error}</p>
-                <Button onClick={resetExport} variant="outline" className="w-full mt-4">
+                <Button type="button" onClick={resetExport} variant="outline" className="w-full mt-4">
                   Close
                 </Button>
               </>
@@ -364,6 +364,7 @@ export function SmartFlowResult({
                 <p className="text-sm text-muted-foreground">Your video is ready.</p>
                 <div className="space-y-2">
                   <Button
+                    type="button"
                     className="w-full gap-2"
                     onClick={() => {
                       const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "infographic";
@@ -375,6 +376,7 @@ export function SmartFlowResult({
                   </Button>
                   {typeof navigator !== "undefined" && navigator.canShare && (
                     <Button
+                      type="button"
                       variant="outline"
                       className="w-full gap-2"
                       onClick={() => {
@@ -387,7 +389,7 @@ export function SmartFlowResult({
                     </Button>
                   )}
                 </div>
-                <Button variant="ghost" onClick={resetExport} className="w-full">
+                <Button type="button" variant="ghost" onClick={resetExport} className="w-full">
                   Close
                 </Button>
               </div>
@@ -425,6 +427,7 @@ export function SmartFlowResult({
           exportState.status === "complete" && exportState.videoUrl ? (
             <>
               <Button
+                type="button"
                 className="flex-1 gap-2"
                 onClick={() => {
                   const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "infographic";
@@ -436,6 +439,7 @@ export function SmartFlowResult({
               </Button>
               {typeof navigator !== "undefined" && navigator.canShare && (
                 <Button
+                  type="button"
                   variant="outline"
                   className="flex-1 gap-2"
                   onClick={() => {
@@ -450,6 +454,7 @@ export function SmartFlowResult({
             </>
           ) : (
             <Button
+              type="button"
               className="flex-1 gap-2"
               onClick={() => {
                 clearVideoExportLogs();
@@ -493,6 +498,7 @@ export function SmartFlowResult({
         {/* Export Logs (only if voice enabled) */}
         {enableVoice && (
           <Button
+            type="button"
             variant="outline"
             className="gap-2"
             onClick={() => {
@@ -506,13 +512,13 @@ export function SmartFlowResult({
         )}
 
         {/* Download Image */}
-        <Button variant="outline" className="gap-2" onClick={handleDownloadImage} disabled={!scene.imageUrl}>
+        <Button type="button" variant="outline" className="gap-2" onClick={handleDownloadImage} disabled={!scene.imageUrl}>
           <Download className="h-4 w-4" />
           Download Image
         </Button>
 
         {/* Create Another */}
-        <Button variant="outline" onClick={onNewProject} className="gap-2">
+        <Button type="button" variant="outline" onClick={onNewProject} className="gap-2">
           <Plus className="h-4 w-4" />
           Create Another
         </Button>
@@ -524,7 +530,7 @@ export function SmartFlowResult({
           <Card className="w-full max-w-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-foreground">Export Logs</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowExportLogs(false)}>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setShowExportLogs(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
