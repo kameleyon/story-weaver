@@ -499,6 +499,7 @@ export function GenerationResult({
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
               <Button
+                type="button"
                 size="sm"
                 onClick={() => setEditingSceneIndex(currentSceneIndex)}
                 className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
@@ -542,6 +543,7 @@ export function GenerationResult({
             const sceneImageCount = scene.imageUrls?.length || (scene.imageUrl ? 1 : 0);
             return (
               <button
+                type="button"
                 key={scene.number}
                 onClick={() => {
                   setCurrentSceneIndex(idx);
@@ -590,7 +592,7 @@ export function GenerationResult({
               </h3>
               {(exportState.status === "error" ||
                 exportState.status === "complete") && (
-                <Button variant="ghost" size="icon" onClick={resetExport}>
+                <Button type="button" variant="ghost" size="icon" onClick={resetExport}>
                   <X className="h-4 w-4" />
                 </Button>
               )}
@@ -600,6 +602,7 @@ export function GenerationResult({
               <>
                 <p className="text-sm text-muted-foreground">{exportState.error}</p>
                 <Button
+                  type="button"
                   onClick={resetExport}
                   variant="outline"
                   className="w-full mt-4"
@@ -614,6 +617,7 @@ export function GenerationResult({
                 </p>
                 <div className="space-y-2">
                   <Button
+                    type="button"
                     className="w-full gap-2"
                     onClick={() => {
                       const safeName =
@@ -627,6 +631,7 @@ export function GenerationResult({
                   {/* Share button for iOS Save to Photos */}
                   {typeof navigator !== "undefined" && navigator.canShare && (
                     <Button
+                      type="button"
                       variant="outline"
                       className="w-full gap-2"
                       onClick={() => {
@@ -641,6 +646,7 @@ export function GenerationResult({
                   )}
                 </div>
                 <Button
+                  type="button"
                   variant="ghost"
                   onClick={resetExport}
                   className="w-full"
@@ -684,6 +690,7 @@ export function GenerationResult({
         {exportState.status === "complete" && exportState.videoUrl ? (
           <>
             <Button
+              type="button"
               className="flex-1 gap-2"
               onClick={() => {
                 const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
@@ -695,6 +702,7 @@ export function GenerationResult({
             </Button>
             {typeof navigator !== "undefined" && navigator.canShare && (
               <Button
+                type="button"
                 variant="outline"
                 className="flex-1 gap-2"
                 onClick={() => {
@@ -709,6 +717,7 @@ export function GenerationResult({
           </>
         ) : (
           <Button
+            type="button"
             className="flex-1 gap-2"
             onClick={() => {
               // Ensure logs aren't empty even if iOS fails before the hook logs anything.
@@ -759,6 +768,7 @@ export function GenerationResult({
         )}
 
         <Button
+          type="button"
           variant="outline"
           className="gap-2"
           onClick={() => {
@@ -771,6 +781,7 @@ export function GenerationResult({
         </Button>
 
         <Button
+          type="button"
           variant="outline"
           className="gap-2"
           onClick={() => downloadImagesAsZip(scenes, title)}
