@@ -5,16 +5,20 @@ import { useAuth } from "@/hooks/useAuth";
 // Stripe product/price mappings - Updated pricing structure
 export const STRIPE_PLANS = {
   starter: {
-    monthly: { priceId: "price_1StHnZGAnMJbBpYY1MvGw8gO", productId: "prod_TqznNZmUhevHh4" },
-    yearly: { priceId: "price_1StHnZGAnMJbBpYY1MvGw8gO", productId: "prod_TqznNZmUhevHh4" },
+    // Stripe: "Premium Plan" (recurring monthly)
+    monthly: { priceId: "price_1SqN1x6hfVkBDzkSzfLDk9eF", productId: "prod_Tnyz2nMLqpHz3R" },
+    // NOTE: No yearly prices exist in Stripe yet; keep yearly mapped to monthly to avoid checkout failures.
+    yearly: { priceId: "price_1SqN1x6hfVkBDzkSzfLDk9eF", productId: "prod_Tnyz2nMLqpHz3R" },
   },
   creator: {
-    monthly: { priceId: "price_1StHnaGAnMJbBpYYBqST0fKp", productId: "prod_TqznlgT1Jl6Re7" },
-    yearly: { priceId: "price_1StHnaGAnMJbBpYYBqST0fKp", productId: "prod_TqznlgT1Jl6Re7" },
+    // Stripe: "Pro Plan" (recurring monthly)
+    monthly: { priceId: "price_1SqN2D6hfVkBDzkS6ywVTBEt", productId: "prod_Tnz0KUQX2J5VBH" },
+    yearly: { priceId: "price_1SqN2D6hfVkBDzkS6ywVTBEt", productId: "prod_Tnz0KUQX2J5VBH" },
   },
   professional: {
-    monthly: { priceId: "price_1StHncGAnMJbBpYYjz8ywAKx", productId: "prod_TqznqQYYG4UUY8" },
-    yearly: { priceId: "price_1StHncGAnMJbBpYYjz8ywAKx", productId: "prod_TqznqQYYG4UUY8" },
+    // Stripe: "Platinum Plan" (recurring monthly)
+    monthly: { priceId: "price_1SqN2U6hfVkBDzkSNCDvRyeP", productId: "prod_Tnz0BeRmJDdh0V" },
+    yearly: { priceId: "price_1SqN2U6hfVkBDzkSNCDvRyeP", productId: "prod_Tnz0BeRmJDdh0V" },
   },
 } as const;
 
