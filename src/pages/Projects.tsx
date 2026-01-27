@@ -340,39 +340,38 @@ export default function Projects() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center gap-4 px-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/app")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <ThemedLogo className="h-8" />
-          <div className="flex-1" />
+      <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 sm:h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/app")}
+              className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <ThemedLogo className="h-8 sm:h-10 w-auto" />
+          </div>
+        </div>
+        {/* Mobile centered logo */}
+        <div className="flex sm:hidden justify-center pb-2 -mt-1">
+          <ThemedLogo className="h-6 w-auto" />
         </div>
       </header>
 
-      <main className="container px-4 py-8">
-        {/* Hero Section */}
-        <div className="relative mb-10 overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-background to-background border border-border/50 p-8">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl" />
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2.5 rounded-xl bg-primary/10">
-                <FolderOpen className="h-6 w-6 text-primary" />
-              </div>
-              <Badge variant="secondary" className="text-xs">
-                {projects.length} Total
-              </Badge>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold mb-2">Your Projects</h1>
-            <p className="text-muted-foreground max-w-lg">
-              Manage, organize, and access all your video creations in one place
-            </p>
-          </div>
-        </div>
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">All Projects</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage, organize, and access all your video creations</p>
+        </motion.div>
 
         {/* Toolbar */}
-        <div className="flex flex-col lg:flex-row gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row gap-4 mt-6 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
