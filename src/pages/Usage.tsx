@@ -585,7 +585,7 @@ export default function Usage() {
                               variant="secondary" 
                               className={`text-[10px] px-1.5 py-0 h-4 font-normal ${
                                 isComplete
-                                  ? "bg-primary/20 text-primary" 
+                                  ? "bg-muted text-white/75" 
                                   : isFailed
                                     ? "bg-destructive/20 text-destructive"
                                     : "bg-amber-500/20 text-amber-600 dark:text-amber-400"

@@ -341,36 +341,23 @@ export function GenerationResult({
         </motion.div>
 
         {/* Stats Panel */}
-        {(totalTimeMs || costTracking) && (
+        {totalTimeMs && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="flex items-center justify-center gap-4 mb-4"
           >
-            {totalTimeMs && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">
-                  {Math.floor(totalTimeMs / 60000)}m {Math.floor((totalTimeMs % 60000) / 1000)}s
-                </span>
-              </div>
-            )}
-            {costTracking && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">
-                  ${costTracking.estimatedCostUsd.toFixed(2)}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">
+                {Math.floor(totalTimeMs / 60000)}m {Math.floor((totalTimeMs % 60000) / 1000)}s
+              </span>
+            </div>
           </motion.div>
         )}
 
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-        <p className="text-muted-foreground mt-1">
-          {scenes.length} scenes • {totalImages} images generated
-        </p>
 
         <div className="mt-4 flex items-center justify-center gap-2">
           {!isPlayingAll ? (
@@ -767,18 +754,6 @@ export function GenerationResult({
           </Button>
         )}
 
-        <Button
-          type="button"
-          variant="outline"
-          className="gap-2"
-          onClick={() => {
-            setExportLogsVersion((v) => v + 1);
-            setShowExportLogs(true);
-          }}
-        >
-          <Terminal className="h-4 w-4" />
-          Export Logs
-        </Button>
 
         <Button
           type="button"

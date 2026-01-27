@@ -150,7 +150,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
               <Menu className="h-5 w-5 text-muted-foreground" />
             </SidebarTrigger>
             <div className="hidden lg:flex items-center gap-3">
-              <ThemedLogo className="h-10 w-auto" />
+              <ThemedLogo className="h-8 w-auto" />
             </div>
           </div>
           
