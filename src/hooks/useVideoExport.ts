@@ -530,7 +530,7 @@ export function useVideoExport() {
       }
     }
 
-    // Android: Try Share API first, then anchor download
+    // Android Chrome: Share API is most reliable, blob anchor often causes navigation/refresh
     if (isAndroid) {
       try {
         const response = await fetch(url);
@@ -541,23 +541,43 @@ export function useVideoExport() {
           await navigator.share({ files: [file], title: filename });
           return;
         }
-      } catch (e) {
-        console.warn("Android share failed, trying anchor download:", e);
-      }
 
-      // Android fallback: anchor download usually works
+        // Fallback: Create object URL from fetched blob (more reliable than original blob URL)
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up after a delay
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        }, 1000);
+        return;
+      } catch (e) {
+        console.warn("Android download failed:", e);
+        // Last resort: alert with instructions
+        alert("To save the video: Long-press on the video above and select 'Download video'");
+        return;
+      }
+    }
+
+    // Desktop: standard anchor download with proper cleanup
+    try {
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
       a.click();
-      return;
+      setTimeout(() => document.body.removeChild(a), 100);
+    } catch (e) {
+      console.warn("Desktop download failed:", e);
+      window.open(url, "_blank");
     }
-
-    // Desktop: standard anchor download
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
   }, []);
 
   return { state, exportVideo, downloadVideo, shareVideo, reset };
