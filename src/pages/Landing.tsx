@@ -143,15 +143,15 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center pt-16">
         <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+          <div className="flex flex-col xl:grid xl:grid-cols-2 gap-8 xl:gap-16 items-center">
             {/* Left Content */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="max-w-2xl"
+              className="max-w-2xl text-center xl:text-left"
             >
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl tracking-tight leading-[1.05]">
+              <h1 className="text-5xl sm:text-6xl md:text-7xl xl:text-8xl tracking-tight leading-[1.05]">
                 <span className="text-foreground/70 font-normal">THINK.</span>
                 <br />
                 <span className="text-[hsl(45,80%,55%)]/85 font-medium">CREATE.</span>
@@ -177,11 +177,11 @@ export default function Landing() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex items-center justify-center lg:justify-end"
+              className="flex items-center justify-center xl:justify-end w-full"
             >
               <svg
                 viewBox="0 0 400 300"
-                className="w-full max-w-lg lg:max-w-xl"
+                className="w-full max-w-md sm:max-w-lg md:max-w-xl"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
