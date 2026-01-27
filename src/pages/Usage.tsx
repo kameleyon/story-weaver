@@ -230,7 +230,7 @@ export default function Usage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <ThemedLogo className="h-6 sm:h-8 w-auto" />
+            <ThemedLogo className="h-8 sm:h-10 w-auto" />
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -244,6 +244,10 @@ export default function Usage() {
             </Button>
             <ThemeToggle />
           </div>
+        </div>
+        {/* Mobile centered logo */}
+        <div className="flex sm:hidden justify-center pb-2 -mt-1">
+          <ThemedLogo className="h-6 w-auto" />
         </div>
       </header>
 
