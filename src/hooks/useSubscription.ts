@@ -19,10 +19,10 @@ export const STRIPE_PLANS = {
 } as const;
 
 export const CREDIT_PACKS = {
-  15: { priceId: "price_1StHndGAnMJbBpYY74IT1rX0", productId: "prod_TqznJ5NkfAEdUY", price: 11.99 },
-  50: { priceId: "price_1StHnjGAnMJbBpYYXjshZvI3", productId: "prod_TqznSfnDazIjj2", price: 34.99 },
-  150: { priceId: "price_1StHnkGAnMJbBpYYF8irO0od", productId: "prod_Tqznn5NHeJnhS6", price: 89.99 },
-  500: { priceId: "price_1StHneGAnMJbBpYYwcUd93aN", productId: "prod_Tqznoknz2TmraQ", price: 249.99 },
+  15: { priceId: "price_1SuJk36hfVkBDzkSCbSorQJY", productId: "prod_Ts3r9EBXzzKKfU", price: 11.99 },
+  50: { priceId: "price_1SqN2q6hfVkBDzkSNbEXBWTL", productId: "prod_Tnz0B2aJPD895y", price: 14.99 },
+  150: { priceId: "price_1SqN316hfVkBDzkSVq77cGDd", productId: "prod_Tnz1CygtJnMhUz", price: 39.99 },
+  500: { priceId: "price_1SuJk46hfVkBDzkSSkkal5QG", productId: "prod_Ts3rl1zDT9oLVt", price: 249.99 },
 } as const;
 
 export interface SubscriptionState {
