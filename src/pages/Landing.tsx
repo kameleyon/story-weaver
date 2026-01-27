@@ -261,7 +261,7 @@ export default function Landing() {
       </section>
 
       {/* Why AudioMax Section */}
-      <section id="features" className="py-24 sm:py-32 bg-primary/5">
+      <section id="features" className="py-24 sm:py-32 bg-primary/75">
         <div className="mx-auto max-w-6xl px-6 sm:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
