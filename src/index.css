@@ -4,108 +4,107 @@
 @tailwind components;
 @tailwind utilities;
 
-/* AudioMax Design System - Aqua & Pacific Theme
+/* AudioMax Design System - Teal & Mist Theme
    Elegant, Minimal, Sophisticated */
 
 @layer base {
   :root {
-    /* Color Palette - Light Mode uses Pacific tones */
-    --brand-dark: 187 34% 16%; /* #1B3236 - Jet Black */
-    --brand-primary: 188 51% 47%; /* #3BA3B3 - Pacific Blue */
-    --brand-secondary: 187 88% 31%; /* #098396 - Pacific Cyan */
-    --brand-accent: 183 74% 67%; /* #6DE4EB - Electric Aqua */
-    --brand-light: 182 100% 83%; /* #AAFBFF - Icy Aqua */
-    --brand-pop: 183 74% 67%; /* Electric Aqua */
-    --brand-surface: 190 50% 96%; /* #EEF8FA - Azure Mist */
+    /* Teal & Mist Color Palette */
+    --brand-dark: 200 9% 6%; /* #0F1112 - Carbon Black */
+    --brand-primary: 186 76% 21%; /* #0D565F - Dark Teal */
+    --brand-secondary: 178 40% 29%; /* #2D6967 - Stormy Teal */
+    --brand-accent: 170 36% 48%; /* #4EA69A - Ocean Mist */
+    --brand-light: 168 47% 67%; /* #86D2CA - Pearl Aqua */
+    --brand-pop: 179 40% 60%; /* #71C0C2 - Tropical Teal */
+    --brand-surface: 165 43% 89%; /* #DAEEE9 - Frozen Water */
 
-    /* Semantic Tokens - Light Mode (Azure Mist background, Jet Black text) */
-    --background: 190 50% 96%; /* Azure Mist */
-    --foreground: 187 34% 16%; /* Jet Black */
+    /* Semantic Tokens - Light Mode */
+    --background: 0 0% 99%;
+    --foreground: 200 9% 15%;
 
-    --card: 190 45% 98%;
-    --card-foreground: 187 34% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 200 9% 12%;
 
-    --popover: 190 45% 98%;
-    --popover-foreground: 187 34% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 9% 12%;
 
-    /* Pacific Blue as primary */
-    --primary: 188 51% 47%;
+    /* Unified teal green */
+    --primary: 173 58% 32%;
     --primary-foreground: 0 0% 100%;
 
-    /* Pacific Cyan as secondary */
-    --secondary: 187 88% 31%;
+    --secondary: 173 45% 42%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 190 30% 92%;
-    --muted-foreground: 187 34% 35%;
+    --muted: 180 10% 95%;
+    --muted-foreground: 200 9% 35%;
 
-    /* Electric Aqua for accents */
-    --accent: 183 74% 50%;
-    --accent-foreground: 187 34% 16%;
+    /* Lighter teal for hover states */
+    --accent: 173 50% 45%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    /* Using muted amber for warnings instead of red */
+    --destructive: 173 58% 32%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 190 25% 88%;
-    --input: 190 30% 92%;
-    --ring: 188 51% 47%;
+    --border: 180 10% 90%;
+    --input: 180 10% 92%;
+    --ring: 173 58% 32%;
 
     --radius: 0.75rem;
 
-    /* Sidebar Tokens - Light */
-    --sidebar-background: 190 40% 94%;
-    --sidebar-foreground: 187 34% 16%;
-    --sidebar-primary: 188 51% 47%;
+    /* Sidebar Tokens - Light - Slightly different from main bg */
+    --sidebar-background: 180 10% 97%;
+    --sidebar-foreground: 180 7% 15%;
+    --sidebar-primary: 173 58% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 190 30% 90%;
-    --sidebar-accent-foreground: 187 34% 16%;
-    --sidebar-border: 190 25% 88%;
-    --sidebar-ring: 188 51% 47%;
+    --sidebar-accent: 180 10% 93%;
+    --sidebar-accent-foreground: 180 7% 15%;
+    --sidebar-border: 180 10% 90%;
+    --sidebar-ring: 173 58% 32%;
   }
 
   .dark {
-    /* Dark Mode - Jet Black background, Light Blue text, Icy/Electric Aqua accents */
-    --background: 187 34% 16%; /* Jet Black */
-    --foreground: 193 27% 80%; /* Light Blue */
+    /* Dark Mode - Teal & Mist - Using #0F1112 base */
+    --background: 200 9% 6%;
+    --foreground: 0 0% 96%;
 
     /* Cards slightly lighter for visibility */
-    --card: 187 30% 20%;
-    --card-foreground: 193 27% 85%;
+    --card: 200 8% 20%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 187 30% 20%;
-    --popover-foreground: 193 27% 85%;
+    --popover: 200 8% 20%;
+    --popover-foreground: 0 0% 96%;
 
-    /* Electric Aqua as primary in dark mode */
-    --primary: 183 74% 67%;
-    --primary-foreground: 187 34% 16%;
+    /* Unified teal green - matches Shorts badge */
+    --primary: 173 58% 39%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Icy Aqua as secondary */
-    --secondary: 182 100% 83%;
-    --secondary-foreground: 187 34% 16%;
+    --secondary: 173 45% 32%;
+    --secondary-foreground: 0 0% 96%;
 
-    --muted: 187 30% 22%;
-    --muted-foreground: 193 27% 65%;
+    --muted: 200 8% 14%;
+    --muted-foreground: 200 8% 60%;
 
-    /* Electric Aqua for accents */
-    --accent: 183 74% 60%;
-    --accent-foreground: 187 34% 16%;
+    /* Lighter teal for hover states */
+    --accent: 173 50% 50%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 173 58% 39%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 187 28% 25%;
-    --input: 187 30% 22%;
-    --ring: 183 74% 67%;
+    --border: 200 8% 18%;
+    --input: 200 8% 14%;
+    --ring: 173 58% 39%;
 
-    /* Sidebar Tokens - Dark */
-    --sidebar-background: 187 32% 14%;
-    --sidebar-foreground: 193 27% 80%;
-    --sidebar-primary: 183 74% 67%;
-    --sidebar-primary-foreground: 187 34% 16%;
-    --sidebar-accent: 187 30% 20%;
-    --sidebar-accent-foreground: 193 27% 85%;
-    --sidebar-border: 187 28% 22%;
-    --sidebar-ring: 183 74% 67%;
+    /* Sidebar Tokens - Dark - Slightly lighter than main bg for contrast */
+    --sidebar-background: 200 8% 10%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 173 58% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 200 8% 14%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 200 8% 16%;
+    --sidebar-ring: 173 58% 39%;
   }
 }
 
