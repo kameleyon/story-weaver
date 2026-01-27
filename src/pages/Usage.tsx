@@ -449,6 +449,60 @@ export default function Usage() {
             </CardContent>
           </Card>
 
+          {/* Generation Stats */}
+          <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <Video className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length}</p>
+                    <p className="text-sm text-muted-foreground">Videos Generated</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <Clock className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {Math.round(allActivity.reduce((acc, a) => {
+                        if (Array.isArray(a.scenes)) {
+                          (a.scenes as any[]).forEach((scene: any) => {
+                            if (typeof scene?.duration === "number") acc += scene.duration;
+                          });
+                        }
+                        return acc;
+                      }, 0) / 60)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Total Minutes</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length * 15} MB</p>
+                    <p className="text-sm text-muted-foreground">Storage Used</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Activity History */}
           <Card className="mt-4 sm:mt-6 border-border/50 bg-card/50 shadow-sm">
             <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6">

@@ -3,9 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  Video, 
-  Clock, 
-  HardDrive, 
   ChevronLeft, 
   ChevronRight,
   Play,
@@ -13,7 +10,8 @@ import {
   Clapperboard,
   Wallpaper,
   Wand2,
-  Menu
+  Menu,
+  Video
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -236,50 +234,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Analytics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10">
-                    <Video className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.videosGenerated || 0}</p>
-                    <p className="text-sm text-muted-foreground">Videos Generated</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10">
-                    <Clock className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.totalMinutes || 0}</p>
-                    <p className="text-sm text-muted-foreground">Total Minutes</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10">
-                    <HardDrive className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.storageUsed || 0} MB</p>
-                    <p className="text-sm text-muted-foreground">Storage Used</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
           {/* Quick Start + Tips Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
