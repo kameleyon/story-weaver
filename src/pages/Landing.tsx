@@ -269,10 +269,10 @@ export default function Landing() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
               Why AudioMax?
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-white/80 max-w-2xl mx-auto">
               From idea to polished content in minutes. Our AI handles the heavy lifting so you can focus on your message.
             </p>
           </motion.div>
@@ -289,13 +289,13 @@ export default function Landing() {
                   transition={{ delay: index * 0.1 }}
                   className="text-center px-4"
                 >
-                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15">
-                    <IconComponent className="h-7 w-7 text-primary" />
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
+                    <IconComponent className="h-7 w-7 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-3">
+                  <h3 className="text-lg font-semibold text-white mb-3">
                     {feature.title}
                   </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-sm text-white/75 leading-relaxed">
                     {feature.description}
                   </p>
                 </motion.div>
