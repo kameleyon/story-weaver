@@ -106,8 +106,8 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[hsl(185,30%,95%)] via-[hsl(185,25%,97%)] to-[hsl(180,20%,98%)] dark:from-[hsl(185,15%,12%)] dark:via-[hsl(185,12%,14%)] dark:to-[hsl(180,10%,16%)]">
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-transparent">
+      {/* Navigation with frosted glass effect */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/30">
         <div className="mx-auto flex h-16 sm:h-20 max-w-6xl items-center justify-between px-6 sm:px-8">
           {/* Logo */}
           <a href="/" className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">
@@ -151,7 +151,7 @@ export default function Landing() {
               transition={{ duration: 0.6 }}
               className="max-w-xl"
             >
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-normal tracking-tight text-foreground leading-[1.1]">
                 Transform Text into
                 <br />
                 <span className="text-foreground">Engaging Audio.</span>
@@ -195,7 +195,7 @@ export default function Landing() {
                   <line x1="15" y1="80" x2="35" y2="80" className="stroke-primary" strokeWidth="3" />
                 </g>
                 
-                {/* Animated sound waves - left side */}
+                {/* Animated sound waves - left side with gold accents */}
                 {[1, 2, 3, 4, 5].map((i) => (
                   <motion.line
                     key={`left-${i}`}
@@ -203,7 +203,7 @@ export default function Landing() {
                     y1={150 - 20 - i * 5}
                     x2={140 - i * 15}
                     y2={150 + 20 + i * 5}
-                    className="stroke-primary"
+                    stroke={i % 2 === 0 ? "hsl(45, 80%, 55%)" : "hsl(var(--primary))"}
                     strokeWidth="4"
                     strokeLinecap="round"
                     initial={{ scaleY: 0.3, opacity: 0.4 }}
@@ -221,7 +221,7 @@ export default function Landing() {
                   />
                 ))}
                 
-                {/* Animated sound waves - right side */}
+                {/* Animated sound waves - right side with gold accents */}
                 {[1, 2, 3, 4, 5].map((i) => (
                   <motion.line
                     key={`right-${i}`}
@@ -229,7 +229,7 @@ export default function Landing() {
                     y1={150 - 20 - i * 5}
                     x2={260 + i * 15}
                     y2={150 + 20 + i * 5}
-                    className="stroke-primary"
+                    stroke={i % 2 === 0 ? "hsl(45, 80%, 55%)" : "hsl(var(--primary))"}
                     strokeWidth="4"
                     strokeLinecap="round"
                     initial={{ scaleY: 0.3, opacity: 0.4 }}
