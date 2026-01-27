@@ -67,19 +67,46 @@ serve(async (req) => {
     }
     logStep("User authenticated", { userId, email: userEmail });
 
+    // First check for manual/enterprise subscriptions in the database
+    const { data: dbSubscription } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan_name, status, current_period_end, cancel_at_period_end, stripe_subscription_id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .single();
+
+    // Get credits balance
+    const { data: creditData } = await supabaseAdmin
+      .from("user_credits")
+      .select("credits_balance")
+      .eq("user_id", userId)
+      .single();
+
+    // If there's a manual enterprise subscription (not a real Stripe subscription), use it
+    if (dbSubscription && dbSubscription.stripe_subscription_id?.startsWith("manual_")) {
+      logStep("Found manual enterprise subscription", { 
+        plan: dbSubscription.plan_name, 
+        subscriptionEnd: dbSubscription.current_period_end 
+      });
+      
+      return new Response(JSON.stringify({
+        subscribed: true,
+        plan: dbSubscription.plan_name,
+        subscription_end: dbSubscription.current_period_end,
+        cancel_at_period_end: dbSubscription.cancel_at_period_end || false,
+        credits_balance: creditData?.credits_balance || 0,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
 
     if (customers.data.length === 0) {
       logStep("No Stripe customer found, returning free tier");
       
-      // Check for credits in the database
-      const { data: creditData } = await supabaseAdmin
-        .from("user_credits")
-        .select("credits_balance")
-        .eq("user_id", userId)
-        .single();
-
       return new Response(JSON.stringify({
         subscribed: false,
         plan: "free",
@@ -149,12 +176,7 @@ serve(async (req) => {
       plan = productToPlan[productId] || "starter";
     }
 
-    // Get credits balance
-    const { data: creditData } = await supabaseAdmin
-      .from("user_credits")
-      .select("credits_balance")
-      .eq("user_id", userId)
-      .single();
+    // creditData already fetched above
 
     logStep("Returning subscription status", { plan, subscriptionEnd });
 
