@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Headphones, Presentation, Mic, ArrowRight, Play, Check, Zap, Crown, Gem, Building2, Wand2 } from "lucide-react";
+import { FileText, Headphones, Presentation, Mic, ArrowRight, Check, Zap, Crown, Gem, Building2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 const features = [
   {
-    title: "NotebookLM-Style Video",
+    title: "Explainer Videos",
     description: "Text → Video",
     icon: FileText,
   },
@@ -21,8 +21,8 @@ const features = [
     icon: Headphones,
   },
   {
-    title: "Slide Deck Narrator",
-    description: "Slides → Narrated Video",
+    title: "Smart Flow Infography",
+    description: "Ideas → Visual Stories",
     icon: Presentation,
   },
   {
@@ -246,14 +246,6 @@ export default function Landing() {
             >
               Start Creating Free
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </Button>
-            <Button
-              size="lg"
-              variant="ghost"
-              className="gap-2 rounded-full px-6 sm:px-8 py-5 sm:py-6 text-sm sm:text-base font-medium text-muted-foreground hover:text-foreground"
-            >
-              <Play className="h-4 w-4" />
-              Watch Demo
             </Button>
           </motion.div>
 

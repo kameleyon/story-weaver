@@ -4,19 +4,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* AudioMax Design System - Teal & Mist Theme
+/* AudioMax Design System - Aqua Theme
    Elegant, Minimal, Sophisticated */
 
 @layer base {
   :root {
-    /* Teal & Mist Color Palette */
+    /* Aqua Color Palette */
     --brand-dark: 200 9% 6%; /* #0F1112 - Carbon Black */
-    --brand-primary: 186 76% 21%; /* #0D565F - Dark Teal */
-    --brand-secondary: 178 40% 29%; /* #2D6967 - Stormy Teal */
-    --brand-accent: 170 36% 48%; /* #4EA69A - Ocean Mist */
-    --brand-light: 168 47% 67%; /* #86D2CA - Pearl Aqua */
-    --brand-pop: 179 40% 60%; /* #71C0C2 - Tropical Teal */
-    --brand-surface: 165 43% 89%; /* #DAEEE9 - Frozen Water */
+    --brand-primary: 187 76% 28%; /* Deep Aqua */
+    --brand-secondary: 185 50% 35%; /* Mid Aqua */
+    --brand-accent: 182 55% 50%; /* Vibrant Aqua */
+    --brand-light: 180 60% 65%; /* Light Aqua */
+    --brand-pop: 183 55% 55%; /* Bright Aqua */
+    --brand-surface: 180 50% 92%; /* Pale Aqua */
 
     /* Semantic Tokens - Light Mode */
     --background: 0 0% 99%;
@@ -28,43 +28,43 @@
     --popover: 0 0% 100%;
     --popover-foreground: 200 9% 12%;
 
-    /* Unified teal green */
-    --primary: 173 58% 32%;
+    /* Unified aqua */
+    --primary: 185 65% 38%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 173 45% 42%;
+    --secondary: 183 55% 45%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 180 10% 95%;
     --muted-foreground: 200 9% 35%;
 
-    /* Lighter teal for hover states */
-    --accent: 173 50% 45%;
+    /* Lighter aqua for hover states */
+    --accent: 182 58% 48%;
     --accent-foreground: 0 0% 100%;
 
-    /* Using muted amber for warnings instead of red */
-    --destructive: 173 58% 32%;
+    /* Using aqua for consistency */
+    --destructive: 185 65% 38%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 180 10% 90%;
     --input: 180 10% 92%;
-    --ring: 173 58% 32%;
+    --ring: 185 65% 38%;
 
     --radius: 0.75rem;
 
     /* Sidebar Tokens - Light - Slightly different from main bg */
     --sidebar-background: 180 10% 97%;
     --sidebar-foreground: 180 7% 15%;
-    --sidebar-primary: 173 58% 32%;
+    --sidebar-primary: 185 65% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 180 10% 93%;
     --sidebar-accent-foreground: 180 7% 15%;
     --sidebar-border: 180 10% 90%;
-    --sidebar-ring: 173 58% 32%;
+    --sidebar-ring: 185 65% 38%;
   }
 
   .dark {
-    /* Dark Mode - Teal & Mist - Using #0F1112 base */
+    /* Dark Mode - Aqua - Using #0F1112 base */
     --background: 200 9% 6%;
     --foreground: 0 0% 96%;
 
@@ -75,36 +75,36 @@
     --popover: 200 8% 20%;
     --popover-foreground: 0 0% 96%;
 
-    /* Unified teal green - matches Shorts badge */
-    --primary: 173 58% 39%;
+    /* Unified aqua */
+    --primary: 185 60% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 173 45% 32%;
+    --secondary: 183 50% 38%;
     --secondary-foreground: 0 0% 96%;
 
     --muted: 200 8% 14%;
     --muted-foreground: 200 8% 60%;
 
-    /* Lighter teal for hover states */
-    --accent: 173 50% 50%;
+    /* Lighter aqua for hover states */
+    --accent: 182 55% 52%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 173 58% 39%;
+    --destructive: 185 60% 45%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 200 8% 18%;
     --input: 200 8% 14%;
-    --ring: 173 58% 39%;
+    --ring: 185 60% 45%;
 
     /* Sidebar Tokens - Dark - Slightly lighter than main bg for contrast */
     --sidebar-background: 200 8% 10%;
     --sidebar-foreground: 0 0% 96%;
-    --sidebar-primary: 173 58% 39%;
+    --sidebar-primary: 185 60% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 200 8% 14%;
     --sidebar-accent-foreground: 0 0% 96%;
     --sidebar-border: 200 8% 16%;
-    --sidebar-ring: 173 58% 39%;
+    --sidebar-ring: 185 60% 45%;
   }
 }
 
