@@ -288,7 +288,7 @@ export default function Landing() {
             </p>
           </motion.div>
 
-          <div className="grid gap-8 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-3">
             {features.map((feature, index) => {
               const IconComponent = feature.icon;
               return (
@@ -298,7 +298,7 @@ export default function Landing() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
-                  className="text-center px-4"
+                  className="text-center p-6 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg"
                 >
                   <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
                     <IconComponent className="h-7 w-7 text-white" />
@@ -306,7 +306,7 @@ export default function Landing() {
                   <h3 className="text-lg font-semibold text-white mb-3">
                     {feature.title}
                   </h3>
-                  <p className="text-sm text-white/75 leading-relaxed">
+                  <p className="text-sm text-white/80 leading-relaxed">
                     {feature.description}
                   </p>
                 </motion.div>
