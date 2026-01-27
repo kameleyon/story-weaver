@@ -261,7 +261,7 @@ export default function Landing() {
       </section>
 
       {/* Why AudioMax Section */}
-      <section id="features" className="py-24 sm:py-32">
+      <section id="features" className="py-24 sm:py-32 bg-primary/5">
         <div className="mx-auto max-w-6xl px-6 sm:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -272,6 +272,9 @@ export default function Landing() {
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
               Why AudioMax?
             </h2>
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+              From idea to polished content in minutes. Our AI handles the heavy lifting so you can focus on your message.
+            </p>
           </motion.div>
 
           <div className="grid gap-8 md:grid-cols-3">
@@ -286,7 +289,7 @@ export default function Landing() {
                   transition={{ delay: index * 0.1 }}
                   className="text-center px-4"
                 >
-                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15">
                     <IconComponent className="h-7 w-7 text-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-3">
