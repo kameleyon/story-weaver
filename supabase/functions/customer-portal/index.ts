@@ -40,6 +40,25 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
+    // Check if this is a manual enterprise subscription (no Stripe customer)
+    const { data: dbSubscription } = await supabaseClient
+      .from("subscriptions")
+      .select("stripe_subscription_id, plan_name")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .single();
+
+    if (dbSubscription?.stripe_subscription_id?.startsWith("manual_")) {
+      logStep("Manual enterprise user - no Stripe portal available");
+      return new Response(JSON.stringify({ 
+        error: "MANUAL_SUBSCRIPTION",
+        message: "Your enterprise subscription is managed directly. Please contact support for billing inquiries."
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, // Return 200 with error code so frontend can handle gracefully
+      });
+    }
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     
@@ -50,7 +69,7 @@ serve(async (req) => {
     const customerId = customers.data[0].id;
     logStep("Found Stripe customer", { customerId });
 
-    const origin = req.headers.get("origin") || "https://vision-narrate-pro.lovable.app";
+    const origin = req.headers.get("origin") || "https://audiomax.lovable.app";
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: `${origin}/usage`,
