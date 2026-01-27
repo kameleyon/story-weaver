@@ -141,17 +141,17 @@ export default function Landing() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center pt-20">
-        <div className="mx-auto max-w-6xl px-6 sm:px-8 w-full">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+      <section className="relative min-h-screen flex items-center pt-16">
+        <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
             {/* Left Content */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="max-w-xl"
+              className="max-w-2xl"
             >
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.1]">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl tracking-tight leading-[1.05]">
                 <span className="text-foreground/70 font-normal">THINK.</span>
                 <br />
                 <span className="text-[hsl(45,80%,55%)]/85 font-medium">CREATE.</span>
@@ -159,13 +159,13 @@ export default function Landing() {
                 <span className="text-[hsl(173,58%,50%)]/90 font-semibold">AND SHARE.</span>
               </h1>
               
-              <p className="mt-6 text-lg text-muted-foreground">
+              <p className="mt-8 text-xl text-muted-foreground">
                 Turn topics into engaging visual contents.
               </p>
               
               <Button
                 size="lg"
-                className="mt-8 rounded-lg bg-primary px-8 py-6 text-base font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+                className="mt-10 rounded-lg bg-primary px-10 py-7 text-lg font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
                 onClick={() => navigate("/auth")}
               >
                 Try for Free
@@ -177,36 +177,36 @@ export default function Landing() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex items-center justify-center"
+              className="flex items-center justify-center lg:justify-end"
             >
               <svg
                 viewBox="0 0 400 300"
-                className="w-full max-w-md"
+                className="w-full max-w-lg lg:max-w-xl"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 {/* Background circles */}
-                <circle cx="200" cy="150" r="80" className="fill-primary/10" />
-                <circle cx="200" cy="150" r="120" className="fill-primary/5" />
+                <circle cx="200" cy="150" r="90" className="fill-primary/10" />
+                <circle cx="200" cy="150" r="130" className="fill-primary/5" />
                 
                 {/* Microphone icon in center */}
-                <g transform="translate(175, 120)">
-                  <rect x="10" y="0" width="30" height="50" rx="15" className="fill-primary/40" />
-                  <path d="M5 45 L5 55 A20 20 0 0 0 45 55 L45 45" className="stroke-primary" strokeWidth="3" fill="none" />
-                  <line x1="25" y1="65" x2="25" y2="80" className="stroke-primary" strokeWidth="3" />
-                  <line x1="15" y1="80" x2="35" y2="80" className="stroke-primary" strokeWidth="3" />
+                <g transform="translate(170, 110)">
+                  <rect x="10" y="0" width="40" height="65" rx="20" className="fill-primary/40" />
+                  <path d="M0 55 L0 70 A30 30 0 0 0 60 70 L60 55" className="stroke-primary" strokeWidth="4" fill="none" />
+                  <line x1="30" y1="85" x2="30" y2="105" className="stroke-primary" strokeWidth="4" />
+                  <line x1="15" y1="105" x2="45" y2="105" className="stroke-primary" strokeWidth="4" />
                 </g>
                 
                 {/* Animated sound waves - left side with gold accents */}
                 {[1, 2, 3, 4, 5].map((i) => (
                   <motion.line
                     key={`left-${i}`}
-                    x1={140 - i * 15}
-                    y1={150 - 20 - i * 5}
-                    x2={140 - i * 15}
-                    y2={150 + 20 + i * 5}
+                    x1={130 - i * 18}
+                    y1={150 - 25 - i * 8}
+                    x2={130 - i * 18}
+                    y2={150 + 25 + i * 8}
                     stroke={i % 2 === 0 ? "hsl(45, 80%, 55%)" : "hsl(var(--primary))"}
-                    strokeWidth="4"
+                    strokeWidth="5"
                     strokeLinecap="round"
                     initial={{ scaleY: 0.3, opacity: 0.4 }}
                     animate={{ 
@@ -219,7 +219,7 @@ export default function Landing() {
                       repeat: Infinity,
                       ease: "easeInOut"
                     }}
-                    style={{ transformOrigin: `${140 - i * 15}px 150px` }}
+                    style={{ transformOrigin: `${130 - i * 18}px 150px` }}
                   />
                 ))}
                 
@@ -227,12 +227,12 @@ export default function Landing() {
                 {[1, 2, 3, 4, 5].map((i) => (
                   <motion.line
                     key={`right-${i}`}
-                    x1={260 + i * 15}
-                    y1={150 - 20 - i * 5}
-                    x2={260 + i * 15}
-                    y2={150 + 20 + i * 5}
+                    x1={270 + i * 18}
+                    y1={150 - 25 - i * 8}
+                    x2={270 + i * 18}
+                    y2={150 + 25 + i * 8}
                     stroke={i % 2 === 0 ? "hsl(45, 80%, 55%)" : "hsl(var(--primary))"}
-                    strokeWidth="4"
+                    strokeWidth="5"
                     strokeLinecap="round"
                     initial={{ scaleY: 0.3, opacity: 0.4 }}
                     animate={{ 
@@ -245,15 +245,15 @@ export default function Landing() {
                       repeat: Infinity,
                       ease: "easeInOut"
                     }}
-                    style={{ transformOrigin: `${260 + i * 15}px 150px` }}
+                    style={{ transformOrigin: `${270 + i * 18}px 150px` }}
                   />
                 ))}
                 
                 {/* Decorative dots */}
-                <circle cx="320" cy="100" r="4" className="fill-primary/60" />
-                <circle cx="340" cy="120" r="3" className="fill-primary/50" />
-                <circle cx="80" cy="200" r="3" className="fill-primary/60" />
-                <circle cx="60" cy="180" r="2" className="fill-primary/40" />
+                <circle cx="340" cy="80" r="5" className="fill-primary/60" />
+                <circle cx="365" cy="105" r="4" className="fill-primary/50" />
+                <circle cx="60" cy="220" r="4" className="fill-primary/60" />
+                <circle cx="35" cy="195" r="3" className="fill-primary/40" />
               </svg>
             </motion.div>
           </div>
