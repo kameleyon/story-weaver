@@ -487,27 +487,69 @@ export function useVideoExport() {
   const downloadVideo = useCallback(async (url: string, filename = "video.mp4") => {
     if (!url) return;
 
-    // Mobile Safari doesn't handle blob: URL anchor clicks well—it navigates to a 404.
-    // Instead, fetch the blob and use the Web Share API if available, otherwise open in new tab.
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
 
-    if (isMobile) {
+    // iOS Safari: blob URLs don't work across tabs and anchor downloads often fail.
+    // The ONLY reliable method is Web Share API.
+    if (isIOS) {
       try {
         const response = await fetch(url);
         const blob = await response.blob();
         const file = new File([blob], filename, { type: "video/mp4" });
 
-        // Try Web Share API first (most reliable on mobile)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: filename });
           return;
         }
       } catch (e) {
-        console.warn("Mobile share/download failed, falling back to window.open", e);
+        console.warn("iOS share failed:", e);
       }
 
-      // Fallback: open blob URL in new tab (user can long-press to save)
-      window.open(url, "_blank");
+      // Last resort for iOS: Create a data URL and trigger download
+      // This is slow for large files but works when Share API fails
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const a = document.createElement("a");
+          a.href = reader.result as string;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      } catch (e) {
+        console.warn("iOS data URL download failed:", e);
+        // If all else fails, at least alert the user
+        alert("To save the video: Long-press on the video above and select 'Save Video'");
+        return;
+      }
+    }
+
+    // Android: Try Share API first, then anchor download
+    if (isAndroid) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: "video/mp4" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      } catch (e) {
+        console.warn("Android share failed, trying anchor download:", e);
+      }
+
+      // Android fallback: anchor download usually works
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
       return;
     }
 
