@@ -3,6 +3,7 @@ import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Cro
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import featuresBackground from "@/assets/features-bg.png";
 
 const features = [
   {
@@ -261,8 +262,18 @@ export default function Landing() {
       </section>
 
       {/* Why AudioMax Section */}
-      <section id="features" className="py-24 sm:py-32 bg-primary/75">
-        <div className="mx-auto max-w-6xl px-6 sm:px-8">
+      <section 
+        id="features" 
+        className="py-24 sm:py-32 relative overflow-hidden"
+        style={{
+          backgroundImage: `url(${featuresBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        {/* Overlay for better text readability */}
+        <div className="absolute inset-0 bg-primary/75" />
+        <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
