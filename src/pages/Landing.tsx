@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
+import audiomaxLogo from "@/assets/audiomax-logo-full.png";
 
 const features = [
   {
@@ -111,8 +112,8 @@ export default function Landing() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/30">
         <div className="mx-auto flex h-16 sm:h-20 max-w-6xl items-center justify-between px-6 sm:px-8">
           {/* Logo */}
-          <a href="/" className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">
-            audiomax.ai
+          <a href="/" className="flex items-center">
+            <img src={audiomaxLogo} alt="AudioMax" className="h-8 sm:h-10 w-auto" />
           </a>
           
           {/* Nav Links */}
@@ -435,9 +436,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border/30 py-8">
         <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 px-6 sm:px-8">
-          <span className="text-lg font-semibold text-foreground/60 tracking-tight">
-            audiomax.ai
-          </span>
+          <img src={audiomaxLogo} alt="AudioMax" className="h-6 w-auto opacity-60" />
           <p className="text-sm text-muted-foreground/60">
             © 2024 AudioMax. All rights reserved.
           </p>
