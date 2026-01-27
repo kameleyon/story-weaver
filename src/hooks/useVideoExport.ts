@@ -484,8 +484,34 @@ export function useVideoExport() {
     return false;
   }, []);
 
-  const downloadVideo = useCallback((url: string, filename = "video.mp4") => {
+  const downloadVideo = useCallback(async (url: string, filename = "video.mp4") => {
     if (!url) return;
+
+    // Mobile Safari doesn't handle blob: URL anchor clicks well—it navigates to a 404.
+    // Instead, fetch the blob and use the Web Share API if available, otherwise open in new tab.
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: "video/mp4" });
+
+        // Try Web Share API first (most reliable on mobile)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      } catch (e) {
+        console.warn("Mobile share/download failed, falling back to window.open", e);
+      }
+
+      // Fallback: open blob URL in new tab (user can long-press to save)
+      window.open(url, "_blank");
+      return;
+    }
+
+    // Desktop: standard anchor download
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
