@@ -13,6 +13,9 @@ import {
   CreditCard,
   Receipt,
   Crown,
+  Gem,
+  Building2,
+  Sparkles,
   ExternalLink,
   Plus,
   DollarSign,
@@ -20,7 +23,8 @@ import {
   Loader2,
   Clock,
   Coins,
-  ChevronDown
+  ChevronDown,
+  LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,12 +45,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Plan limits configuration - Updated tiers
-const planLimits = {
-  free: { credits: 5, label: "Free", color: "bg-muted" },
-  starter: { credits: 30, label: "Starter", color: "bg-primary/20" },
-  creator: { credits: 100, label: "Creator", color: "bg-primary/30" },
-  professional: { credits: 300, label: "Professional", color: "bg-primary/40" },
+// Plan limits configuration - Updated tiers with matching icons from Pricing page
+const planLimits: Record<string, { credits: number; label: string; color: string; icon: LucideIcon }> = {
+  free: { credits: 5, label: "Free", color: "bg-muted", icon: Sparkles },
+  starter: { credits: 30, label: "Starter", color: "bg-primary/20", icon: Zap },
+  creator: { credits: 100, label: "Creator", color: "bg-primary/30", icon: Crown },
+  professional: { credits: 300, label: "Professional", color: "bg-primary/40", icon: Gem },
+  enterprise: { credits: Infinity, label: "Enterprise", color: "bg-primary/50", icon: Building2 },
 };
 
 export default function Usage() {
@@ -181,6 +186,7 @@ export default function Usage() {
   }, [allActivity, selectedMonth]);
 
   const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
+  const PlanIcon = planInfo.icon;
   const creditsLimit = planInfo.credits;
   const videosCreated = usageData?.videosCreated || 0;
   const creditsPercentage = creditsLimit === Infinity ? 0 : (videosCreated / creditsLimit) * 100;
@@ -257,7 +263,7 @@ export default function Usage() {
             <CardContent className="flex flex-col items-start justify-between gap-4 p-4 sm:p-6 sm:flex-row sm:items-center">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20">
-                  <Crown className="h-6 w-6 text-primary" />
+                  <PlanIcon className="h-6 w-6 text-primary" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -373,7 +379,7 @@ export default function Usage() {
                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 sm:p-6">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
-                      <Crown className="h-5 w-5 text-primary" />
+                      <PlanIcon className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <p className="font-medium text-foreground">Active Subscription</p>
