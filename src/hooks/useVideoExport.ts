@@ -32,7 +32,17 @@ function generateAACAudioSpecificConfig(sampleRate: number, channels: number): U
   return config;
 }
 
+// Yield helpers for memory management during long exports
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const longYield = () => new Promise<void>((resolve) => setTimeout(resolve, 16)); // One frame (~16ms)
+const gcYield = () => new Promise<void>((resolve) => setTimeout(resolve, 50)); // Allow garbage collection
+
+// Wait for video encoder queue to drain to prevent memory buildup
+const waitForEncoderDrain = async (encoder: VideoEncoder, maxQueue = 10) => {
+  while (encoder.encodeQueueSize > maxQueue) {
+    await longYield();
+  }
+};
 
 export function useVideoExport() {
   const [state, setState] = useState<ExportState>({ status: "idle", progress: 0 });
@@ -332,6 +342,7 @@ export function useVideoExport() {
              }
 
              const chunkFrames = 4096;
+             let audioChunkIndex = 0;
              for (let offset = 0; offset < renderedBuf.length; offset += chunkFrames) {
                 const size = Math.min(chunkFrames, renderedBuf.length - offset);
                 const chunkData = rawData.subarray(offset * 2, (offset + size) * 2);
@@ -351,6 +362,10 @@ export function useVideoExport() {
                 audioEncoder.encode(audioData);
                 audioData.close();
                 globalAudioSampleCount += size;
+                audioChunkIndex++;
+                
+                // Yield during audio processing to prevent blocking
+                if (audioChunkIndex % 20 === 0) await yieldToUI();
              }
           }
 
@@ -422,6 +437,9 @@ export function useVideoExport() {
                }
              }
 
+             // Wait for encoder to catch up if queue is backing up (backpressure)
+             await waitForEncoderDrain(videoEncoder, 10);
+             
              const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
              const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6/fps) });
              
@@ -431,7 +449,31 @@ export function useVideoExport() {
              
              globalFrameCount++;
 
-             if (globalFrameCount % 10 === 0) await yieldToUI();
+             // More aggressive yielding for long videos to prevent browser lockup
+             if (globalFrameCount % 5 === 0) await yieldToUI();
+             if (globalFrameCount % 30 === 0) await longYield();
+          }
+          
+          // Scene-level cleanup: flush audio encoder and clear references
+          if (audioEncoder) {
+            await audioEncoder.flush();
+          }
+          
+          // Clear image references to help garbage collection
+          loadedImages.length = 0;
+          // nextSceneFirstImage will be garbage collected naturally
+          
+          // Allow garbage collection between scenes
+          await gcYield();
+          
+          log("Run", runId, `Scene ${i + 1} complete, memory checkpoint`);
+          
+          // Show warning for long exports
+          if (i === Math.floor(scenes.length / 2) && scenes.length > 10) {
+            setState(prev => ({
+              ...prev,
+              warning: "Long video export in progress. If browser becomes slow, save your work first."
+            }));
           }
         }
 
