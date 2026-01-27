@@ -18,7 +18,6 @@ import {
   Sparkles,
   ExternalLink,
   Plus,
-  DollarSign,
   RefreshCw,
   Loader2,
   Clock,
@@ -338,7 +337,7 @@ export default function Usage() {
             <Card className="border-border/50 bg-card/50 shadow-sm">
               <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
                 <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                  <DollarSign className="h-4 w-4 text-primary" />
+                  <Coins className="h-4 w-4 text-primary" />
                   Credits Available
                 </CardTitle>
               </CardHeader>
@@ -602,7 +601,7 @@ export default function Usage() {
                         
                         {/* Stats - Only show for completed */}
                         {isComplete && (
-                          <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground shrink-0">
+                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground shrink-0">
                             {/* Generation Time */}
                             {activity.generationTimeMs && (
                               <div className="flex items-center gap-1" title="Generation time">
@@ -610,27 +609,11 @@ export default function Usage() {
                                 <span>{formatTime(activity.generationTimeMs)}</span>
                               </div>
                             )}
-                            {/* Cost */}
-                            {activity.costTracking?.estimatedCostUsd && (
-                              <div className="flex items-center gap-1" title="Estimated cost">
-                                <DollarSign className="h-3 w-3" />
-                                <span>{activity.costTracking.estimatedCostUsd.toFixed(2)}</span>
-                              </div>
-                            )}
                             {/* Credits */}
                             <div className="flex items-center gap-1" title="Credits used">
                               <Coins className="h-3 w-3" />
                               <span>1</span>
                             </div>
-                          </div>
-                        )}
-                        
-                        {/* Mobile stats */}
-                        {isComplete && (
-                          <div className="flex sm:hidden items-center gap-2 text-[10px] text-muted-foreground shrink-0">
-                            {activity.costTracking?.estimatedCostUsd && (
-                              <span>${activity.costTracking.estimatedCostUsd.toFixed(2)}</span>
-                            )}
                           </div>
                         )}
                       </div>
