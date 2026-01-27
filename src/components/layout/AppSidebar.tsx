@@ -196,7 +196,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
   return (
     <>
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50 text-foreground/80 dark:text-white/80">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border/50 text-foreground/80 dark:text-white/80 max-h-screen overflow-hidden flex flex-col">
       <SidebarHeader className="p-3">
         {/* Collapse/Expand Toggle - always on top */}
         <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"} mb-3`}>
@@ -223,7 +223,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         )}
       </SidebarHeader>
 
-      <SidebarContent className="px-2 overflow-hidden flex flex-col">
+      <SidebarContent className="px-2 overflow-y-auto flex flex-col flex-1 min-h-0">
         {/* Main Navigation - flat list */}
         <SidebarGroup className="mt-2">
           <SidebarGroupContent>
@@ -308,8 +308,8 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
-              {/* Presenter (Coming Soon) */}
-              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+              {/* Presenter (Coming Soon) - Commented out for now */}
+              {/* <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
@@ -329,7 +329,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   </TooltipTrigger>
                   <TooltipContent side="right">Presenter – Turn media into a guided presentation (Coming Soon)</TooltipContent>
                 </Tooltip>
-              </SidebarMenuItem>
+              </SidebarMenuItem> */}
 
               {/* Voice Lab */}
               <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
@@ -501,7 +501,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
             <DropdownMenuItem
-              className="cursor-pointer rounded-lg text-primary hover:text-primary focus:text-primary"
+              className="cursor-pointer rounded-lg text-foreground hover:text-foreground focus:text-foreground"
               onClick={handleSignOut}
             >
               <LogOut className="mr-2 h-4 w-4" />
