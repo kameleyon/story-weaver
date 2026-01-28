@@ -313,7 +313,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-2xl mx-auto space-y-6"
               >
-                <GenerationProgress state={generationState} />
+                <GenerationProgress state={generationState} onRetry={() => { reset(); handleGenerate(); }} />
               </motion.div>
             )}
           </AnimatePresence>

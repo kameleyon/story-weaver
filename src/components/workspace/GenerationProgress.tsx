@@ -1,12 +1,14 @@
 import { motion } from "framer-motion";
-import { Loader2, Wand2, Wallpaper } from "lucide-react";
+import { Loader2, Wand2, Wallpaper, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
   state: GenerationState;
+  onRetry?: () => void;
 }
 
-export function GenerationProgress({ state }: GenerationProgressProps) {
+export function GenerationProgress({ state, onRetry }: GenerationProgressProps) {
   const isSmartFlow = state.projectType === "smartflow";
   
   // Build verbose status message based on current step and progress
@@ -183,19 +185,18 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
         </div>
       </div>
 
-      {/* Scene/Image breakdown when in visuals step - hide for Smart Flow since it's always 1 */}
-      {state.step === "visuals" && state.sceneCount > 0 && !isSmartFlow && (
-        <div className="grid grid-cols-2 gap-4 text-center">
-          <div className="rounded-lg bg-muted/10 px-3 py-2">
-            <p className="text-lg font-semibold text-foreground">{state.sceneCount}</p>
-            <p className="text-xs text-muted-foreground">Total Scenes</p>
-          </div>
-          <div className="rounded-lg bg-muted/10 px-3 py-2">
-            <p className="text-lg font-semibold text-foreground">
-              {state.totalImages > 0 ? `${state.completedImages}/${state.totalImages}` : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground">Images Generated</p>
-          </div>
+      {/* Retry Button - shows during generation (as cancel/restart) or on error */}
+      {onRetry && (state.isGenerating || state.step === "error") && state.step !== "complete" && (
+        <div className="flex justify-center pt-2">
+          <Button
+            onClick={onRetry}
+            variant="outline"
+            size="sm"
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {state.step === "error" ? "Try Again" : "Cancel & Restart"}
+          </Button>
         </div>
       )}
     </motion.div>
