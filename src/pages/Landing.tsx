@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
+import heroVideoPoster from "@/assets/hero-video-poster.png";
 
 const features = [
   {
@@ -197,7 +198,7 @@ export default function Landing() {
                 className="w-full rounded-2xl shadow-2xl"
                 controls
                 preload="metadata"
-                poster=""
+                poster={heroVideoPoster}
               >
                 Your browser does not support the video tag.
               </video>
