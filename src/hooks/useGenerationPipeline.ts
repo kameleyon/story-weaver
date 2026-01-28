@@ -162,9 +162,22 @@ export function useGenerationPipeline() {
     return { totalImages: scenes.length, completedImages: 0 };
   };
 
-  // Helper to call a phase with configurable timeout
+  // Helper to get a fresh session token (avoids using stale tokens during long generations)
+  const getFreshSession = async (): Promise<string> => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) {
+      // Try to refresh the session
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        throw new Error("Session expired. Please refresh the page and try again.");
+      }
+      return refreshData.session.access_token;
+    }
+    return session.access_token;
+  };
+
+  // Helper to call a phase with configurable timeout and fresh auth
   const callPhase = async (
-    session: { access_token: string },
     body: Record<string, unknown>,
     timeoutMs: number = 120000 // Default 2 minutes
   ): Promise<any> => {
@@ -172,11 +185,14 @@ export function useGenerationPipeline() {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      // Get fresh token before each phase call to avoid JWT expiration mid-generation
+      const accessToken = await getFreshSession();
+      
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -198,6 +214,9 @@ export function useGenerationPipeline() {
         }
         if (response.status === 402) {
           throw new Error("AI credits exhausted. Please add credits.");
+        }
+        if (response.status === 401) {
+          throw new Error("Session expired. Please refresh the page and try again.");
         }
         throw new Error(errorMessage);
       }
@@ -236,8 +255,9 @@ export function useGenerationPipeline() {
       });
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("You must be logged in to generate videos");
+        // Verify user is logged in before starting (fresh token will be fetched per-phase)
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        if (!initialSession) throw new Error("You must be logged in to generate videos");
 
         // ============= PHASE 1: SCRIPT =============
         setState((prev) => ({ 
@@ -249,7 +269,6 @@ export function useGenerationPipeline() {
 
         // Script phase needs longer timeout due to character analysis
         const scriptResult = await callPhase(
-          session,
           {
             phase: "script",
             content: params.content,
@@ -261,12 +280,10 @@ export function useGenerationPipeline() {
             presenterFocus: params.presenterFocus,
             characterDescription: params.characterDescription,
             disableExpressions: params.disableExpressions,
-            characterConsistencyEnabled: params.characterConsistencyEnabled, // Hypereal character refs
-            // Voice selection
+            characterConsistencyEnabled: params.characterConsistencyEnabled,
             voiceType: params.voiceType,
             voiceId: params.voiceId,
             voiceName: params.voiceName,
-            // Storytelling fields
             projectType: params.projectType,
             inspirationStyle: params.inspirationStyle,
             storyTone: params.storyTone,
@@ -310,7 +327,6 @@ export function useGenerationPipeline() {
 
         do {
           audioResult = await callPhase(
-            session,
             {
               phase: "audio",
               generationId,
@@ -351,7 +367,6 @@ export function useGenerationPipeline() {
         do {
           // Images phase can take 2-3 minutes per chunk (8 images), especially with Hypereal
           imagesResult = await callPhase(
-            session,
             {
               phase: "images",
               generationId,
@@ -388,7 +403,7 @@ export function useGenerationPipeline() {
         }));
 
         // ============= PHASE 4: FINALIZE =============
-        const finalResult = await callPhase(session, {
+        const finalResult = await callPhase({
           phase: "finalize",
           generationId,
           projectId,
