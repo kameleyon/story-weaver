@@ -19,6 +19,7 @@ import {
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -251,7 +252,9 @@ export default function VoiceLab() {
             <div className="flex justify-center lg:hidden">
               <ThemedLogo className="h-10 w-auto" />
             </div>
-            <div className="flex items-center justify-end" />
+            <div className="flex items-center justify-end">
+              <ThemeToggle />
+            </div>
           </header>
 
           {/* Content */}
