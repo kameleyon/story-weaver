@@ -143,8 +143,8 @@ export default function Landing() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center pt-16">
-        <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full">
+      <section className="relative min-h-screen flex items-center pt-32 md:pt-40 xl:pt-16">
+        <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full pb-16 md:pb-24">
           <div className="flex flex-col xl:grid xl:grid-cols-2 gap-8 xl:gap-16 items-center">
             {/* Left Content */}
             <motion.div
