@@ -21,7 +21,8 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
     switch (step) {
       case "analysis":
         if (progress < 5) return "Starting generation...";
-        if (progress < 10) return isSmartFlow ? "Analyzing your data..." : "Analyzing your content...";
+        if (progress < 8) return isSmartFlow ? "Analyzing your data..." : "Analyzing your content...";
+        if (progress < 10) return "Generating character references..."; // Character phase for Pro users
         return isSmartFlow ? "Preparing infographic layout..." : "Preparing script generation...";
       
       case "scripting":

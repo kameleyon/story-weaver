@@ -31,12 +31,17 @@ export const CREDIT_PACKS = {
 
 export interface SubscriptionState {
   subscribed: boolean;
-  plan: "free" | "starter" | "creator" | "professional";
+  plan: "free" | "starter" | "creator" | "professional" | "enterprise";
   subscriptionEnd: string | null;
   cancelAtPeriodEnd: boolean;
   creditsBalance: number;
   isLoading: boolean;
   error: string | null;
+}
+
+// Helper to check if user can use character consistency feature
+export function canUseCharacterConsistency(plan: "free" | "starter" | "creator" | "professional"): boolean {
+  return plan === "professional";
 }
 
 export function useSubscription() {

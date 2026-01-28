@@ -70,6 +70,7 @@ interface GenerationParams {
   presenterFocus?: string;
   characterDescription?: string;
   disableExpressions?: boolean;
+  characterConsistencyEnabled?: boolean; // Enable Hypereal character reference generation
   // Voice selection
   voiceType?: "standard" | "custom";
   voiceId?: string;
@@ -260,6 +261,7 @@ export function useGenerationPipeline() {
             presenterFocus: params.presenterFocus,
             characterDescription: params.characterDescription,
             disableExpressions: params.disableExpressions,
+            characterConsistencyEnabled: params.characterConsistencyEnabled, // Hypereal character refs
             // Voice selection
             voiceType: params.voiceType,
             voiceId: params.voiceId,
