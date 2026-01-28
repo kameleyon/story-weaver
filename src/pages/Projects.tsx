@@ -443,10 +443,10 @@ export default function Projects() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: index * 0.02 }}
-                      className={cn(
-                        "cursor-pointer hover:bg-muted/30 border-b border-border/40 group",
-                        selectedIds.has(project.id) && "bg-primary/5"
-                      )}
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/30 border-b border-primary/20 group",
+                      selectedIds.has(project.id) && "bg-primary/5"
+                    )}
                     >
                       <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
