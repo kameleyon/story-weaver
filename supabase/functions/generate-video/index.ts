@@ -282,6 +282,40 @@ const STYLE_PROMPTS: Record<string, string> = {
 
 const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
 
+// Pro/Enterprise tiers that get Hypereal access
+const PRO_TIER_PLANS = ["professional", "enterprise"];
+
+// ============= SUBSCRIPTION TIER CHECK =============
+async function isProOrEnterpriseTier(supabase: any, userId: string): Promise<boolean> {
+  try {
+    const { data: subscription, error } = await supabase
+      .from("subscriptions")
+      .select("plan_name, status")
+      .eq("user_id", userId)
+      .in("status", ["active", "trialing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.log(`[SUBSCRIPTION] Error checking tier for user ${userId}: ${error.message}`);
+      return false;
+    }
+
+    if (!subscription) {
+      console.log(`[SUBSCRIPTION] No active subscription found for user ${userId}`);
+      return false;
+    }
+
+    const isPro = PRO_TIER_PLANS.includes(subscription.plan_name?.toLowerCase());
+    console.log(`[SUBSCRIPTION] User ${userId} plan: ${subscription.plan_name}, isPro: ${isPro}`);
+    return isPro;
+  } catch (err) {
+    console.error(`[SUBSCRIPTION] Error checking tier: ${err}`);
+    return false;
+  }
+}
+
 // ============= HYPEREAL AI CHARACTER GENERATION (Pro Feature) =============
 interface CharacterReference {
   name: string;
@@ -3231,23 +3265,28 @@ async function handleImagesPhase(
   // Fetch generation with project format and character consistency flag
   const { data: generation } = await supabase
     .from("generations")
-    .select("*, projects!inner(format, style, brand_mark, character_consistency_enabled)")
+    .select("*, projects!inner(format, style, brand_mark, character_consistency_enabled, project_type)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
 
   if (!generation) throw new Error("Generation not found");
 
-  // Check if Hypereal Pro should be used (Pro/Enterprise with character consistency enabled)
-  const useHypereal = generation.projects.character_consistency_enabled === true;
-  const hyperealApiKey = useHypereal ? Deno.env.get("HYPEREAL_API_KEY") : null;
+  // Check if user is Pro/Enterprise tier
+  const isProUser = await isProOrEnterpriseTier(supabase, user.id);
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  
+  // Use Hypereal for Pro/Enterprise users on ALL project types (doc2video, storytelling, smartflow)
+  const useHypereal = isProUser && !!hyperealApiKey;
 
   const maxImagesPerCall = useHypereal ? MAX_IMAGES_PER_CALL_HYPEREAL : MAX_IMAGES_PER_CALL_DEFAULT;
   
-  if (useHypereal && hyperealApiKey) {
-    console.log(`[IMAGES] Using Hypereal nano-banana-pro-t2i for Pro user with character consistency enabled`);
-  } else if (useHypereal && !hyperealApiKey) {
-    console.warn(`[IMAGES] Character consistency enabled but HYPEREAL_API_KEY not configured - falling back to Replicate`);
+  if (useHypereal) {
+    console.log(`[IMAGES] Using Hypereal nano-banana-pro-t2i for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
+  } else if (isProUser && !hyperealApiKey) {
+    console.warn(`[IMAGES] Pro user but HYPEREAL_API_KEY not configured - falling back to Replicate`);
+  } else {
+    console.log(`[IMAGES] Using Replicate for non-Pro user (project type: ${generation.projects.project_type})`);
   }
 
   const scenes = generation.scenes as Scene[];
@@ -3802,16 +3841,18 @@ async function handleRegenerateImage(
 
   const format = generation.projects.format;
   const style = generation.projects.style;
-  const characterConsistencyEnabled = generation.projects.character_consistency_enabled === true;
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
 
-  // Check if Pro user with character consistency - use Hypereal
-  const hyperealApiKey = characterConsistencyEnabled ? Deno.env.get("HYPEREAL_API_KEY") : null;
-  const useHypereal = characterConsistencyEnabled && !!hyperealApiKey;
+  // Check if user is Pro/Enterprise tier - use Hypereal for all Pro users
+  const isProUser = await isProOrEnterpriseTier(supabase, user.id);
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  const useHypereal = isProUser && !!hyperealApiKey;
   
   if (useHypereal) {
-    console.log(`[regenerate-image] Pro user with character consistency - will use Hypereal nano-banana-pro-t2i`);
+    console.log(`[regenerate-image] Pro/Enterprise user - will use Hypereal nano-banana-pro-t2i`);
+  } else if (isProUser && !hyperealApiKey) {
+    console.warn(`[regenerate-image] Pro user but HYPEREAL_API_KEY not configured - falling back to Replicate`);
   }
 
   // Get existing imageUrls or create from single imageUrl
