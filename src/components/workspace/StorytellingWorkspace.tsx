@@ -18,6 +18,8 @@ import { InclinationSelector } from "./InclinationSelector";
 import { StorytellingLengthSelector, type StoryLength } from "./StorytellingLengthSelector";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
+import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
+import { CharacterPreview, type CharacterData } from "./CharacterPreview";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import type { WorkspaceHandle } from "./Doc2VideoWorkspace";
@@ -35,6 +37,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [genre, setGenre] = useState<StoryGenre>("documentary");
     const [disableVoiceExpressions, setDisableVoiceExpressions] = useState(false);
     const [brandName, setBrandName] = useState("");
+    const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
     
     // Shared inputs
     const [format, setFormat] = useState<VideoFormat>("portrait");
@@ -81,6 +84,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
           storyGenre: genre,
           disableExpressions: disableVoiceExpressions,
           brandName: brandName.trim() || undefined,
+          characterConsistencyEnabled, // Pass the flag for Hypereal character generation
           // Voice selection - pass gender for standard voices, voiceName for custom
           voiceType: voice.type,
           voiceId: voice.voiceId,
@@ -97,6 +101,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       setGenre("documentary");
       setDisableVoiceExpressions(false);
       setBrandName("");
+      setCharacterConsistencyEnabled(false);
       setFormat("portrait");
       setLength("brief");
       setStyle("minimalist");
@@ -239,6 +244,12 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                       </div>
                     </div>
                   </div>
+
+                  {/* Character Consistency - Pro Feature */}
+                  <CharacterConsistencyToggle 
+                    enabled={characterConsistencyEnabled}
+                    onToggle={setCharacterConsistencyEnabled}
+                  />
 
                   {/* Brand Name (Optional) */}
                   <div className="rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm">

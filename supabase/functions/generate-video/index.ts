@@ -163,6 +163,14 @@ function validateGenerationRequest(body: unknown): GenerationRequest {
     validated.disableExpressions = raw.disableExpressions;
   }
 
+  // Validate characterConsistencyEnabled (Pro feature)
+  if (raw.characterConsistencyEnabled !== undefined) {
+    if (typeof raw.characterConsistencyEnabled !== "boolean") {
+      throw new Error("characterConsistencyEnabled must be a boolean");
+    }
+    validated.characterConsistencyEnabled = raw.characterConsistencyEnabled;
+  }
+
   // Validate voice selection
   validated.voiceType =
     (validateEnum(raw.voiceType, "voiceType", ALLOWED_VOICE_TYPES) as GenerationRequest["voiceType"]) ?? undefined;
@@ -187,6 +195,7 @@ interface GenerationRequest {
   presenterFocus?: string;
   characterDescription?: string;
   disableExpressions?: boolean;
+  characterConsistencyEnabled?: boolean; // Enable Hypereal character reference generation (Pro only)
   // Voice selection
   voiceType?: "standard" | "custom";
   voiceId?: string;
@@ -272,6 +281,106 @@ const STYLE_PROMPTS: Record<string, string> = {
 };
 
 const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
+
+// ============= HYPEREAL AI CHARACTER GENERATION (Pro Feature) =============
+interface CharacterReference {
+  name: string;
+  description: string;
+  referenceImageUrl: string;
+}
+
+async function generateCharacterReferenceWithHypereal(
+  characterName: string,
+  description: string,
+  hyperealApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+): Promise<{ url: string | null; error?: string }> {
+  try {
+    console.log(`[HYPEREAL] Generating character reference for: ${characterName}`);
+
+    // Build portrait prompt for character reference sheet
+    const prompt = `Character reference portrait of ${characterName}:
+${description}
+
+REQUIREMENTS:
+- Clean, neutral background (white or light gray)
+- Upper body portrait showing head and shoulders
+- Face clearly visible, neutral/slight smile expression
+- High detail on facial features for recognition
+- Professional character reference sheet quality
+- Ultra high resolution`;
+
+    const response = await fetch("https://api.hypereal.tech/v1/images/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${hyperealApiKey}`,
+      },
+      body: JSON.stringify({
+        prompt,
+        model: "nano-banana-pro-t2i",
+        resolution: "1k",
+        aspect_ratio: "1:1", // Square for portraits
+        output_format: "png",
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[HYPEREAL] API error: ${response.status} - ${errText}`);
+      return { url: null, error: `Hypereal API failed: ${response.status}` };
+    }
+
+    const data = await response.json();
+    
+    // Hypereal returns the image URL or base64
+    let imageBytes: Uint8Array;
+    if (data.image_url) {
+      // Download the image
+      const imgResponse = await fetch(data.image_url);
+      if (!imgResponse.ok) {
+        return { url: null, error: "Failed to download generated image" };
+      }
+      imageBytes = new Uint8Array(await imgResponse.arrayBuffer());
+    } else if (data.image) {
+      // Base64 encoded image
+      imageBytes = base64Decode(data.image);
+    } else {
+      return { url: null, error: "No image data in Hypereal response" };
+    }
+
+    // Upload to Supabase storage
+    const safeName = characterName.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+    const path = `${userId}/${projectId}/characters/${safeName}-ref-${Date.now()}.png`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from("audio")
+      .upload(path, imageBytes, { contentType: "image/png", upsert: true });
+
+    if (uploadError) {
+      console.error(`[HYPEREAL] Upload failed: ${uploadError.message}`);
+      return { url: null, error: `Upload failed: ${uploadError.message}` };
+    }
+
+    // Get signed URL
+    const { data: signedData, error: signError } = await supabase.storage
+      .from("audio")
+      .createSignedUrl(path, 604800); // 7 days
+
+    if (signError || !signedData?.signedUrl) {
+      return { url: null, error: "Failed to create signed URL" };
+    }
+
+    console.log(`[HYPEREAL] Character reference generated successfully for: ${characterName}`);
+    return { url: signedData.signedUrl };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown Hypereal error";
+    console.error(`[HYPEREAL] Error generating character reference:`, errorMsg);
+    return { url: null, error: errorMsg };
+  }
+}
 
 // ============= HELPER FUNCTIONS =============
 function getStylePrompt(style: string, customStyle?: string): string {
@@ -2410,6 +2519,7 @@ async function handleStorytellingScriptPhase(
   voiceType?: string,
   voiceId?: string,
   voiceName?: string,
+  characterConsistencyEnabled?: boolean, // Pro feature: Hypereal character reference generation
 ): Promise<Response> {
   const phaseStart = Date.now();
 
@@ -2684,6 +2794,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       style,
       brand_mark: brandMark || null,
       character_description: characterDescription || null,
+      character_consistency_enabled: characterConsistencyEnabled || false,
       project_type: "storytelling",
       inspiration_style: inspirationStyle || null,
       story_tone: storyTone || null,
@@ -3815,6 +3926,7 @@ serve(async (req) => {
           body.voiceType,
           body.voiceId,
           body.voiceName,
+          body.characterConsistencyEnabled, // Pro feature: Hypereal character refs
         );
       }
 
