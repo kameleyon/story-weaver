@@ -435,20 +435,21 @@ export default function Projects() {
         ) : (
           /* List View */
           <div className="rounded-xl border border-border/60 overflow-hidden bg-card/50">
+            <div className="overflow-x-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-border/60 bg-muted/20">
-                  <TableHead className="w-12 py-3 px-3">
+                  <TableHead className="w-8 sm:w-10 py-2 px-1.5 sm:px-3">
                     <Checkbox
                       checked={selectedIds.size === filteredProjects.length && filteredProjects.length > 0}
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead className="w-12 py-3 px-3" />
-                  <TableHead className="py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Title</TableHead>
-                  <TableHead className="hidden md:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Format</TableHead>
-                  <TableHead className="hidden lg:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Style</TableHead>
-                  <TableHead className="w-12 py-3 px-3" />
+                  <TableHead className="w-8 sm:w-10 py-2 px-1 sm:px-3" />
+                  <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Title</TableHead>
+                  <TableHead className="hidden md:table-cell py-2 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Format</TableHead>
+                  <TableHead className="hidden lg:table-cell py-2 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Style</TableHead>
+                  <TableHead className="w-8 sm:w-10 py-2 px-1 sm:px-3" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -465,22 +466,22 @@ export default function Projects() {
                       selectedIds.has(project.id) && "bg-primary/5"
                     )}
                     >
-                      <TableCell className="py-2.5 px-2 sm:px-3" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2 px-1.5 sm:px-3" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedIds.has(project.id)}
                           onCheckedChange={() => toggleSelect(project.id)}
                         />
                       </TableCell>
-                      <TableCell className="py-2.5 px-2 sm:px-3" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2 px-1 sm:px-3" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 sm:h-8 sm:w-8"
+                          className="h-6 w-6 sm:h-8 sm:w-8"
                           onClick={(e) => handleToggleFavorite(project, e)}
                         >
                           <Star
                             className={cn(
-                              "h-4 w-4 transition-colors",
+                              "h-3.5 w-3.5 sm:h-4 sm:w-4 transition-colors",
                               project.is_favorite
                                 ? "fill-yellow-400 text-yellow-400"
                                 : "text-muted-foreground hover:text-yellow-400"
@@ -488,22 +489,22 @@ export default function Projects() {
                           />
                         </Button>
                       </TableCell>
-                      <TableCell className="py-2.5 px-2 sm:px-3 min-w-0" onClick={() => handleView(project)}>
-                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                          <div className="p-1.5 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20 shrink-0">
+                      <TableCell className="py-2 px-1 sm:px-3 max-w-0" onClick={() => handleView(project)}>
+                        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+                          <div className="p-1 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20 shrink-0">
                             {project.project_type === "storytelling" ? (
-                              <Clapperboard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                              <Clapperboard className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
-                              <Wallpaper className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                              <Wallpaper className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : (
-                              <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                              <Video className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             )}
                           </div>
-                          <div className="min-w-0 overflow-hidden">
-                            <span className="font-medium group-hover:text-primary transition-colors truncate block text-sm">
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <span className="font-medium group-hover:text-primary transition-colors truncate block text-xs sm:text-sm">
                               {project.title}
                             </span>
-                            <span className="text-[11px] sm:text-xs text-muted-foreground">
+                            <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
                               {formatTimestamp(project.updated_at)}
                             </span>
                           </div>
@@ -556,6 +557,7 @@ export default function Projects() {
                 </AnimatePresence>
               </TableBody>
             </Table>
+            </div>
 
             {/* Show More Button */}
             {hasMore && (
