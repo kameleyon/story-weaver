@@ -170,15 +170,11 @@ export default function Landing() {
               <img 
                 src={motionMaxHeroLogo} 
                 alt="MotionMax" 
-                className="w-full max-w-md sm:max-w-lg md:max-w-xl xl:max-w-2xl mx-auto xl:mx-0"
+                className="w-full max-w-sm sm:max-w-md md:max-w-lg xl:max-w-xl mx-auto xl:mx-0"
               />
               
-              <p className="mt-8 text-3xl sm:text-4xl md:text-5xl font-medium leading-tight uppercase tracking-wide">
-                <span className="text-foreground/85">Turn </span>
-                <span className="text-primary">Text</span>
-                <span className="text-foreground/85"> Into Engaging </span>
-                <span className="text-[#edc58a]">Visual</span>
-                <span className="text-foreground/85"> Contents.</span>
+              <p className="mt-8 text-3xl sm:text-4xl md:text-5xl font-medium leading-tight uppercase tracking-wide text-foreground/85">
+                Turn Text Into Engaging Visual Contents.
               </p>
               
               <Button
