@@ -427,15 +427,15 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 opacity-0 group-hover:opacity-100 transition-opacity text-foreground"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-foreground/60 dark:text-white/60" />
+                              <MoreVertical className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuItem
-                              className="text-muted-foreground focus:text-foreground cursor-pointer text-sm"
+                              className="cursor-pointer text-sm focus:bg-accent focus:text-accent-foreground"
                               onClick={(e) => handleDeleteProject(project, e as unknown as React.MouseEvent)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -482,26 +482,26 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
             {isCollapsed && <TooltipContent side="right">Account</TooltipContent>}
           </Tooltip>
           <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-sm">
-            <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => navigate("/settings")}>
-              <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+            <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/settings")}>
+              <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => navigate("/usage")}>
-              <History className="mr-2 h-4 w-4 text-muted-foreground" />
+            <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/usage")}>
+              <History className="mr-2 h-4 w-4" />
               <span>Usage & Billing</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
             <DropdownMenuItem
-              className="cursor-pointer rounded-lg"
+              className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
-              <Sun className="mr-2 h-4 w-4 text-muted-foreground dark:hidden" />
-              <Moon className="mr-2 hidden h-4 w-4 text-muted-foreground dark:block" />
+              <Sun className="mr-2 h-4 w-4 dark:hidden" />
+              <Moon className="mr-2 hidden h-4 w-4 dark:block" />
               <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border/50" />
             <DropdownMenuItem
-              className="cursor-pointer rounded-lg text-foreground hover:text-foreground focus:text-foreground"
+              className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
               onClick={handleSignOut}
             >
               <LogOut className="mr-2 h-4 w-4" />

@@ -398,7 +398,7 @@ export default function Landing() {
       </section>
 
       {/* Simple CTA Section */}
-      <section id="about" className="py-24 sm:py-32 border-t border-border/30">
+      <section className="py-24 sm:py-32 border-t border-border/30">
         <div className="mx-auto max-w-3xl px-6 sm:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -433,12 +433,48 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* About Us Section */}
+      <section id="about" className="py-20 sm:py-24 border-t border-border/30 bg-muted/30">
+        <div className="mx-auto max-w-4xl px-6 sm:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center space-y-6"
+          >
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              About AudioMax
+            </h2>
+            <p className="text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+              AudioMax is an AI-powered content creation platform designed to transform the way you produce visual and audio content. 
+              Our mission is to empower creators, educators, and businesses with intuitive tools that turn ideas into professional-quality 
+              videos and audio experiences in minutes—not hours.
+            </p>
+            <p className="text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+              Built by a passionate team of engineers and creatives, AudioMax leverages cutting-edge AI to handle the heavy lifting, 
+              so you can focus on what matters most: your message.
+            </p>
+            <div className="pt-4">
+              <p className="text-sm text-muted-foreground">
+                Have questions? Reach out to us at{" "}
+                <a 
+                  href="mailto:support@audiomax.ai" 
+                  className="text-primary hover:underline font-medium"
+                >
+                  support@audiomax.ai
+                </a>
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="border-t border-border/30 py-8">
+      <footer className="border-t border-border/30 py-10">
         <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 px-6 sm:px-8">
-          <img src={audiomaxLogo} alt="AudioMax" className="h-6 w-auto opacity-60" />
-          <p className="text-sm text-muted-foreground/60">
-            © 2024 AudioMax. All rights reserved.
+          <img src={audiomaxLogo} alt="AudioMax" className="h-10 w-auto" />
+          <p className="text-sm text-muted-foreground">
+            © 2025 AudioMax. All rights reserved.
           </p>
         </div>
       </footer>
