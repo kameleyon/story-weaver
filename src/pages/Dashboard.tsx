@@ -104,6 +104,23 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
+  // Fetch display name from profiles table
+  const { data: profile } = useQuery({
+    queryKey: ["user-profile", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .single();
+      
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   // Fetch recent projects
   const { data: recentProjects = [] } = useQuery({
     queryKey: ["dashboard-recent", user?.id],
@@ -123,7 +140,7 @@ export default function Dashboard() {
   const creditsUsed = credits ? credits.total - credits.balance : 0;
   const usagePercentage = credits ? Math.round((creditsUsed / credits.total) * 100) : 0;
 
-  const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User';
+  const displayName = profile?.display_name || user?.email?.split('@')[0] || 'User';
 
   const getProjectIcon = (projectType: string) => {
     switch (projectType) {
