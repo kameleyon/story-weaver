@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -96,6 +96,8 @@ const formatTimestamp = (iso: string) => {
   return format(d, "MMM d, h:mm a");
 };
 
+const ITEMS_PER_PAGE = 25;
+
 export default function Projects() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -104,6 +106,7 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -214,6 +217,22 @@ export default function Projects() {
 
     return result;
   }, [projects, searchQuery, sortField, sortOrder]);
+
+  // Paginated projects
+  const paginatedProjects = useMemo(() => {
+    return filteredProjects.slice(0, visibleCount);
+  }, [filteredProjects, visibleCount]);
+
+  const hasMore = visibleCount < filteredProjects.length;
+
+  const handleShowMore = () => {
+    setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredProjects.length));
+  };
+
+  // Reset visible count when search changes
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [searchQuery]);
 
   // Selection handlers
   const toggleSelect = (id: string) => {
@@ -434,7 +453,7 @@ export default function Projects() {
               </TableHeader>
               <TableBody>
                 <AnimatePresence>
-                  {filteredProjects.map((project, index) => (
+                  {paginatedProjects.map((project, index) => (
                     <motion.tr
                       key={project.id}
                       initial={{ opacity: 0 }}
@@ -446,17 +465,17 @@ export default function Projects() {
                       selectedIds.has(project.id) && "bg-primary/5"
                     )}
                     >
-                      <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2.5 px-2 sm:px-3" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedIds.has(project.id)}
                           onCheckedChange={() => toggleSelect(project.id)}
                         />
                       </TableCell>
-                      <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2.5 px-2 sm:px-3" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-7 w-7 sm:h-8 sm:w-8"
                           onClick={(e) => handleToggleFavorite(project, e)}
                         >
                           <Star
@@ -469,22 +488,22 @@ export default function Projects() {
                           />
                         </Button>
                       </TableCell>
-                      <TableCell className="py-2.5 px-3 min-w-0" onClick={() => handleView(project)}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20">
+                      <TableCell className="py-2.5 px-2 sm:px-3 min-w-0" onClick={() => handleView(project)}>
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <div className="p-1.5 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20 shrink-0">
                             {project.project_type === "storytelling" ? (
-                              <Clapperboard className="h-4 w-4 text-primary" />
+                              <Clapperboard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                             ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
-                              <Wallpaper className="h-4 w-4 text-primary" />
+                              <Wallpaper className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                             ) : (
-                              <Video className="h-4 w-4 text-primary" />
+                              <Video className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                             )}
                           </div>
-                          <div className="min-w-0">
-                            <span className="font-medium group-hover:text-primary transition-colors truncate block">
+                          <div className="min-w-0 overflow-hidden">
+                            <span className="font-medium group-hover:text-primary transition-colors truncate block text-sm">
                               {project.title}
                             </span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-[11px] sm:text-xs text-muted-foreground">
                               {formatTimestamp(project.updated_at)}
                             </span>
                           </div>
@@ -496,10 +515,10 @@ export default function Projects() {
                       <TableCell className="py-2.5 px-3 hidden lg:table-cell" onClick={() => handleView(project)}>
                         <span className="capitalize text-muted-foreground">{project.style.replace(/-/g, " ")}</span>
                       </TableCell>
-                      <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2.5 px-2 sm:px-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -537,28 +556,44 @@ export default function Projects() {
                 </AnimatePresence>
               </TableBody>
             </Table>
+
+            {/* Show More Button */}
+            {hasMore && (
+              <div className="p-4 border-t border-border/30 flex justify-center">
+                <Button 
+                  variant="outline" 
+                  onClick={handleShowMore}
+                  className="gap-2"
+                >
+                  Show more ({filteredProjects.length - visibleCount} remaining)
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
         {/* Footer Stats */}
         <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}
+          <span className="text-xs sm:text-sm">
+            {paginatedProjects.length}/{filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}
             {selectedIds.size > 0 && ` • ${selectedIds.size} selected`}
           </span>
           {filteredProjects.length > 0 && (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-1 sm:gap-1.5" title="Explainers">
                 <Video className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type === "doc2video" || !p.project_type).length} explainers</span>
+                <span className="text-xs sm:text-sm">{filteredProjects.filter(p => p.project_type === "doc2video" || !p.project_type).length}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm">explainers</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5" title="Stories">
                 <Clapperboard className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type === "storytelling").length} stories</span>
+                <span className="text-xs sm:text-sm">{filteredProjects.filter(p => p.project_type === "storytelling").length}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm">stories</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5" title="SmartFlow">
                 <Wallpaper className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type === "smartflow").length} smartflow</span>
+                <span className="text-xs sm:text-sm">{filteredProjects.filter(p => p.project_type === "smartflow").length}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm">smartflow</span>
               </div>
             </div>
           )}
