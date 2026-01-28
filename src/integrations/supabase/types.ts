@@ -127,9 +127,40 @@ export type Database = {
         }
         Relationships: []
       }
+      project_characters: {
+        Row: {
+          character_name: string
+          created_at: string | null
+          description: string
+          id: string
+          project_id: string
+          reference_image_url: string
+          user_id: string
+        }
+        Insert: {
+          character_name: string
+          created_at?: string | null
+          description: string
+          id?: string
+          project_id: string
+          reference_image_url: string
+          user_id: string
+        }
+        Update: {
+          character_name?: string
+          created_at?: string | null
+          description?: string
+          id?: string
+          project_id?: string
+          reference_image_url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           brand_mark: string | null
+          character_consistency_enabled: boolean | null
           character_description: string | null
           content: string
           created_at: string
@@ -155,6 +186,7 @@ export type Database = {
         }
         Insert: {
           brand_mark?: string | null
+          character_consistency_enabled?: boolean | null
           character_description?: string | null
           content: string
           created_at?: string
@@ -180,6 +212,7 @@ export type Database = {
         }
         Update: {
           brand_mark?: string | null
+          character_consistency_enabled?: boolean | null
           character_description?: string | null
           content?: string
           created_at?: string
