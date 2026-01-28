@@ -2,10 +2,12 @@ import { motion } from "framer-motion";
 import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
-import heroVideo from "@/assets/hero-animation.mp4";
+import heroVideoLight from "@/assets/hero-animation.mp4";
+import heroVideoDark from "@/assets/hero-animation-dark.mp4";
 const features = [
   {
     title: "Document to Video",
@@ -105,6 +107,8 @@ const pricingPlans = [
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { resolvedTheme } = useTheme();
+  const heroVideo = resolvedTheme === "dark" ? heroVideoDark : heroVideoLight;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[hsl(185,30%,95%)] via-[hsl(185,25%,97%)] to-[hsl(180,20%,98%)] dark:bg-none dark:bg-background">
