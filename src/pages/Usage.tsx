@@ -245,10 +245,6 @@ export default function Usage() {
             <ThemeToggle />
           </div>
         </div>
-        {/* Mobile centered logo */}
-        <div className="flex sm:hidden justify-center pb-2 -mt-1">
-          <ThemedLogo className="h-6 w-auto" />
-        </div>
       </header>
 
       {/* Main Content */}
