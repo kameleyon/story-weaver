@@ -2,12 +2,10 @@ import { motion } from "framer-motion";
 import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useTheme } from "next-themes";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
-import heroVideoLight from "@/assets/hero-animation.mp4";
-import heroVideoDark from "@/assets/hero-animation-dark.mp4";
+
 const features = [
   {
     title: "Document to Video",
@@ -107,8 +105,6 @@ const pricingPlans = [
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { resolvedTheme } = useTheme();
-  const heroVideo = resolvedTheme === "dark" ? heroVideoDark : heroVideoLight;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[hsl(185,30%,95%)] via-[hsl(185,25%,97%)] to-[hsl(180,20%,98%)] dark:bg-none dark:bg-background">
@@ -188,22 +184,6 @@ export default function Landing() {
               </Button>
             </motion.div>
 
-            {/* Right Illustration - Hero Video */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex items-center justify-center xl:justify-end w-full"
-            >
-              <video
-                src={heroVideo}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full max-w-md sm:max-w-lg md:max-w-xl rounded-2xl"
-              />
-            </motion.div>
           </div>
         </div>
       </section>
