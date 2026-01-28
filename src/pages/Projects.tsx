@@ -23,15 +23,12 @@ import {
   Video,
   Clapperboard,
   Wallpaper,
-  LayoutGrid,
-  List,
   Wand2,
   Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -78,7 +75,6 @@ import { cn } from "@/lib/utils";
 
 type SortField = "title" | "created_at" | "updated_at";
 type SortOrder = "asc" | "desc";
-type ViewMode = "grid" | "list";
 
 interface Project {
   id: string;
@@ -107,7 +103,7 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
@@ -385,24 +381,6 @@ export default function Projects() {
             >
               <SortIcon className="h-4 w-4" />
             </Button>
-            <div className="flex rounded-lg border border-border/50 overflow-hidden">
-              <Button
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                size="icon"
-                onClick={() => setViewMode("grid")}
-                className="rounded-none border-0"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "secondary" : "ghost"}
-                size="icon"
-                onClick={() => setViewMode("list")}
-                className="rounded-none border-0"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
             {selectedIds.size > 0 && (
               <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
                 <Trash2 className="h-4 w-4" />
@@ -436,129 +414,6 @@ export default function Projects() {
                 Create Project
               </Button>
             )}
-          </motion.div>
-        ) : viewMode === "grid" ? (
-          /* Grid View */
-          <motion.div 
-            layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"
-          >
-            <AnimatePresence mode="popLayout">
-              {filteredProjects.map((project, index) => (
-                <motion.div
-                  key={project.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: index * 0.03 }}
-                >
-                  <Card 
-                    className={cn(
-                      "group cursor-pointer overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5",
-                      selectedIds.has(project.id) && "ring-2 ring-primary"
-                    )}
-                    onClick={() => handleView(project)}
-                  >
-                    <CardContent className="p-4">
-                      {/* Header with checkbox and actions */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={selectedIds.has(project.id)}
-                            onCheckedChange={() => toggleSelect(project.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="border-border/50"
-                          />
-                          <div className="p-1.5 rounded-lg bg-primary/10">
-                            {project.project_type === "storytelling" ? (
-                              <Clapperboard className="h-4 w-4 text-primary" />
-                            ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
-                              <Wallpaper className="h-4 w-4 text-primary" />
-                            ) : (
-                              <Video className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => handleToggleFavorite(project, e)}
-                          >
-                            <Star className={cn(
-                              "h-3.5 w-3.5",
-                              project.is_favorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-                            )} />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreVertical className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleView(project); }}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Open
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRename(project); }}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShare(project); }}>
-                                <Share2 className="mr-2 h-4 w-4" />
-                                Share
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownload(project); }}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => { e.stopPropagation(); handleDelete(project); }}
-                                className="text-muted-foreground focus:text-foreground"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-
-                      {/* Title */}
-                      <h3 className="font-semibold truncate mb-2 group-hover:text-primary transition-colors">
-                        {project.title}
-                      </h3>
-                      
-                      {/* Format & Style badges */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <Badge variant="outline" className="text-[10px] capitalize">
-                          {project.format}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] capitalize">
-                          {project.style.replace(/-/g, " ")}
-                        </Badge>
-                      </div>
-
-                      {/* Timestamp */}
-                      <div className="text-xs text-muted-foreground">
-                        {formatTimestamp(project.updated_at)}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </AnimatePresence>
           </motion.div>
         ) : (
           /* List View */
@@ -697,11 +552,15 @@ export default function Projects() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <Video className="h-3.5 w-3.5" />
-                <span>{filteredProjects.filter(p => p.project_type !== "storytelling").length} videos</span>
+                <span>{filteredProjects.filter(p => p.project_type === "doc2video" || !p.project_type).length} explainers</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Clapperboard className="h-3.5 w-3.5" />
                 <span>{filteredProjects.filter(p => p.project_type === "storytelling").length} stories</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Wallpaper className="h-3.5 w-3.5" />
+                <span>{filteredProjects.filter(p => p.project_type === "smartflow").length} smartflow</span>
               </div>
             </div>
           )}
