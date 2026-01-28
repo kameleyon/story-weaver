@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { format } from "date-fns";
 
 // Import background images
@@ -188,6 +189,7 @@ export default function Dashboard() {
           </SidebarTrigger>
           <ThemedLogo className="h-8 lg:h-10 w-auto" />
         </div>
+        <ThemeToggle />
       </header>
 
       {/* Main Content */}

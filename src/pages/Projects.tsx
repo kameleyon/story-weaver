@@ -71,6 +71,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 type SortField = "title" | "created_at" | "updated_at";
@@ -334,6 +335,7 @@ export default function Projects() {
             </Button>
             <ThemedLogo className="h-8 sm:h-10 w-auto" />
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
