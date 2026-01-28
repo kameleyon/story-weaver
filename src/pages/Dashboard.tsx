@@ -33,6 +33,15 @@ const TIPS = [
   "Use brand marks to add your logo to generated images",
 ];
 
+const GREETINGS = [
+  { greeting: "Hey", suffix: "Ready to create?" },
+  { greeting: "Welcome back", suffix: "Let's make something great." },
+  { greeting: "Good to see you", suffix: "What are we building today?" },
+  { greeting: "Hi there", suffix: "Your canvas awaits." },
+  { greeting: "Hello", suffix: "Time to bring ideas to life." },
+  { greeting: "Welcome", suffix: "Let's get creative." },
+];
+
 // Circular progress component
 const CircularProgress = ({ percentage, size = 80 }: { percentage: number; size?: number }) => {
   const strokeWidth = 6;
@@ -76,6 +85,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [currentTip, setCurrentTip] = useState(0);
   const [projectScrollIndex, setProjectScrollIndex] = useState(0);
+  const [greetingIndex] = useState(() => Math.floor(Math.random() * GREETINGS.length));
 
   // Rotate tips
   useEffect(() => {
@@ -199,9 +209,9 @@ export default function Dashboard() {
           {/* Welcome Section */}
           <div className="space-y-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-              Hello, Welcome back {displayName}
+              {GREETINGS[greetingIndex].greeting}, {displayName}
             </h1>
-            <p className="text-muted-foreground">Let's create something amazing today.</p>
+            <p className="text-muted-foreground">{GREETINGS[greetingIndex].suffix}</p>
           </div>
 
           {/* Usage Overview + Did You Know Row */}
