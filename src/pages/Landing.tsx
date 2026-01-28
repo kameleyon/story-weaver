@@ -173,7 +173,7 @@ export default function Landing() {
                 className="w-full max-w-md sm:max-w-lg md:max-w-xl xl:max-w-2xl mx-auto xl:mx-0"
               />
               
-              <p className="mt-8 text-xl text-muted-foreground">
+              <p className="mt-8 text-2xl sm:text-3xl md:text-4xl font-medium text-foreground/85">
                 Turn text into engaging visual contents.
               </p>
               
