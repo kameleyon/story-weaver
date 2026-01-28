@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { formatDistanceToNow, format } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -27,7 +27,6 @@ import {
   List,
   Wand2,
   Clock,
-  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,20 +93,10 @@ interface Project {
   project_type?: string;
 }
 
-// Style color mapping for visual variety - Teal & Mist palette
-const styleColors: Record<string, string> = {
-  "3d-pixar": "from-[#4EA69A]/30 to-[#2D6967]/20",
-  "anime": "from-[#71C0C2]/30 to-[#4EA69A]/20",
-  "realistic": "from-[#0D565F]/30 to-[#2D6967]/20",
-  "sketch": "from-[#86D2CA]/20 to-[#DAEEE9]/15",
-  "doodle": "from-[#86D2CA]/30 to-[#71C0C2]/20",
-  "minimalist": "from-[#DAEEE9]/30 to-[#86D2CA]/15",
-  "painterly": "from-[#2D6967]/30 to-[#4EA69A]/20",
-  "caricature": "from-[#71C0C2]/30 to-[#0D565F]/20",
-  "claymation": "from-[#4EA69A]/35 to-[#86D2CA]/20",
-  "crayon": "from-[#86D2CA]/35 to-[#4EA69A]/20",
-  "stick": "from-[#0D565F]/30 to-[#71C0C2]/20",
-  "storybook": "from-[#2D6967]/30 to-[#86D2CA]/20",
+const formatTimestamp = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return format(d, "MMM d, h:mm a");
 };
 
 export default function Projects() {
@@ -331,10 +320,6 @@ export default function Projects() {
     toast.success("Project metadata downloaded");
   };
 
-  const getStyleGradient = (style: string) => {
-    return styleColors[style] || "from-primary/20 to-primary/10";
-  };
-
   const SortIcon = sortOrder === "asc" ? SortAsc : SortDesc;
 
   return (
@@ -456,7 +441,7 @@ export default function Projects() {
           /* Grid View */
           <motion.div 
             layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"
           >
             <AnimatePresence mode="popLayout">
               {filteredProjects.map((project, index) => (
@@ -475,12 +460,8 @@ export default function Projects() {
                     )}
                     onClick={() => handleView(project)}
                   >
-                    {/* Gradient Header */}
-                    <div className={cn(
-                      "h-24 relative bg-gradient-to-br",
-                      getStyleGradient(project.style)
-                    )}>
-                      <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
+                    {/* Thumbnail */}
+                    <div className="h-24 relative bg-[hsl(var(--thumbnail-surface))]">
                       
                       {/* Quick Actions */}
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -542,7 +523,7 @@ export default function Projects() {
                           checked={selectedIds.has(project.id)}
                           onCheckedChange={() => toggleSelect(project.id)}
                           onClick={(e) => e.stopPropagation()}
-                          className="bg-background/80 backdrop-blur-sm border-white/20"
+                          className="bg-background/80 backdrop-blur-sm border-border/50"
                         />
                       </div>
 
@@ -567,7 +548,7 @@ export default function Projects() {
                       )}
                     </div>
 
-                    <CardContent className="p-4">
+                    <CardContent className="p-3">
                       <h3 className="font-semibold truncate mb-2 group-hover:text-primary transition-colors">
                         {project.title}
                       </h3>
@@ -584,7 +565,7 @@ export default function Projects() {
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          <span>{formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}</span>
+                          <span>{formatTimestamp(project.updated_at)}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -595,23 +576,23 @@ export default function Projects() {
           </motion.div>
         ) : (
           /* List View */
-          <div className="rounded-xl border border-border/50 overflow-hidden bg-card">
+          <div className="rounded-xl border border-border/60 overflow-hidden bg-card/50">
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="w-12">
+                <TableRow className="hover:bg-transparent border-border/60 bg-muted/20">
+                  <TableHead className="w-12 py-3 px-3">
                     <Checkbox
                       checked={selectedIds.size === filteredProjects.length && filteredProjects.length > 0}
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead className="hidden md:table-cell">Type</TableHead>
-                  <TableHead className="hidden md:table-cell">Format</TableHead>
-                  <TableHead className="hidden lg:table-cell">Style</TableHead>
-                  <TableHead className="hidden sm:table-cell">Updated</TableHead>
-                  <TableHead className="w-12"></TableHead>
+                  <TableHead className="w-12 py-3 px-3" />
+                  <TableHead className="py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Title</TableHead>
+                  <TableHead className="hidden md:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Type</TableHead>
+                  <TableHead className="hidden md:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Format</TableHead>
+                  <TableHead className="hidden lg:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Style</TableHead>
+                  <TableHead className="hidden sm:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Updated</TableHead>
+                  <TableHead className="w-12 py-3 px-3" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -624,17 +605,17 @@ export default function Projects() {
                       exit={{ opacity: 0 }}
                       transition={{ delay: index * 0.02 }}
                       className={cn(
-                        "cursor-pointer hover:bg-muted/50 border-border/50 group",
+                        "cursor-pointer hover:bg-muted/30 border-b border-border/40 group",
                         selectedIds.has(project.id) && "bg-primary/5"
                       )}
                     >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedIds.has(project.id)}
                           onCheckedChange={() => toggleSelect(project.id)}
                         />
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -651,12 +632,9 @@ export default function Projects() {
                           />
                         </Button>
                       </TableCell>
-                      <TableCell onClick={() => handleView(project)}>
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "p-2 rounded-lg bg-gradient-to-br",
-                            getStyleGradient(project.style)
-                          )}>
+                      <TableCell className="py-2.5 px-3 min-w-0" onClick={() => handleView(project)}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20">
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-4 w-4 text-primary" />
                             ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
@@ -665,12 +643,12 @@ export default function Projects() {
                               <Video className="h-4 w-4 text-primary" />
                             )}
                           </div>
-                          <span className="font-medium group-hover:text-primary transition-colors">
+                          <span className="font-medium group-hover:text-primary transition-colors truncate">
                             {project.title}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
+                      <TableCell className="py-2.5 px-3 hidden md:table-cell" onClick={() => handleView(project)}>
                         <Badge variant="outline" className="capitalize text-xs">
                           {project.project_type === "storytelling" 
                             ? "Story" 
@@ -679,19 +657,19 @@ export default function Projects() {
                               : "Explainer"}
                         </Badge>
                       </TableCell>
-                      <TableCell onClick={() => handleView(project)} className="hidden md:table-cell">
+                      <TableCell className="py-2.5 px-3 hidden md:table-cell" onClick={() => handleView(project)}>
                         <span className="capitalize text-muted-foreground">{project.format}</span>
                       </TableCell>
-                      <TableCell onClick={() => handleView(project)} className="hidden lg:table-cell">
+                      <TableCell className="py-2.5 px-3 hidden lg:table-cell" onClick={() => handleView(project)}>
                         <span className="capitalize text-muted-foreground">{project.style.replace(/-/g, " ")}</span>
                       </TableCell>
-                      <TableCell onClick={() => handleView(project)} className="hidden sm:table-cell">
+                      <TableCell className="py-2.5 px-3 hidden sm:table-cell" onClick={() => handleView(project)}>
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
-                          <span className="text-sm">{formatDistanceToNow(new Date(project.updated_at), { addSuffix: true })}</span>
+                          <span className="text-xs">{formatTimestamp(project.updated_at)}</span>
                         </div>
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
