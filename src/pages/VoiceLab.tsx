@@ -243,12 +243,15 @@ export default function VoiceLab() {
         
         <main className="flex-1 flex flex-col">
           {/* Header */}
-          <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 md:px-6">
-            <SidebarTrigger className="md:hidden" />
-            <div className="hidden md:block">
-              <ThemedLogo className="h-8 w-auto" />
+          <header className="sticky top-0 z-40 grid h-14 sm:h-16 grid-cols-3 items-center border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
+            <div className="flex items-center justify-start gap-2">
+              <SidebarTrigger />
+              <ThemedLogo className="hidden lg:block h-10 w-auto" />
             </div>
-            <div className="flex-1" />
+            <div className="flex justify-center lg:hidden">
+              <ThemedLogo className="h-10 w-auto" />
+            </div>
+            <div className="flex items-center justify-end" />
           </header>
 
           {/* Content */}
