@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
+import heroPromoVideo from "@/assets/hero-promo.mp4";
 
 const features = [
   {
@@ -157,6 +158,7 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full pb-16 md:pb-24">
           <div className="flex flex-col xl:grid xl:grid-cols-2 gap-8 xl:gap-16 items-center">
             {/* Left Content */}
+            {/* Left Content */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -164,15 +166,13 @@ export default function Landing() {
               className="max-w-2xl text-center xl:text-left"
             >
               <h1 className="text-5xl sm:text-6xl md:text-7xl xl:text-8xl tracking-tight leading-[1.05]">
-                <span className="text-foreground/70 font-normal">THINK.</span>
-                <br />
-                <span className="text-[hsl(45,80%,55%)]/85 font-medium">CREATE.</span>
-                <br />
-                <span className="text-[hsl(173,58%,50%)]/90 font-semibold">AND SHARE.</span>
+                <span className="text-foreground/70 font-normal">The Future </span>
+                <span className="text-[hsl(45,80%,55%)]/85 font-medium">is </span>
+                <span className="text-[hsl(173,58%,50%)]/90 font-semibold">Visual</span>
               </h1>
               
               <p className="mt-8 text-xl text-muted-foreground">
-                Turn topics into engaging visual contents.
+                Turn text into engaging visual contents.
               </p>
               
               <Button
@@ -184,6 +184,23 @@ export default function Landing() {
               </Button>
             </motion.div>
 
+            {/* Right Illustration - Hero Video */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="w-full max-w-2xl"
+            >
+              <video
+                src={heroPromoVideo}
+                className="w-full rounded-2xl shadow-2xl"
+                controls
+                preload="metadata"
+                poster=""
+              >
+                Your browser does not support the video tag.
+              </video>
+            </motion.div>
           </div>
         </div>
       </section>
