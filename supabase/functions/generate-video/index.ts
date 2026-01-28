@@ -3773,10 +3773,10 @@ async function handleRegenerateImage(
     `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Starting image regeneration...`,
   );
 
-  // Fetch generation with project format and style
+  // Fetch generation with project format, style, and character_consistency_enabled
   const { data: generation } = await supabase
     .from("generations")
-    .select("scenes, projects!inner(format, style)")
+    .select("scenes, projects!inner(format, style, character_consistency_enabled)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
@@ -3790,8 +3790,17 @@ async function handleRegenerateImage(
 
   const format = generation.projects.format;
   const style = generation.projects.style;
+  const characterConsistencyEnabled = generation.projects.character_consistency_enabled === true;
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
+
+  // Check if Pro user with character consistency - use Hypereal
+  const hyperealApiKey = characterConsistencyEnabled ? Deno.env.get("HYPEREAL_API_KEY") : null;
+  const useHypereal = characterConsistencyEnabled && !!hyperealApiKey;
+  
+  if (useHypereal) {
+    console.log(`[regenerate-image] Pro user with character consistency - will use Hypereal nano-banana-pro-t2i`);
+  }
 
   // Get existing imageUrls or create from single imageUrl
   const existingImageUrls = scene.imageUrls?.length ? [...scene.imageUrls] : scene.imageUrl ? [scene.imageUrl] : [];
@@ -3813,7 +3822,17 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
+    // Use Hypereal for Pro users, fallback to Replicate
+    if (useHypereal) {
+      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
+      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey!, format);
+      if (!imageResult.ok) {
+        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate: ${imageResult.error}`);
+        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
+      }
+    } else {
+      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
+    }
   } else if (sourceImageUrl) {
     // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
     console.log(
@@ -3836,7 +3855,17 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image.`;
 
-    imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
+    // Use Hypereal for Pro users, fallback to Replicate
+    if (useHypereal) {
+      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for modified regeneration`);
+      imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey!, format);
+      if (!imageResult.ok) {
+        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate: ${imageResult.error}`);
+        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
+      }
+    } else {
+      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
+    }
   }
 
   if (!imageResult.ok) {
