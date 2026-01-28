@@ -349,12 +349,17 @@ export function useGenerationPipeline() {
         
         // Loop until all images are generated
         do {
-          imagesResult = await callPhase(session, {
-            phase: "images",
-            generationId,
-            projectId,
-            imageStartIndex,
-          });
+          // Images phase can take 2-3 minutes per chunk (8 images), especially with Hypereal
+          imagesResult = await callPhase(
+            session,
+            {
+              phase: "images",
+              generationId,
+              projectId,
+              imageStartIndex,
+            },
+            300000 // 5 minutes timeout for images (matches audio phase)
+          );
 
           if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
 
