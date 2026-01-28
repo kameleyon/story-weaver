@@ -197,33 +197,82 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   return (
     <>
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/50 text-foreground/80 dark:text-white/80 max-h-screen overflow-hidden flex flex-col">
-      <SidebarHeader className="p-3">
-        {/* Collapse/Expand Toggle - always on top */}
-        <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"} mb-3`}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-accent"
-              >
-                {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{isCollapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
-          </Tooltip>
-        </div>
+      <SidebarHeader className="p-3 flex-shrink-0">
+        {/* Mobile: Profile icon at top instead of collapse toggle */}
+        {isMobile ? (
+          <div className="flex justify-between items-center mb-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <Avatar className="h-7 w-7">
+                    <AvatarFallback className="bg-muted text-muted-foreground">
+                      <User className="h-3.5 w-3.5" />
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 rounded-xl border-border/50 shadow-sm">
+                <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => { navigate("/settings"); toggleSidebar(); }}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => { navigate("/usage"); toggleSidebar(); }}>
+                  <History className="mr-2 h-4 w-4" />
+                  <span>Usage & Billing</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border/50" />
+                <DropdownMenuItem
+                  className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                >
+                  <Sun className="mr-2 h-4 w-4 dark:hidden" />
+                  <Moon className="mr-2 hidden h-4 w-4 dark:block" />
+                  <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border/50" />
+                <DropdownMenuItem
+                  className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log Out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span className="text-xs text-muted-foreground">{getPlanDisplayName()}</span>
+          </div>
+        ) : (
+          /* Desktop: Collapse/Expand Toggle */
+          <div className={`flex ${isCollapsed ? "justify-center" : "justify-end"} mb-3`}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleSidebar}
+                  className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-accent"
+                >
+                  {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{isCollapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
 
-        {/* Search bar - only when expanded */}
-        {!isCollapsed && (
+        {/* Search bar - only when expanded (desktop) or always on mobile */}
+        {(!isCollapsed || isMobile) && (
           <div>
             <ProjectSearch onSelectProject={onOpenProject} />
           </div>
         )}
       </SidebarHeader>
 
-      <SidebarContent className="px-2 overflow-y-auto flex flex-col flex-1 min-h-0">
+      <SidebarContent className={`px-2 flex flex-col flex-1 min-h-0 ${isMobile ? 'overflow-y-auto' : 'overflow-y-auto'}`}>
         {/* Main Navigation - flat list */}
         <SidebarGroup className="mt-2">
           <SidebarGroupContent>
@@ -374,14 +423,14 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Recent Projects Section - only show when expanded */}
-        {!isCollapsed && (
-          <SidebarGroup className="mt-4 flex-1 min-h-0 flex flex-col">
+        {/* Recent Projects Section - only show when expanded or on mobile */}
+        {(!isCollapsed || isMobile) && (
+          <SidebarGroup className={`mt-4 ${isMobile ? '' : 'flex-1 min-h-0 flex flex-col'}`}>
             <SidebarGroupLabel className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-white/50 px-3 py-2 flex items-center gap-2 flex-shrink-0">
               <History className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span>Recent</span>
             </SidebarGroupLabel>
-            <SidebarGroupContent className="mt-1 ml-3 flex-1 min-h-0 overflow-y-auto sidebar-scrollbar">
+            <SidebarGroupContent className={`mt-1 ml-3 ${isMobile ? '' : 'flex-1 min-h-0 overflow-y-auto sidebar-scrollbar'}`}>
               <SidebarMenu className="space-y-0.5 sm:space-y-1 border-l border-foreground/10 dark:border-white/10 pl-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
@@ -453,63 +502,66 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-2 sm:p-3">
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className={`w-full rounded-lg hover:bg-sidebar-accent hover:text-accent ${
-                    isCollapsed ? "justify-center px-0" : "justify-start gap-2 sm:gap-3 px-2 sm:px-3"
-                  } py-2 sm:py-2.5`}
-                  size={isCollapsed ? "icon" : "default"}
-                >
-                  <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
-                    <AvatarFallback className="bg-muted text-muted-foreground">
-                      <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  {!isCollapsed && (
-                    <div className="flex flex-col items-start overflow-hidden">
-                      <span className="truncate text-xs sm:text-sm">{user?.email?.split("@")[0] || "User"}</span>
-                      <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">{getPlanDisplayName()}</span>
-                    </div>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            {isCollapsed && <TooltipContent side="right">Account</TooltipContent>}
-          </Tooltip>
-          <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-sm">
-            <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/settings")}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/usage")}>
-              <History className="mr-2 h-4 w-4" />
-              <span>Usage & Billing</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border/50" />
-            <DropdownMenuItem
-              className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              <Sun className="mr-2 h-4 w-4 dark:hidden" />
-              <Moon className="mr-2 hidden h-4 w-4 dark:block" />
-              <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border/50" />
-            <DropdownMenuItem
-              className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
-              onClick={handleSignOut}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Log Out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarFooter>
+      {/* Footer with profile - hide on mobile since profile is in header */}
+      {!isMobile && (
+        <SidebarFooter className="p-2 sm:p-3 flex-shrink-0">
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className={`w-full rounded-lg hover:bg-sidebar-accent hover:text-accent ${
+                      isCollapsed ? "justify-center px-0" : "justify-start gap-2 sm:gap-3 px-2 sm:px-3"
+                    } py-2 sm:py-2.5`}
+                    size={isCollapsed ? "icon" : "default"}
+                  >
+                    <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
+                      <AvatarFallback className="bg-muted text-muted-foreground">
+                        <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    {!isCollapsed && (
+                      <div className="flex flex-col items-start overflow-hidden">
+                        <span className="truncate text-xs sm:text-sm">{user?.email?.split("@")[0] || "User"}</span>
+                        <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">{getPlanDisplayName()}</span>
+                      </div>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {isCollapsed && <TooltipContent side="right">Account</TooltipContent>}
+            </Tooltip>
+            <DropdownMenuContent align="start" side="top" className="w-56 rounded-xl border-border/50 shadow-sm">
+              <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/settings")}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/usage")}>
+                <History className="mr-2 h-4 w-4" />
+                <span>Usage & Billing</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border/50" />
+              <DropdownMenuItem
+                className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              >
+                <Sun className="mr-2 h-4 w-4 dark:hidden" />
+                <Moon className="mr-2 hidden h-4 w-4 dark:block" />
+                <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border/50" />
+              <DropdownMenuItem
+                className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
+                onClick={handleSignOut}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarFooter>
+      )}
     </Sidebar>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
