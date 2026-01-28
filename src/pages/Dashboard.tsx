@@ -190,13 +190,13 @@ export default function Dashboard() {
           {/* Usage Overview + Did You Know Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Usage Overview Card */}
-            <div className="rounded-xl border border-primary/75 bg-card/80 backdrop-blur-sm p-5 shadow-sm">
+            <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-5 shadow-sm">
               <div className="flex items-center gap-5">
                 <CircularProgress percentage={usagePercentage} />
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">Usage Overview</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-foreground mb-1">Usage Overview</h3>
                   <p className="text-sm text-primary font-medium">{usagePercentage}% Credits Used</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-gray-600 dark:text-muted-foreground">
                     {credits?.balance || 0} / {credits?.total || 200} Credits Left
                   </p>
                 </div>
@@ -204,20 +204,20 @@ export default function Dashboard() {
             </div>
 
             {/* Did You Know Card */}
-            <div className="rounded-xl border border-primary/75 bg-card/80 backdrop-blur-sm p-5 shadow-sm">
+            <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-5 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-lg bg-primary/10 shrink-0">
                   <Lightbulb className="h-5 w-5 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-foreground mb-2">Did You Know?</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-foreground mb-2">Did You Know?</h3>
                   <AnimatePresence mode="wait">
                     <motion.p
                       key={currentTip}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -5 }}
-                      className="text-sm text-muted-foreground leading-relaxed"
+                      className="text-sm text-gray-600 dark:text-muted-foreground leading-relaxed"
                     >
                       Tip: {TIPS[currentTip]}
                     </motion.p>
@@ -241,8 +241,8 @@ export default function Dashboard() {
             </div>
 
             {recentProjects.length === 0 ? (
-              <div className="rounded-xl border border-primary/75 bg-card/80 backdrop-blur-sm p-8 text-center shadow-sm">
-                <p className="text-muted-foreground mb-4">No projects yet</p>
+              <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-8 text-center shadow-sm">
+                <p className="text-gray-600 dark:text-muted-foreground mb-4">No projects yet</p>
                 <Button onClick={() => navigate("/app/create?mode=doc2video")} className="gap-2">
                   <Video className="h-4 w-4" />
                   Create Your First Project
@@ -273,7 +273,7 @@ export default function Dashboard() {
                         <div
                           key={project.id}
                           onClick={() => navigate(`/app/create?project=${project.id}`)}
-                          className="shrink-0 w-[200px] rounded-xl border border-primary/75 bg-card/80 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-primary transition-colors shadow-sm group"
+                          className="shrink-0 w-[200px] rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-primary transition-colors shadow-sm group"
                         >
                           {/* Thumbnail area */}
                           <div className="h-24 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent flex items-center justify-center relative overflow-hidden">
@@ -282,10 +282,10 @@ export default function Dashboard() {
                           </div>
                           {/* Info area */}
                           <div className="p-3">
-                            <p className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                            <p className="font-medium text-sm text-gray-900 dark:text-foreground truncate group-hover:text-primary transition-colors">
                               {project.title}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">
                               Last edited {format(new Date(project.updated_at), "MMM d, yyyy")}
                             </p>
                           </div>
@@ -309,13 +309,13 @@ export default function Dashboard() {
           </div>
 
           {/* Community Coming Soon Section */}
-          <div className="rounded-xl border border-dashed border-primary/50 bg-card/60 backdrop-blur-sm p-8 text-center shadow-sm">
+          <div className="rounded-xl border border-dashed border-primary/50 bg-white/60 dark:bg-card/60 backdrop-blur-sm p-8 text-center shadow-sm">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
               <Users className="h-3 w-3" />
               Coming Soon
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Community Showcase</h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground mb-2">Community Showcase</h3>
+            <p className="text-sm text-gray-600 dark:text-muted-foreground max-w-md mx-auto">
               Share your creations with the community. Toggle videos to public, get likes, and discover what others are creating.
             </p>
           </div>
