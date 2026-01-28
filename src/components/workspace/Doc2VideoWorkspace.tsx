@@ -144,17 +144,22 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
     return (
       <div className="flex h-screen flex-col bg-background overflow-hidden">
         {/* Top Bar */}
-        <header className="flex h-14 sm:h-16 items-center justify-between border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <header className="grid h-14 sm:h-16 grid-cols-3 items-center border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
+          <div className="flex items-center gap-3 sm:gap-4 justify-start">
             <SidebarTrigger className="lg:hidden">
               <Menu className="h-5 w-5 text-muted-foreground" />
             </SidebarTrigger>
-            <div className="hidden lg:flex items-center gap-3">
-              <ThemedLogo className="h-8 w-auto" />
+            <div className="hidden lg:flex items-center">
+              <ThemedLogo className="h-10 w-auto" />
             </div>
           </div>
-          
-          <div className="flex items-center gap-3">
+
+          {/* Mobile centered logo */}
+          <div className="flex justify-center lg:hidden">
+            <ThemedLogo className="h-10 w-auto" />
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
             {generationState.step !== "idle" && generationState.step !== "complete" && generationState.step !== "error" && (
               <motion.div
                 className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"

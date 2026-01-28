@@ -52,6 +52,10 @@
 
     --radius: 0.75rem;
 
+    /* UI surfaces */
+    /* Light: subtle dark overlay. Dark: requested white/15 thumbnail surface */
+    --thumbnail-surface: 0 0% 0% / 0.04;
+
     /* Sidebar Tokens - Light - Slightly different from main bg */
     --sidebar-background: 180 10% 97%;
     --sidebar-foreground: 180 7% 15%;
@@ -105,6 +109,9 @@
     --sidebar-accent-foreground: 0 0% 96%;
     --sidebar-border: 200 8% 16%;
     --sidebar-ring: 170 55% 54%;
+
+    /* UI surfaces */
+    --thumbnail-surface: 0 0% 100% / 0.15;
   }
 }
 
