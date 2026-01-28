@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
-
+import heroVideo from "@/assets/hero-animation.mp4";
 const features = [
   {
     title: "Document to Video",
@@ -174,89 +174,21 @@ export default function Landing() {
               </Button>
             </motion.div>
 
-            {/* Right Illustration - Sound Wave Animation */}
+            {/* Right Illustration - Hero Video */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
               className="flex items-center justify-center xl:justify-end w-full"
             >
-              <svg
-                viewBox="0 0 400 300"
-                className="w-full max-w-md sm:max-w-lg md:max-w-xl"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                {/* Background circles */}
-                <circle cx="200" cy="150" r="90" className="fill-primary/10" />
-                <circle cx="200" cy="150" r="130" className="fill-primary/5" />
-                
-                {/* Microphone icon in center */}
-                <g transform="translate(170, 110)">
-                  <rect x="10" y="0" width="40" height="65" rx="20" className="fill-primary/40" />
-                  <path d="M0 55 L0 70 A30 30 0 0 0 60 70 L60 55" className="stroke-primary" strokeWidth="4" fill="none" />
-                  <line x1="30" y1="85" x2="30" y2="105" className="stroke-primary" strokeWidth="4" />
-                  <line x1="15" y1="105" x2="45" y2="105" className="stroke-primary" strokeWidth="4" />
-                </g>
-                
-                {/* Animated sound waves - left side with gold accents */}
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <motion.line
-                    key={`left-${i}`}
-                    x1={130 - i * 18}
-                    y1={150 - 25 - i * 8}
-                    x2={130 - i * 18}
-                    y2={150 + 25 + i * 8}
-                    stroke={i % 2 === 0 ? "hsl(45, 80%, 55%)" : "hsl(var(--primary))"}
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                    initial={{ scaleY: 0.3, opacity: 0.4 }}
-                    animate={{ 
-                      scaleY: [0.3, 1, 0.5, 0.8, 0.3],
-                      opacity: [0.4, 1, 0.6, 0.8, 0.4]
-                    }}
-                    transition={{
-                      duration: 1.5,
-                      delay: i * 0.1,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                    style={{ transformOrigin: `${130 - i * 18}px 150px` }}
-                  />
-                ))}
-                
-                {/* Animated sound waves - right side with gold accents */}
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <motion.line
-                    key={`right-${i}`}
-                    x1={270 + i * 18}
-                    y1={150 - 25 - i * 8}
-                    x2={270 + i * 18}
-                    y2={150 + 25 + i * 8}
-                    stroke={i % 2 === 0 ? "hsl(45, 80%, 55%)" : "hsl(var(--primary))"}
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                    initial={{ scaleY: 0.3, opacity: 0.4 }}
-                    animate={{ 
-                      scaleY: [0.3, 0.8, 1, 0.5, 0.3],
-                      opacity: [0.4, 0.8, 1, 0.6, 0.4]
-                    }}
-                    transition={{
-                      duration: 1.5,
-                      delay: i * 0.1 + 0.2,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                    style={{ transformOrigin: `${270 + i * 18}px 150px` }}
-                  />
-                ))}
-                
-                {/* Decorative dots */}
-                <circle cx="340" cy="80" r="5" className="fill-primary/60" />
-                <circle cx="365" cy="105" r="4" className="fill-primary/50" />
-                <circle cx="60" cy="220" r="4" className="fill-primary/60" />
-                <circle cx="35" cy="195" r="3" className="fill-primary/40" />
-              </svg>
+              <video
+                src={heroVideo}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full max-w-md sm:max-w-lg md:max-w-xl rounded-2xl"
+              />
             </motion.div>
           </div>
         </div>
