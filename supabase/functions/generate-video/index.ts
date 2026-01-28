@@ -2714,6 +2714,7 @@ ${brandName ? `- BRANDING: Every image prompt must include instructions to overl
 - Show, don't tell—use sensory details and vivid imagery
 - Vary sentence rhythm for musicality
 - NO labels, NO stage directions, NO markdown
+- **PRESERVE THE USER'S EXACT TERMINOLOGY**: If the user refers to a character as "Queen of Clubs", use "Queen of Clubs" throughout the story - do NOT replace names/titles with pronouns like "she" or "they". The user chose specific names/titles for a reason. Use pronouns sparingly and only after establishing the character name in the same scene.
 ${
   disableExpressions
     ? `- Do NOT include any paralinguistic tags or expressions like [chuckle], [sigh], etc.
