@@ -335,10 +335,6 @@ export default function Projects() {
             <ThemedLogo className="h-8 sm:h-10 w-auto" />
           </div>
         </div>
-        {/* Mobile centered logo */}
-        <div className="flex sm:hidden justify-center pb-2 -mt-1">
-          <ThemedLogo className="h-6 w-auto" />
-        </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">

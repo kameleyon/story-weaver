@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   ArrowLeft, 
   User, 
@@ -22,6 +23,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Display name state
   const [displayName, setDisplayName] = useState("");
@@ -79,6 +81,9 @@ export default function Settings() {
         }, { onConflict: "user_id" });
 
       if (error) throw error;
+
+      // Invalidate profile query so Dashboard updates
+      queryClient.invalidateQueries({ queryKey: ["user-profile", user.id] });
 
       toast({
         title: "Profile updated",
@@ -214,10 +219,6 @@ export default function Settings() {
             <ThemedLogo className="h-8 sm:h-10 w-auto" />
           </div>
           <ThemeToggle />
-        </div>
-        {/* Mobile centered logo */}
-        <div className="flex sm:hidden justify-center pb-2 -mt-1">
-          <ThemedLogo className="h-6 w-auto" />
         </div>
       </header>
 
