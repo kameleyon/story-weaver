@@ -114,10 +114,8 @@ export default function Landing() {
       {/* Navigation with frosted glass effect */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/30">
         <div className="mx-auto flex h-16 sm:h-20 max-w-6xl items-center justify-between px-6 sm:px-8">
-          {/* Logo */}
-          <a href="/" className="flex items-center">
-            <img src={audiomaxLogo} alt="AudioMax" className="h-8 sm:h-10 w-auto" />
-          </a>
+          {/* Logo removed - main logo is in hero */}
+          <div className="w-8 sm:w-10" />
           
           {/* Nav Links */}
           <nav className="hidden items-center gap-8 md:flex">
