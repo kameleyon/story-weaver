@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
+import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
 import heroVideoPoster from "@/assets/hero-video-poster.png";
 
@@ -166,12 +167,11 @@ export default function Landing() {
               transition={{ duration: 0.6 }}
               className="max-w-2xl text-center xl:text-left"
             >
-              <h1 className="text-5xl sm:text-6xl md:text-7xl xl:text-8xl tracking-tight leading-[1.05]">
-                <span className="text-foreground/70 font-normal">THE FUTURE</span>
-                <br />
-                <span className="text-[hsl(45,80%,55%)]/85 font-medium">IS </span>
-                <span className="text-[hsl(173,58%,50%)]/90 font-semibold">VISUAL</span>
-              </h1>
+              <img 
+                src={motionMaxHeroLogo} 
+                alt="MotionMax" 
+                className="w-full max-w-md sm:max-w-lg md:max-w-xl xl:max-w-2xl mx-auto xl:mx-0"
+              />
               
               <p className="mt-8 text-xl text-muted-foreground">
                 Turn text into engaging visual contents.
