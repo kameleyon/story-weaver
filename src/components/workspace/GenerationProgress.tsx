@@ -185,8 +185,8 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
         </div>
       </div>
 
-      {/* Retry Button - shows during generation (as cancel/restart) or on error */}
-      {onRetry && (state.isGenerating || state.step === "error") && state.step !== "complete" && (
+      {/* Retry Button - shows only when generation failed or stuck in error state */}
+      {onRetry && state.step === "error" && (
         <div className="flex justify-center pt-2">
           <Button
             onClick={onRetry}
@@ -195,7 +195,7 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
             className="gap-2 text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            {state.step === "error" ? "Try Again" : "Cancel & Restart"}
+            Try Again
           </Button>
         </div>
       )}
