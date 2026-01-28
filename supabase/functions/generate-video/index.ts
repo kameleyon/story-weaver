@@ -382,6 +382,67 @@ REQUIREMENTS:
   }
 }
 
+// ============= IMAGE GENERATION WITH HYPEREAL PRO (for Pro/Enterprise scene images) =============
+async function generateImageWithHypereal(
+  prompt: string,
+  hyperealApiKey: string,
+  format: string,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  // Map format to Hypereal aspect ratios
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  // Use higher resolution for scene images
+  const resolution = "2k";
+
+  try {
+    console.log(`[HYPEREAL-PRO] Generating scene image with nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`);
+
+    const response = await fetch("https://api.hypereal.tech/v1/images/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${hyperealApiKey}`,
+      },
+      body: JSON.stringify({
+        prompt,
+        model: "nano-banana-pro-t2i",
+        resolution,
+        aspect_ratio: aspectRatio,
+        output_format: "png",
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[HYPEREAL-PRO] API error: ${response.status} - ${errText}`);
+      return { ok: false, error: `Hypereal API failed: ${response.status}` };
+    }
+
+    const data = await response.json();
+
+    // Hypereal returns image_url or base64 image
+    let imageBytes: Uint8Array;
+    if (data.image_url) {
+      const imgResponse = await fetch(data.image_url);
+      if (!imgResponse.ok) {
+        return { ok: false, error: "Failed to download Hypereal image" };
+      }
+      imageBytes = new Uint8Array(await imgResponse.arrayBuffer());
+    } else if (data.image) {
+      imageBytes = base64Decode(data.image);
+    } else {
+      console.error(`[HYPEREAL-PRO] No image data in response:`, JSON.stringify(data).substring(0, 200));
+      return { ok: false, error: "No image data in Hypereal response" };
+    }
+
+    console.log(`[HYPEREAL-PRO] Image generated successfully: ${imageBytes.length} bytes`);
+    return { ok: true, bytes: imageBytes };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown Hypereal error";
+    console.error(`[HYPEREAL-PRO] Error:`, errorMsg);
+    return { ok: false, error: errorMsg };
+  }
+}
+
 // ============= HELPER FUNCTIONS =============
 function getStylePrompt(style: string, customStyle?: string): string {
   if (style === "custom" && customStyle) return customStyle;
@@ -3157,15 +3218,25 @@ async function handleImagesPhase(
 ): Promise<Response> {
   const phaseStart = Date.now();
 
-  // Fetch generation with project format
+  // Fetch generation with project format and character consistency flag
   const { data: generation } = await supabase
     .from("generations")
-    .select("*, projects!inner(format, style, brand_mark)")
+    .select("*, projects!inner(format, style, brand_mark, character_consistency_enabled)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
 
   if (!generation) throw new Error("Generation not found");
+
+  // Check if Hypereal Pro should be used (Pro/Enterprise with character consistency enabled)
+  const useHypereal = generation.projects.character_consistency_enabled === true;
+  const hyperealApiKey = useHypereal ? Deno.env.get("HYPEREAL_API_KEY") : null;
+  
+  if (useHypereal && hyperealApiKey) {
+    console.log(`[IMAGES] Using Hypereal nano-banana-pro-t2i for Pro user with character consistency enabled`);
+  } else if (useHypereal && !hyperealApiKey) {
+    console.warn(`[IMAGES] Character consistency enabled but HYPEREAL_API_KEY not configured - falling back to Replicate`);
+  }
 
   const scenes = generation.scenes as Scene[];
   const format = generation.projects.format;
@@ -3362,7 +3433,23 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       batchPromises.push(
         (async () => {
           for (let attempt = 1; attempt <= 3; attempt++) {
-            const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
+            // Try Hypereal first if available (Pro/Enterprise with character consistency)
+            let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
+            
+            if (useHypereal && hyperealApiKey) {
+              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex}`);
+              result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
+              
+              // If Hypereal fails, fall back to Replicate
+              if (!result.ok) {
+                console.warn(`[IMG] Hypereal failed, falling back to Replicate: ${result.error}`);
+                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
+              }
+            } else {
+              // Use Replicate (standard tier or fallback)
+              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
+            }
+            
             if (result.ok) {
               const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
               const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
@@ -3391,7 +3478,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
 
             if (attempt < 3) {
-              const delay = result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 5000;
+              const delay = 'retryAfterSeconds' in result && result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 5000;
               await sleep(delay + Math.random() * 1000);
             }
           }
