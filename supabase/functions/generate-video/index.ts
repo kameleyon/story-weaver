@@ -2763,13 +2763,72 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     throw new Error("Failed to parse script JSON");
   }
 
+  // ============= HYPEREAL CHARACTER REFERENCE GENERATION (Pro/Enterprise only) =============
+  let characterReferences: Record<string, string> = {}; // Maps character name to reference image URL
+  
+  if (characterConsistencyEnabled && parsedScript.characters && Object.keys(parsedScript.characters).length > 0) {
+    const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+    
+    if (hyperealApiKey) {
+      console.log(`[HYPEREAL] Character Consistency enabled - generating ${Object.keys(parsedScript.characters).length} character references with nano-banana-pro-t2i`);
+      
+      // Generate reference images for each character in parallel (max 4 at a time)
+      const characterEntries = Object.entries(parsedScript.characters);
+      const BATCH_SIZE = 4;
+      
+      for (let i = 0; i < characterEntries.length; i += BATCH_SIZE) {
+        const batch = characterEntries.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async ([charName, charDescription]) => {
+          const result = await generateCharacterReferenceWithHypereal(
+            charName,
+            charDescription as string,
+            hyperealApiKey,
+            supabase,
+            user.id,
+            "temp-project", // We'll update this after project creation
+          );
+          return { charName, result };
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        
+        for (const { charName, result } of batchResults) {
+          if (result.url) {
+            characterReferences[charName] = result.url;
+            console.log(`[HYPEREAL] Generated reference for ${charName}`);
+          } else {
+            console.warn(`[HYPEREAL] Failed to generate reference for ${charName}: ${result.error}`);
+          }
+        }
+      }
+      
+      console.log(`[HYPEREAL] Successfully generated ${Object.keys(characterReferences).length}/${characterEntries.length} character references`);
+    } else {
+      console.warn("[HYPEREAL] HYPEREAL_API_KEY not configured - skipping character reference generation");
+    }
+  }
+
   // Sanitize voiceovers and append style to visualPrompts for visibility
-  parsedScript.scenes = parsedScript.scenes.map((s) => ({
-    ...s,
-    voiceover: sanitizeVoiceover(s.voiceover),
-    visualPrompt: `${s.visualPrompt || ""}\n\nSTYLE: ${styleDescription}`,
-    subVisuals: s.subVisuals?.map((sv: string) => `${sv}\n\nSTYLE: ${styleDescription}`) || [],
-  }));
+  // Also inject character references into prompts if available
+  parsedScript.scenes = parsedScript.scenes.map((s) => {
+    let visualPrompt = s.visualPrompt || "";
+    
+    // If we have character references, add them to the prompt for conditioning
+    if (Object.keys(characterReferences).length > 0) {
+      const refSection = Object.entries(characterReferences)
+        .map(([name, url]) => `Reference image for "${name}": ${url}`)
+        .join("\n");
+      visualPrompt = `${visualPrompt}\n\n=== CHARACTER REFERENCES (use for visual consistency) ===\n${refSection}`;
+    }
+    
+    return {
+      ...s,
+      voiceover: sanitizeVoiceover(s.voiceover),
+      visualPrompt: `${visualPrompt}\n\nSTYLE: ${styleDescription}`,
+      subVisuals: s.subVisuals?.map((sv: string) => `${sv}\n\nSTYLE: ${styleDescription}`) || [],
+      _characterReferences: characterReferences, // Store for image generation phase
+    };
+  });
 
   // Calculate total images needed (3-4 images per scene for dynamic visuals)
   let totalImages = 0;
@@ -2811,6 +2870,30 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   if (projectError) {
     console.error("Project creation error:", projectError);
     throw new Error("Failed to create project");
+  }
+
+  // Store character references in project_characters table (for Pro/Enterprise users)
+  if (Object.keys(characterReferences).length > 0 && parsedScript.characters) {
+    console.log(`[HYPEREAL] Storing ${Object.keys(characterReferences).length} character references in project_characters table`);
+    
+    const characterInserts = Object.entries(characterReferences).map(([charName, refUrl]) => ({
+      project_id: project.id,
+      user_id: user.id,
+      character_name: charName,
+      description: (parsedScript.characters as Record<string, string>)[charName] || charName,
+      reference_image_url: refUrl,
+    }));
+    
+    const { error: charError } = await supabase
+      .from("project_characters")
+      .insert(characterInserts);
+    
+    if (charError) {
+      console.warn(`[HYPEREAL] Failed to store character references: ${charError.message}`);
+      // Non-fatal - continue with generation
+    } else {
+      console.log(`[HYPEREAL] Successfully stored character references for project ${project.id}`);
+    }
   }
 
   const phaseTime = Date.now() - phaseStart;
