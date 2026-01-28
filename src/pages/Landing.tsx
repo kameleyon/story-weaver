@@ -166,9 +166,10 @@ export default function Landing() {
               className="max-w-2xl text-center xl:text-left"
             >
               <h1 className="text-5xl sm:text-6xl md:text-7xl xl:text-8xl tracking-tight leading-[1.05]">
-                <span className="text-foreground/70 font-normal">The Future </span>
-                <span className="text-[hsl(45,80%,55%)]/85 font-medium">is </span>
-                <span className="text-[hsl(173,58%,50%)]/90 font-semibold">Visual</span>
+                <span className="text-foreground/70 font-normal">THE FUTURE</span>
+                <br />
+                <span className="text-[hsl(45,80%,55%)]/85 font-medium">IS </span>
+                <span className="text-[hsl(173,58%,50%)]/90 font-semibold">VISUAL</span>
               </h1>
               
               <p className="mt-8 text-xl text-muted-foreground">
