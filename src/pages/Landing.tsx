@@ -182,7 +182,7 @@ export default function Landing() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="flex items-center justify-center xl:justify-end w-full"
             >
-              <div className="w-full max-w-xs sm:max-w-sm md:max-w-md aspect-square rounded-2xl overflow-hidden shadow-2xl border border-border/20">
+              <div className="w-full max-w-xs sm:max-w-sm md:max-w-md aspect-square rounded-2xl overflow-hidden border-2 border-primary/50 shadow-[0_0_40px_-5px_hsl(var(--primary)/0.4)]">
                 <video
                   autoPlay
                   loop
