@@ -233,7 +233,7 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold text-foreground">Recent Projects</h2>
               <Button 
                 variant="link" 
-                className="text-primary font-semibold p-0 h-auto hover:text-primary/80"
+                className="text-brand-primary dark:text-primary font-semibold p-0 h-auto hover:opacity-80"
                 onClick={() => navigate("/projects")}
               >
                 View All
@@ -310,7 +310,7 @@ export default function Dashboard() {
 
           {/* Community Coming Soon Section */}
           <div className="rounded-xl border border-dashed border-primary/50 bg-white/80 dark:bg-card/60 backdrop-blur-sm p-8 text-center shadow-sm">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold mb-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary/20 dark:bg-primary/20 text-brand-primary dark:text-primary text-xs font-semibold mb-3">
               <Users className="h-3 w-3" />
               Coming Soon
             </div>
