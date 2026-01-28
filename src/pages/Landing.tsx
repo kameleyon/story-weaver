@@ -173,7 +173,7 @@ export default function Landing() {
                 className="w-full max-w-md sm:max-w-lg md:max-w-xl xl:max-w-2xl mx-auto xl:mx-0"
               />
               
-              <p className="mt-8 text-4xl sm:text-5xl md:text-6xl font-medium leading-tight uppercase tracking-wide">
+              <p className="mt-8 text-3xl sm:text-4xl md:text-5xl font-medium leading-tight uppercase tracking-wide">
                 <span className="text-foreground/85">Turn </span>
                 <span className="text-primary">Text</span>
                 <span className="text-foreground/85"> Into Engaging </span>
