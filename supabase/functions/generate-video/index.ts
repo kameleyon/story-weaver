@@ -419,10 +419,16 @@ async function generateImageWithHypereal(
 
     const data = await response.json();
 
-    // Hypereal returns image_url or base64 image
+    // Hypereal can return image URL in different formats:
+    // 1. data.data[0].url (standard format)
+    // 2. data.image_url (direct URL)
+    // 3. data.image (base64)
     let imageBytes: Uint8Array;
-    if (data.image_url) {
-      const imgResponse = await fetch(data.image_url);
+    const imageUrl = data.data?.[0]?.url || data.image_url;
+    
+    if (imageUrl) {
+      console.log(`[HYPEREAL-PRO] Downloading image from URL: ${imageUrl.substring(0, 80)}...`);
+      const imgResponse = await fetch(imageUrl);
       if (!imgResponse.ok) {
         return { ok: false, error: "Failed to download Hypereal image" };
       }
