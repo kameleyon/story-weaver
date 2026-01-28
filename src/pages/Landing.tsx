@@ -187,7 +187,7 @@ export default function Landing() {
                 loop
                 muted
                 playsInline
-                className="w-full max-w-md sm:max-w-lg md:max-w-xl rounded-2xl"
+                className="w-full max-w-md sm:max-w-lg md:max-w-xl rounded-2xl mix-blend-screen dark:mix-blend-screen"
               />
             </motion.div>
           </div>
