@@ -3985,6 +3985,7 @@ serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("authorization");
@@ -3998,11 +3999,23 @@ serve(async (req) => {
     // Use service role for all DB operations (bypasses RLS, handles long-running tasks)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const token = authHeader.replace("Bearer ", "");
+    // Use anon-key client for auth verification (matches signing-keys behavior)
+    const authSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const match = authHeader.match(/Bearer\s+(.+)/i);
+    const token = match?.[1]?.trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Invalid authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     let user: { id: string; email?: string };
 
     try {
-      const { data, error: claimsError } = await supabase.auth.getClaims(token);
+      const { data, error: claimsError } = await authSupabase.auth.getClaims(token);
 
       if (claimsError) {
         // Check if it's an expiration error - provide helpful message
@@ -4013,6 +4026,22 @@ serve(async (req) => {
             }),
             {
               status: 401,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        // If auth verification fails due to a transient network/runtime issue,
+        // don't mislabel it as "unauthorized".
+        const msg = (claimsError.message || "").toLowerCase();
+        if (msg.includes("fetch") || msg.includes("network") || msg.includes("connection")) {
+          console.error("Auth verification transient failure:", claimsError);
+          return new Response(
+            JSON.stringify({
+              error: "Temporary authentication verification failure. Please retry.",
+            }),
+            {
+              status: 503,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             },
           );
