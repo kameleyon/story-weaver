@@ -149,9 +149,9 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden relative">
-      {/* Background Image */}
+      {/* Background Image - more subtle in light mode */}
       <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 dark:opacity-40 pointer-events-none"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-15 dark:opacity-0 pointer-events-none"
         style={{ 
           backgroundImage: `url(${dashboardBgLight})`,
         }}
@@ -233,7 +233,7 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold text-foreground">Recent Projects</h2>
               <Button 
                 variant="link" 
-                className="text-primary p-0 h-auto"
+                className="text-primary font-semibold p-0 h-auto hover:text-primary/80"
                 onClick={() => navigate("/projects")}
               >
                 View All
@@ -309,13 +309,13 @@ export default function Dashboard() {
           </div>
 
           {/* Community Coming Soon Section */}
-          <div className="rounded-xl border border-dashed border-primary/50 bg-white/60 dark:bg-card/60 backdrop-blur-sm p-8 text-center shadow-sm">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
+          <div className="rounded-xl border border-dashed border-primary/50 bg-white/80 dark:bg-card/60 backdrop-blur-sm p-8 text-center shadow-sm">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold mb-3">
               <Users className="h-3 w-3" />
               Coming Soon
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground mb-2">Community Showcase</h3>
-            <p className="text-sm text-gray-600 dark:text-muted-foreground max-w-md mx-auto">
+            <p className="text-sm text-gray-700 dark:text-muted-foreground max-w-md mx-auto">
               Share your creations with the community. Toggle videos to public, get likes, and discover what others are creating.
             </p>
           </div>
