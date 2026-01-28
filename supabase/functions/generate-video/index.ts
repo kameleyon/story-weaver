@@ -3210,9 +3210,12 @@ async function handleAudioPhase(
   );
 }
 
-// Images phase now processes in chunks to avoid timeout
-// Each call processes up to MAX_IMAGES_PER_CALL images and returns "continue" if more remain
-const MAX_IMAGES_PER_CALL = 8;
+// Images phase now processes in chunks to avoid request timeouts.
+// IMPORTANT: When using Hypereal (character consistency), each image can be slow enough that
+// 8 images can exceed the platform gateway timeout (~150s). We therefore reduce the per-call
+// workload for Hypereal to keep requests reliably under the limit.
+const MAX_IMAGES_PER_CALL_DEFAULT = 8;
+const MAX_IMAGES_PER_CALL_HYPEREAL = 4;
 
 async function handleImagesPhase(
   supabase: any,
@@ -3237,6 +3240,8 @@ async function handleImagesPhase(
   // Check if Hypereal Pro should be used (Pro/Enterprise with character consistency enabled)
   const useHypereal = generation.projects.character_consistency_enabled === true;
   const hyperealApiKey = useHypereal ? Deno.env.get("HYPEREAL_API_KEY") : null;
+
+  const maxImagesPerCall = useHypereal ? MAX_IMAGES_PER_CALL_HYPEREAL : MAX_IMAGES_PER_CALL_DEFAULT;
   
   if (useHypereal && hyperealApiKey) {
     console.log(`[IMAGES] Using Hypereal nano-banana-pro-t2i for Pro user with character consistency enabled`);
@@ -3383,7 +3388,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   const totalImages = allImageTasks.length;
 
   // Get tasks for this chunk
-  const endIndex = Math.min(startIndex + MAX_IMAGES_PER_CALL, totalImages);
+  const endIndex = Math.min(startIndex + maxImagesPerCall, totalImages);
   const tasksThisChunk = allImageTasks.slice(startIndex, endIndex);
 
   console.log(`Phase: IMAGES - Chunk ${startIndex}-${endIndex} of ${totalImages} images...`);
