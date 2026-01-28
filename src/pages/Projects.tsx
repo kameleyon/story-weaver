@@ -460,99 +460,87 @@ export default function Projects() {
                     )}
                     onClick={() => handleView(project)}
                   >
-                    {/* Thumbnail */}
-                    <div className="h-24 relative bg-[hsl(var(--thumbnail-surface))]">
-                      
-                      {/* Quick Actions */}
-                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                          onClick={(e) => handleToggleFavorite(project, e)}
-                        >
-                          <Star className={cn(
-                            "h-3.5 w-3.5",
-                            project.is_favorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-                          )} />
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="secondary"
-                              size="icon"
-                              className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical className="h-3.5 w-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleView(project); }}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Open
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRename(project); }}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShare(project); }}>
-                              <Share2 className="mr-2 h-4 w-4" />
-                              Share
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownload(project); }}>
-                              <Download className="mr-2 h-4 w-4" />
-                              Download
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => { e.stopPropagation(); handleDelete(project); }}
-                              className="text-muted-foreground focus:text-foreground"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      {/* Checkbox */}
-                      <div className="absolute top-2 left-2">
-                        <Checkbox
-                          checked={selectedIds.has(project.id)}
-                          onCheckedChange={() => toggleSelect(project.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="bg-background/80 backdrop-blur-sm border-border/50"
-                        />
-                      </div>
-
-                      {/* Project Type Icon */}
-                      <div className="absolute bottom-2 left-3">
-                        <div className="p-2 rounded-lg bg-background/80 backdrop-blur-sm">
-                          {project.project_type === "storytelling" ? (
-                            <Clapperboard className="h-4 w-4 text-primary" />
-                          ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
-                            <Wallpaper className="h-4 w-4 text-primary" />
-                          ) : (
-                            <Video className="h-4 w-4 text-primary" />
-                          )}
+                    <CardContent className="p-4">
+                      {/* Header with checkbox and actions */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={selectedIds.has(project.id)}
+                            onCheckedChange={() => toggleSelect(project.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="border-border/50"
+                          />
+                          <div className="p-1.5 rounded-lg bg-primary/10">
+                            {project.project_type === "storytelling" ? (
+                              <Clapperboard className="h-4 w-4 text-primary" />
+                            ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
+                              <Wallpaper className="h-4 w-4 text-primary" />
+                            ) : (
+                              <Video className="h-4 w-4 text-primary" />
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={(e) => handleToggleFavorite(project, e)}
+                          >
+                            <Star className={cn(
+                              "h-3.5 w-3.5",
+                              project.is_favorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                            )} />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleView(project); }}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Open
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRename(project); }}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShare(project); }}>
+                                <Share2 className="mr-2 h-4 w-4" />
+                                Share
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownload(project); }}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Download
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => { e.stopPropagation(); handleDelete(project); }}
+                                className="text-muted-foreground focus:text-foreground"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
 
-                      {/* Favorite Badge */}
-                      {project.is_favorite && (
-                        <div className="absolute bottom-2 right-3">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        </div>
-                      )}
-                    </div>
-
-                    <CardContent className="p-3">
+                      {/* Title */}
                       <h3 className="font-semibold truncate mb-2 group-hover:text-primary transition-colors">
                         {project.title}
                       </h3>
                       
+                      {/* Format & Style badges */}
                       <div className="flex items-center gap-2 mb-3">
                         <Badge variant="outline" className="text-[10px] capitalize">
                           {project.format}
@@ -562,11 +550,9 @@ export default function Projects() {
                         </Badge>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{formatTimestamp(project.updated_at)}</span>
-                        </div>
+                      {/* Timestamp */}
+                      <div className="text-xs text-muted-foreground">
+                        {formatTimestamp(project.updated_at)}
                       </div>
                     </CardContent>
                   </Card>
@@ -588,10 +574,8 @@ export default function Projects() {
                   </TableHead>
                   <TableHead className="w-12 py-3 px-3" />
                   <TableHead className="py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Title</TableHead>
-                  <TableHead className="hidden md:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Type</TableHead>
                   <TableHead className="hidden md:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Format</TableHead>
                   <TableHead className="hidden lg:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Style</TableHead>
-                  <TableHead className="hidden sm:table-cell py-3 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Updated</TableHead>
                   <TableHead className="w-12 py-3 px-3" />
                 </TableRow>
               </TableHeader>
@@ -643,31 +627,21 @@ export default function Projects() {
                               <Video className="h-4 w-4 text-primary" />
                             )}
                           </div>
-                          <span className="font-medium group-hover:text-primary transition-colors truncate">
-                            {project.title}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="font-medium group-hover:text-primary transition-colors truncate block">
+                              {project.title}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatTimestamp(project.updated_at)}
+                            </span>
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3 hidden md:table-cell" onClick={() => handleView(project)}>
-                        <Badge variant="outline" className="capitalize text-xs">
-                          {project.project_type === "storytelling" 
-                            ? "Story" 
-                            : project.project_type === "smartflow" || project.project_type === "smart-flow"
-                              ? "Smart Flow"
-                              : "Explainer"}
-                        </Badge>
                       </TableCell>
                       <TableCell className="py-2.5 px-3 hidden md:table-cell" onClick={() => handleView(project)}>
                         <span className="capitalize text-muted-foreground">{project.format}</span>
                       </TableCell>
                       <TableCell className="py-2.5 px-3 hidden lg:table-cell" onClick={() => handleView(project)}>
                         <span className="capitalize text-muted-foreground">{project.style.replace(/-/g, " ")}</span>
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3 hidden sm:table-cell" onClick={() => handleView(project)}>
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span className="text-xs">{formatTimestamp(project.updated_at)}</span>
-                        </div>
                       </TableCell>
                       <TableCell className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
