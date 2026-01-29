@@ -241,7 +241,7 @@ export default function Landing() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
-                  className="text-center p-6 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg"
+                  className="text-center p-6 rounded-2xl bg-black/20 backdrop-blur-sm border border-white/20 shadow-lg"
                 >
                   <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
                     <IconComponent className="h-7 w-7 text-white" />
