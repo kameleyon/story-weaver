@@ -113,7 +113,7 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
