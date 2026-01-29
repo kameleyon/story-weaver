@@ -12,6 +12,10 @@ interface GenerationProgressProps {
 export function GenerationProgress({ state, onRetry }: GenerationProgressProps) {
   const isSmartFlow = state.projectType === "smartflow";
 
+  // Timer tick to ensure time-based UI (like the 60s safety-valve button)
+  // can appear even if the backend stops sending progress updates.
+  const [now, setNow] = useState(() => Date.now());
+
   // Detect when generation appears stuck (no meaningful progress updates)
   // and show a recovery button as a safety valve.
   const generationStartRef = useRef<number>(Date.now());
@@ -72,6 +76,13 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
     }
   }, [state.isGenerating, state.step]);
 
+  // Force re-render while generating so `MIN_GENERATION_TIME_FOR_BUTTON_MS` can be evaluated.
+  useEffect(() => {
+    if (!state.isGenerating || state.step === "complete" || state.step === "error") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [state.isGenerating, state.step]);
+
   useEffect(() => {
     if (signature !== lastSignatureRef.current) {
       lastSignatureRef.current = signature;
@@ -109,9 +120,9 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
     if (!state.isGenerating || state.step === "complete") return false;
     if (state.step === "error") return true; // Always show on error
     
-    const totalElapsed = Date.now() - generationStartRef.current;
+    const totalElapsed = now - generationStartRef.current;
     return isStuck || totalElapsed >= MIN_GENERATION_TIME_FOR_BUTTON_MS;
-  }, [state.isGenerating, state.step, isStuck]);
+  }, [state.isGenerating, state.step, isStuck, now]);
   
   // Build verbose status message based on current step and progress
   const getStatusMessage = (): string => {
@@ -297,11 +308,11 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
             className="gap-2 text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            {state.step === "error" ? "Try Again" : isStuck ? "Cancel & Restart" : "Cancel"}
+            {state.step === "error" ? "Try Again" : "Cancel & Restart"}
           </Button>
-          {isStuck && state.step !== "error" && (
+          {state.step !== "error" && (
             <p className="text-xs text-muted-foreground text-center max-w-xs">
-              Generation appears stuck. You can cancel and try again.
+              If generation looks stuck, use this to restart.
             </p>
           )}
         </div>
