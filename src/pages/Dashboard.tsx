@@ -344,11 +344,17 @@ export default function Dashboard() {
                           {/* Thumbnail area */}
                           <div className="h-24 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent flex items-center justify-center relative overflow-hidden">
                             {project.thumbnailUrl ? (
-                              <img 
-                                src={project.thumbnailUrl} 
-                                alt={project.title}
-                                className="absolute inset-0 w-full h-full object-cover"
-                              />
+                              <>
+                                <img 
+                                  src={project.thumbnailUrl} 
+                                  alt={project.title}
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                />
+                                {/* Category icon overlay */}
+                                <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 backdrop-blur-sm">
+                                  <ProjectIcon className="h-4 w-4 text-white" />
+                                </div>
+                              </>
                             ) : (
                               <>
                                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0wIDUwQzIwIDMwIDQwIDcwIDYwIDUwQzgwIDMwIDEwMCA3MCAxMjAgNTBDMTQwIDMwIDE2MCA3MCAxODAgNTBDMjAwIDMwIDIwMCA1MCAyMDAgNTAiIHN0cm9rZT0icmdiYSg3MywgMjA1LCAxOTEsIDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMCA2MEM0MCAyMCA4MCAxMDAgMTIwIDYwQzE2MCAyMCAyMDAgNjAgMjAwIDYwIiBzdHJva2U9InJnYmEoNzMsIDIwNSwgMTkxLCAwLjIpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+')] opacity-60" />
