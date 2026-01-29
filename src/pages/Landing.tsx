@@ -215,8 +215,7 @@ export default function Landing() {
           backgroundPosition: 'center',
         }}
       >
-        {/* Subtle overlay for consistency */}
-        <div className="absolute inset-0 bg-black/20" />
+        {/* No overlay needed - dark background has sufficient contrast */}
         <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
