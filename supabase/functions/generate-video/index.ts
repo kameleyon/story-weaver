@@ -1839,7 +1839,7 @@ async function generateImageWithReplicate(
     
     // Add resolution for Pro model (1K = 1024px on the long side)
     if (useProModel) {
-      input.resolution = "1k";
+      input.resolution = "1K";
     }
 
     const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
