@@ -3,7 +3,7 @@ import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Cro
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import featuresBackground from "@/assets/features-bg.png";
+import featuresBackground from "@/assets/features-bg-dark.png";
 import audiomaxLogo from "@/assets/audiomax-logo-full.png";
 import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
@@ -215,8 +215,8 @@ export default function Landing() {
           backgroundPosition: 'center',
         }}
       >
-        {/* Overlay for better text readability (dark neutral for contrast) */}
-        <div className="absolute inset-0 bg-foreground/75 dark:bg-background/80" />
+        {/* Subtle overlay for consistency */}
+        <div className="absolute inset-0 bg-black/20" />
         <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
