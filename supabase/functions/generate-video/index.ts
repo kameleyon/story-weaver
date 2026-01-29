@@ -2510,13 +2510,13 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     subVisuals: s.subVisuals?.map((sv: string) => `${sv}\n\nSTYLE: ${styleDescription}`) || [],
   }));
 
-  // Calculate total images needed (3-4 images per scene for dynamic visuals)
+  // Calculate total images needed (2-3 images per scene for dynamic visuals)
   let totalImages = 0;
   for (const scene of parsedScript.scenes) {
     totalImages += 1; // Primary
     if (scene.subVisuals && scene.subVisuals.length > 0) {
-      // Always include up to 3 sub-visuals for variety (total 4 images per scene max)
-      const maxSub = Math.min(scene.subVisuals.length, 3);
+      // Generate up to 2 sub-visuals for variety (total 3 images per scene max)
+      const maxSub = Math.min(scene.subVisuals.length, 2);
       totalImages += maxSub;
     }
   }
@@ -2937,8 +2937,8 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   for (const scene of parsedScript.scenes) {
     totalImages += 1; // Primary
     if (scene.subVisuals && scene.subVisuals.length > 0) {
-      // Always include up to 3 sub-visuals for variety (total 4 images per scene max)
-      const maxSub = Math.min(scene.subVisuals.length, 3);
+      // Generate up to 2 sub-visuals for variety (total 3 images per scene max)
+      const maxSub = Math.min(scene.subVisuals.length, 2);
       totalImages += maxSub;
     }
   }
@@ -3411,9 +3411,9 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       taskIndex: taskIndex++,
     });
 
-    // Always generate up to 3 sub-visuals for variety (total 4 images per scene max)
+    // Generate up to 2 sub-visuals for variety (total 3 images per scene max)
     if (scene.subVisuals && scene.subVisuals.length > 0) {
-      const maxSub = Math.min(scene.subVisuals.length, 3);
+      const maxSub = Math.min(scene.subVisuals.length, 2);
       for (let j = 0; j < maxSub; j++) {
         allImageTasks.push({
           sceneIndex: i,
