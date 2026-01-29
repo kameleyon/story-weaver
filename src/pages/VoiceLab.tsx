@@ -492,7 +492,7 @@ export default function VoiceLab() {
                         className="mt-0.5"
                       />
                       <label htmlFor="voice-consent" className="text-sm text-muted-foreground leading-relaxed cursor-pointer">
-                        I hereby confirm that I have all necessary rights or consents to upload and clone these voice samples and that I will not use the platform-generated content for any illegal, fraudulent, or harmful purpose. I reaffirm my obligation to abide by AudioMax's{" "}
+                        I hereby confirm that I have all necessary rights or consents to upload and clone these voice samples and that I will not use the platform-generated content for any illegal, fraudulent, or harmful purpose. I reaffirm my obligation to abide by MotionMax's{" "}
                         <a href="/terms" className="text-primary underline hover:no-underline">Terms of Service</a>,{" "}
                         <a href="/privacy" className="text-primary underline hover:no-underline">Privacy Policy</a>, and{" "}
                         <a href="/acceptable-use" className="text-primary underline hover:no-underline">Acceptable Use Policy</a>.

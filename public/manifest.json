@@ -1,7 +1,7 @@
 {
-  "name": "AudioMax - Turn Topics into Engaging Visual Contents",
-  "short_name": "AudioMax",
-  "description": "Turn topics into engaging visual contents. AI-powered video creation with voice cloning and professional quality.",
+  "name": "MotionMax - Turn text into engaging visual contents",
+  "short_name": "MotionMax",
+  "description": "Turn text into engaging visual contents. AI-powered video creation with voice cloning and professional quality.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0F1112",
@@ -36,7 +36,7 @@
       "sizes": "1200x630",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "AudioMax Homepage"
+      "label": "MotionMax Homepage"
     }
   ],
   "shortcuts": [

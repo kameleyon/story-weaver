@@ -1269,8 +1269,8 @@ async function generateSceneAudioOpenRouter(
       headers: {
         Authorization: `Bearer ${openRouterApiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://audiomax.lovable.app",
-        "X-Title": "AudioMax",
+        "HTTP-Referer": "https://motionmax.io",
+        "X-Title": "MotionMax",
       },
       body: JSON.stringify({
         model: modelName,
