@@ -1,5 +1,5 @@
 import {
-  User,
+  CircleUserRound,
   Settings,
   LogOut,
   Moon,
@@ -140,6 +140,24 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
     }
   };
 
+  // Fetch user profile for display name
+  const { data: profile } = useQuery({
+    queryKey: ["user-profile", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .single();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  const displayName = profile?.display_name || user?.email?.split("@")[0] || "User";
+
   const { data: recentProjects = [], isLoading } = useQuery({
     queryKey: ["recent-projects", user?.id],
     queryFn: async () => {
@@ -205,14 +223,10 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg"
+                  size="sm"
+                  className="h-8 rounded-lg gap-2 px-2"
                 >
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="bg-muted text-muted-foreground">
-                      <User className="h-3.5 w-3.5" />
-                    </AvatarFallback>
-                  </Avatar>
+                  <CircleUserRound className="h-5 w-5 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56 rounded-xl border-border/50 shadow-sm">
@@ -516,14 +530,10 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     } py-2 sm:py-2.5`}
                     size={isCollapsed ? "icon" : "default"}
                   >
-                    <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
-                      <AvatarFallback className="bg-muted text-muted-foreground">
-                        <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      </AvatarFallback>
-                    </Avatar>
+                    <CircleUserRound className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground shrink-0" />
                     {!isCollapsed && (
                       <div className="flex flex-col items-start overflow-hidden">
-                        <span className="truncate text-xs sm:text-sm">{user?.email?.split("@")[0] || "User"}</span>
+                        <span className="truncate text-xs sm:text-sm">{displayName}</span>
                         <span className="text-[10px] sm:text-[11px] text-muted-foreground/70">{getPlanDisplayName()}</span>
                       </div>
                     )}
