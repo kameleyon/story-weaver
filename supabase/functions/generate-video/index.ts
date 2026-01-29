@@ -3528,10 +3528,10 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               console.log(`[IMG] Using Hypereal nano-banana-pro for task ${task.taskIndex}`);
               result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
               
-              // Fallback to Replicate if Hypereal fails
+              // Fallback to Replicate nano-banana (not pro) if Hypereal fails
               if (!result.ok) {
-                console.log(`[IMG] Hypereal failed, falling back to Replicate for task ${task.taskIndex}`);
-                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+                console.log(`[IMG] Hypereal failed, falling back to Replicate nano-banana for task ${task.taskIndex}`);
+                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false); // false = use regular nano-banana
               }
             } else {
               console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
