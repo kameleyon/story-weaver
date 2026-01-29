@@ -148,21 +148,28 @@ export default function Dashboard() {
       
       if (!projects?.length) return [];
       
-      // Fetch latest complete generation for each project to get thumbnail
+      // Fetch ALL generations for each project to get status and thumbnail
       const projectIds = projects.map(p => p.id);
       const { data: generations } = await supabase
         .from("generations")
-        .select("project_id, scenes")
+        .select("project_id, scenes, status")
         .in("project_id", projectIds)
-        .eq("status", "complete")
         .order("created_at", { ascending: false });
       
-      // Create a map of project_id -> first image URL
+      // Create maps for thumbnails and failed status
       const thumbnailMap: Record<string, string | null> = {};
+      const failedMap: Record<string, boolean> = {};
+      
       if (generations) {
         for (const gen of generations) {
-          // Only use the first generation found for each project
+          // Track if the LATEST generation for this project failed
+          if (failedMap[gen.project_id] === undefined) {
+            failedMap[gen.project_id] = gen.status === "error" || gen.status === "generating";
+          }
+          
+          // Only use the first complete generation for thumbnail
           if (thumbnailMap[gen.project_id] !== undefined) continue;
+          if (gen.status !== "complete") continue;
           
           const scenes = gen.scenes as any[];
           if (Array.isArray(scenes) && scenes.length > 0) {
@@ -178,10 +185,11 @@ export default function Dashboard() {
         }
       }
       
-      // Attach thumbnails to projects
+      // Attach thumbnails and failed status to projects
       return projects.map(p => ({
         ...p,
         thumbnailUrl: thumbnailMap[p.id] || null,
+        hasFailed: failedMap[p.id] || false,
       }));
     },
     enabled: !!user?.id,
@@ -352,8 +360,16 @@ export default function Dashboard() {
                             ) : (
                               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0wIDUwQzIwIDMwIDQwIDcwIDYwIDUwQzgwIDMwIDEwMCA3MCAxMjAgNTBDMTQwIDMwIDE2MCA3MCAxODAgNTBDMjAwIDMwIDIwMCA1MCAyMDAgNTAiIHN0cm9rZT0icmdiYSg3MywgMjA1LCAxOTEsIDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMCA2MEM0MCAyMCA4MCAxMDAgMTIwIDYwQzE2MCAyMCAyMDAgNjAgMjAwIDYwIiBzdHJva2U9InJnYmEoNzMsIDIwNSwgMTkxLCAwLjIpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+')] opacity-40" />
                             )}
+                            {/* Generation Failed overlay */}
+                            {project.hasFailed && (
+                              <div className="absolute inset-0 bg-destructive/80 flex items-center justify-center z-10">
+                                <span className="text-destructive-foreground text-xs font-semibold px-2 text-center">
+                                  Generation Failed!
+                                </span>
+                              </div>
+                            )}
                             {/* Category icon overlay - always visible */}
-                            <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 backdrop-blur-sm z-10">
+                            <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 backdrop-blur-sm z-20">
                               <ProjectIcon className="h-4 w-4 text-white" />
                             </div>
                           </div>
