@@ -132,51 +132,18 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Fetch recent projects with their first generated thumbnail
+  // Fetch recent projects
   const { data: recentProjects = [] } = useQuery({
     queryKey: ["dashboard-recent", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      
-      // First, get the projects
-      const { data: projects } = await supabase
+      const { data } = await supabase
         .from("projects")
         .select("id, title, created_at, updated_at, project_type, style")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(10);
-      
-      if (!projects || projects.length === 0) return [];
-      
-      // Fetch the latest generation for each project to get thumbnails
-      const projectIds = projects.map(p => p.id);
-      const { data: generations } = await supabase
-        .from("generations")
-        .select("project_id, scenes")
-        .in("project_id", projectIds)
-        .eq("status", "completed")
-        .order("created_at", { ascending: false });
-      
-      // Create a map of project_id -> first image URL
-      const thumbnailMap: Record<string, string | null> = {};
-      generations?.forEach(gen => {
-        if (thumbnailMap[gen.project_id]) return; // Already have thumbnail for this project
-        
-        const scenes = gen.scenes as Array<{ imageUrls?: string[]; imageUrl?: string }> | null;
-        if (scenes && scenes.length > 0) {
-          const firstScene = scenes[0];
-          const imageUrl = firstScene.imageUrls?.[0] || firstScene.imageUrl || null;
-          if (imageUrl) {
-            thumbnailMap[gen.project_id] = imageUrl;
-          }
-        }
-      });
-      
-      // Merge thumbnails into projects
-      return projects.map(project => ({
-        ...project,
-        thumbnailUrl: thumbnailMap[project.id] || null
-      }));
+      return data || [];
     },
     enabled: !!user?.id,
   });
@@ -336,22 +303,10 @@ export default function Dashboard() {
                           className="shrink-0 w-[200px] rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-primary transition-colors shadow-sm group"
                         >
                           {/* Thumbnail area */}
-                          {project.thumbnailUrl ? (
-                            <div className="h-24 relative overflow-hidden">
-                              <img 
-                                src={project.thumbnailUrl} 
-                                alt={project.title}
-                                className="w-full h-full object-cover"
-                              />
-                              {/* Subtle overlay for consistency */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-                            </div>
-                          ) : (
-                            <div className="h-24 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent flex items-center justify-center relative overflow-hidden">
-                              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0wIDUwQzIwIDMwIDQwIDcwIDYwIDUwQzgwIDMwIDEwMCA3MCAxMjAgNTBDMTQwIDMwIDE2MCA3MCAxODAgNTBDMjAwIDMwIDIwMCA1MCAyMDAgNTAiIHN0cm9rZT0icmdiYSg3MywgMjA1LCAxOTEsIDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMCA2MEM0MCAyMCA4MCAxMDAgMTIwIDYwQzE2MCAyMCAyMDAgNjAgMjAwIDYwIiBzdHJva2U9InJnYmEoNzMsIDIwNSwgMTkxLCAwLjIpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+')] opacity-60" />
-                              <ProjectIcon className="h-8 w-8 text-primary relative z-10" />
-                            </div>
-                          )}
+                          <div className="h-24 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent flex items-center justify-center relative overflow-hidden">
+                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0wIDUwQzIwIDMwIDQwIDcwIDYwIDUwQzgwIDMwIDEwMCA3MCAxMjAgNTBDMTQwIDMwIDE2MCA3MCAxODAgNTBDMjAwIDMwIDIwMCA1MCAyMDAgNTAiIHN0cm9rZT0icmdiYSg3MywgMjA1LCAxOTEsIDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMCA2MEM0MCAyMCA4MCAxMDAgMTIwIDYwQzE2MCAyMCAyMDAgNjAgMjAwIDYwIiBzdHJva2U9InJnYmEoNzMsIDIwNSwgMTkxLCAwLjIpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+')] opacity-60" />
+                            <ProjectIcon className="h-8 w-8 text-primary relative z-10" />
+                          </div>
                           {/* Info area */}
                           <div className="p-3">
                             <p className="font-medium text-sm text-gray-900 dark:text-foreground truncate group-hover:text-primary transition-colors">
