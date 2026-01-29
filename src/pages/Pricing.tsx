@@ -602,11 +602,11 @@ export default function Pricing() {
           >
             <p className="text-sm text-muted-foreground">
               Have questions? Check our{" "}
-              <a href="mailto:support@audiomax.com" className="text-primary hover:underline">
+              <a href="mailto:support@motionmax.io" className="text-primary hover:underline">
                 FAQ
               </a>{" "}
               or{" "}
-              <a href="mailto:support@audiomax.com" className="text-primary hover:underline">
+              <a href="mailto:support@motionmax.io" className="text-primary hover:underline">
                 contact support
               </a>
             </p>
