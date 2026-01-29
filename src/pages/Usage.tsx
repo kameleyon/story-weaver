@@ -125,6 +125,8 @@ export default function Usage() {
 
   // Month filter state
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [visibleCount, setVisibleCount] = useState(20);
+  const ITEMS_PER_PAGE = 20;
   
   // Generate month options (last 12 months)
   const monthOptions = useMemo(() => {
@@ -191,6 +193,16 @@ export default function Usage() {
       isSameMonth(new Date(activity.created_at), filterDate)
     );
   }, [allActivity, selectedMonth]);
+
+  // Paginated activity
+  const paginatedActivity = useMemo(() => {
+    return filteredActivity.slice(0, visibleCount);
+  }, [filteredActivity, visibleCount]);
+
+  // Reset visible count when filter changes
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [selectedMonth]);
 
   const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
   const PlanIcon = planInfo.icon;
@@ -550,104 +562,120 @@ export default function Usage() {
                   </p>
                 </div>
               ) : (
-              <div className="rounded-xl border border-border/60 overflow-hidden bg-card/50">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-border/60 bg-muted/20">
-                      <TableHead className="w-8 sm:w-10 py-2 px-1.5 sm:px-3" />
-                      <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Project</TableHead>
-                      <TableHead className="hidden sm:table-cell py-2 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Status</TableHead>
-                      <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70 text-right">Stats</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredActivity.map((activity) => {
-                      const formatTime = (ms: number | null) => {
-                        if (!ms) return null;
-                        const seconds = Math.floor(ms / 1000);
-                        const minutes = Math.floor(seconds / 60);
-                        const secs = seconds % 60;
-                        return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
-                      };
-                      
-                      const isComplete = activity.status === "complete" || activity.status === "completed";
-                      const isFailed = activity.status === "failed" || activity.status === "error";
-                      const projectType = (activity.project as any)?.project_type;
-                      const IconComponent = projectType === "storytelling" 
-                        ? Clapperboard 
-                        : projectType === "smartflow" || projectType === "smart-flow"
-                          ? Wallpaper
-                          : Video;
-                      
-                      return (
-                        <TableRow
-                          key={activity.id}
-                          className="cursor-default hover:bg-muted/30 border-b border-primary/20 group"
-                        >
-                          <TableCell className="py-2 px-1.5 sm:px-3">
-                            <div className="p-1 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20">
-                              <IconComponent className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-2 px-1 sm:px-3 max-w-0">
-                            <div className="min-w-0 flex-1 overflow-hidden">
-                              <span className="font-normal opacity-85 truncate block text-xs sm:text-sm">
-                                {(activity.project as any)?.title || "Untitled Video"}
-                              </span>
-                              <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
-                                {format(new Date(activity.created_at), "MMM d, h:mm a")}
-                              </span>
-                              {/* Status badge on mobile only */}
-                              <Badge 
-                                variant="secondary" 
-                                className={`sm:hidden mt-1 text-[10px] px-1.5 py-0 h-4 font-normal ${
-                                  isComplete
-                                    ? "bg-muted text-white/75" 
-                                    : isFailed
-                                      ? "bg-destructive/20 text-destructive"
-                                      : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                                }`}
-                              >
-                                {activity.status}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell py-2 px-3">
-                            <Badge 
-                              variant="secondary" 
-                              className={`text-[10px] px-1.5 py-0 h-4 font-normal ${
-                                isComplete
-                                  ? "bg-muted text-white/75" 
-                                  : isFailed
-                                    ? "bg-destructive/20 text-destructive"
-                                    : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                              }`}
+                <>
+                  <div className="rounded-xl border border-border/60 overflow-hidden bg-card/50">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent border-border/60 bg-muted/20">
+                          <TableHead className="w-8 sm:w-10 py-2 px-1.5 sm:px-3" />
+                          <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Project</TableHead>
+                          <TableHead className="hidden sm:table-cell py-2 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Status</TableHead>
+                          <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70 text-right">Stats</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedActivity.map((activity) => {
+                          const formatTime = (ms: number | null) => {
+                            if (!ms) return null;
+                            const seconds = Math.floor(ms / 1000);
+                            const minutes = Math.floor(seconds / 60);
+                            const secs = seconds % 60;
+                            return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+                          };
+                          
+                          const isComplete = activity.status === "complete" || activity.status === "completed";
+                          const isFailed = activity.status === "failed" || activity.status === "error";
+                          const projectType = (activity.project as any)?.project_type;
+                          const IconComponent = projectType === "storytelling" 
+                            ? Clapperboard 
+                            : projectType === "smartflow" || projectType === "smart-flow"
+                              ? Wallpaper
+                              : Video;
+                          
+                          return (
+                            <TableRow
+                              key={activity.id}
+                              className="cursor-default hover:bg-muted/30 border-b border-primary/20 group"
                             >
-                              {activity.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-2 px-1 sm:px-3 text-right">
-                            {isComplete && (
-                              <div className="flex items-center justify-end gap-2 sm:gap-3 text-[10px] sm:text-[11px] text-muted-foreground">
-                                {activity.generationTimeMs && (
-                                  <div className="flex items-center gap-0.5 sm:gap-1" title="Generation time">
-                                    <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                    <span>{formatTime(activity.generationTimeMs)}</span>
+                              <TableCell className="py-2 px-1.5 sm:px-3">
+                                <div className="p-1 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20">
+                                  <IconComponent className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 px-1 sm:px-3 max-w-0">
+                                <div className="min-w-0 flex-1 overflow-hidden">
+                                  <span className="font-normal opacity-85 truncate block text-xs sm:text-sm">
+                                    {(activity.project as any)?.title || "Untitled Video"}
+                                  </span>
+                                  <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
+                                    {format(new Date(activity.created_at), "MMM d, h:mm a")}
+                                  </span>
+                                  {/* Status badge on mobile only */}
+                                  <Badge 
+                                    variant="secondary" 
+                                    className={`sm:hidden mt-1 text-[10px] px-1.5 py-0 h-4 font-normal ${
+                                      isComplete
+                                        ? "bg-muted text-white/75" 
+                                        : isFailed
+                                          ? "bg-destructive/20 text-destructive"
+                                          : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                                    }`}
+                                  >
+                                    {activity.status}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className="hidden sm:table-cell py-2 px-3">
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`text-[10px] px-1.5 py-0 h-4 font-normal ${
+                                    isComplete
+                                      ? "bg-muted text-white/75" 
+                                      : isFailed
+                                        ? "bg-destructive/20 text-destructive"
+                                        : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                                  }`}
+                                >
+                                  {activity.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-2 px-1 sm:px-3 text-right">
+                                {isComplete && (
+                                  <div className="flex items-center justify-end gap-2 sm:gap-3 text-[10px] sm:text-[11px] text-muted-foreground">
+                                    {activity.generationTimeMs && (
+                                      <div className="flex items-center gap-0.5 sm:gap-1" title="Generation time">
+                                        <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                        <span>{formatTime(activity.generationTimeMs)}</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-0.5 sm:gap-1" title="Credits used">
+                                      <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                      <span>1</span>
+                                    </div>
                                   </div>
                                 )}
-                                <div className="flex items-center gap-0.5 sm:gap-1" title="Credits used">
-                                  <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                  <span>1</span>
-                                </div>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {/* Show more button */}
+                  {visibleCount < filteredActivity.length && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                        className="gap-2"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                        Show more ({filteredActivity.length - visibleCount} remaining)
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
