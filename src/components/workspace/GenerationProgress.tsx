@@ -1,136 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Wand2, Wallpaper, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, Wand2, Wallpaper } from "lucide-react";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
   state: GenerationState;
-  onRetry?: () => void;
 }
 
-export function GenerationProgress({ state, onRetry }: GenerationProgressProps) {
+export function GenerationProgress({ state }: GenerationProgressProps) {
   const isSmartFlow = state.projectType === "smartflow";
-
-  // Timer tick to ensure time-based UI (like the 60s safety-valve button)
-  // can appear even if the backend stops sending progress updates.
-  const [now, setNow] = useState(() => Date.now());
-
-  // Detect when generation appears stuck (no meaningful progress updates)
-  // and show a recovery button as a safety valve.
-  const generationStartRef = useRef<number>(Date.now());
-  const lastChangeAtRef = useRef<number>(Date.now());
-  const lastSignatureRef = useRef<string>("");
-  const [isStuck, setIsStuck] = useState(false);
-
-  // Shorter, more responsive thresholds - if nothing changes for this long, something's wrong
-  const STUCK_THRESHOLD_MS = 90 * 1000; // 90 seconds of no change = stuck
-  const MIN_GENERATION_TIME_FOR_BUTTON_MS = 60 * 1000; // Always show button after 60s as safety valve
-
-  // Detect state inconsistencies that indicate a stalled pipeline
-  const hasStateInconsistency = useMemo(() => {
-    const msg = state.statusMessage?.toLowerCase() || "";
-    
-    // Status says something is complete but step doesn't match
-    if (msg.includes("script complete") && state.step === "scripting" && state.progress < 15) {
-      return true;
-    }
-    if (msg.includes("audio complete") && state.step === "visuals" && state.progress < 50) {
-      return true;
-    }
-    if (msg.includes("images complete") && state.step === "visuals" && state.progress < 90) {
-      return true;
-    }
-    // Progress says ready for next phase but step hasn't advanced
-    if (msg.includes("ready for") && state.progress < 20) {
-      return true;
-    }
-    
-    return false;
-  }, [state.statusMessage, state.step, state.progress]);
-
-  const signature = useMemo(() => {
-    // Only include fields that should change when real progress happens.
-    // Exclude statusMessage from signature to avoid false positives from repeated status updates
-    return JSON.stringify({
-      step: state.step,
-      progress: Math.round(state.progress),
-      currentScene: state.currentScene,
-      completedImages: state.completedImages,
-      totalImages: state.totalImages,
-      error: state.error,
-    });
-  }, [
-    state.step,
-    state.progress,
-    state.currentScene,
-    state.completedImages,
-    state.totalImages,
-    state.error,
-  ]);
-
-  // Track when generation starts
-  useEffect(() => {
-    if (state.isGenerating && state.step !== "complete" && state.step !== "error") {
-      generationStartRef.current = Date.now();
-    }
-  }, [state.isGenerating, state.step]);
-
-  // Force re-render while generating so `MIN_GENERATION_TIME_FOR_BUTTON_MS` can be evaluated.
-  useEffect(() => {
-    if (!state.isGenerating || state.step === "complete" || state.step === "error") return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [state.isGenerating, state.step]);
-
-  useEffect(() => {
-    if (signature !== lastSignatureRef.current) {
-      lastSignatureRef.current = signature;
-      lastChangeAtRef.current = Date.now();
-      setIsStuck(false);
-    }
-  }, [signature]);
-
-  useEffect(() => {
-    // Reset any stuck state when generation is not active or is done.
-    if (!state.isGenerating || state.step === "complete" || state.step === "error") {
-      setIsStuck(false);
-      return;
-    }
-
-    const id = window.setInterval(() => {
-      const elapsed = Date.now() - lastChangeAtRef.current;
-      const totalElapsed = Date.now() - generationStartRef.current;
-      
-      // Mark as stuck if:
-      // 1. No progress change for STUCK_THRESHOLD_MS, OR
-      // 2. State inconsistency detected (status/step mismatch), OR
-      // 3. Been generating for a while with no completion in sight
-      const noProgressForTooLong = elapsed >= STUCK_THRESHOLD_MS;
-      const inconsistentState = hasStateInconsistency && totalElapsed > 30000; // Give 30s before flagging inconsistency
-      
-      setIsStuck(noProgressForTooLong || inconsistentState);
-    }, 2000);
-
-    return () => window.clearInterval(id);
-  }, [state.isGenerating, state.step, hasStateInconsistency]);
-
-  // Show the recovery button if stuck OR if generation has been running long enough
-  const showRecoveryButton = useMemo(() => {
-    if (!state.isGenerating || state.step === "complete") return false;
-    if (state.step === "error") return true; // Always show on error
-    // Safety valve: show if either the pipeline looks stuck OR there has been no meaningful
-    // progress update for long enough. This is more reliable than basing it solely on
-    // total elapsed time (which can reset on step transitions or remounts).
-    const totalElapsed = now - generationStartRef.current;
-    const sinceLastChange = now - lastChangeAtRef.current;
-
-    return (
-      isStuck ||
-      sinceLastChange >= MIN_GENERATION_TIME_FOR_BUTTON_MS ||
-      totalElapsed >= MIN_GENERATION_TIME_FOR_BUTTON_MS
-    );
-  }, [state.isGenerating, state.step, isStuck, now]);
   
   // Build verbose status message based on current step and progress
   const getStatusMessage = (): string => {
@@ -145,7 +22,7 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
       case "analysis":
         if (progress < 5) return "Starting generation...";
         if (progress < 8) return isSmartFlow ? "Analyzing your data..." : "Analyzing your content...";
-        if (progress < 10) return "Generating character references..."; // Character phase for Pro users
+        if (progress < 10) return "Generating character references...";
         return isSmartFlow ? "Preparing infographic layout..." : "Preparing script generation...";
       
       case "scripting":
@@ -168,11 +45,9 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
           return "Creating your infographic...";
         }
         if (progress < 45) {
-          // Audio phase (40-45% is audio)
           const audioProgress = currentScene || 1;
           return `Generating voiceover audio... (${audioProgress}/${sceneCount} scenes)`;
         }
-        // Image phase (45-90%)
         if (totalImages > 0 && completedImages >= 0) {
           return `Creating visuals... (${completedImages}/${totalImages} images)`;
         }
@@ -305,26 +180,6 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
           </div>
         </div>
       </div>
-
-      {/* Recovery Button - show on error, when stuck, or as safety valve after 60s */}
-      {onRetry && showRecoveryButton && (
-        <div className="flex flex-col items-center gap-2 pt-2">
-          <Button
-            onClick={onRetry}
-            variant="outline"
-            size="sm"
-            className="gap-2 text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            {state.step === "error" ? "Try Again" : "Cancel & Restart"}
-          </Button>
-          {state.step !== "error" && (
-            <p className="text-xs text-muted-foreground text-center max-w-xs">
-              If generation looks stuck, use this to restart.
-            </p>
-          )}
-        </div>
-      )}
     </motion.div>
   );
 }

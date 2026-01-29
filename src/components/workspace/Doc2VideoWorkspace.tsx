@@ -17,6 +17,7 @@ import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
@@ -345,7 +346,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                   <div className="rounded-2xl border border-primary/50 bg-primary/10 p-8 text-center">
                     <AlertCircle className="h-12 w-12 mx-auto text-primary mb-4" />
                     <h2 className="text-xl font-semibold text-foreground mb-2">Generation Failed</h2>
-                    <p className="text-muted-foreground mb-6">{generationState.error}</p>
+                    <p className="text-muted-foreground mb-6">{getUserFriendlyErrorMessage(generationState.error)}</p>
                     <Button onClick={handleRetry} variant="outline" className="gap-2">
                       <RotateCcw className="h-4 w-4" />
                       Try Again
@@ -383,7 +384,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                   exit={{ opacity: 0, y: -20 }}
                   className="max-w-2xl mx-auto space-y-6"
                 >
-                  <GenerationProgress state={generationState} onRetry={handleRetry} />
+                  <GenerationProgress state={generationState} />
                 </motion.div>
               )}
             </AnimatePresence>

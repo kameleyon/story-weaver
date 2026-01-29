@@ -558,28 +558,21 @@ export function useGenerationPipeline() {
           format: project.format as "landscape" | "portrait" | "square",
         }));
       } else if (generation) {
-        const dbProgress = typeof generation.progress === "number" ? generation.progress : 0;
-        const scenes = normalizeScenes(generation.scenes);
-        const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
-        const sceneCount = scenes?.length ?? state.sceneCount;
-        const step = inferStepFromDb(generation.status, dbProgress);
-
+        // For any non-complete generation (generating, error, pending, etc.),
+        // show the failed interface immediately instead of pretending it's still generating
         setState({
-          step,
-          progress: dbProgress,
-          sceneCount,
-          currentScene: inferCurrentSceneFromDb(dbProgress, sceneCount),
-          totalImages: meta.totalImages || sceneCount,
-          completedImages: meta.completedImages,
-          isGenerating: true,
+          step: "error",
+          progress: 0,
+          sceneCount: state.sceneCount,
+          currentScene: 0,
+          totalImages: state.sceneCount,
+          completedImages: 0,
+          isGenerating: false,
           projectId,
           generationId: generation.id,
           title: project.title,
-          scenes,
           format: project.format as "landscape" | "portrait" | "square",
-          statusMessage: meta.statusMessage,
-          costTracking: meta.costTracking,
-          phaseTimings: meta.phaseTimings,
+          error: "This generation was interrupted. Please try again.",
         });
       } else {
         setState((prev) => ({

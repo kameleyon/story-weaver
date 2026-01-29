@@ -23,6 +23,7 @@ import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
 import { CharacterPreview, type CharacterData } from "./CharacterPreview";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
 import type { WorkspaceHandle } from "./Doc2VideoWorkspace";
 
 interface StorytellingWorkspaceProps {
@@ -360,7 +361,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                   <div className="rounded-2xl border border-primary/50 bg-primary/10 p-8 text-center">
                     <AlertCircle className="h-12 w-12 mx-auto text-primary mb-4" />
                     <h2 className="text-xl font-semibold text-foreground mb-2">Story Generation Failed</h2>
-                    <p className="text-muted-foreground mb-6">{generationState.error}</p>
+                    <p className="text-muted-foreground mb-6">{getUserFriendlyErrorMessage(generationState.error)}</p>
                     <Button onClick={() => { reset(); handleGenerate(); }} variant="outline" className="gap-2">
                       <RotateCcw className="h-4 w-4" />
                       Try Again
@@ -398,7 +399,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                   exit={{ opacity: 0, y: -20 }}
                   className="max-w-2xl mx-auto space-y-6"
                 >
-                  <GenerationProgress state={generationState} onRetry={() => { reset(); handleGenerate(); }} />
+                  <GenerationProgress state={generationState} />
                 </motion.div>
               )}
             </AnimatePresence>
