@@ -1811,53 +1811,62 @@ async function generateSceneAudio(
   return result;
 }
 
-// ============= IMAGE GENERATION WITH NANO BANANA =============
+// ============= IMAGE GENERATION WITH NANO BANANA (Pro uses nano-banana-pro at 1K) =============
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiKey: string,
   format: string,
+  useProModel: boolean = false, // Pro/Enterprise users get nano-banana-pro with 1K resolution
 ): Promise<
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   // Map format to nano-banana supported aspect ratios
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  // Pro users get nano-banana-pro at 1K resolution for higher quality
+  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana";
 
   try {
-    // Using Google Nano Banana model via Replicate
-    // Docs: https://replicate.com/google/nano-banana
-    console.log(`[IMG] Generating image with Nano Banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
+    console.log(`[IMG] Generating image with ${modelName}, format: ${format}, aspect_ratio: ${aspectRatio}`);
 
-    const createResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana/predictions", {
+    // Build input - nano-banana-pro supports resolution parameter
+    const input: Record<string, unknown> = {
+      prompt,
+      aspect_ratio: aspectRatio,
+      output_format: "png",
+    };
+    
+    // Add resolution for Pro model (1K = 1024px on the long side)
+    if (useProModel) {
+      input.resolution = "1k";
+    }
+
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
         "Content-Type": "application/json",
         Prefer: "wait",
       },
-      body: JSON.stringify({
-        input: {
-          prompt,
-          aspect_ratio: aspectRatio,
-          output_format: "png",
-        },
-      }),
+      body: JSON.stringify({ input }),
     });
 
     if (!createResponse.ok) {
       const status = createResponse.status;
       const retryAfter = createResponse.headers.get("retry-after");
       const errText = await createResponse.text().catch(() => "");
-      console.error(`[IMG] Nano Banana create failed: ${status} - ${errText}`);
+      console.error(`[IMG] ${modelName} create failed: ${status} - ${errText}`);
       return {
         ok: false,
-        error: `Replicate Nano Banana failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `Replicate ${modelName} failed: ${status}${errText ? ` - ${errText}` : ""}`,
         status,
         retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
       };
     }
 
     let prediction = await createResponse.json();
-    console.log(`[IMG] Nano Banana prediction started: ${prediction.id}, status: ${prediction.status}`);
+    console.log(`[IMG] ${modelName} prediction started: ${prediction.id}, status: ${prediction.status}`);
 
     // Poll for completion if not finished
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
@@ -1869,7 +1878,7 @@ async function generateImageWithReplicate(
     }
 
     if (prediction.status === "failed") {
-      console.error(`[IMG] Nano Banana prediction failed: ${prediction.error}`);
+      console.error(`[IMG] ${modelName} prediction failed: ${prediction.error}`);
       return { ok: false, error: prediction.error || "Image generation failed" };
     }
 
@@ -1883,20 +1892,20 @@ async function generateImageWithReplicate(
           : null;
 
     if (!imageUrl) {
-      console.error(`[IMG] Nano Banana no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
-      return { ok: false, error: "No image URL returned from Nano Banana" };
+      console.error(`[IMG] ${modelName} no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
+      return { ok: false, error: `No image URL returned from ${modelName}` };
     }
 
-    console.log(`[IMG] Nano Banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
+    console.log(`[IMG] ${modelName} success, downloading from: ${imageUrl.substring(0, 80)}...`);
 
     const imgResponse = await fetch(imageUrl);
     if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
 
     const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[IMG] Nano Banana image downloaded: ${bytes.length} bytes`);
+    console.log(`[IMG] ${modelName} image downloaded: ${bytes.length} bytes`);
     return { ok: true, bytes };
   } catch (err) {
-    console.error(`[IMG] Nano Banana error:`, err);
+    console.error(`[IMG] ${modelName} error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
@@ -3272,21 +3281,21 @@ async function handleImagesPhase(
 
   if (!generation) throw new Error("Generation not found");
 
-  // Check if user is Pro/Enterprise tier
+  // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
-  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   
-  // Use Hypereal for Pro/Enterprise users on ALL project types (doc2video, storytelling, smartflow)
-  const useHypereal = isProUser && !!hyperealApiKey;
+  // DISABLED: Hypereal is commented out - using Replicate only
+  // const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  // const useHypereal = isProUser && !!hyperealApiKey;
+  const useHypereal = false; // Force Replicate-only
+  const useProModel = isProUser; // Pro/Enterprise users get nano-banana-pro at 1K
 
-  const maxImagesPerCall = useHypereal ? MAX_IMAGES_PER_CALL_HYPEREAL : MAX_IMAGES_PER_CALL_DEFAULT;
+  const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT; // No Hypereal throttling needed
   
-  if (useHypereal) {
-    console.log(`[IMAGES] Using Hypereal nano-banana-pro-t2i for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
-  } else if (isProUser && !hyperealApiKey) {
-    console.warn(`[IMAGES] Pro user but HYPEREAL_API_KEY not configured - falling back to Replicate`);
+  if (useProModel) {
+    console.log(`[IMAGES] Using Replicate nano-banana-pro (1K) for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
   } else {
-    console.log(`[IMAGES] Using Replicate for non-Pro user (project type: ${generation.projects.project_type})`);
+    console.log(`[IMAGES] Using Replicate nano-banana for non-Pro user (project type: ${generation.projects.project_type})`);
   }
 
   const scenes = generation.scenes as Scene[];
@@ -3485,22 +3494,12 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       batchPromises.push(
         (async () => {
           for (let attempt = 1; attempt <= 3; attempt++) {
-            // Try Hypereal first if available (Pro/Enterprise with character consistency)
+            // Use Replicate for all images (Hypereal disabled)
+            // Pro/Enterprise users get nano-banana-pro at 1K resolution
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
             
-            if (useHypereal && hyperealApiKey) {
-              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex}`);
-              result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
-              
-              // If Hypereal fails, fall back to Replicate
-              if (!result.ok) {
-                console.warn(`[IMG] Hypereal failed, falling back to Replicate: ${result.error}`);
-                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
-              }
-            } else {
-              // Use Replicate (standard tier or fallback)
-              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format);
-            }
+            console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
+            result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
             
             if (result.ok) {
               const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
@@ -3845,15 +3844,15 @@ async function handleRegenerateImage(
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
 
-  // Check if user is Pro/Enterprise tier - use Hypereal for all Pro users
+  // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
-  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-  const useHypereal = isProUser && !!hyperealApiKey;
+  // DISABLED: Hypereal is commented out - using Replicate only
+  // const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  // const useHypereal = isProUser && !!hyperealApiKey;
+  const useProModel = isProUser; // Pro/Enterprise users get nano-banana-pro at 1K
   
-  if (useHypereal) {
-    console.log(`[regenerate-image] Pro/Enterprise user - will use Hypereal nano-banana-pro-t2i`);
-  } else if (isProUser && !hyperealApiKey) {
-    console.warn(`[regenerate-image] Pro user but HYPEREAL_API_KEY not configured - falling back to Replicate`);
+  if (useProModel) {
+    console.log(`[regenerate-image] Pro/Enterprise user - will use Replicate nano-banana-pro (1K)`);
   }
 
   // Get existing imageUrls or create from single imageUrl
@@ -3876,17 +3875,9 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Use Hypereal for Pro users, fallback to Replicate
-    if (useHypereal) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
-      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey!, format);
-      if (!imageResult.ok) {
-        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate: ${imageResult.error}`);
-        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
-      }
-    } else {
-      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format);
-    }
+    // Use Replicate - Pro users get nano-banana-pro at 1K
+    console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for regeneration`);
+    imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
   } else if (sourceImageUrl) {
     // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
     console.log(
@@ -3909,17 +3900,9 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image.`;
 
-    // Use Hypereal for Pro users, fallback to Replicate
-    if (useHypereal) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for modified regeneration`);
-      imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey!, format);
-      if (!imageResult.ok) {
-        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate: ${imageResult.error}`);
-        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
-      }
-    } else {
-      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format);
-    }
+    // Use Replicate - Pro users get nano-banana-pro at 1K
+    console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for modified regeneration`);
+    imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
   }
 
   if (!imageResult.ok) {
