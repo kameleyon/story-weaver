@@ -1,91 +1,95 @@
 
-# Plan: Simplify Progress Bar and Add Retry Button
+# Plan: Reduce Images to 3 Per Scene and Optimize Generation Speed
 
-## Overview
-This plan addresses two UI improvements to the GenerationProgress component:
-1. Remove the scene/image count breakdown section
-2. Add a retry button that appears when generation fails or appears stuck
+## Problem Summary
+The current system generates **4 images per scene** (1 primary + 3 sub-visuals), resulting in 24 images for a 6-scene "short" video. This takes 5+ minutes with Hypereal Pro.
 
-## Changes Required
+## Your Questions Answered
+| Question | Answer |
+|----------|--------|
+| Haitian Creole + Google TTS? | ✅ Yes - Gemini TTS with 2-model fallback chain |
+| Voice being used? | Replicate Chatterbox (Ethan/Marisol) for standard; ElevenLabs for custom |
+| Hypereal fallback? | ✅ Yes - Falls back to Replicate nano-banana automatically |
+| Subscription checking? | Every 60s in background - does NOT affect generation |
 
-### 1. Update GenerationProgress Component
-**File:** `src/components/workspace/GenerationProgress.tsx`
+## Solution: Change from 4 to 3 Images Per Scene
 
-**Remove Scene/Image Breakdown:**
-- Delete the grid section at lines 186-200 that displays "Total Scenes" and "Images Generated" counts
-- This information is already shown inline in the status messages (e.g., "Creating visuals... (3/6 images)")
+### What Changes
+Reduce `maxSub` from **3** to **2** sub-visuals per scene:
+- Before: 1 primary + 3 sub-visuals = 4 images/scene
+- After: 1 primary + 2 sub-visuals = **3 images/scene**
 
-**Add Retry Button:**
-- Accept a new `onRetry` callback prop
-- Display a "Retry" button when:
-  - `step === "error"` (generation failed)
-  - OR when generation appears stuck (still showing as generating but no progress updates)
-- Add a subtle timer-based "stuck detection" using the `isGenerating` state combined with checking if the step is not "complete"
-- Style the retry button consistently with the existing error card pattern (bg-primary/10 with primary text)
+### Expected Results
+| Length | Before (4 img/scene) | After (3 img/scene) | Time Saved |
+|--------|---------------------|---------------------|------------|
+| Short (6 scenes) | 24 images | 18 images | ~25% faster |
+| Brief (8 scenes) | 32 images | 24 images | ~25% faster |
+| Presentation (16 scenes) | 64 images | 48 images | ~25% faster |
 
-**Props Update:**
-```typescript
-interface GenerationProgressProps {
-  state: GenerationState;
-  onRetry?: () => void;
-}
-```
+Estimated generation time for "short": **3-4 minutes** (down from 5-6 minutes)
 
-**Retry Button UI:**
-- Display below the status message area
-- Show only when `step === "error"` OR when `isGenerating && step !== "complete"` (user can cancel/retry anytime during generation)
-- Use a clear "Try Again" label with a refresh icon
-- For error state: always visible
-- For stuck/in-progress: always visible as a safety valve (allow users to restart if something feels wrong)
+## Technical Implementation
 
-### 2. Update All Workspace Components
-Pass the `onRetry` callback to GenerationProgress in each workspace:
+### File: `supabase/functions/generate-video/index.ts`
 
-**Files to update:**
-- `src/components/workspace/StorytellingWorkspace.tsx`
-- `src/components/workspace/Doc2VideoWorkspace.tsx`
-- `src/components/workspace/SmartFlowWorkspace.tsx`
-- `src/components/workspace/Workspace.tsx`
-
-**Implementation:**
-- Pass a retry handler that calls `reset()` followed by the workspace's `handleGenerate()` function
-- This reuses the same pattern already used in GenerationResult for "Regenerate All"
-
----
-
-## Technical Details
-
-### GenerationProgress Component Changes
-
+**Change 1: Script Phase (Doc2Video)** - Around line 2519
 ```text
-Updated component structure:
-+------------------------------------+
-|  Header (icon + title)             |
-+------------------------------------+
-|  Progress bar with percentage      |
-+------------------------------------+
-|  Status message box                |
-+------------------------------------+
-|  [Retry button - conditional]      |
-+------------------------------------+
+// Before
+const maxSub = Math.min(scene.subVisuals.length, 3);
+
+// After
+const maxSub = Math.min(scene.subVisuals.length, 2);
 ```
 
-The retry button appears:
-- **Always during active generation** - as a "Cancel & Restart" option
-- **Always on error** - to retry the failed generation
-- **Never when complete** - the result page handles regeneration
+**Change 2: Script Phase (Storytelling)** - Similar location
+```text
+// Before
+const maxSub = Math.min(scene.subVisuals.length, 3);
 
-### Workspace Integration Pattern
-
-Each workspace will pass:
-```typescript
-<GenerationProgress 
-  state={generationState} 
-  onRetry={() => {
-    reset();
-    handleGenerate();
-  }}
-/>
+// After
+const maxSub = Math.min(scene.subVisuals.length, 2);
 ```
 
-This mirrors the existing `onRegenerateAll` pattern used in GenerationResult.
+**Change 3: Images Phase** - Around line 3416
+```text
+// Before
+const maxSub = Math.min(scene.subVisuals.length, 3);
+
+// After
+const maxSub = Math.min(scene.subVisuals.length, 2);
+```
+
+**Change 4: Update the comment** - Lines 2513, 3414
+```text
+// Before
+// Calculate total images needed (3-4 images per scene for dynamic visuals)
+// Always generate up to 3 sub-visuals for variety (total 4 images per scene max)
+
+// After
+// Calculate total images needed (2-3 images per scene for dynamic visuals)
+// Generate up to 2 sub-visuals for variety (total 3 images per scene max)
+```
+
+## Subscription Checking - No Changes Needed
+
+The 60-second polling is background-only and doesn't block generation. However, to reduce noise:
+- Current: `setInterval(checkSubscription, 60000)` (every 60s)
+- Keep as-is: This only runs when user is on the page, not during generation
+
+The edge function logs you saw are from the **page reloading/rebuilding** during development, not from the generation pipeline. Once the app is stable, these won't appear during generation.
+
+## Files Modified
+
+1. **supabase/functions/generate-video/index.ts**
+   - Line ~2519: Reduce maxSub from 3 to 2 in Doc2Video script phase
+   - Line ~2817: Reduce maxSub from 3 to 2 in Storytelling script phase
+   - Line ~3416: Reduce maxSub from 3 to 2 in images phase
+   - Update comments to reflect the change
+
+## Testing Checklist
+
+After implementation:
+- [ ] Generate a new "short" video - should have 18 images instead of 24
+- [ ] Verify generation completes in under 4 minutes
+- [ ] Check video export still has smooth transitions with 3 images per scene
+- [ ] Verify Haitian Creole content still uses Gemini TTS correctly
