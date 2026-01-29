@@ -3445,8 +3445,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
   let completedThisChunk = 0;
 
-  // Process this chunk in batches of 4
-  const BATCH_SIZE = 4;
+  // Process this chunk in batches of 6 for faster generation
+  const BATCH_SIZE = 6;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
