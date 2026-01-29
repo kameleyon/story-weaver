@@ -3287,15 +3287,16 @@ async function handleImagesPhase(
   // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
   
-  // DISABLED: Hypereal is commented out - using Replicate only
-  // const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-  // const useHypereal = isProUser && !!hyperealApiKey;
-  const useHypereal = false; // Force Replicate-only
+  // Hypereal nano-banana-pro for Pro/Enterprise users
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  const useHypereal = isProUser && !!hyperealApiKey;
   const useProModel = isProUser; // Pro/Enterprise users get nano-banana-pro at 1K
 
-  const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT; // No Hypereal throttling needed
+  const maxImagesPerCall = useHypereal ? MAX_IMAGES_PER_CALL_HYPEREAL : MAX_IMAGES_PER_CALL_DEFAULT;
   
-  if (useProModel) {
+  if (useHypereal) {
+    console.log(`[IMAGES] Using Hypereal nano-banana-pro for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
+  } else if (useProModel) {
     console.log(`[IMAGES] Using Replicate nano-banana-pro (1K) for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
   } else {
     console.log(`[IMAGES] Using Replicate nano-banana for non-Pro user (project type: ${generation.projects.project_type})`);
@@ -3520,12 +3521,22 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           if (staggerDelay > 0) await sleep(staggerDelay);
           
           for (let attempt = 1; attempt <= 4; attempt++) {
-            // Use Replicate for all images (Hypereal disabled)
-            // Pro/Enterprise users get nano-banana-pro at 1K resolution
+            // Pro/Enterprise users get Hypereal nano-banana-pro, with Replicate as fallback
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
             
-            console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
-            result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+            if (useHypereal && hyperealApiKey) {
+              console.log(`[IMG] Using Hypereal nano-banana-pro for task ${task.taskIndex}`);
+              result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
+              
+              // Fallback to Replicate if Hypereal fails
+              if (!result.ok) {
+                console.log(`[IMG] Hypereal failed, falling back to Replicate for task ${task.taskIndex}`);
+                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+              }
+            } else {
+              console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
+              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+            }
             
             if (result.ok) {
               const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
