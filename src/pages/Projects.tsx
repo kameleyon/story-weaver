@@ -25,7 +25,11 @@ import {
   Wallpaper,
   Wand2,
   Clock,
+  LayoutList,
+  LayoutGrid,
 } from "lucide-react";
+import { ProjectsGridView } from "@/components/projects/ProjectsGridView";
+import defaultThumbnail from "@/assets/dashboard/default-thumbnail.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -88,7 +92,10 @@ interface Project {
   created_at: string;
   updated_at: string;
   project_type?: string;
+  thumbnailUrl?: string | null;
 }
+
+type ViewMode = "list" | "grid";
 
 const formatTimestamp = (iso: string) => {
   const d = new Date(iso);
@@ -96,7 +103,7 @@ const formatTimestamp = (iso: string) => {
   return format(d, "MMM d, h:mm a");
 };
 
-const ITEMS_PER_PAGE = 25;
+const ITEMS_PER_PAGE = 20;
 
 export default function Projects() {
   const navigate = useNavigate();
@@ -106,6 +113,7 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -122,13 +130,48 @@ export default function Projects() {
     queryKey: ["all-projects", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const { data, error } = await supabase
+      
+      // Fetch projects
+      const { data: projectsData, error } = await supabase
         .from("projects")
         .select("*")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
-      return data as Project[];
+      
+      if (!projectsData?.length) return [];
+      
+      // Fetch thumbnails from generations
+      const projectIds = projectsData.map(p => p.id);
+      const { data: generations } = await supabase
+        .from("generations")
+        .select("project_id, scenes")
+        .in("project_id", projectIds)
+        .eq("status", "complete")
+        .order("created_at", { ascending: false });
+      
+      // Create thumbnail map
+      const thumbnailMap: Record<string, string | null> = {};
+      if (generations) {
+        for (const gen of generations) {
+          if (thumbnailMap[gen.project_id] !== undefined) continue;
+          const scenes = gen.scenes as any[];
+          if (Array.isArray(scenes) && scenes.length > 0) {
+            const firstScene = scenes[0];
+            const imageUrl = firstScene?.imageUrl || 
+                            firstScene?.image_url || 
+                            (Array.isArray(firstScene?.imageUrls) ? firstScene.imageUrls[0] : null);
+            thumbnailMap[gen.project_id] = imageUrl || null;
+          } else {
+            thumbnailMap[gen.project_id] = null;
+          }
+        }
+      }
+      
+      return projectsData.map(p => ({
+        ...p,
+        thumbnailUrl: thumbnailMap[p.id] || null,
+      })) as Project[];
     },
     enabled: !!user?.id,
   });
@@ -398,6 +441,24 @@ export default function Projects() {
             >
               <SortIcon className="h-4 w-4" />
             </Button>
+            <div className="flex border border-border/50 rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                size="icon"
+                onClick={() => setViewMode("list")}
+                className="rounded-none border-0"
+              >
+                <LayoutList className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                size="icon"
+                onClick={() => setViewMode("grid")}
+                className="rounded-none border-0"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
             {selectedIds.size > 0 && (
               <Button variant="destructive" onClick={handleBulkDelete} className="gap-2">
                 <Trash2 className="h-4 w-4" />
@@ -432,6 +493,31 @@ export default function Projects() {
               </Button>
             )}
           </motion.div>
+        ) : viewMode === "grid" ? (
+          /* Grid View */
+          <>
+            <ProjectsGridView
+              projects={paginatedProjects}
+              onView={handleView}
+              onRename={handleRename}
+              onDelete={handleDelete}
+              onShare={handleShare}
+              onDownload={handleDownload}
+              onToggleFavorite={handleToggleFavorite}
+            />
+            {/* Show More Button for Grid */}
+            {hasMore && (
+              <div className="mt-6 flex justify-center">
+                <Button 
+                  variant="outline" 
+                  onClick={handleShowMore}
+                  className="gap-2"
+                >
+                  Show more ({filteredProjects.length - visibleCount} remaining)
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           /* List View */
           <div className="rounded-xl border border-border/60 overflow-hidden bg-card/50">
