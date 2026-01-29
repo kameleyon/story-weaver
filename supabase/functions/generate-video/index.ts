@@ -3256,9 +3256,9 @@ async function handleAudioPhase(
 
 // Images phase now processes in chunks to avoid request timeouts.
 // IMPORTANT: When using Hypereal (character consistency), each image can be slow enough that
-// 8 images can exceed the platform gateway timeout (~150s). We therefore reduce the per-call
-// workload for Hypereal to keep requests reliably under the limit.
-const MAX_IMAGES_PER_CALL_DEFAULT = 8;
+// Smaller chunk size (6) prevents "failed to fetch" timeouts during image generation.
+// Pro model (nano-banana-pro 1K) is slower, so we keep chunks manageable.
+const MAX_IMAGES_PER_CALL_DEFAULT = 6;
 const MAX_IMAGES_PER_CALL_HYPEREAL = 4;
 
 async function handleImagesPhase(
@@ -3413,6 +3413,12 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let taskIndex = 0;
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
+    
+    // ALWAYS generate exactly 3 images per scene: 1 primary + 2 sub-visuals
+    // This ensures consistent visual density across all scenes
+    const IMAGES_PER_SCENE = 3;
+    
+    // Primary image (subIndex 0)
     allImageTasks.push({
       sceneIndex: i,
       subIndex: 0,
@@ -3420,17 +3426,29 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       taskIndex: taskIndex++,
     });
 
-    // Generate up to 2 sub-visuals for variety (total 3 images per scene max)
-    if (scene.subVisuals && scene.subVisuals.length > 0) {
-      const maxSub = Math.min(scene.subVisuals.length, 2);
-      for (let j = 0; j < maxSub; j++) {
-        allImageTasks.push({
-          sceneIndex: i,
-          subIndex: j + 1,
-          prompt: buildImagePrompt(scene.subVisuals[j], scene, j + 1),
-          taskIndex: taskIndex++,
-        });
+    // Generate exactly 2 sub-visuals (subIndex 1 and 2)
+    for (let j = 0; j < 2; j++) {
+      let subPrompt: string;
+      
+      if (scene.subVisuals && scene.subVisuals.length > j && scene.subVisuals[j]) {
+        // Use provided sub-visual prompt
+        subPrompt = scene.subVisuals[j];
+      } else {
+        // Synthesize fallback sub-visual from primary prompt with variation
+        const basePrompt = scene.visualPrompt || "";
+        const variations = [
+          "close-up detail shot, different angle, ",
+          "wide establishing shot, alternative perspective, ",
+        ];
+        subPrompt = variations[j] + basePrompt;
       }
+      
+      allImageTasks.push({
+        sceneIndex: i,
+        subIndex: j + 1,
+        prompt: buildImagePrompt(subPrompt, scene, j + 1),
+        taskIndex: taskIndex++,
+      });
     }
   }
 
