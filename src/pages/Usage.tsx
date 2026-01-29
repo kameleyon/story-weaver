@@ -665,10 +665,10 @@ export default function Usage() {
                   {visibleCount < filteredActivity.length && (
                     <div className="flex justify-center pt-4">
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
-                        className="gap-2"
+                        className="gap-2 hover:bg-muted"
                       >
                         <ChevronDown className="h-4 w-4" />
                         Show more ({filteredActivity.length - visibleCount} remaining)
