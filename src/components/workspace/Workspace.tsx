@@ -1,4 +1,5 @@
-import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
+import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -50,6 +51,40 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       setFormat("portrait");
     }
   }, [length, format]);
+
+  // Auto-recovery: if we're in a "generating" state but the generation actually completed
+  // (e.g., after page reload/rebuild), poll the database to verify and restore complete state
+  useEffect(() => {
+    if (
+      generationState.projectId && 
+      generationState.isGenerating && 
+      generationState.step !== "complete" && 
+      generationState.step !== "error"
+    ) {
+      const checkGenerationStatus = async () => {
+        const { data } = await supabase
+          .from("generations")
+          .select("id,status,progress,scenes,error_message")
+          .eq("project_id", generationState.projectId!)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // If database says complete but UI shows generating, reload the project
+        if (data?.status === "complete" && generationState.step !== "complete") {
+          console.log("[Workspace] Found completed generation in DB, reloading project");
+          await loadProject(generationState.projectId!);
+        }
+      };
+
+      // Check immediately
+      checkGenerationStatus();
+
+      // Also set up a periodic check every 5 seconds while "generating"
+      const intervalId = setInterval(checkGenerationStatus, 5000);
+      return () => clearInterval(intervalId);
+    }
+  }, [generationState.projectId, generationState.isGenerating, generationState.step, loadProject]);
 
   const handleGenerate = () => {
     if (canGenerate) {
