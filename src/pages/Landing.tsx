@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg-dark.png";
-import audiomaxLogo from "@/assets/audiomax-logo-full.png";
+import motionmaxLogo from "@/assets/motionmax-logo.png";
 import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
 import heroVideoPoster from "@/assets/hero-video-poster.png";
@@ -400,10 +400,10 @@ export default function Landing() {
               <p className="text-sm text-muted-foreground">
                 Have questions? Reach out to us at{" "}
                 <a 
-                  href="mailto:support@audiomax.ai" 
+                  href="mailto:support@motionmax.io" 
                   className="text-primary hover:underline font-medium"
                 >
-                  support@audiomax.ai
+                  support@motionmax.io
                 </a>
               </p>
             </div>
@@ -414,7 +414,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border/30 py-10">
         <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 px-6 sm:px-8">
-          <img src={audiomaxLogo} alt="MotionMax" className="h-10 w-auto" />
+          <img src={motionmaxLogo} alt="MotionMax" className="h-10 w-auto" />
           <p className="text-sm text-muted-foreground">
             © 2025 MotionMax. All rights reserved.
           </p>
