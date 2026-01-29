@@ -2,6 +2,8 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export type GenerationStep =
   | "idle"
   | "analysis"
@@ -181,54 +183,77 @@ export function useGenerationPipeline() {
     body: Record<string, unknown>,
     timeoutMs: number = 120000 // Default 2 minutes
   ): Promise<any> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    // Retry transient network failures (these often surface as TypeError: Failed to fetch)
+    // so generation doesn't hard-fail on a single dropped connection.
+    const MAX_ATTEMPTS = 3;
 
-    try {
-      // Get fresh token before each phase call to avoid JWT expiration mid-generation
-      const accessToken = await getFreshSession();
-      
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      clearTimeout(timeoutId);
+      try {
+        // Get fresh token before each phase call to avoid JWT expiration mid-generation
+        const accessToken = await getFreshSession();
 
-      if (!response.ok) {
-        let errorMessage = "Phase failed";
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData?.error || errorMessage;
-        } catch {
-          // ignore
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          let errorMessage = "Phase failed";
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData?.error || errorMessage;
+          } catch {
+            // ignore
+          }
+
+          if (response.status === 429) {
+            throw new Error("Rate limit exceeded. Please wait and try again.");
+          }
+          if (response.status === 402) {
+            throw new Error("AI credits exhausted. Please add credits.");
+          }
+          if (response.status === 401) {
+            throw new Error("Session expired. Please refresh the page and try again.");
+          }
+          if (response.status === 503 && attempt < MAX_ATTEMPTS) {
+            await sleep(800 * attempt);
+            continue;
+          }
+
+          throw new Error(errorMessage);
         }
 
-        if (response.status === 429) {
-          throw new Error("Rate limit exceeded. Please wait and try again.");
+        return response.json();
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new Error(`Request timed out after ${timeoutMs / 1000}s. Please try again.`);
         }
-        if (response.status === 402) {
-          throw new Error("AI credits exhausted. Please add credits.");
+
+        const msg = error instanceof Error ? error.message : String(error);
+        const isTransientFetch = msg.toLowerCase().includes("failed to fetch");
+        if (attempt < MAX_ATTEMPTS && isTransientFetch) {
+          const jitter = Math.floor(Math.random() * 250);
+          await sleep(750 * attempt + jitter);
+          continue;
         }
-        if (response.status === 401) {
-          throw new Error("Session expired. Please refresh the page and try again.");
-        }
-        throw new Error(errorMessage);
+
+        throw error;
       }
-
-      return response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timed out after ${timeoutMs / 1000}s. Please try again.`);
-      }
-      throw error;
     }
+
+    throw new Error("Phase call failed after retries");
   };
 
   const startGeneration = useCallback(

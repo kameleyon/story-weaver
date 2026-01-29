@@ -4,7 +4,10 @@ import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/b
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // Keep this list broad so browser preflight never fails as client headers evolve.
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
 // ============= INPUT VALIDATION =============
@@ -3110,7 +3113,8 @@ async function handleAudioPhase(
   const audioUrls: (string | null)[] = scenes.map((s) => (s as any).audioUrl ?? null);
   let totalAudioSeconds = typeof costTracking.audioSeconds === "number" ? costTracking.audioSeconds : 0;
 
-  const BATCH_SIZE = 2;
+  // Keep each request small to avoid network/gateway timeouts that surface as client-side "Failed to fetch".
+  const BATCH_SIZE = 1;
   const batchStart = Math.max(0, startIndex);
   const batchEnd = Math.min(batchStart + BATCH_SIZE, scenes.length);
 
@@ -3989,7 +3993,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
 // ============= MAIN HANDLER =============
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
