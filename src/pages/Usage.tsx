@@ -37,6 +37,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, format, startOfMonth, endOfMonth, subMonths, isSameMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -542,45 +550,69 @@ export default function Usage() {
                   </p>
                 </div>
               ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-thin">
-                  {filteredActivity.map((activity) => {
-                    const formatTime = (ms: number | null) => {
-                      if (!ms) return null;
-                      const seconds = Math.floor(ms / 1000);
-                      const minutes = Math.floor(seconds / 60);
-                      const secs = seconds % 60;
-                      return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
-                    };
-                    
-                    const isComplete = activity.status === "complete" || activity.status === "completed";
-                    const isFailed = activity.status === "failed" || activity.status === "error";
-                    
-                    return (
-                      <div
-                        key={activity.id}
-                        className="flex items-center gap-3 rounded-lg border border-border/30 bg-muted/20 px-3 py-2.5"
-                      >
-                        {/* Icon - based on project type */}
-                        {(() => {
-                          const projectType = (activity.project as any)?.project_type;
-                          const IconComponent = projectType === "storytelling" 
-                            ? Clapperboard 
-                            : projectType === "smartflow" || projectType === "smart-flow"
-                              ? Wallpaper
-                              : Video;
-                          return (
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                              <IconComponent className="h-4 w-4 text-primary" />
+              <div className="rounded-xl border border-border/60 overflow-hidden bg-card/50">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-border/60 bg-muted/20">
+                      <TableHead className="w-8 sm:w-10 py-2 px-1.5 sm:px-3" />
+                      <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Project</TableHead>
+                      <TableHead className="hidden sm:table-cell py-2 px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70">Status</TableHead>
+                      <TableHead className="py-2 px-1 sm:px-3 text-[11px] uppercase tracking-wider text-muted-foreground/70 text-right">Stats</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActivity.map((activity) => {
+                      const formatTime = (ms: number | null) => {
+                        if (!ms) return null;
+                        const seconds = Math.floor(ms / 1000);
+                        const minutes = Math.floor(seconds / 60);
+                        const secs = seconds % 60;
+                        return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+                      };
+                      
+                      const isComplete = activity.status === "complete" || activity.status === "completed";
+                      const isFailed = activity.status === "failed" || activity.status === "error";
+                      const projectType = (activity.project as any)?.project_type;
+                      const IconComponent = projectType === "storytelling" 
+                        ? Clapperboard 
+                        : projectType === "smartflow" || projectType === "smart-flow"
+                          ? Wallpaper
+                          : Video;
+                      
+                      return (
+                        <TableRow
+                          key={activity.id}
+                          className="cursor-default hover:bg-muted/30 border-b border-primary/20 group"
+                        >
+                          <TableCell className="py-2 px-1.5 sm:px-3">
+                            <div className="p-1 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20">
+                              <IconComponent className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             </div>
-                          );
-                        })()}
-                        
-                        {/* Title & Status */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-normal opacity-85 truncate">
-                            {(activity.project as any)?.title || "Untitled Video"}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          </TableCell>
+                          <TableCell className="py-2 px-1 sm:px-3 max-w-0">
+                            <div className="min-w-0 flex-1 overflow-hidden">
+                              <span className="font-normal opacity-85 truncate block text-xs sm:text-sm">
+                                {(activity.project as any)?.title || "Untitled Video"}
+                              </span>
+                              <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
+                                {format(new Date(activity.created_at), "MMM d, h:mm a")}
+                              </span>
+                              {/* Status badge on mobile only */}
+                              <Badge 
+                                variant="secondary" 
+                                className={`sm:hidden mt-1 text-[10px] px-1.5 py-0 h-4 font-normal ${
+                                  isComplete
+                                    ? "bg-muted text-white/75" 
+                                    : isFailed
+                                      ? "bg-destructive/20 text-destructive"
+                                      : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                                }`}
+                              >
+                                {activity.status}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell py-2 px-3">
                             <Badge 
                               variant="secondary" 
                               className={`text-[10px] px-1.5 py-0 h-4 font-normal ${
@@ -593,33 +625,29 @@ export default function Usage() {
                             >
                               {activity.status}
                             </Badge>
-                            <span className="text-[10px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {/* Stats - Only show for completed */}
-                        {isComplete && (
-                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground shrink-0">
-                            {/* Generation Time */}
-                            {activity.generationTimeMs && (
-                              <div className="flex items-center gap-1" title="Generation time">
-                                <Clock className="h-3 w-3" />
-                                <span>{formatTime(activity.generationTimeMs)}</span>
+                          </TableCell>
+                          <TableCell className="py-2 px-1 sm:px-3 text-right">
+                            {isComplete && (
+                              <div className="flex items-center justify-end gap-2 sm:gap-3 text-[10px] sm:text-[11px] text-muted-foreground">
+                                {activity.generationTimeMs && (
+                                  <div className="flex items-center gap-0.5 sm:gap-1" title="Generation time">
+                                    <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                    <span>{formatTime(activity.generationTimeMs)}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-0.5 sm:gap-1" title="Credits used">
+                                  <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                  <span>1</span>
+                                </div>
                               </div>
                             )}
-                            {/* Credits */}
-                            <div className="flex items-center gap-1" title="Credits used">
-                              <Coins className="h-3 w-3" />
-                              <span>1</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
               )}
             </CardContent>
           </Card>
