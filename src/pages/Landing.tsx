@@ -205,7 +205,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Why AudioMax Section */}
+      {/* Why MotionMax Section */}
       <section 
         id="features" 
         className="py-24 sm:py-32 relative overflow-hidden"

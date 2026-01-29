@@ -64,7 +64,7 @@ export default function Auth() {
           toast({ variant: "destructive", title: "Sign up failed", description: error.message });
           return;
         }
-        toast({ title: "Account created", description: "Welcome to AudioMax!" });
+        toast({ title: "Account created", description: "Welcome to MotionMax!" });
         navigate("/app");
         return;
       }

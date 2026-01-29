@@ -595,7 +595,7 @@ export default function Usage() {
                           
                           // Clean up title - remove redundant prefixes
                           const rawTitle = (activity.project as any)?.title || "Untitled Video";
-                          const cleanTitle = rawTitle.replace(/^AudioMax:\s*/i, "");
+                          const cleanTitle = rawTitle.replace(/^(AudioMax|MotionMax):\s*/i, "");
                           
                           return (
                             <TableRow

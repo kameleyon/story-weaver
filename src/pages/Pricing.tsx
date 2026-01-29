@@ -445,7 +445,7 @@ export default function Pricing() {
                           disabled={isDisabled || isLoading}
                           onClick={() => {
                             if (plan.id === "enterprise") {
-                              window.open("mailto:sales@audiomax.com?subject=Enterprise%20Inquiry", "_blank");
+                              window.open("mailto:support@motionmax.io?subject=Enterprise%20Inquiry", "_blank");
                             } else if (plan.id === "free" && currentPlan !== "free") {
                               setShowDowngradeDialog(true);
                             } else if (plan.priceId) {
