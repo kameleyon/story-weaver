@@ -36,6 +36,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
     const [length, setLength] = useState<VideoLength>("brief");
     const [style, setStyle] = useState<VisualStyle>("minimalist");
     const [customStyle, setCustomStyle] = useState("");
+    const [customStyleImage, setCustomStyleImage] = useState<string | null>(null);
     const [voice, setVoice] = useState<VoiceSelection>({ type: "standard", gender: "female" });
     const [presenterFocus, setPresenterFocus] = useState("");
     const [characterDescription, setCharacterDescription] = useState("");
@@ -103,6 +104,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
         length,
         style,
         customStyle: style === "custom" ? customStyle : undefined,
+        customStyleImage: style === "custom" ? customStyleImage : undefined,
         brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
         presenterFocus: presenterFocus.trim() || undefined,
         characterDescription: characterDescription.trim() || undefined,
@@ -135,6 +137,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
       setLength("brief");
       setStyle("minimalist");
       setCustomStyle("");
+      setCustomStyleImage(null);
       setVoice({ type: "standard", gender: "female" });
       setPresenterFocus("");
       setCharacterDescription("");
@@ -326,6 +329,8 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                       customStyle={customStyle}
                       onSelect={setStyle}
                       onCustomStyleChange={setCustomStyle}
+                      customStyleImage={customStyleImage}
+                      onCustomStyleImageChange={setCustomStyleImage}
                       brandMarkEnabled={brandMarkEnabled}
                       brandMarkText={brandMarkText}
                       onBrandMarkEnabledChange={setBrandMarkEnabled}

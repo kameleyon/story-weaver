@@ -68,6 +68,7 @@ interface GenerationParams {
   length: string;
   style: string;
   customStyle?: string;
+  customStyleImage?: string | null; // Base64 image for custom style reference
   brandMark?: string;
   presenterFocus?: string;
   characterDescription?: string;
@@ -301,6 +302,7 @@ export function useGenerationPipeline() {
             length: params.length,
             style: params.style,
             customStyle: params.customStyle,
+            customStyleImage: params.customStyleImage,
             brandMark: params.brandMark,
             presenterFocus: params.presenterFocus,
             characterDescription: params.characterDescription,
