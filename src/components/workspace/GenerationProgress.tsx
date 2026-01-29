@@ -119,9 +119,17 @@ export function GenerationProgress({ state, onRetry }: GenerationProgressProps) 
   const showRecoveryButton = useMemo(() => {
     if (!state.isGenerating || state.step === "complete") return false;
     if (state.step === "error") return true; // Always show on error
-    
+    // Safety valve: show if either the pipeline looks stuck OR there has been no meaningful
+    // progress update for long enough. This is more reliable than basing it solely on
+    // total elapsed time (which can reset on step transitions or remounts).
     const totalElapsed = now - generationStartRef.current;
-    return isStuck || totalElapsed >= MIN_GENERATION_TIME_FOR_BUTTON_MS;
+    const sinceLastChange = now - lastChangeAtRef.current;
+
+    return (
+      isStuck ||
+      sinceLastChange >= MIN_GENERATION_TIME_FOR_BUTTON_MS ||
+      totalElapsed >= MIN_GENERATION_TIME_FOR_BUTTON_MS
+    );
   }, [state.isGenerating, state.step, isStuck, now]);
   
   // Build verbose status message based on current step and progress
