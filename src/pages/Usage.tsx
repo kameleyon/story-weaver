@@ -523,8 +523,8 @@ export default function Usage() {
           </div>
 
           {/* Activity History */}
-          <div className="mt-4 sm:mt-6">
-            <div className="px-0 pt-4 sm:pt-6">
+          <Card className="mt-4 sm:mt-6 border-border/50 bg-card/50 shadow-sm">
+            <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -547,8 +547,8 @@ export default function Usage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="px-0 pb-4 sm:pb-6">
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               {isLoadingActivity ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   Loading activity...
@@ -677,8 +677,8 @@ export default function Usage() {
                   )}
                 </>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </motion.div>
       </main>
     </div>
