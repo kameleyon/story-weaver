@@ -211,11 +211,15 @@ export function SceneEditModal({
                     </div>
                     <Textarea
                       value={imageModification}
-                      onChange={(e) => setImageModification(e.target.value)}
+                      onChange={(e) => setImageModification(e.target.value.slice(0, 5000))}
                       placeholder="e.g., Make the background blue, add a sunset, change the expression to happy..."
                       className="min-h-[100px] resize-none"
                       disabled={isRegenerating}
+                      maxLength={5000}
                     />
+                    <p className="text-xs text-muted-foreground text-right">
+                      {imageModification.length}/5000
+                    </p>
                     <div className="flex gap-2">
                       <Button
                         onClick={handleModifyImage}
@@ -312,13 +316,14 @@ export function SceneEditModal({
                     </Button>
                   </div>
 
-                  {/* Visual Prompt (read-only for reference) */}
+                  {/* Visual Prompt hidden - uncomment if needed for debugging
                   <div className="space-y-2">
                     <Label className="text-sm text-muted-foreground">Visual Prompt (reference)</Label>
                     <p className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg line-clamp-4">
                       {scene.visualPrompt}
                     </p>
                   </div>
+                  */}
                 </div>
               </div>
             </div>
