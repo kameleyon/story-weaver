@@ -13,6 +13,7 @@ import { StyleSelector, type VisualStyle } from "./StyleSelector";
 import { VoiceSelector, type VoiceSelection } from "./VoiceSelector";
 import { PresenterFocusInput } from "./PresenterFocusInput";
 import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
+import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
@@ -43,6 +44,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
     const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
     const [brandMarkText, setBrandMarkText] = useState("");
     const [disableExpressions, setDisableExpressions] = useState(false);
+    const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
 
     const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
@@ -105,6 +107,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
         presenterFocus: presenterFocus.trim() || undefined,
         characterDescription: characterDescription.trim() || undefined,
         disableExpressions,
+        characterConsistencyEnabled,
         projectType: "doc2video",
         // Voice selection - pass gender for standard voices, voiceName for custom
         voiceType: voice.type,
@@ -140,6 +143,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
       setBrandMarkEnabled(false);
       setBrandMarkText("");
       setDisableExpressions(false);
+      setCharacterConsistencyEnabled(false);
     };
 
     const handleOpenProject = async (projectId: string) => {
@@ -293,6 +297,12 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                         <span className="text-[10px] sm:text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
                       </label>
                     </div>
+
+                    {/* Character Consistency Toggle - Pro Feature */}
+                    <CharacterConsistencyToggle
+                      enabled={characterConsistencyEnabled}
+                      onToggle={setCharacterConsistencyEnabled}
+                    />
                   </div>
 
                   {/* Configuration */}
