@@ -303,7 +303,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     <AlertCircle className="h-12 w-12 mx-auto text-primary mb-4" />
                     <h2 className="text-xl font-semibold text-foreground mb-2">Generation Failed</h2>
                     <p className="text-muted-foreground mb-6">{generationState.error}</p>
-                    <Button onClick={() => { reset(); }} variant="outline" className="gap-2">
+                    <Button onClick={() => { reset(); handleGenerate(); }} variant="outline" className="gap-2">
                       <RotateCcw className="h-4 w-4" />
                       Try Again
                     </Button>
