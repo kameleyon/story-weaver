@@ -3676,7 +3676,7 @@ async function handleFinalizePhase(
 
   const { data: generation } = await supabase
     .from("generations")
-    .select("*, projects!inner(title)")
+    .select("*, projects!inner(title, length, project_type)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
@@ -3703,6 +3703,68 @@ async function handleFinalizePhase(
     return rest;
   });
 
+  // ============= CREDIT DEDUCTION =============
+  // Calculate credits based on length: Short/SmartFlow=1, Brief=2, Presentation=4
+  const projectLength = generation.projects.length || "short";
+  const projectType = generation.projects.project_type || "doc2video";
+  
+  let creditsToDeduct = 1; // Default for short
+  if (projectType === "smartflow") {
+    creditsToDeduct = 1; // Smart Flow always 1 credit
+  } else if (projectLength === "brief") {
+    creditsToDeduct = 2;
+  } else if (projectLength === "presentation") {
+    creditsToDeduct = 4;
+  }
+
+  console.log(`[FINALIZE] Deducting ${creditsToDeduct} credit(s) for ${projectType}/${projectLength} video`);
+
+  // Deduct credits from user_credits table
+  const { data: currentCredits, error: creditsError } = await supabase
+    .from("user_credits")
+    .select("credits_balance, total_used")
+    .eq("user_id", user.id)
+    .single();
+
+  if (creditsError && creditsError.code !== "PGRST116") {
+    console.error("[FINALIZE] Error fetching user credits:", creditsError);
+  }
+
+  if (currentCredits) {
+    const newBalance = Math.max(0, (currentCredits.credits_balance || 0) - creditsToDeduct);
+    const newTotalUsed = (currentCredits.total_used || 0) + creditsToDeduct;
+
+    const { error: updateError } = await supabase
+      .from("user_credits")
+      .update({
+        credits_balance: newBalance,
+        total_used: newTotalUsed,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      console.error("[FINALIZE] Error updating credits:", updateError);
+    } else {
+      console.log(`[FINALIZE] Credits updated: ${currentCredits.credits_balance} -> ${newBalance}`);
+
+      // Record transaction in credit_transactions table
+      const { error: txError } = await supabase.from("credit_transactions").insert({
+        user_id: user.id,
+        amount: -creditsToDeduct,
+        transaction_type: "generation",
+        description: `Video generation: ${generation.projects.title || "Untitled"} (${projectLength})`,
+      });
+
+      if (txError) {
+        console.error("[FINALIZE] Error recording credit transaction:", txError);
+      }
+    }
+  } else {
+    console.log("[FINALIZE] No user_credits record found, skipping deduction");
+  }
+  // ============= END CREDIT DEDUCTION =============
+
   // Mark complete
   await supabase
     .from("generations")
@@ -3726,7 +3788,7 @@ async function handleFinalizePhase(
   await supabase.from("projects").update({ status: "complete" }).eq("id", projectId).eq("user_id", user.id);
 
   console.log(
-    `Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}`,
+    `Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}, Credits: ${creditsToDeduct}`,
   );
 
   return new Response(
@@ -3739,6 +3801,7 @@ async function handleFinalizePhase(
       title: generation.projects.title,
       scenes: finalScenes,
       costTracking,
+      creditsUsed: creditsToDeduct,
       phaseTimings,
       totalTimeMs: totalTime,
     }),
