@@ -1,4 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -63,25 +64,64 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
       }
     }, [initialProjectId]);
 
-    const handleGenerate = () => {
-      if (canGenerate) {
-        startGeneration({
-          content,
-          format,
-          length,
-          style,
-          customStyle: style === "custom" ? customStyle : undefined,
-          brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
-          presenterFocus: presenterFocus.trim() || undefined,
-          characterDescription: characterDescription.trim() || undefined,
-          disableExpressions,
-          projectType: "doc2video",
-          // Voice selection - pass gender for standard voices, voiceName for custom
-          voiceType: voice.type,
-          voiceId: voice.voiceId,
-          voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
-        });
+    // Auto-recovery: if backend completes while UI is "generating" (e.g. after refresh),
+    // poll the database and reload the project once it's marked complete.
+    useEffect(() => {
+      if (
+        generationState.projectId &&
+        generationState.isGenerating &&
+        generationState.step !== "complete" &&
+        generationState.step !== "error"
+      ) {
+        const checkGenerationStatus = async () => {
+          const { data } = await supabase
+            .from("generations")
+            .select("id,status")
+            .eq("project_id", generationState.projectId!)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (data?.status === "complete" && generationState.step !== "complete") {
+            await loadProject(generationState.projectId!);
+          }
+        };
+
+        checkGenerationStatus();
+        const intervalId = setInterval(checkGenerationStatus, 5000);
+        return () => clearInterval(intervalId);
       }
+    }, [generationState.projectId, generationState.isGenerating, generationState.step, loadProject]);
+
+    const runGeneration = () => {
+      startGeneration({
+        content,
+        format,
+        length,
+        style,
+        customStyle: style === "custom" ? customStyle : undefined,
+        brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+        presenterFocus: presenterFocus.trim() || undefined,
+        characterDescription: characterDescription.trim() || undefined,
+        disableExpressions,
+        projectType: "doc2video",
+        // Voice selection - pass gender for standard voices, voiceName for custom
+        voiceType: voice.type,
+        voiceId: voice.voiceId,
+        voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
+      });
+    };
+
+    const handleGenerate = () => {
+      if (content.trim().length === 0) return;
+      if (generationState.isGenerating) return;
+      runGeneration();
+    };
+
+    const handleRetry = () => {
+      if (content.trim().length === 0) return;
+      reset();
+      runGeneration();
     };
 
     const handleNewProject = () => {
@@ -327,7 +367,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                     onNewProject={handleNewProject}
                     onRegenerateAll={() => {
                       reset();
-                      handleGenerate();
+                      runGeneration();
                     }}
                     totalTimeMs={generationState.totalTimeMs}
                     costTracking={generationState.costTracking}
@@ -343,7 +383,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                   exit={{ opacity: 0, y: -20 }}
                   className="max-w-2xl mx-auto space-y-6"
                 >
-                  <GenerationProgress state={generationState} onRetry={() => { reset(); handleGenerate(); }} />
+                  <GenerationProgress state={generationState} onRetry={handleRetry} />
                 </motion.div>
               )}
             </AnimatePresence>
