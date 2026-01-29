@@ -327,7 +327,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       {!isCollapsed && <span className="text-sm">Explainers</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Explainers – Turn text into education</TooltipContent>}
+                  {isCollapsed && <TooltipContent side="right">Explainers</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -347,7 +347,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       {!isCollapsed && <span className="text-sm">Visual Stories</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Visual Stories – Turn ideas into cinema</TooltipContent>}
+                  {isCollapsed && <TooltipContent side="right">Visual Stories</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -367,7 +367,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       {!isCollapsed && <span className="text-sm">Smart Flow</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Smart Flow – Turn data into visual insights</TooltipContent>}
+                  {isCollapsed && <TooltipContent side="right">Smart Flow</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -410,7 +410,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       {!isCollapsed && <span className="text-sm">Voice Lab</span>}
                     </SidebarMenuButton>
                   </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Voice Lab – Clone and manage your digital voice</TooltipContent>}
+                  {isCollapsed && <TooltipContent side="right">Voice Lab</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
 
@@ -530,7 +530,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     } py-2 sm:py-2.5`}
                     size={isCollapsed ? "icon" : "default"}
                   >
-                    <CircleUserRound className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground shrink-0" />
+                    <CircleUserRound className="h-6 w-6 text-muted-foreground shrink-0" />
                     {!isCollapsed && (
                       <div className="flex flex-col items-start overflow-hidden">
                         <span className="truncate text-xs sm:text-sm">{displayName}</span>
