@@ -111,7 +111,7 @@ export default function Usage() {
 
       if (error) throw error;
 
-      const completedGenerations = generations?.filter(g => g.status === "completed") || [];
+      const completedGenerations = generations?.filter(g => g.status === "completed" || g.status === "complete") || [];
       
       return {
         videosCreated: completedGenerations.length,
