@@ -191,15 +191,17 @@ export default function Landing() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="w-full max-w-2xl"
             >
-              <video
-                src={heroPromoVideo}
-                className="w-full rounded-2xl shadow-2xl"
-                controls
-                preload="metadata"
-                poster={heroVideoPoster}
-              >
-                Your browser does not support the video tag.
-              </video>
+              <div className="w-full rounded-2xl shadow-2xl overflow-hidden">
+                <video
+                  src={heroPromoVideo}
+                  className="w-full h-full"
+                  controls
+                  preload="metadata"
+                  poster={heroVideoPoster}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </div>
             </motion.div>
           </div>
         </div>
