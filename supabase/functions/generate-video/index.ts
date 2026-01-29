@@ -3455,8 +3455,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let completedThisChunk = 0;
 
   // Process this chunk in batches.
-  // Hypereal is slower/stricter; keep concurrency lower to avoid stalls/timeouts.
-  const BATCH_SIZE = useHypereal ? 4 : 6;
+  // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
+  const BATCH_SIZE = useProModel ? 3 : 5;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
@@ -3491,9 +3491,14 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
     const batchPromises = [];
     for (let t = batchStart; t < batchEnd; t++) {
       const task = tasksThisChunk[t];
+      // Stagger requests within batch to avoid rate limits (1.5s between each)
+      const staggerDelay = (t - batchStart) * 1500;
       batchPromises.push(
         (async () => {
-          for (let attempt = 1; attempt <= 3; attempt++) {
+          // Wait for stagger delay before starting this request
+          if (staggerDelay > 0) await sleep(staggerDelay);
+          
+          for (let attempt = 1; attempt <= 4; attempt++) {
             // Use Replicate for all images (Hypereal disabled)
             // Pro/Enterprise users get nano-banana-pro at 1K resolution
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
@@ -3528,9 +3533,12 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
 
-            if (attempt < 3) {
-              const delay = 'retryAfterSeconds' in result && result.retryAfterSeconds ? result.retryAfterSeconds * 1000 : 5000;
-              await sleep(delay + Math.random() * 1000);
+            if (attempt < 4) {
+              // Use server's retry-after or exponential backoff (3s, 6s, 12s)
+              const baseDelay = 'retryAfterSeconds' in result && result.retryAfterSeconds 
+                ? result.retryAfterSeconds * 1000 
+                : 3000 * Math.pow(2, attempt - 1);
+              await sleep(baseDelay + Math.random() * 2000);
             }
           }
           return { task, url: null };
