@@ -1,5 +1,5 @@
 import { forwardRef, HTMLAttributes } from "react";
-import motionmaxLogo from "@/assets/motionmax-hero-logo.png";
+import audiomaxLogo from "@/assets/audiomax-logo-full.png";
 
 interface ThemedLogoProps extends HTMLAttributes<HTMLImageElement> {
   className?: string;
@@ -8,7 +8,7 @@ interface ThemedLogoProps extends HTMLAttributes<HTMLImageElement> {
 
 export const ThemedLogo = forwardRef<HTMLImageElement, ThemedLogoProps>(
   ({ className = "h-10 w-auto", alt = "MotionMax", ...props }, ref) => {
-    return <img ref={ref} src={motionmaxLogo} alt={alt} className={className} {...props} />;
+    return <img ref={ref} src={audiomaxLogo} alt={alt} className={className} {...props} />;
   }
 );
 
