@@ -132,18 +132,57 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Fetch recent projects
+  // Fetch recent projects with their first generated image
   const { data: recentProjects = [] } = useQuery({
     queryKey: ["dashboard-recent", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const { data } = await supabase
+      
+      // Fetch projects
+      const { data: projects } = await supabase
         .from("projects")
         .select("id, title, created_at, updated_at, project_type, style")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(10);
-      return data || [];
+      
+      if (!projects?.length) return [];
+      
+      // Fetch latest complete generation for each project to get thumbnail
+      const projectIds = projects.map(p => p.id);
+      const { data: generations } = await supabase
+        .from("generations")
+        .select("project_id, scenes")
+        .in("project_id", projectIds)
+        .eq("status", "complete")
+        .order("created_at", { ascending: false });
+      
+      // Create a map of project_id -> first image URL
+      const thumbnailMap: Record<string, string | null> = {};
+      if (generations) {
+        for (const gen of generations) {
+          // Only use the first generation found for each project
+          if (thumbnailMap[gen.project_id] !== undefined) continue;
+          
+          const scenes = gen.scenes as any[];
+          if (Array.isArray(scenes) && scenes.length > 0) {
+            // Get first scene's image
+            const firstScene = scenes[0];
+            const imageUrl = firstScene?.imageUrl || 
+                            firstScene?.image_url || 
+                            (Array.isArray(firstScene?.imageUrls) ? firstScene.imageUrls[0] : null);
+            thumbnailMap[gen.project_id] = imageUrl || null;
+          } else {
+            thumbnailMap[gen.project_id] = null;
+          }
+        }
+      }
+      
+      // Attach thumbnails to projects
+      return projects.map(p => ({
+        ...p,
+        thumbnailUrl: thumbnailMap[p.id] || null,
+      }));
     },
     enabled: !!user?.id,
   });
@@ -304,8 +343,18 @@ export default function Dashboard() {
                         >
                           {/* Thumbnail area */}
                           <div className="h-24 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent flex items-center justify-center relative overflow-hidden">
-                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0wIDUwQzIwIDMwIDQwIDcwIDYwIDUwQzgwIDMwIDEwMCA3MCAxMjAgNTBDMTQwIDMwIDE2MCA3MCAxODAgNTBDMjAwIDMwIDIwMCA1MCAyMDAgNTAiIHN0cm9rZT0icmdiYSg3MywgMjA1LCAxOTEsIDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMCA2MEM0MCAyMCA4MCAxMDAgMTIwIDYwQzE2MCAyMCAyMDAgNjAgMjAwIDYwIiBzdHJva2U9InJnYmEoNzMsIDIwNSwgMTkxLCAwLjIpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+')] opacity-60" />
-                            <ProjectIcon className="h-8 w-8 text-primary relative z-10" />
+                            {project.thumbnailUrl ? (
+                              <img 
+                                src={project.thumbnailUrl} 
+                                alt={project.title}
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
+                            ) : (
+                              <>
+                                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0wIDUwQzIwIDMwIDQwIDcwIDYwIDUwQzgwIDMwIDEwMCA3MCAxMjAgNTBDMTQwIDMwIDE2MCA3MCAxODAgNTBDMjAwIDMwIDIwMCA1MCAyMDAgNTAiIHN0cm9rZT0icmdiYSg3MywgMjA1LCAxOTEsIDAuMykiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMCA2MEM0MCAyMCA4MCAxMDAgMTIwIDYwQzE2MCAyMCAyMDAgNjAgMjAwIDYwIiBzdHJva2U9InJnYmEoNzMsIDIwNSwgMTkxLCAwLjIpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+')] opacity-60" />
+                                <ProjectIcon className="h-8 w-8 text-primary relative z-10" />
+                              </>
+                            )}
                           </div>
                           {/* Info area */}
                           <div className="p-3">
