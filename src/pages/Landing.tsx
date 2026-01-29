@@ -215,8 +215,8 @@ export default function Landing() {
           backgroundPosition: 'center',
         }}
       >
-        {/* Overlay for better text readability */}
-        <div className="absolute inset-0 bg-primary/75" />
+        {/* Overlay for better text readability - darker */}
+        <div className="absolute inset-0 bg-primary/85" />
         <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -225,9 +225,9 @@ export default function Landing() {
             className="text-center mb-16"
           >
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-              Why AudioMax?
+              Why MotionMax?
             </h2>
-            <p className="mt-4 text-lg text-white/80 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-white/90 max-w-2xl mx-auto">
               From idea to polished content in minutes. Our AI handles the heavy lifting so you can focus on your message.
             </p>
           </motion.div>
@@ -386,15 +386,15 @@ export default function Landing() {
             className="text-center space-y-6"
           >
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              About AudioMax
+              About MotionMax
             </h2>
             <p className="text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              AudioMax is an AI-powered content creation platform designed to transform the way you produce visual and audio content. 
+              MotionMax is an AI-powered content creation platform designed to transform the way you produce visual and audio content. 
               Our mission is to empower creators, educators, and businesses with intuitive tools that turn ideas into professional-quality 
               videos and audio experiences in minutes—not hours.
             </p>
             <p className="text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Built by a passionate team of engineers and creatives, AudioMax leverages cutting-edge AI to handle the heavy lifting, 
+              Built by a passionate team of engineers and creatives, MotionMax leverages cutting-edge AI to handle the heavy lifting, 
               so you can focus on what matters most: your message.
             </p>
             <div className="pt-4">
@@ -415,9 +415,9 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border/30 py-10">
         <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 px-6 sm:px-8">
-          <img src={audiomaxLogo} alt="AudioMax" className="h-10 w-auto" />
+          <img src={audiomaxLogo} alt="MotionMax" className="h-10 w-auto" />
           <p className="text-sm text-muted-foreground">
-            © 2025 AudioMax. All rights reserved.
+            © 2025 MotionMax. All rights reserved.
           </p>
         </div>
       </footer>
