@@ -46,6 +46,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [length, setLength] = useState<StoryLength>("brief");
     const [style, setStyle] = useState<VisualStyle>("minimalist");
     const [customStyle, setCustomStyle] = useState("");
+    const [customStyleImage, setCustomStyleImage] = useState<string | null>(null);
     const [voice, setVoice] = useState<VoiceSelection>({ type: "standard", gender: "female" });
     const [characterDescription, setCharacterDescription] = useState("");
     const [characterDescOpen, setCharacterDescOpen] = useState(false);
@@ -112,6 +113,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
           length: lengthMap[length],
           style,
           customStyle: style === "custom" ? customStyle : undefined,
+          customStyleImage: style === "custom" ? customStyleImage : undefined,
           brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
           characterDescription: characterDescription.trim() || undefined,
           projectType: "storytelling",
@@ -142,6 +144,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       setLength("brief");
       setStyle("minimalist");
       setCustomStyle("");
+      setCustomStyleImage(null);
       setVoice({ type: "standard", gender: "female" });
       setCharacterDescription("");
       setCharacterDescOpen(false);
@@ -331,6 +334,8 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                       customStyle={customStyle}
                       onSelect={setStyle}
                       onCustomStyleChange={setCustomStyle}
+                      customStyleImage={customStyleImage}
+                      onCustomStyleImageChange={setCustomStyleImage}
                       brandMarkEnabled={brandMarkEnabled}
                       brandMarkText={brandMarkText}
                       onBrandMarkEnabledChange={setBrandMarkEnabled}

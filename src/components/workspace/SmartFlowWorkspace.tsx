@@ -34,6 +34,8 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     const [extractionPrompt, setExtractionPrompt] = useState("");
     const [format, setFormat] = useState<VideoFormat>("portrait");
     const [style, setStyle] = useState<SmartFlowStyle>("minimalist");
+    const [customStyle, setCustomStyle] = useState("");
+    const [customStyleImage, setCustomStyleImage] = useState<string | null>(null);
     const [enableVoice, setEnableVoice] = useState(false);
     const [voice, setVoice] = useState<VoiceSelection>({ type: "standard", gender: "female" });
     const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
@@ -93,6 +95,8 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           presenterFocus: extractionPrompt, // Reusing presenterFocus for extraction prompt
           format,
           style,
+          customStyle: style === "custom" ? customStyle : undefined,
+          customStyleImage: style === "custom" ? customStyleImage : undefined,
           length: "short", // Fixed for Smart Flow - single scene
           brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
           projectType: "smartflow", // Smart Flow uses dedicated single-scene backend
@@ -114,6 +118,8 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       setExtractionPrompt("");
       setFormat("portrait");
       setStyle("minimalist");
+      setCustomStyle("");
+      setCustomStyleImage(null);
       setEnableVoice(false);
       setVoice({ type: "standard", gender: "female" });
       setBrandMarkEnabled(false);
@@ -237,6 +243,10 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     <SmartFlowStyleSelector
                       selected={style}
                       onSelect={setStyle}
+                      customStyle={customStyle}
+                      onCustomStyleChange={setCustomStyle}
+                      customStyleImage={customStyleImage}
+                      onCustomStyleImageChange={setCustomStyleImage}
                       brandMarkEnabled={brandMarkEnabled}
                       brandMarkText={brandMarkText}
                       onBrandMarkEnabledChange={setBrandMarkEnabled}

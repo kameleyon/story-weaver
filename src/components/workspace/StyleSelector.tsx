@@ -1,9 +1,10 @@
-import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon } from "lucide-react";
+import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon, Upload, X, Image as ImageIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { useRef, useState, useEffect } from "react";
 
 // Import style preview images
@@ -28,6 +29,8 @@ interface StyleSelectorProps {
   customStyle: string;
   onSelect: (style: VisualStyle) => void;
   onCustomStyleChange: (value: string) => void;
+  customStyleImage?: string | null;
+  onCustomStyleImageChange?: (image: string | null) => void;
   brandMarkEnabled?: boolean;
   brandMarkText?: string;
   onBrandMarkEnabledChange?: (enabled: boolean) => void;
@@ -55,12 +58,15 @@ export function StyleSelector({
   customStyle, 
   onSelect, 
   onCustomStyleChange,
+  customStyleImage,
+  onCustomStyleImageChange,
   brandMarkEnabled = false,
   brandMarkText = "",
   onBrandMarkEnabledChange,
   onBrandMarkTextChange
 }: StyleSelectorProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
@@ -91,6 +97,29 @@ export function StyleSelector({
         left: direction === "left" ? -scrollAmount : scrollAmount,
         behavior: "smooth",
       });
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      onCustomStyleImageChange?.(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    onCustomStyleImageChange?.(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -211,13 +240,61 @@ export function StyleSelector({
           exit={{ opacity: 0, height: 0 }}
           className="overflow-hidden"
         >
-          <div className="pt-2">
+          <div className="pt-2 space-y-3">
             <Input
               placeholder="Describe your custom style..."
               value={customStyle}
               onChange={(e) => onCustomStyleChange(e.target.value)}
               className="rounded-xl border-border/50 bg-muted/30 focus:bg-background"
             />
+            
+            {/* Style Reference Image Upload */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                Or upload a style reference image
+              </Label>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              
+              {customStyleImage ? (
+                <div className="relative inline-block">
+                  <div className="relative rounded-lg overflow-hidden border border-border/50 bg-muted/30">
+                    <img
+                      src={customStyleImage}
+                      alt="Style reference"
+                      className="h-24 w-auto object-cover"
+                    />
+                    <button
+                      onClick={handleRemoveImage}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-background/80 hover:bg-background border border-border/50 transition-colors"
+                      aria-label="Remove image"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    AI will mimic this visual style
+                  </p>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-2 rounded-lg border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload reference image
+                </Button>
+              )}
+            </div>
           </div>
         </motion.div>
       )}
