@@ -281,17 +281,6 @@ export default function Auth() {
                     >
                       Sign up
                     </button>
-                    <span className="mx-2">·</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMode("reset");
-                        setPassword("");
-                      }}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </button>
                   </>
                 )}
 
