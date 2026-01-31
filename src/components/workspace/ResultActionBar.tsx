@@ -115,9 +115,11 @@ export function ResultActionBar({
         if (error) throw error;
       }
 
-      // Use the branded domain for the share URL
-      const sharePageUrl = `${window.location.origin}/share/${token}`;
-      setShareUrl(sharePageUrl);
+      // Use the edge function URL for social sharing - this serves proper OG meta tags
+      // The edge function auto-redirects humans to the branded URL via meta refresh
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?token=${token}`;
+      setShareUrl(metaUrl);
     } catch (error) {
       console.error("Failed to create share:", error);
       toast({
