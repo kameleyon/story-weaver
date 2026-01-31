@@ -6,48 +6,43 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  // 1. Handle CORS
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const url = new URL(req.url);
     const generationId = url.searchParams.get("id");
+    const userAgent = req.headers.get("user-agent") || "";
+    const isBot = /bot|googlebot|crawler|spider|robot|crawling|facebookexternalhit/i.test(userAgent);
 
-    console.log("Share request for Generation ID:", generationId);
+    console.log(`[Share-Meta] Request for ID: ${generationId} | User-Agent: ${userAgent}`);
 
     if (!generationId) {
-      return new Response("Missing ID", { status: 400 });
+      return Response.redirect("https://motionmax.io", 302);
     }
 
-    // 2. Initialize Supabase
+    // 1. Setup Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 3. Fetch Generation Data (Title, Scenes for Image/Script)
+    // 2. Fetch Data
     const { data: generation, error } = await supabase
       .from("generations")
       .select(`
         id,
         scenes,
-        projects (
-          title
-        )
+        projects ( title )
       `)
       .eq("id", generationId)
       .maybeSingle();
 
     if (error || !generation) {
-      console.error("Database Error or Not Found:", error);
-      // Fallback to main site if ID is wrong
-      return Response.redirect("https://motionmax.io", 302);
+      console.error("[Share-Meta] DB Error:", error);
+      return Response.redirect(`https://motionmax.io/share/${generationId}`, 302);
     }
 
-    // 4. Extract Metadata
-    
-    // A. Title - handle projects as either object or array depending on join result
+    // 3. Extract Metadata (Safely)
+    // Handle projects as either object or array depending on join result
     const projectData = generation.projects as unknown;
     let projectTitle: string | undefined;
     if (Array.isArray(projectData) && projectData.length > 0) {
@@ -55,108 +50,104 @@ Deno.serve(async (req) => {
     } else if (projectData && typeof projectData === 'object') {
       projectTitle = (projectData as { title?: string }).title;
     }
+    
     const title = projectTitle 
       ? `${projectTitle} | MotionMax` 
-      : "Check out this video | MotionMax";
-
-    // B. Parse Scenes to get Thumbnail and Snippet
-    let imageUrl = "https://motionmax.io/og-image.png"; // Default
-    let description = "Watch this AI-generated video story created with MotionMax."; // Default
-
-    const scenes = generation.scenes;
+      : "Watch this video on MotionMax";
     
-    if (Array.isArray(scenes) && scenes.length > 0) {
-      const firstScene = scenes[0];
+    let description = "AI-generated video presentation.";
+    let imageUrl = "https://motionmax.io/og-image.png";
 
-      // Extract Image
-      if (firstScene.imageUrl && firstScene.imageUrl.startsWith("http")) {
-        imageUrl = firstScene.imageUrl;
-      } else if (firstScene.imageUrls?.[0]?.startsWith("http")) {
-        imageUrl = firstScene.imageUrls[0];
+    // --- ROBUST JSON PARSING FIX ---
+    let scenes = generation.scenes;
+    
+    // Fix: Sometimes Supabase returns JSONB as a string if using specific drivers
+    if (typeof scenes === 'string') {
+      try { scenes = JSON.parse(scenes); } catch (e) { console.error("[Share-Meta] JSON parse fail", e); }
+    }
+
+    if (Array.isArray(scenes) && scenes.length > 0) {
+      const first = scenes[0];
+      
+      console.log(`[Share-Meta] First scene keys: ${Object.keys(first).join(', ')}`);
+      
+      // 1. Get Image (Prioritize valid URLs)
+      if (first.imageUrl && first.imageUrl.startsWith("http")) {
+        imageUrl = first.imageUrl;
+        console.log(`[Share-Meta] Using imageUrl: ${imageUrl}`);
+      } else if (Array.isArray(first.imageUrls) && first.imageUrls.length > 0) {
+        if (first.imageUrls[0].startsWith("http")) {
+          imageUrl = first.imageUrls[0];
+          console.log(`[Share-Meta] Using imageUrls[0]: ${imageUrl}`);
+        }
       }
 
-      // Extract Snippet (Script/Voiceover)
-      if (firstScene.voiceover) {
-        // Create a 160-char snippet
-        description = firstScene.voiceover.substring(0, 160).replace(/\s+/g, ' ').trim() + "...";
+      // 2. Get Description (Snippet)
+      if (first.voiceover) {
+        const text = first.voiceover.replace(/[^\w\s.,?!]/g, ' ').replace(/\s+/g, ' ').trim();
+        description = text.length > 150 ? text.substring(0, 150) + "..." : text;
       }
     }
 
-    const videoUrl = `https://motionmax.io/share/${generationId}`;
-    const siteName = "MotionMax";
+    // Ensure URL is absolute
+    const finalUrl = `https://motionmax.io/share/${generationId}`;
+    
+    console.log(`[Share-Meta] Resolved: Title="${title}" | Image="${imageUrl}"`);
 
-    console.log("Serving Meta:", { title, imageUrl, description });
-
-    // 5. Generate the HTML response
+    // 4. Generate HTML
     const html = `<!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}">
+    
     <meta property="og:type" content="video.other">
-    <meta property="og:url" content="${videoUrl}">
+    <meta property="og:url" content="${finalUrl}">
     <meta property="og:title" content="${escapeHtml(title)}">
     <meta property="og:description" content="${escapeHtml(description)}">
     <meta property="og:image" content="${imageUrl}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:site_name" content="${siteName}">
+    <meta property="og:site_name" content="MotionMax">
+
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="${videoUrl}">
+    <meta name="twitter:url" content="${finalUrl}">
     <meta name="twitter:title" content="${escapeHtml(title)}">
     <meta name="twitter:description" content="${escapeHtml(description)}">
     <meta name="twitter:image" content="${imageUrl}">
-    <meta http-equiv="refresh" content="0;url=${videoUrl}">
-    <link rel="canonical" href="${videoUrl}">
+    
+    <meta http-equiv="refresh" content="0;url=${finalUrl}">
+    <link rel="canonical" href="${finalUrl}">
+    
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #0F1112;
-            color: #fff;
-            text-align: center;
-        }
-        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        p { color: #888; margin: 0.5rem 0; }
-        a { color: #2D9A8C; text-decoration: none; }
+      body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0F1112; color: #fff; }
+      h1 { font-size: 1.5rem; margin: 1rem 0; }
+      p { color: #888; }
+      a { color: #2D9A8C; }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(description)}</p>
-    <br>
-    <p>Redirecting to MotionMax...</p>
-    <a href="${videoUrl}">Click here if not redirected</a>
-</body>
+    <p>Redirecting to app...</p>
+    <a href="${finalUrl}">Click to watch</a>
+  </body>
 </html>`;
 
     return new Response(html, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
-      },
+      headers: { ...corsHeaders, "Content-Type": "text/html" },
     });
 
-  } catch (error: any) {
-    console.error("Function Error:", error.message);
-    return new Response(null, {
-      status: 302,
-      headers: { ...corsHeaders, "Location": "https://motionmax.io" },
-    });
+  } catch (e: any) {
+    console.error("[Share-Meta] Fatal:", e);
+    return Response.redirect("https://motionmax.io", 302);
   }
 });
 
-// Helper to prevent breaking HTML with special chars
-function escapeHtml(text: string): string {
-  return text
+function escapeHtml(unsafe: string): string {
+  return unsafe
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
