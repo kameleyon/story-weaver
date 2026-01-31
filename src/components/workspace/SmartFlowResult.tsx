@@ -424,6 +424,7 @@ export function SmartFlowResult({
       {/* Actions */}
       <ResultActionBar
         projectId={projectId}
+        generationId={generationId}
         title={title}
         scenes={scenes}
         format={format}

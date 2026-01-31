@@ -40,6 +40,7 @@ import type { Scene } from "@/hooks/useGenerationPipeline";
 
 interface ResultActionBarProps {
   projectId?: string;
+  generationId?: string;
   title: string;
   scenes: Scene[];
   format: "landscape" | "portrait" | "square";
@@ -55,6 +56,7 @@ interface ResultActionBarProps {
 
 export function ResultActionBar({
   projectId,
+  generationId,
   title,
   scenes,
   format,
@@ -76,7 +78,7 @@ export function ResultActionBar({
   const [hasCopied, setHasCopied] = useState(false);
 
   const handleShare = async () => {
-    if (!projectId) {
+    if (!projectId || !generationId) {
       toast({
         title: "Cannot share",
         description: "Project must be saved first",
@@ -90,7 +92,7 @@ export function ResultActionBar({
     setHasCopied(false);
 
     try {
-      // Check if share already exists
+      // Check if share already exists for this project
       const { data: existingShare } = await supabase
         .from("project_shares")
         .select("share_token")
@@ -115,10 +117,10 @@ export function ResultActionBar({
         if (error) throw error;
       }
 
-      // Use the edge function URL for social sharing - this serves proper OG meta tags
-      // The edge function auto-redirects humans to the branded URL via meta refresh
+      // Use the edge function URL with generation ID for social sharing
+      // The edge function serves proper OG meta tags and redirects humans to the branded URL
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?token=${token}`;
+      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?id=${generationId}`;
       setShareUrl(metaUrl);
     } catch (error) {
       console.error("Failed to create share:", error);
