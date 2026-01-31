@@ -27,6 +27,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -187,98 +193,120 @@ export function ResultActionBar({
   return (
     <>
       {/* Action Bar */}
-      <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4">
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          {/* Primary: Export Video */}
-          <Button
-            type="button"
-            onClick={onExportVideo}
-            disabled={isExporting || !hasVideo}
-            className="gap-2 min-w-[140px]"
-          >
-            {isExporting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4" />
-                Export Video
-              </>
+      <TooltipProvider delayDuration={300}>
+        <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-3">
+          <div className="flex items-center justify-center gap-2">
+            {/* Primary: Export Video */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={onExportVideo}
+                  disabled={isExporting || !hasVideo}
+                  className="h-10 w-10"
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Download className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export Video</TooltipContent>
+            </Tooltip>
+
+            {/* Download Images */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={onDownloadImages}
+                  disabled={isDownloadingImages || !hasImages}
+                  className="h-10 w-10"
+                >
+                  {isDownloadingImages ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <FolderArchive className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Download Images</TooltipContent>
+            </Tooltip>
+
+            {/* Share Video */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleShare}
+                  disabled={!projectId}
+                  className="h-10 w-10"
+                >
+                  <Link2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Share Video</TooltipContent>
+            </Tooltip>
+
+            {/* Regenerate All */}
+            {onRegenerateAll && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={onRegenerateAll}
+                    className="h-10 w-10"
+                  >
+                    <RefreshCw className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Regenerate All</TooltipContent>
+              </Tooltip>
             )}
-          </Button>
 
-          {/* Download Images */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onDownloadImages}
-            disabled={isDownloadingImages || !hasImages}
-            className="gap-2"
-          >
-            {isDownloadingImages ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Downloading...
-              </>
-            ) : (
-              <>
-                <FolderArchive className="h-4 w-4" />
-                Download Images
-              </>
-            )}
-          </Button>
+            {/* Create Another */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={onNewProject}
+                  className="h-10 w-10"
+                >
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Create Another</TooltipContent>
+            </Tooltip>
 
-          {/* Share Video */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleShare}
-            disabled={!projectId}
-            className="gap-2"
-          >
-            <Link2 className="h-4 w-4" />
-            Share Video
-          </Button>
-
-          {/* Regenerate All */}
-          {onRegenerateAll && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onRegenerateAll}
-              className="gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Regenerate All
-            </Button>
-          )}
-
-          {/* Create Another */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onNewProject}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Another
-          </Button>
-
-          {/* Delete */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsDeleteDialogOpen(true)}
-            disabled={!projectId}
-            className="gap-2 text-muted-foreground hover:text-destructive hover:border-destructive/50"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
+            {/* Delete */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  disabled={!projectId}
+                  className="h-10 w-10 text-muted-foreground hover:text-destructive hover:border-destructive/50"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete Project</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
-      </div>
+      </TooltipProvider>
 
       {/* Share Dialog */}
       <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
