@@ -178,7 +178,8 @@ export function ResultActionBar({
       if (error) throw error;
 
       // Navigate first to prevent any re-renders trying to fetch deleted project
-      navigate("/app/projects", { replace: true });
+      // Projects list route is "/projects" ("/app/projects" does not exist)
+      navigate("/projects", { replace: true });
       
       toast({
         title: "Project deleted",
