@@ -109,8 +109,11 @@ export function ResultActionBar({
         if (error) throw error;
       }
 
-      const url = `${window.location.origin}/share/${token}`;
-      setShareUrl(url);
+      // Use the edge function URL for rich social previews (OG meta tags)
+      // This URL serves proper meta tags and redirects to the share page
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?token=${token}`;
+      setShareUrl(metaUrl);
     } catch (error) {
       console.error("Failed to create share:", error);
       toast({
