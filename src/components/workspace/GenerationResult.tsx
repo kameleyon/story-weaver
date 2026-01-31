@@ -672,6 +672,7 @@ export function GenerationResult({
       {/* Actions */}
       <ResultActionBar
         projectId={projectId}
+        generationId={generationId}
         title={title}
         scenes={scenes}
         format={format}
