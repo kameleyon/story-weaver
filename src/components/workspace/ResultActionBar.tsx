@@ -177,12 +177,13 @@ export function ResultActionBar({
 
       if (error) throw error;
 
+      // Navigate first to prevent any re-renders trying to fetch deleted project
+      navigate("/app/projects", { replace: true });
+      
       toast({
         title: "Project deleted",
         description: "Your project has been permanently deleted",
       });
-
-      navigate("/app/projects");
     } catch (error) {
       console.error("Failed to delete project:", error);
       toast({
