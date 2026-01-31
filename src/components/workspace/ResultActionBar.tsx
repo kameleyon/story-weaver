@@ -141,7 +141,7 @@ export function ResultActionBar({
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(displayUrl);
       setHasCopied(true);
       toast({
         title: "Link copied!",
