@@ -78,7 +78,7 @@ export function ResultActionBar({
   const [hasCopied, setHasCopied] = useState(false);
 
   const handleShare = async () => {
-    if (!projectId || !generationId) {
+    if (!projectId) {
       toast({
         title: "Cannot share",
         description: "Project must be saved first",
@@ -117,10 +117,10 @@ export function ResultActionBar({
         if (error) throw error;
       }
 
-      // Use the edge function URL with generation ID for social sharing
-      // The edge function serves proper OG meta tags and redirects humans to the branded URL
+      // Use the backend function URL for social sharing - it serves proper OG meta tags
+      // and redirects humans to the branded /share/:token page.
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?id=${generationId}`;
+      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?token=${token}&v=${Date.now()}`;
       setShareUrl(metaUrl);
     } catch (error) {
       console.error("Failed to create share:", error);

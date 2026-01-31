@@ -2,7 +2,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 Deno.serve(async (req) => {
@@ -13,12 +14,16 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
+    const token = url.searchParams.get("token");
     const generationId = url.searchParams.get("id");
     const debug = url.searchParams.get("debug") === "true"; // ?debug=true to see data without redirect
+    const v = url.searchParams.get("v") || Date.now().toString();
 
-    console.log(`[Share-Meta] Request for ID: ${generationId} | Debug: ${debug}`);
+    console.log(
+      `[Share-Meta] Request token=${token ?? ""} id=${generationId ?? ""} debug=${debug} v=${v}`,
+    );
 
-    if (!generationId) {
+    if (!token && !generationId) {
       return Response.redirect("https://motionmax.io", 302);
     }
 
@@ -27,61 +32,92 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 3. Fetch specific video data
-    const { data: generation, error } = await supabase
-      .from("generations")
-      .select(`id, scenes, projects(title)`)
-      .eq("id", generationId)
-      .maybeSingle();
-
-    if (error || !generation) {
-      console.error("[Share-Meta] Not found:", generationId, error);
-      return Response.redirect("https://motionmax.io", 302);
-    }
-
-    // 4. Extract Metadata
-    // Handle projects as either object or array depending on join result
-    const projectData = generation.projects as unknown;
-    let projectTitle: string | undefined;
-    if (Array.isArray(projectData) && projectData.length > 0) {
-      projectTitle = projectData[0]?.title;
-    } else if (projectData && typeof projectData === 'object') {
-      projectTitle = (projectData as { title?: string }).title;
-    }
-
-    let title = projectTitle || "MotionMax Video";
+    // 3. Fetch share data
+    let title = "MotionMax Video";
     let description = "Watch this AI-generated story.";
-    let imageUrl = "https://motionmax.io/og-image.png"; // Fallback
+    let imageUrl = "https://motionmax.io/og-image.png";
+    let appUrl = "https://motionmax.io";
+
+    let scenes: unknown = undefined;
+
+    if (token) {
+      // Token-based share (matches /share/:token route)
+      const { data: shared, error: sharedError } = await supabase.rpc(
+        "get_shared_project",
+        { share_token_param: token },
+      );
+
+      if (sharedError || !shared) {
+        console.error("[Share-Meta] Share token not found:", token, sharedError);
+        return Response.redirect("https://motionmax.io", 302);
+      }
+
+      const sharedAny = shared as any;
+      const projectTitle = sharedAny?.project?.title as string | undefined;
+      title = projectTitle ? `${projectTitle} | MotionMax` : "MotionMax Video | MotionMax";
+      scenes = sharedAny?.scenes;
+      appUrl = `https://motionmax.io/share/${token}`;
+    } else if (generationId) {
+      // Fallback: generation-id based (kept for testing)
+      const { data: generation, error: genError } = await supabase
+        .from("generations")
+        .select(`id, scenes, projects(title)`)
+        .eq("id", generationId)
+        .maybeSingle();
+
+      if (genError || !generation) {
+        console.error("[Share-Meta] Generation not found:", generationId, genError);
+        return Response.redirect("https://motionmax.io", 302);
+      }
+
+      const projectData = generation.projects as unknown;
+      let projectTitle: string | undefined;
+      if (Array.isArray(projectData) && projectData.length > 0) {
+        projectTitle = projectData[0]?.title;
+      } else if (projectData && typeof projectData === "object") {
+        projectTitle = (projectData as { title?: string }).title;
+      }
+
+      title = projectTitle ? `${projectTitle} | MotionMax` : "MotionMax Video | MotionMax";
+      scenes = generation.scenes;
+      appUrl = `https://motionmax.io/share/${generationId}`;
+    }
 
     // Parse Scenes safely
-    let scenes = generation.scenes;
-    if (typeof scenes === 'string') {
-      try { scenes = JSON.parse(scenes); } catch (e) { console.error("[Share-Meta] JSON parse fail", e); }
+    if (typeof scenes === "string") {
+      try {
+        scenes = JSON.parse(scenes);
+      } catch (e) {
+        console.error("[Share-Meta] JSON parse fail", e);
+      }
     }
 
     if (Array.isArray(scenes) && scenes.length > 0) {
-      const first = scenes[0];
-      
-      console.log(`[Share-Meta] First scene keys: ${Object.keys(first).join(', ')}`);
-      
+      const first = scenes[0] as any;
+
+      console.log(`[Share-Meta] First scene keys: ${Object.keys(first ?? {}).join(", ")}`);
+
       // Get Image (Check both single and array)
-      if (first.imageUrl?.startsWith("http")) {
+      if (first?.imageUrl?.startsWith("http")) {
         imageUrl = first.imageUrl;
         console.log(`[Share-Meta] Using imageUrl: ${imageUrl}`);
-      } else if (first.imageUrls?.[0]?.startsWith("http")) {
+      } else if (first?.imageUrls?.[0]?.startsWith("http")) {
         imageUrl = first.imageUrls[0];
         console.log(`[Share-Meta] Using imageUrls[0]: ${imageUrl}`);
       }
 
       // Get Snippet (Script)
-      if (first.voiceover) {
-        description = first.voiceover.substring(0, 160).replace(/\s+/g, ' ').trim() + "...";
+      if (typeof first?.voiceover === "string" && first.voiceover.length > 0) {
+        description = first.voiceover
+          .substring(0, 160)
+          .replace(/\s+/g, " ")
+          .trim() + "...";
       }
     }
 
-    const appUrl = `https://motionmax.io/share/${generationId}`;
+    const cacheBustedImageUrl = withCacheBust(imageUrl, v);
 
-    console.log(`[Share-Meta] Resolved: Title="${title}" | Image="${imageUrl}"`);
+    console.log(`[Share-Meta] Resolved: Title="${title}" | Image="${imageUrl}" | AppUrl="${appUrl}"`);
 
     // 5. Return HTML (Bot Friendly)
     const html = `<!DOCTYPE html>
@@ -96,7 +132,7 @@ Deno.serve(async (req) => {
     <meta property="og:url" content="${appUrl}">
     <meta property="og:title" content="${escapeHtml(title)} | MotionMax">
     <meta property="og:description" content="${escapeHtml(description)}">
-    <meta property="og:image" content="${imageUrl}">
+    <meta property="og:image" content="${cacheBustedImageUrl}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="MotionMax">
@@ -104,7 +140,7 @@ Deno.serve(async (req) => {
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="${escapeHtml(title)} | MotionMax">
     <meta name="twitter:description" content="${escapeHtml(description)}">
-    <meta name="twitter:image" content="${imageUrl}">
+    <meta name="twitter:image" content="${cacheBustedImageUrl}">
 
     ${!debug ? `<meta http-equiv="refresh" content="0;url=${appUrl}">` : ''}
     <link rel="canonical" href="${appUrl}">
@@ -122,11 +158,12 @@ Deno.serve(async (req) => {
   <body>
     ${debug 
       ? `<h1>🔍 Debug Mode</h1>
-         <img src="${imageUrl}" alt="Thumbnail" onerror="this.style.display='none'">
+          <img src="${cacheBustedImageUrl}" alt="Thumbnail" onerror="this.style.display='none'">
          <div class="debug-info">
            <p><strong>Title:</strong> <code>${escapeHtml(title)}</code></p>
            <p><strong>Description:</strong> <code>${escapeHtml(description)}</code></p>
            <p><strong>Image URL:</strong> <code>${imageUrl}</code></p>
+           <p><strong>Image URL (busted):</strong> <code>${cacheBustedImageUrl}</code></p>
            <p><strong>App URL:</strong> <code>${appUrl}</code></p>
          </div>
          <p style="margin-top: 1rem;"><a href="${appUrl}">→ Go to App</a></p>`
@@ -137,7 +174,11 @@ Deno.serve(async (req) => {
 </html>`;
 
     return new Response(html, { 
-      headers: { ...corsHeaders, "Content-Type": "text/html" } 
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, max-age=300",
+      },
     });
 
   } catch (e: any) {
@@ -153,4 +194,14 @@ function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function withCacheBust(url: string, v: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("v", v);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
