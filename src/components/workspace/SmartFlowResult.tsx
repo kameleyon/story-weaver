@@ -7,10 +7,8 @@ import {
   Pause,
   Pencil,
   Play,
-  Plus,
   Share2,
   Square,
-  Terminal,
   Trash2,
   Volume2,
   X,
@@ -25,6 +23,7 @@ import type { VideoFormat } from "./FormatSelector";
 import type { Scene, CostTracking } from "@/hooks/useGenerationPipeline";
 import { useVideoExport } from "@/hooks/useVideoExport";
 import { useSceneRegeneration } from "@/hooks/useSceneRegeneration";
+import { useImagesZipDownload } from "@/hooks/useImagesZipDownload";
 import {
   appendVideoExportLog,
   clearVideoExportLogs,
@@ -32,6 +31,7 @@ import {
   getVideoExportLogs,
 } from "@/lib/videoExportDebug";
 import { SceneEditModal } from "./SceneEditModal";
+import { ResultActionBar } from "./ResultActionBar";
 
 interface SmartFlowResultProps {
   title: string;
@@ -65,6 +65,7 @@ export function SmartFlowResult({
   const [showExportLogs, setShowExportLogs] = useState(false);
   const [exportLogsVersion, setExportLogsVersion] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { state: zipState, downloadImagesAsZip } = useImagesZipDownload();
 
   const { state: exportState, exportVideo, downloadVideo, shareVideo, reset: resetExport } = useVideoExport();
   const shouldAutoDownloadRef = useRef(false);
@@ -421,108 +422,42 @@ export function SmartFlowResult({
       )}
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {/* Export Video (only if voice enabled) */}
-        {enableVoice && (
-          exportState.status === "complete" && exportState.videoUrl ? (
-            <>
-              <Button
-                type="button"
-                className="flex-1 gap-2"
-                onClick={() => {
-                  const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "infographic";
-                  downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                }}
-              >
-                <Download className="h-4 w-4" />
-                Download
-              </Button>
-              {typeof navigator !== "undefined" && navigator.canShare && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={() => {
-                    const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "infographic";
-                    shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                  }}
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </Button>
-              )}
-            </>
-          ) : (
-            <Button
-              type="button"
-              className="flex-1 gap-2"
-              onClick={() => {
-                clearVideoExportLogs();
-                appendVideoExportLog("log", [
-                  "[UI] Export button pressed",
-                  {
-                    scenes: scenes.length,
-                    format,
-                    userAgent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 120) : "unknown",
-                    isIOS: typeof navigator !== "undefined" ? /iPad|iPhone|iPod/.test(navigator.userAgent) : false,
-                  },
-                ]);
-                setExportLogsVersion((v) => v + 1);
-                shouldAutoDownloadRef.current = true;
-                void exportVideo(scenes, format).catch(() => {
-                  setExportLogsVersion((v) => v + 1);
-                });
-              }}
-              disabled={
-                exportState.status === "loading" ||
-                exportState.status === "rendering" ||
-                exportState.status === "encoding" ||
-                !scene.imageUrl
-              }
-            >
-              {exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  Export Video
-                </>
-              )}
-            </Button>
-          )
-        )}
-
-        {/* Export Logs (only if voice enabled) */}
-        {enableVoice && (
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2"
-            onClick={() => {
-              setExportLogsVersion((v) => v + 1);
-              setShowExportLogs(true);
-            }}
-          >
-            <Terminal className="h-4 w-4" />
-            Export Logs
-          </Button>
-        )}
-
-        {/* Download Image */}
-        <Button type="button" variant="outline" className="gap-2" onClick={handleDownloadImage} disabled={!scene.imageUrl}>
-          <Download className="h-4 w-4" />
-          Download Image
-        </Button>
-
-        {/* Create Another */}
-        <Button type="button" variant="outline" onClick={onNewProject} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Another
-        </Button>
-      </div>
+      <ResultActionBar
+        projectId={projectId}
+        title={title}
+        scenes={scenes}
+        format={format}
+        onExportVideo={() => {
+          if (!enableVoice) return;
+          clearVideoExportLogs();
+          appendVideoExportLog("log", [
+            "[UI] Export button pressed",
+            {
+              scenes: scenes.length,
+              format,
+              userAgent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 120) : "unknown",
+              isIOS: typeof navigator !== "undefined" ? /iPad|iPhone|iPod/.test(navigator.userAgent) : false,
+            },
+          ]);
+          setExportLogsVersion((v) => v + 1);
+          shouldAutoDownloadRef.current = true;
+          void exportVideo(scenes, format).catch(() => {
+            setExportLogsVersion((v) => v + 1);
+          });
+        }}
+        onDownloadImages={() => downloadImagesAsZip(scenes, title)}
+        onNewProject={onNewProject}
+        isExporting={
+          exportState.status === "loading" ||
+          exportState.status === "rendering" ||
+          exportState.status === "encoding"
+        }
+        isDownloadingImages={
+          zipState.status === "downloading" || zipState.status === "zipping"
+        }
+        hasImages={!!scene.imageUrl}
+        hasVideo={enableVoice && !!scene.imageUrl}
+      />
 
       {/* Export Logs Modal */}
       {showExportLogs && (

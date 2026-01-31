@@ -5,19 +5,16 @@ import {
   ChevronRight,
   Copy,
   Download,
-  FolderArchive,
   Loader2,
   Pause,
   Pencil,
   Play,
-  Plus,
-  RefreshCw,
   Share2,
   Square,
-  Terminal,
   Trash2,
   Volume2,
   X,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,7 +31,7 @@ import {
   getVideoExportLogs,
 } from "@/lib/videoExportDebug";
 import { SceneEditModal } from "./SceneEditModal";
-import { Clock, DollarSign } from "lucide-react";
+import { ResultActionBar } from "./ResultActionBar";
 
 interface GenerationResultProps {
   title: string;
@@ -673,122 +670,48 @@ export function GenerationResult({
       )}
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {exportState.status === "complete" && exportState.videoUrl ? (
-          <>
-            <Button
-              type="button"
-              className="flex-1 gap-2"
-              onClick={() => {
-                const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
-                downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
-              }}
-            >
-              <Download className="h-4 w-4" />
-              Download
-            </Button>
-            {typeof navigator !== "undefined" && navigator.canShare && (
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => {
-                  const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "video";
-                  shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                }}
-              >
-                <Share2 className="h-4 w-4" />
-                Share
-              </Button>
-            )}
-          </>
-        ) : (
-          <Button
-            type="button"
-            className="flex-1 gap-2"
-            onClick={() => {
-              // Ensure logs aren't empty even if iOS fails before the hook logs anything.
-              clearVideoExportLogs();
-              appendVideoExportLog("log", [
-                "[UI] Export button pressed",
-                {
-                  scenes: scenes.length,
-                  format,
-                  userAgent:
-                    typeof navigator !== "undefined"
-                      ? navigator.userAgent.slice(0, 120)
-                      : "unknown",
-                  isIOS:
-                    typeof navigator !== "undefined"
-                      ? /iPad|iPhone|iPod/.test(navigator.userAgent)
-                      : false,
-                },
-              ]);
-              setExportLogsVersion((v) => v + 1);
-
-              shouldAutoDownloadRef.current = true;
-
-              // Prevent unhandled promise rejection from hiding useful details.
-              void exportVideo(scenes, format).catch(() => {
-                setExportLogsVersion((v) => v + 1);
-              });
-            }}
-            disabled={
-              exportState.status === "loading" ||
-              exportState.status === "rendering" ||
-              exportState.status === "encoding" ||
-              !scenes.some((s) => !!s.imageUrl)
-            }
-          >
-            {exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4" />
-                Export Video
-              </>
-            )}
-          </Button>
-        )}
-
-
-        <Button
-          type="button"
-          variant="outline"
-          className="gap-2"
-          onClick={() => downloadImagesAsZip(scenes, title)}
-          disabled={
-            zipState.status === "downloading" ||
-            zipState.status === "zipping" ||
-            !scenes.some((s) => !!s.imageUrl || (s.imageUrls && s.imageUrls.length > 0))
-          }
-        >
-          {zipState.status === "downloading" || zipState.status === "zipping" ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {zipState.status === "downloading" ? `${zipState.progress}%` : "Zipping..."}
-            </>
-          ) : (
-            <>
-              <FolderArchive className="h-4 w-4" />
-              Download Images
-            </>
-          )}
-        </Button>
-        <Button variant="outline" onClick={onNewProject} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Another
-        </Button>
-        {onRegenerateAll && (
-          <Button variant="outline" onClick={onRegenerateAll} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Regenerate All
-          </Button>
-        )}
-      </div>
+      <ResultActionBar
+        projectId={projectId}
+        title={title}
+        scenes={scenes}
+        format={format}
+        onExportVideo={() => {
+          clearVideoExportLogs();
+          appendVideoExportLog("log", [
+            "[UI] Export button pressed",
+            {
+              scenes: scenes.length,
+              format,
+              userAgent:
+                typeof navigator !== "undefined"
+                  ? navigator.userAgent.slice(0, 120)
+                  : "unknown",
+              isIOS:
+                typeof navigator !== "undefined"
+                  ? /iPad|iPhone|iPod/.test(navigator.userAgent)
+                  : false,
+            },
+          ]);
+          setExportLogsVersion((v) => v + 1);
+          shouldAutoDownloadRef.current = true;
+          void exportVideo(scenes, format).catch(() => {
+            setExportLogsVersion((v) => v + 1);
+          });
+        }}
+        onDownloadImages={() => downloadImagesAsZip(scenes, title)}
+        onRegenerateAll={onRegenerateAll}
+        onNewProject={onNewProject}
+        isExporting={
+          exportState.status === "loading" ||
+          exportState.status === "rendering" ||
+          exportState.status === "encoding"
+        }
+        isDownloadingImages={
+          zipState.status === "downloading" || zipState.status === "zipping"
+        }
+        hasImages={scenes.some((s) => !!s.imageUrl || (s.imageUrls && s.imageUrls.length > 0))}
+        hasVideo={scenes.some((s) => !!s.imageUrl)}
+      />
 
       {/* Export Logs Modal */}
       {showExportLogs && (
