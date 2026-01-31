@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, MoreVertical, Eye, Pencil, Share2, Download, Trash2, Video, Clapperboard, Wallpaper } from "lucide-react";
+import { Star, MoreVertical, Eye, Pencil, Share2, Download, Trash2, Video, Clapperboard, Wallpaper, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,6 +34,7 @@ interface ProjectsGridViewProps {
   onShare: (project: Project) => void;
   onDownload: (project: Project) => void;
   onToggleFavorite: (project: Project, e?: React.MouseEvent) => void;
+  downloadingProjectId?: string | null;
 }
 
 const getProjectIcon = (projectType?: string) => {
@@ -73,6 +74,7 @@ export function ProjectsGridView({
   onShare,
   onDownload,
   onToggleFavorite,
+  downloadingProjectId,
 }: ProjectsGridViewProps) {
   return (
     <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
@@ -150,9 +152,16 @@ export function ProjectsGridView({
                           <Share2 className="mr-2 h-4 w-4" />
                           Share
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onDownload(project)}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download
+                        <DropdownMenuItem 
+                          onClick={() => onDownload(project)}
+                          disabled={downloadingProjectId === project.id}
+                        >
+                          {downloadingProjectId === project.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="mr-2 h-4 w-4" />
+                          )}
+                          {downloadingProjectId === project.id ? "Downloading..." : "Download Video"}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem

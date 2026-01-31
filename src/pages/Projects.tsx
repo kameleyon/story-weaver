@@ -344,39 +344,97 @@ export default function Projects() {
     toggleFavoriteMutation.mutate({ id: project.id, is_favorite: !project.is_favorite });
   };
 
-  const handleShare = (project: Project) => {
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [downloadingProjectId, setDownloadingProjectId] = useState<string | null>(null);
+
+  const handleShare = async (project: Project) => {
     setProjectToShare(project);
+    setShareUrl("");
     setShareDialogOpen(true);
+    setShareLoading(true);
+
+    try {
+      // Check if share already exists
+      const { data: existingShare } = await supabase
+        .from("project_shares")
+        .select("share_token")
+        .eq("project_id", project.id)
+        .eq("user_id", user?.id)
+        .maybeSingle();
+
+      if (existingShare?.share_token) {
+        setShareUrl(`${window.location.origin}/share/${existingShare.share_token}`);
+      } else {
+        // Create new share token
+        const shareToken = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        const { error } = await supabase.from("project_shares").insert({
+          project_id: project.id,
+          user_id: user?.id,
+          share_token: shareToken,
+        });
+
+        if (error) throw error;
+        setShareUrl(`${window.location.origin}/share/${shareToken}`);
+      }
+    } catch (err: any) {
+      toast.error("Failed to create share link");
+      console.error(err);
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   const copyShareLink = () => {
-    if (projectToShare) {
-      const url = `${window.location.origin}/app/create?project=${projectToShare.id}`;
-      navigator.clipboard.writeText(url);
+    if (shareUrl) {
+      navigator.clipboard.writeText(shareUrl);
       toast.success("Link copied to clipboard");
-      setShareDialogOpen(false);
     }
   };
 
   const handleDownload = async (project: Project) => {
-    const data = {
-      title: project.title,
-      description: project.description,
-      format: project.format,
-      style: project.style,
-      created_at: project.created_at,
-      updated_at: project.updated_at,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${project.title.replace(/[^a-z0-9]/gi, "_")}_project.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success("Project metadata downloaded");
+    setDownloadingProjectId(project.id);
+    
+    try {
+      // Fetch the latest complete generation for this project
+      const { data: generation, error } = await supabase
+        .from("generations")
+        .select("scenes, video_url")
+        .eq("project_id", project.id)
+        .eq("status", "complete")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !generation) {
+        toast.error("No video found. Please generate a video first.");
+        return;
+      }
+
+      // If there's a pre-rendered video URL, download that
+      if (generation.video_url) {
+        const response = await fetch(generation.video_url);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${project.title.replace(/[^a-z0-9]/gi, "_")}.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success("Video download started");
+        return;
+      }
+
+      // Otherwise, redirect to workspace to export
+      toast.info("Redirecting to workspace to export video...");
+      navigate(`/app/create?project=${project.id}`);
+    } catch (err: any) {
+      toast.error("Download failed: " + err.message);
+    } finally {
+      setDownloadingProjectId(null);
+    }
   };
 
   const SortIcon = sortOrder === "asc" ? SortAsc : SortDesc;
@@ -504,6 +562,7 @@ export default function Projects() {
               onShare={handleShare}
               onDownload={handleDownload}
               onToggleFavorite={handleToggleFavorite}
+              downloadingProjectId={downloadingProjectId}
             />
             {/* Show More Button for Grid */}
             {hasMore && (
@@ -623,9 +682,16 @@ export default function Projects() {
                               <Share2 className="mr-2 h-4 w-4" />
                               Share
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDownload(project)}>
-                              <Download className="mr-2 h-4 w-4" />
-                              Download
+                            <DropdownMenuItem 
+                              onClick={() => handleDownload(project)}
+                              disabled={downloadingProjectId === project.id}
+                            >
+                              {downloadingProjectId === project.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="mr-2 h-4 w-4" />
+                              )}
+                              {downloadingProjectId === project.id ? "Downloading..." : "Download Video"}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -761,17 +827,26 @@ export default function Projects() {
           <DialogHeader>
             <DialogTitle>Share Project</DialogTitle>
             <DialogDescription>
-              Copy the link below to share this project.
+              Anyone with this link can view your project (view-only, no download).
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-2">
-            <Input
-              readOnly
-              value={projectToShare ? `${window.location.origin}/app/create?project=${projectToShare.id}` : ""}
-              className="flex-1 bg-muted/50"
-            />
-            <Button onClick={copyShareLink}>Copy</Button>
-          </div>
+          {shareLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={shareUrl}
+                className="flex-1 bg-muted/50"
+              />
+              <Button onClick={copyShareLink} disabled={!shareUrl}>Copy</Button>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Viewers cannot download, edit, or save the project.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShareDialogOpen(false)}>
               Close
