@@ -15,6 +15,7 @@ import Usage from "./pages/Usage";
 import Pricing from "./pages/Pricing";
 import Projects from "./pages/Projects";
 import VoiceLab from "./pages/VoiceLab";
+import PublicShare from "./pages/PublicShare";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
+            {/* Public share page - no auth required */}
+            <Route path="/share/:token" element={<PublicShare />} />
             {/* Main app - Dashboard */}
             <Route
               path="/app"
