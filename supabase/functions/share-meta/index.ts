@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const APP_BASE_URL = "https://motionmax.io";
+
 interface ShareData {
   project: {
     id: string;
@@ -34,22 +36,40 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
 
-    if (!token) {
-      return new Response("Missing share token", { status: 400 });
+    // Initialize Supabase client with service role (bypasses RLS)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Missing Supabase Environment Variables");
+      return new Response(getDefaultHtml(token || ""), {
+        headers: { ...corsHeaders, "Content-Type": "text/html" },
+      });
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    if (!token) {
+      console.error("Missing share token");
+      return new Response(getDefaultHtml(""), {
+        headers: { ...corsHeaders, "Content-Type": "text/html" },
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch shared project data using the RPC function
     const { data, error } = await supabase.rpc("get_shared_project", {
       share_token_param: token,
     });
 
-    if (error || !data) {
-      console.error("Error fetching share:", error);
+    if (error) {
+      console.error("Supabase RPC Error:", error);
+      return new Response(getDefaultHtml(token), {
+        headers: { ...corsHeaders, "Content-Type": "text/html" },
+      });
+    }
+
+    if (!data) {
+      console.error("No data returned for token:", token);
       return new Response(getDefaultHtml(token), {
         headers: { ...corsHeaders, "Content-Type": "text/html" },
       });
@@ -57,20 +77,40 @@ Deno.serve(async (req) => {
 
     const shareData = data as ShareData;
     const project = shareData.project;
-    const scenes = shareData.scenes || [];
+    const scenes = shareData.scenes;
 
-    // Get thumbnail from first scene
-    const firstScene = scenes[0];
-    const thumbnailUrl = firstScene?.imageUrls?.[0] || firstScene?.imageUrl || "";
+    // Extract title with fallback
+    const title = project?.title || "MotionMax Video";
+
+    // Extract thumbnail from first scene with robust fallback logic
+    let thumbnailUrl = `${APP_BASE_URL}/og-image.png`;
+
+    if (Array.isArray(scenes) && scenes.length > 0) {
+      const firstScene = scenes[0];
+
+      // Priority 1: Direct imageUrl that is a valid absolute URL
+      if (firstScene?.imageUrl && typeof firstScene.imageUrl === 'string' && firstScene.imageUrl.startsWith('http')) {
+        thumbnailUrl = firstScene.imageUrl;
+      }
+      // Priority 2: First image in imageUrls array
+      else if (firstScene?.imageUrls && Array.isArray(firstScene.imageUrls) && firstScene.imageUrls.length > 0) {
+        const firstImageUrl = firstScene.imageUrls[0];
+        if (typeof firstImageUrl === 'string' && firstImageUrl.startsWith('http')) {
+          thumbnailUrl = firstImageUrl;
+        }
+      }
+    }
 
     // Get snippet from first scene narration or project description
-    const snippet = project.description || 
-      firstScene?.narration?.slice(0, 150) || 
-      "Watch this AI-generated video created with MotionMax";
+    const snippet = project?.description ||
+      (Array.isArray(scenes) && scenes.length > 0 && scenes[0]?.narration
+        ? scenes[0].narration.slice(0, 150)
+        : "Watch this AI-generated video created with MotionMax");
 
-    // Build the share page URL
-    const sharePageUrl = `https://motionmax.io/share/${token}`;
-    const siteUrl = "https://motionmax.io";
+    // Build the share page URL (where users will be redirected)
+    const sharePageUrl = `${APP_BASE_URL}/share/${token}`;
+
+    console.log("Serving OG meta for:", { token, title, thumbnailUrl, sharePageUrl });
 
     // Generate HTML with OG meta tags
     const html = `<!DOCTYPE html>
@@ -78,18 +118,18 @@ Deno.serve(async (req) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(project.title)} | MotionMax</title>
+  <title>${escapeHtml(title)} | MotionMax</title>
   
   <!-- Primary Meta Tags -->
-  <meta name="title" content="${escapeHtml(project.title)} | MotionMax">
+  <meta name="title" content="${escapeHtml(title)} | MotionMax">
   <meta name="description" content="${escapeHtml(snippet)}">
   
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="video.other">
   <meta property="og:url" content="${sharePageUrl}">
-  <meta property="og:title" content="${escapeHtml(project.title)}">
+  <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(snippet)}">
-  ${thumbnailUrl ? `<meta property="og:image" content="${escapeHtml(thumbnailUrl)}">` : `<meta property="og:image" content="${siteUrl}/og-image.png">`}
+  <meta property="og:image" content="${escapeHtml(thumbnailUrl)}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="MotionMax">
@@ -97,9 +137,9 @@ Deno.serve(async (req) => {
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="${sharePageUrl}">
-  <meta name="twitter:title" content="${escapeHtml(project.title)}">
+  <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(snippet)}">
-  ${thumbnailUrl ? `<meta name="twitter:image" content="${escapeHtml(thumbnailUrl)}">` : `<meta name="twitter:image" content="${siteUrl}/og-image.png">`}
+  <meta name="twitter:image" content="${escapeHtml(thumbnailUrl)}">
   
   <!-- Redirect to actual share page -->
   <meta http-equiv="refresh" content="0;url=${sharePageUrl}">
@@ -119,6 +159,10 @@ Deno.serve(async (req) => {
     .loading {
       text-align: center;
     }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
     a {
       color: #2D9A8C;
       text-decoration: none;
@@ -127,8 +171,9 @@ Deno.serve(async (req) => {
 </head>
 <body>
   <div class="loading">
-    <p>Loading...</p>
-    <p><a href="${sharePageUrl}">Click here if you're not redirected</a></p>
+    <h1>${escapeHtml(title)}</h1>
+    <p>Redirecting to MotionMax...</p>
+    <p><a href="${sharePageUrl}">Click here if not redirected</a></p>
   </div>
 </body>
 </html>`;
@@ -138,7 +183,9 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("Share meta error:", error);
-    return new Response("Internal server error", { status: 500 });
+    return new Response(getDefaultHtml(""), {
+      headers: { ...corsHeaders, "Content-Type": "text/html" },
+    });
   }
 });
 
@@ -152,18 +199,42 @@ function escapeHtml(str: string): string {
 }
 
 function getDefaultHtml(token: string): string {
-  const sharePageUrl = `https://motionmax.io/share/${token}`;
+  const sharePageUrl = token ? `${APP_BASE_URL}/share/${token}` : APP_BASE_URL;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MotionMax Video</title>
+  
+  <meta name="description" content="Watch this AI-generated video created with MotionMax">
+  
+  <meta property="og:type" content="video.other">
   <meta property="og:title" content="MotionMax Video">
   <meta property="og:description" content="Watch this AI-generated video created with MotionMax">
-  <meta property="og:image" content="https://motionmax.io/og-image.png">
+  <meta property="og:image" content="${APP_BASE_URL}/og-image.png">
   <meta property="og:url" content="${sharePageUrl}">
+  <meta property="og:site_name" content="MotionMax">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MotionMax Video">
+  <meta name="twitter:description" content="Watch this AI-generated video created with MotionMax">
+  <meta name="twitter:image" content="${APP_BASE_URL}/og-image.png">
+  
   <meta http-equiv="refresh" content="0;url=${sharePageUrl}">
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #0F1112;
+      color: #fff;
+    }
+  </style>
 </head>
 <body>
   <p>Redirecting...</p>
