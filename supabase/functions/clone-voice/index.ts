@@ -188,11 +188,17 @@ serve(async (req) => {
           });
 
         if (!uploadError) {
-          const { data: urlData } = supabaseAdmin.storage
+          // Use signed URL (valid for 1 year) since bucket is now private
+          const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
             .from("voice_samples")
-            .getPublicUrl(sampleFileName);
-          sampleUrl = urlData.publicUrl;
-          console.log("Test phrase sample uploaded:", sampleUrl);
+            .createSignedUrl(sampleFileName, 60 * 60 * 24 * 365); // 1 year expiry
+          
+          if (signedUrlData && !signedUrlError) {
+            sampleUrl = signedUrlData.signedUrl;
+            console.log("Test phrase sample uploaded with signed URL");
+          } else {
+            console.error("Failed to create signed URL:", signedUrlError);
+          }
         } else {
           console.error("Failed to upload sample:", uploadError);
         }
