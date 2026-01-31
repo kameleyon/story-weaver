@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { Loader2, Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
+import { Loader2, Play, Pause, Volume2, VolumeX, Maximize, CircleUserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Scene {
   imageUrl?: string;
@@ -16,6 +17,23 @@ interface Scene {
   audioUrl?: string;
   duration?: number;
   narration?: string;
+}
+
+// Header CTA component - Get Started button (icon on mobile/tablet)
+function HeaderCTA() {
+  const isMobile = useIsMobile();
+  
+  return (
+    <Button asChild size={isMobile ? "icon" : "sm"} variant="default">
+      <Link to="/">
+        {isMobile ? (
+          <CircleUserRound className="h-5 w-5" />
+        ) : (
+          "Get Started"
+        )}
+      </Link>
+    </Button>
+  );
 }
 
 export default function PublicShare() {
@@ -185,7 +203,7 @@ export default function PublicShare() {
         <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
           <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
             <ThemedLogo className="h-8 w-auto" />
-            <span className="text-xs text-muted-foreground">View Only</span>
+            <HeaderCTA />
           </div>
         </header>
 
@@ -300,16 +318,15 @@ export default function PublicShare() {
                   </Button>
                 </div>
 
-                {/* Scene indicator */}
-                <p className="text-center text-xs text-muted-foreground">
-                  Scene {currentSceneIndex + 1} of {scenes.length}
-                </p>
               </div>
             )}
 
             {/* Footer notice */}
             <p className="text-center text-xs text-muted-foreground pt-8">
-              Created with MotionMax • View Only
+              Created with MotionMax •{" "}
+              <Link to="/" className="text-primary hover:underline">
+                Sign up
+              </Link>
             </p>
           </motion.div>
         </main>
