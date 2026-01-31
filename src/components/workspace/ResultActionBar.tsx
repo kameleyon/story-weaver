@@ -72,7 +72,8 @@ export function ResultActionBar({
   const navigate = useNavigate();
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
+  const [shareUrl, setShareUrl] = useState(""); // Edge function URL for clipboard (works for social bots)
+  const [displayUrl, setDisplayUrl] = useState(""); // Branded URL shown in UI
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
@@ -122,6 +123,9 @@ export function ResultActionBar({
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const metaUrl = `${supabaseUrl}/functions/v1/share-meta?token=${token}&v=${Date.now()}`;
       setShareUrl(metaUrl);
+      
+      // Show branded URL in the UI for better UX
+      setDisplayUrl(`https://motionmax.io/share/${token}`);
     } catch (error) {
       console.error("Failed to create share:", error);
       toast({
@@ -328,7 +332,7 @@ export function ResultActionBar({
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Input
-                  value={shareUrl}
+                  value={displayUrl}
                   readOnly
                   className="flex-1 text-sm"
                 />
