@@ -532,6 +532,36 @@ serve(async (req) => {
         break;
       }
 
+      case "api_calls_list": {
+        const { page = 1, limit = 50, status, provider } = params || {};
+
+        let query = supabaseAdmin
+          .from("api_call_logs")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false });
+
+        if (status) {
+          query = query.eq("status", status);
+        }
+        if (provider) {
+          query = query.eq("provider", provider);
+        }
+
+        const { data: logs, count, error: logsError } = await query
+          .range((page - 1) * limit, page * limit - 1);
+
+        if (logsError) throw logsError;
+
+        result = {
+          logs: logs || [],
+          total: count || 0,
+          page,
+          limit,
+          totalPages: Math.ceil((count || 0) / limit),
+        };
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }

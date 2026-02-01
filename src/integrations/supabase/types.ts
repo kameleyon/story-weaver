@@ -50,6 +50,51 @@ export type Database = {
         }
         Relationships: []
       }
+      api_call_logs: {
+        Row: {
+          cost: number | null
+          created_at: string
+          error_message: string | null
+          generation_id: string | null
+          id: string
+          model: string
+          provider: string
+          queue_time_ms: number | null
+          running_time_ms: number | null
+          status: string
+          total_duration_ms: number | null
+          user_id: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          error_message?: string | null
+          generation_id?: string | null
+          id?: string
+          model: string
+          provider: string
+          queue_time_ms?: number | null
+          running_time_ms?: number | null
+          status?: string
+          total_duration_ms?: number | null
+          user_id: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          error_message?: string | null
+          generation_id?: string | null
+          id?: string
+          model?: string
+          provider?: string
+          queue_time_ms?: number | null
+          running_time_ms?: number | null
+          status?: string
+          total_duration_ms?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       credit_transactions: {
         Row: {
           amount: number

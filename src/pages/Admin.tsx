@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Shield, Users, DollarSign, Activity, Flag, FileText, AlertTriangle } from "lucide-react";
+import { Loader2, Shield, Users, DollarSign, Activity, Flag, FileText, AlertTriangle, Zap } from "lucide-react";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminSubscribers } from "@/components/admin/AdminSubscribers";
 import { AdminRevenue } from "@/components/admin/AdminRevenue";
 import { AdminGenerations } from "@/components/admin/AdminGenerations";
 import { AdminFlags } from "@/components/admin/AdminFlags";
 import { AdminLogs } from "@/components/admin/AdminLogs";
+import { AdminApiCalls } from "@/components/admin/AdminApiCalls";
 
 export default function Admin() {
   const { isAdmin, loading, user } = useAdminAuth();
@@ -99,6 +100,10 @@ export default function Admin() {
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Logs</span>
             </TabsTrigger>
+            <TabsTrigger value="api-calls" className="gap-2 flex-shrink-0">
+              <Zap className="h-4 w-4" />
+              <span className="hidden sm:inline">API Calls</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -123,6 +128,10 @@ export default function Admin() {
 
           <TabsContent value="logs" className="space-y-6">
             <AdminLogs />
+          </TabsContent>
+
+          <TabsContent value="api-calls" className="space-y-6">
+            <AdminApiCalls />
           </TabsContent>
         </Tabs>
       </main>
