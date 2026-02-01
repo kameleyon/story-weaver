@@ -445,17 +445,65 @@ serve(async (req) => {
       }
 
       case "admin_logs": {
-        const { page = 1, limit = 50 } = params || {};
+        const { page = 1, limit = 50, category = "all" } = params || {};
 
-        const { data: logs, count } = await supabaseAdmin
+        // Fetch admin action logs
+        const { data: adminLogs } = await supabaseAdmin
           .from("admin_logs")
-          .select("*", { count: "exact" })
+          .select("*")
           .order("created_at", { ascending: false })
-          .range((page - 1) * limit, page * limit - 1);
+          .limit(500);
+
+        // Fetch system logs (user activity + system errors)
+        const { data: systemLogs } = await supabaseAdmin
+          .from("system_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(500);
+
+        // Transform admin_logs to unified format
+        const transformedAdminLogs = (adminLogs || []).map(log => ({
+          id: log.id,
+          created_at: log.created_at,
+          category: "admin_action" as const,
+          event_type: log.action,
+          message: `${log.action.replace(/_/g, " ")} on ${log.target_type}`,
+          user_id: log.admin_id,
+          details: log.details,
+          target_id: log.target_id,
+          target_type: log.target_type,
+        }));
+
+        // Transform system_logs to unified format
+        const transformedSystemLogs = (systemLogs || []).map(log => ({
+          id: log.id,
+          created_at: log.created_at,
+          category: log.category as "user_activity" | "system_error" | "system_warning" | "system_info",
+          event_type: log.event_type,
+          message: log.message,
+          user_id: log.user_id,
+          details: log.details,
+          generation_id: log.generation_id,
+          project_id: log.project_id,
+        }));
+
+        // Combine and sort by date
+        let allLogs = [...transformedAdminLogs, ...transformedSystemLogs]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        // Filter by category if specified
+        if (category && category !== "all") {
+          allLogs = allLogs.filter(log => log.category === category);
+        }
+
+        // Paginate
+        const total = allLogs.length;
+        const start = (page - 1) * limit;
+        const paginatedLogs = allLogs.slice(start, start + limit);
 
         result = {
-          logs,
-          total: count || 0,
+          logs: paginatedLogs,
+          total,
           page,
           limit,
         };

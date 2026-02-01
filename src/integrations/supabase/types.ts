@@ -486,6 +486,42 @@ export type Database = {
         }
         Relationships: []
       }
+      system_logs: {
+        Row: {
+          category: string
+          created_at: string
+          details: Json | null
+          event_type: string
+          generation_id: string | null
+          id: string
+          message: string
+          project_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          generation_id?: string | null
+          id?: string
+          message: string
+          project_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          generation_id?: string | null
+          id?: string
+          message?: string
+          project_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_api_keys: {
         Row: {
           created_at: string

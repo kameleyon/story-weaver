@@ -378,6 +378,42 @@ async function logApiCall(params: ApiCallLogParams): Promise<void> {
   }
 }
 
+// ============= SYSTEM EVENT LOGGING =============
+interface SystemLogParams {
+  supabase: any;
+  userId?: string;
+  eventType: string;
+  category: "user_activity" | "system_error" | "system_warning" | "system_info";
+  message: string;
+  details?: Record<string, unknown>;
+  generationId?: string;
+  projectId?: string;
+}
+
+async function logSystemEvent(params: SystemLogParams): Promise<void> {
+  try {
+    const { supabase, userId, eventType, category, message, details, generationId, projectId } = params;
+    
+    const { error } = await supabase.from("system_logs").insert({
+      user_id: userId || null,
+      event_type: eventType,
+      category,
+      message,
+      details: details || null,
+      generation_id: generationId || null,
+      project_id: projectId || null,
+    });
+
+    if (error) {
+      console.error(`[SYSTEM_LOG] Failed to log event: ${error.message}`);
+    } else {
+      console.log(`[SYSTEM_LOG] Logged ${category}/${eventType}: ${message}`);
+    }
+  } catch (err) {
+    console.error(`[SYSTEM_LOG] Error logging event:`, err);
+  }
+}
+
 const STYLE_PROMPTS: Record<string, string> = {
   minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
   doodle: `Urban Minimalist Doodle style. Creative, Dynamic, and Catchy Flat 2D vector illustration with indie comic aesthetic. Make the artwork detailed, highly dynamic, catchy and captivating, and filling up the entire page. Add Words to illustrate the artwork. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured background. CHARACTER DESIGN: Object-Head surrealism with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
@@ -2725,6 +2761,24 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   if (genError) throw new Error("Failed to create generation");
 
+  // Log generation started event
+  await logSystemEvent({
+    supabase,
+    userId: user.id,
+    eventType: "generation_started",
+    category: "user_activity",
+    message: `User started a new Doc2Video generation: "${parsedScript.title}"`,
+    details: {
+      projectType: "doc2video",
+      sceneCount: parsedScript.scenes.length,
+      format,
+      length,
+      style,
+    },
+    generationId: generation.id,
+    projectId: project.id,
+  });
+
   console.log(
     `Phase: SCRIPT complete in ${phaseTime}ms - ${parsedScript.scenes.length} scenes, ${totalImages} images planned`,
   );
@@ -4006,6 +4060,24 @@ async function handleFinalizePhase(
 
   await supabase.from("projects").update({ status: "complete" }).eq("id", projectId).eq("user_id", user.id);
 
+  // Log generation completed event
+  await logSystemEvent({
+    supabase,
+    userId: user.id,
+    eventType: "generation_completed",
+    category: "user_activity",
+    message: `Generation completed: "${generation.projects.title}"`,
+    details: {
+      projectType: generation.projects.project_type || "doc2video",
+      totalTimeMs: totalTime,
+      estimatedCost: costTracking.estimatedCostUsd,
+      creditsUsed: creditsToDeduct,
+      sceneCount: finalScenes.length,
+    },
+    generationId,
+    projectId,
+  });
+
   console.log(
     `Phase: FINALIZE complete - Total time: ${totalTime}ms, Cost: $${costTracking.estimatedCostUsd.toFixed(4)}, Credits: ${creditsToDeduct}`,
   );
@@ -4780,6 +4852,29 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error("Generation error:", error);
+    
+    // Try to log the error to system_logs (best-effort)
+    try {
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        const errorLogSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const errorMessage = error instanceof Error ? error.message : "Generation failed";
+        await logSystemEvent({
+          supabase: errorLogSupabase,
+          eventType: "generation_failed",
+          category: "system_error",
+          message: `Generation error: ${errorMessage}`,
+          details: {
+            errorType: error instanceof Error ? error.name : "Unknown",
+            stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
+          },
+        });
+      }
+    } catch (logError) {
+      console.error("Failed to log generation error:", logError);
+    }
+    
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

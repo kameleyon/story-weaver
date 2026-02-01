@@ -3,70 +3,51 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { Loader2, FileText, RefreshCw, ChevronLeft, ChevronRight, Shield, User, Flag, Settings, AlertCircle, CheckCircle, Info } from "lucide-react";
+import { Loader2, FileText, RefreshCw, ChevronLeft, ChevronRight, Shield, User, Flag, Settings, AlertCircle, CheckCircle, Info, Activity, AlertTriangle, Zap } from "lucide-react";
 import { format } from "date-fns";
 
-interface AdminLog {
+interface UnifiedLog {
   id: string;
-  admin_id: string;
-  action: string;
-  target_type: string;
-  target_id: string | null;
-  details: Record<string, unknown> | null;
-  ip_address: string | null;
-  user_agent: string | null;
   created_at: string;
+  category: "admin_action" | "user_activity" | "system_error" | "system_warning" | "system_info";
+  event_type: string;
+  message: string;
+  user_id: string | null;
+  details: Record<string, unknown> | null;
+  target_id?: string | null;
+  target_type?: string;
+  generation_id?: string | null;
+  project_id?: string | null;
 }
 
 interface LogsResponse {
-  logs: AdminLog[];
+  logs: UnifiedLog[];
   total: number;
   page: number;
   limit: number;
 }
 
-const ACTION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  admin_action: { label: "Admin", icon: Shield, color: "bg-primary/10 text-primary border-l-2 border-l-primary" },
+  user_activity: { label: "User", icon: Activity, color: "bg-muted text-muted-foreground border-l-2 border-l-muted-foreground" },
+  system_error: { label: "Error", icon: AlertCircle, color: "bg-muted text-muted-foreground border-l-2 border-l-muted-foreground" },
+  system_warning: { label: "Warning", icon: AlertTriangle, color: "bg-muted text-muted-foreground border-l-2 border-l-muted-foreground" },
+  system_info: { label: "Info", icon: Info, color: "bg-primary/10 text-primary border-l-2 border-l-primary" },
+};
+
+const EVENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   create_flag: Flag,
   resolve_flag: CheckCircle,
   update_user: User,
   update_role: Shield,
   update_settings: Settings,
-  error: AlertCircle,
-  warning: AlertCircle,
-  info: Info,
-};
-
-// Teal and neutral color scheme - no red/orange
-const ACTION_COLORS: Record<string, string> = {
-  // Success actions (primary teal)
-  resolve_flag: "bg-primary/10 text-primary",
-  update_settings: "bg-primary/10 text-primary",
-  
-  // Warning actions (muted)
-  create_flag: "bg-muted text-muted-foreground",
-  warning: "bg-muted text-muted-foreground",
-  
-  // Error actions (muted darker)
-  error: "bg-muted text-muted-foreground",
-  delete_user: "bg-muted text-muted-foreground",
-  ban_user: "bg-muted text-muted-foreground",
-  
-  // Info actions (primary variants)
-  update_user: "bg-primary/10 text-primary",
-  update_role: "bg-primary/10 text-primary",
-  info: "bg-primary/10 text-primary",
-  
-  // Default
-  default: "bg-muted text-muted-foreground",
-};
-
-// Get severity level for logs
-const getLogSeverity = (action: string): "info" | "warning" | "error" | "success" => {
-  if (["resolve_flag", "update_settings"].includes(action)) return "success";
-  if (["create_flag", "suspend_user"].includes(action)) return "warning";
-  if (["error", "delete_user", "ban_user"].includes(action)) return "error";
-  return "info";
+  generation_started: Zap,
+  generation_completed: CheckCircle,
+  generation_failed: AlertCircle,
+  project_created: FileText,
+  project_deleted: AlertTriangle,
 };
 
 export function AdminLogs() {
@@ -75,11 +56,12 @@ export function AdminLogs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await callAdminApi("admin_logs", { page, limit: 50 });
+      const result = await callAdminApi("admin_logs", { page, limit: 50, category: categoryFilter });
       setData(result);
       setError(null);
     } catch (err) {
@@ -87,29 +69,20 @@ export function AdminLogs() {
     } finally {
       setLoading(false);
     }
-  }, [callAdminApi, page]);
+  }, [callAdminApi, page, categoryFilter]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  const getActionBadge = (action: string) => {
-    const Icon = ACTION_ICONS[action] || FileText;
-    const color = ACTION_COLORS[action] || ACTION_COLORS.default;
-    const severity = getLogSeverity(action);
-    
-    // Add a subtle left border indicator based on severity
-    const borderClass = {
-      success: "border-l-2 border-l-primary",
-      warning: "border-l-2 border-l-muted-foreground",
-      error: "border-l-2 border-l-muted-foreground",
-      info: "border-l-2 border-l-primary",
-    }[severity];
+  const getCategoryBadge = (log: UnifiedLog) => {
+    const config = CATEGORY_CONFIG[log.category] || CATEGORY_CONFIG.system_info;
+    const EventIcon = EVENT_ICONS[log.event_type] || config.icon;
     
     return (
-      <Badge className={`gap-1 ${color} ${borderClass}`}>
-        <Icon className="h-3 w-3" />
-        {action.replace(/_/g, " ")}
+      <Badge className={`gap-1 ${config.color}`}>
+        <EventIcon className="h-3 w-3" />
+        {config.label}
       </Badge>
     );
   };
@@ -125,7 +98,7 @@ export function AdminLogs() {
   if (error) {
     return (
       <div className="text-center py-12 space-y-4">
-        <p className="text-destructive">{error}</p>
+        <p className="text-muted-foreground">{error}</p>
         <Button onClick={fetchLogs} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Retry
@@ -138,35 +111,46 @@ export function AdminLogs() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div>
-          <h2 className="text-2xl font-bold">Admin Activity Logs</h2>
+          <h2 className="text-2xl font-bold">System Logs</h2>
           <p className="text-muted-foreground">
-            {data?.total || 0} logged actions
+            {data?.total || 0} logged events
           </p>
         </div>
 
-        <Button onClick={fetchLogs} variant="outline" size="sm">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="admin_action">Admin</SelectItem>
+              <SelectItem value="user_activity">User Activity</SelectItem>
+              <SelectItem value="system_error">Errors</SelectItem>
+              <SelectItem value="system_warning">Warnings</SelectItem>
+              <SelectItem value="system_info">Info</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={fetchLogs} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      {/* Legend for log severity */}
+      {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary" />
-          <span className="text-muted-foreground">Success</span>
+          <Shield className="h-4 w-4 text-primary" />
+          <span className="text-muted-foreground">Admin Actions</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary/60" />
-          <span className="text-muted-foreground">Info</span>
+          <Activity className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">User Activity</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-muted-foreground/50" />
-          <span className="text-muted-foreground">Warning</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-muted-foreground" />
-          <span className="text-muted-foreground">Error</span>
+          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">System Errors</span>
         </div>
       </div>
 
@@ -178,46 +162,42 @@ export function AdminLogs() {
           {data?.logs && data.logs.length > 0 ? (
             <>
               <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[120px]">Timestamp</TableHead>
-                    <TableHead className="min-w-[100px]">Action</TableHead>
-                    <TableHead className="min-w-[80px]">Target</TableHead>
-                    <TableHead className="min-w-[100px]">Target ID</TableHead>
-                    <TableHead className="min-w-[150px]">Details</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                        {format(new Date(log.created_at), "PP p")}
-                      </TableCell>
-                      <TableCell>{getActionBadge(log.action)}</TableCell>
-                      <TableCell className="capitalize text-sm">{log.target_type}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {log.target_id ? (
-                          <span className="truncate max-w-[100px] block" title={log.target_id}>
-                            {log.target_id.substring(0, 8)}...
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-[150px]">
-                        {log.details ? (
-                          <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-w-[150px]">
-                            {JSON.stringify(log.details, null, 2)}
-                          </pre>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[120px]">Timestamp</TableHead>
+                      <TableHead className="min-w-[100px]">Category</TableHead>
+                      <TableHead className="min-w-[120px]">Event</TableHead>
+                      <TableHead className="min-w-[200px]">Message</TableHead>
+                      <TableHead className="min-w-[100px]">Details</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {data.logs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                          {format(new Date(log.created_at), "PP p")}
+                        </TableCell>
+                        <TableCell>{getCategoryBadge(log)}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {log.event_type.replace(/_/g, " ")}
+                        </TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate" title={log.message}>
+                          {log.message}
+                        </TableCell>
+                        <TableCell className="max-w-[150px]">
+                          {log.details ? (
+                            <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-w-[150px]">
+                              {JSON.stringify(log.details, null, 2)}
+                            </pre>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
 
               {/* Pagination */}
@@ -250,8 +230,8 @@ export function AdminLogs() {
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No admin activity logged yet</p>
-              <p className="text-sm mt-1">Actions performed in the admin panel will appear here</p>
+              <p>No logs found</p>
+              <p className="text-sm mt-1">System activity will appear here as events occur</p>
             </div>
           )}
         </CardContent>
