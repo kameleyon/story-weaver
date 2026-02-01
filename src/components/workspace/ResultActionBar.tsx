@@ -364,20 +364,9 @@ export function ResultActionBar({
                   {hasCopied ? "Copied!" : "Copy Link"}
                 </Button>
               </div>
-               <div className="flex items-center justify-between gap-3">
-                 <p className="text-xs text-muted-foreground">
-                   This link will remain active until you delete the project.
-                 </p>
-                 <Button
-                   type="button"
-                   variant="link"
-                   size="sm"
-                   onClick={handleCopySocialPreviewLink}
-                   className="h-auto p-0"
-                 >
-                   Copy social-preview link
-                 </Button>
-               </div>
+              <p className="text-xs text-muted-foreground">
+                This link will remain active until you delete the project.
+              </p>
             </div>
           )}
         </DialogContent>
