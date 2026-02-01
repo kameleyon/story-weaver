@@ -119,12 +119,14 @@ export function AdminRevenue() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - All teal themed */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <DollarSign className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${data?.totalRevenue?.toFixed(2) || "0.00"}</div>
@@ -137,7 +139,9 @@ export function AdminRevenue() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Monthly Recurring</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
+            <div className="p-2 rounded-lg bg-primary/15">
+              <TrendingUp className="h-4 w-4 text-[hsl(170,55%,45%)]" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${data?.mrr?.toFixed(2) || "0.00"}</div>
@@ -148,7 +152,9 @@ export function AdminRevenue() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
-            <CreditCard className="h-4 w-4 text-purple-500" />
+            <div className="p-2 rounded-lg bg-primary/20">
+              <CreditCard className="h-4 w-4 text-[hsl(170,55%,40%)]" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data?.activeSubscriptions || 0}</div>
@@ -159,7 +165,9 @@ export function AdminRevenue() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Per Charge</CardTitle>
-            <DollarSign className="h-4 w-4 text-amber-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <DollarSign className="h-4 w-4 text-[hsl(170,55%,50%)]" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -185,19 +193,21 @@ export function AdminRevenue() {
                 <AreaChart data={data.revenueByDay}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(170, 55%, 54%)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(170, 55%, 54%)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
                   <XAxis 
                     dataKey="date" 
                     tickFormatter={(value) => format(new Date(value), "MMM d")}
-                    className="text-xs"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
                   />
                   <YAxis 
                     tickFormatter={(value) => `$${value}`}
-                    className="text-xs"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
                   />
                   <Tooltip 
                     formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]}
@@ -211,7 +221,7 @@ export function AdminRevenue() {
                   <Area
                     type="monotone"
                     dataKey="amount"
-                    stroke="hsl(var(--primary))"
+                    stroke="hsl(170, 55%, 54%)"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorRevenue)"

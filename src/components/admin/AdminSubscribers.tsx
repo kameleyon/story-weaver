@@ -6,10 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { Loader2, Search, ChevronLeft, ChevronRight, Eye, Flag, AlertTriangle } from "lucide-react";
+import { Loader2, Search, ChevronLeft, ChevronRight, Eye, AlertTriangle, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AdminUserDetails } from "./AdminUserDetails";
 import { format } from "date-fns";
+
+interface CostBreakdown {
+  openrouter: number;
+  replicate: number;
+  hypereal: number;
+  googleTts: number;
+  total: number;
+}
 
 interface Subscriber {
   id: string;
@@ -25,6 +33,7 @@ interface Subscriber {
   totalUsed: number;
   generationCount: number;
   flagCount: number;
+  costs?: CostBreakdown;
 }
 
 interface SubscribersResponse {
@@ -86,6 +95,11 @@ export function AdminSubscribers() {
     );
   };
 
+  const formatCost = (cost: number | undefined) => {
+    if (cost === undefined || cost === null) return "$0.00";
+    return `$${cost.toFixed(4)}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
@@ -136,8 +150,13 @@ export function AdminSubscribers() {
                       <TableHead className="text-center">Credits</TableHead>
                       <TableHead className="text-center">Generations</TableHead>
                       <TableHead className="text-center">Flags</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <DollarSign className="h-3 w-3 text-primary" />
+                          <span>API Costs</span>
+                        </div>
+                      </TableHead>
                       <TableHead>Joined</TableHead>
-                      <TableHead>Last Active</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -174,14 +193,55 @@ export function AdminSubscribers() {
                             <span className="text-muted-foreground">0</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {format(new Date(user.createdAt), "MMM d, yyyy")}
+                        <TableCell>
+                          {user.costs ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-left">
+                                  <div className="flex flex-col items-start">
+                                    <span className="font-medium text-primary">
+                                      {formatCost(user.costs.total)}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">View breakdown</span>
+                                  </div>
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Cost Breakdown for {user.displayName}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 rounded-lg bg-primary/10">
+                                      <p className="text-sm text-muted-foreground">OpenRouter</p>
+                                      <p className="text-xl font-bold text-primary">{formatCost(user.costs.openrouter)}</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-[hsl(170,55%,45%)]/10">
+                                      <p className="text-sm text-muted-foreground">Replicate</p>
+                                      <p className="text-xl font-bold text-[hsl(170,55%,40%)]">{formatCost(user.costs.replicate)}</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-[hsl(170,40%,50%)]/10">
+                                      <p className="text-sm text-muted-foreground">Hypereal</p>
+                                      <p className="text-xl font-bold text-[hsl(170,40%,45%)]">{formatCost(user.costs.hypereal)}</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-[hsl(170,55%,50%)]/10">
+                                      <p className="text-sm text-muted-foreground">Google TTS</p>
+                                      <p className="text-xl font-bold text-[hsl(170,55%,45%)]">{formatCost(user.costs.googleTts)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="p-4 rounded-lg bg-primary/20 border border-primary/30">
+                                    <p className="text-sm text-muted-foreground">Total Cost</p>
+                                    <p className="text-2xl font-bold text-primary">{formatCost(user.costs.total)}</p>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">$0.00</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {user.lastSignIn 
-                            ? format(new Date(user.lastSignIn), "MMM d, yyyy")
-                            : "Never"
-                          }
+                          {format(new Date(user.createdAt), "MMM d, yyyy")}
                         </TableCell>
                         <TableCell className="text-right">
                           <Dialog>
