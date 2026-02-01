@@ -150,21 +150,21 @@ export function AdminFlags() {
       </div>
 
       {/* Stats Cards - Teal themed */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {Object.entries(FLAG_TYPE_CONFIG).map(([type, config]) => {
           const Icon = config.icon;
           const count = data?.flags?.filter(f => f.flag_type === type && !f.resolved_at).length || 0;
           return (
-            <Card key={type}>
+            <Card key={type} className="shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium capitalize">{type}</CardTitle>
-                <div className={`p-2 rounded-lg ${config.color.split(" ")[0]}`}>
+                <div className={`p-2 rounded-lg ${config.color.split(" ")[0]} shadow-sm`}>
                   <Icon className={`h-4 w-4 ${config.color.split(" ")[1]}`} />
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{count}</div>
-                <p className="text-xs text-muted-foreground">Active {type}s</p>
+                <p className="text-xs text-muted-foreground">Active</p>
               </CardContent>
             </Card>
           );
@@ -172,13 +172,14 @@ export function AdminFlags() {
       </div>
 
       {/* Flags Table */}
-      <Card>
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle className="text-lg">Flag History</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 sm:p-6">
           {data?.flags && data.flags.length > 0 ? (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -314,9 +315,10 @@ export function AdminFlags() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t px-4 sm:px-0">
                 <p className="text-sm text-muted-foreground">
                   Page {page}
                 </p>
@@ -328,7 +330,7 @@ export function AdminFlags() {
                     disabled={page === 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    Previous
+                    <span className="hidden sm:inline">Previous</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -336,7 +338,7 @@ export function AdminFlags() {
                     onClick={() => setPage(p => p + 1)}
                     disabled={!data.flags || data.flags.length < 20}
                   >
-                    Next
+                    <span className="hidden sm:inline">Next</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

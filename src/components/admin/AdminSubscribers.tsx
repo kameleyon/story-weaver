@@ -126,11 +126,11 @@ export function AdminSubscribers() {
         </form>
       </div>
 
-      <Card>
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle className="text-lg">User List</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 sm:p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -212,24 +212,24 @@ export function AdminSubscribers() {
                                 </DialogHeader>
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 rounded-lg bg-primary/10">
+                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
                                       <p className="text-sm text-muted-foreground">OpenRouter</p>
                                       <p className="text-xl font-bold text-primary">{formatCost(user.costs.openrouter)}</p>
                                     </div>
-                                    <div className="p-4 rounded-lg bg-[hsl(170,55%,45%)]/10">
+                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
                                       <p className="text-sm text-muted-foreground">Replicate</p>
                                       <p className="text-xl font-bold text-[hsl(170,55%,40%)]">{formatCost(user.costs.replicate)}</p>
                                     </div>
-                                    <div className="p-4 rounded-lg bg-[hsl(170,40%,50%)]/10">
+                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
                                       <p className="text-sm text-muted-foreground">Hypereal</p>
                                       <p className="text-xl font-bold text-[hsl(170,40%,45%)]">{formatCost(user.costs.hypereal)}</p>
                                     </div>
-                                    <div className="p-4 rounded-lg bg-[hsl(170,55%,50%)]/10">
+                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
                                       <p className="text-sm text-muted-foreground">Google TTS</p>
                                       <p className="text-xl font-bold text-[hsl(170,55%,45%)]">{formatCost(user.costs.googleTts)}</p>
                                     </div>
                                   </div>
-                                  <div className="p-4 rounded-lg bg-primary/20 border border-primary/30">
+                                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/30 shadow-sm">
                                     <p className="text-sm text-muted-foreground">Total Cost</p>
                                     <p className="text-2xl font-bold text-primary">{formatCost(user.costs.total)}</p>
                                   </div>
@@ -270,7 +270,7 @@ export function AdminSubscribers() {
 
               {/* Pagination */}
               {data && data.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t px-4 sm:px-0">
                   <p className="text-sm text-muted-foreground">
                     Showing {((page - 1) * data.limit) + 1} to {Math.min(page * data.limit, data.total)} of {data.total}
                   </p>
@@ -282,7 +282,7 @@ export function AdminSubscribers() {
                       disabled={page === 1}
                     >
                       <ChevronLeft className="h-4 w-4" />
-                      Previous
+                      <span className="hidden sm:inline">Previous</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -290,7 +290,7 @@ export function AdminSubscribers() {
                       onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
                       disabled={page === data.totalPages}
                     >
-                      Next
+                      <span className="hidden sm:inline">Next</span>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>

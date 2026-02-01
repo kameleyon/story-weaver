@@ -76,7 +76,7 @@ export function AdminOverview() {
       description: "Paid subscriptions",
       icon: CreditCard,
       color: tealShades.light,
-      bgColor: "bg-primary/15",
+      bgColor: "bg-primary/10",
     },
     {
       title: "Total Generations",
@@ -84,7 +84,7 @@ export function AdminOverview() {
       description: `${stats?.activeGenerations || 0} active, ${stats?.archivedGenerations || 0} deleted`,
       icon: Activity,
       color: tealShades.dark,
-      bgColor: "bg-primary/20",
+      bgColor: "bg-primary/10",
     },
     {
       title: "Active Flags",
@@ -92,7 +92,7 @@ export function AdminOverview() {
       description: "Unresolved issues",
       icon: Flag,
       color: stats?.activeFlags ? "text-red-500" : "text-muted-foreground",
-      bgColor: stats?.activeFlags ? "bg-red-500/10" : "bg-muted/50",
+      bgColor: stats?.activeFlags ? "bg-red-500/10" : "bg-muted",
     },
     {
       title: "Credit Purchases",
@@ -108,7 +108,7 @@ export function AdminOverview() {
       description: "Deleted by users",
       icon: Archive,
       color: "text-muted-foreground",
-      bgColor: "bg-muted/50",
+      bgColor: "bg-muted",
     },
   ];
 
@@ -119,12 +119,12 @@ export function AdminOverview() {
         <p className="text-muted-foreground">Real-time platform statistics and metrics</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
         {statCards.map((stat) => (
-          <Card key={stat.title}>
+          <Card key={stat.title} className="shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+              <div className={`p-2 rounded-lg ${stat.bgColor} shadow-sm`}>
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </div>
             </CardHeader>

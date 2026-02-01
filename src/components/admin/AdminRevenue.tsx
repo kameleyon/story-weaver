@@ -120,39 +120,39 @@ export function AdminRevenue() {
       </div>
 
       {/* Stats Cards - All teal themed */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/10">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <DollarSign className="h-4 w-4 text-primary" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${data?.totalRevenue?.toFixed(2) || "0.00"}</div>
             <p className="text-xs text-muted-foreground">
-              {data?.chargeCount || 0} successful charges
+              {data?.chargeCount || 0} charges
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Monthly Recurring</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/15">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <TrendingUp className="h-4 w-4 text-[hsl(170,55%,45%)]" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${data?.mrr?.toFixed(2) || "0.00"}</div>
-            <p className="text-xs text-muted-foreground">MRR from subscriptions</p>
+            <p className="text-xs text-muted-foreground">MRR</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/20">
+            <CardTitle className="text-sm font-medium">Active Subs</CardTitle>
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <CreditCard className="h-4 w-4 text-[hsl(170,55%,40%)]" />
             </div>
           </CardHeader>
@@ -162,10 +162,10 @@ export function AdminRevenue() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Per Charge</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/10">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <DollarSign className="h-4 w-4 text-[hsl(170,55%,50%)]" />
             </div>
           </CardHeader>
@@ -176,19 +176,19 @@ export function AdminRevenue() {
                 : "0.00"
               }
             </div>
-            <p className="text-xs text-muted-foreground">Average transaction</p>
+            <p className="text-xs text-muted-foreground">Avg transaction</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Revenue Chart */}
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Revenue Over Time</CardTitle>
         </CardHeader>
         <CardContent>
           {data?.revenueByDay && data.revenueByDay.length > 0 ? (
-            <div className="h-[400px]">
+            <div className="h-[300px] sm:h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data.revenueByDay}>
                   <defs>
@@ -202,12 +202,14 @@ export function AdminRevenue() {
                     dataKey="date" 
                     tickFormatter={(value) => format(new Date(value), "MMM d")}
                     stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
+                    fontSize={11}
+                    tick={{ fontSize: 10 }}
                   />
                   <YAxis 
                     tickFormatter={(value) => `$${value}`}
                     stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
+                    fontSize={11}
+                    width={45}
                   />
                   <Tooltip 
                     formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]}
@@ -230,7 +232,7 @@ export function AdminRevenue() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+            <div className="flex items-center justify-center h-[300px] sm:h-[400px] text-muted-foreground">
               No revenue data available for this period
             </div>
           )}
