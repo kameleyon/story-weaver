@@ -496,6 +496,20 @@ serve(async (req) => {
           .select("*", { count: "exact", head: true })
           .eq("user_id", targetUserId);
 
+        // Get deleted (archived) projects count
+        const { count: deletedProjectsCount } = await supabaseAdmin
+          .from("generation_archives")
+          .select("project_id", { count: "exact", head: true })
+          .eq("user_id", targetUserId);
+
+        // Get total generation costs for this user
+        const { data: costsData } = await supabaseAdmin
+          .from("generation_costs")
+          .select("total_cost")
+          .eq("user_id", targetUserId);
+
+        const totalGenerationCost = costsData?.reduce((sum, c) => sum + (Number(c.total_cost) || 0), 0) || 0;
+
         // Get generations
         const { data: generations } = await supabaseAdmin
           .from("generations")
@@ -511,6 +525,12 @@ serve(async (req) => {
           .eq("user_id", targetUserId)
           .order("created_at", { ascending: false });
 
+        // Determine user status based on flags
+        const activeFlags = flags?.filter(f => !f.resolved_at) || [];
+        const isBanned = activeFlags.some(f => f.flag_type === "banned");
+        const isSuspended = activeFlags.some(f => f.flag_type === "suspended");
+        const userStatus = isBanned ? "banned" : isSuspended ? "suspended" : "active";
+
         // Get credit transactions
         const { data: transactions } = await supabaseAdmin
           .from("credit_transactions")
@@ -525,6 +545,9 @@ serve(async (req) => {
           subscription,
           credits,
           projectsCount: projectsCount || 0,
+          deletedProjectsCount: deletedProjectsCount || 0,
+          totalGenerationCost,
+          userStatus,
           recentGenerations: generations,
           flags,
           recentTransactions: transactions,

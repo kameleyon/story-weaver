@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Calendar, CreditCard, Activity, Flag, Coins } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Mail, Calendar, CreditCard, Activity, Flag, Coins, DollarSign, Trash2, ShieldAlert, ShieldX, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 interface UserDetails {
   user: {
@@ -30,6 +34,9 @@ interface UserDetails {
     total_used: number;
   } | null;
   projectsCount: number;
+  deletedProjectsCount: number;
+  totalGenerationCost: number;
+  userStatus: "active" | "suspended" | "banned";
   recentGenerations: Array<{
     id: string;
     status: string;
@@ -54,30 +61,73 @@ interface UserDetails {
 
 interface AdminUserDetailsProps {
   userId: string;
+  onFlagCreated?: () => void;
 }
 
-export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
-  const { callAdminApi } = useAdminAuth();
+export function AdminUserDetails({ userId, onFlagCreated }: AdminUserDetailsProps) {
+  const { callAdminApi, user: adminUser } = useAdminAuth();
   const [data, setData] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionDialog, setActionDialog] = useState<{ type: "suspend" | "ban" | "unblock"; open: boolean }>({ type: "suspend", open: false });
+  const [actionReason, setActionReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchDetails = async () => {
+    try {
+      setLoading(true);
+      const result = await callAdminApi("user_details", { targetUserId: userId });
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load user details");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDetails = async () => {
-      try {
-        setLoading(true);
-        const result = await callAdminApi("user_details", { targetUserId: userId });
-        setData(result);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load user details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDetails();
   }, [callAdminApi, userId]);
+
+  const handleAction = async () => {
+    if (!actionReason.trim() && actionDialog.type !== "unblock") {
+      toast.error("Please provide a reason");
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      if (actionDialog.type === "unblock") {
+        // Resolve all active flags for this user
+        const activeFlags = data?.flags?.filter(f => !f.resolved_at) || [];
+        for (const flag of activeFlags) {
+          await callAdminApi("resolve_flag", {
+            flagId: flag.id,
+            resolutionNotes: actionReason || "Unblocked by admin",
+          });
+        }
+        toast.success("User unblocked successfully");
+      } else {
+        await callAdminApi("create_flag", {
+          userId: userId,
+          flagType: actionDialog.type === "ban" ? "banned" : "suspended",
+          reason: actionReason,
+          details: `Action taken by admin`,
+        });
+        toast.success(`User ${actionDialog.type === "ban" ? "banned" : "suspended"} successfully`);
+      }
+      
+      setActionDialog({ type: "suspend", open: false });
+      setActionReason("");
+      fetchDetails();
+      onFlagCreated?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -90,13 +140,73 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
   if (error || !data) {
     return (
       <div className="text-center py-12">
-        <p className="text-destructive">{error || "No data available"}</p>
+        <p className="text-muted-foreground">{error || "No data available"}</p>
       </div>
     );
   }
 
+  const getStatusBadge = () => {
+    switch (data.userStatus) {
+      case "banned":
+        return <Badge variant="secondary" className="bg-muted text-muted-foreground">Banned</Badge>;
+      case "suspended":
+        return <Badge variant="secondary" className="bg-muted text-muted-foreground">Suspended</Badge>;
+      default:
+        return <Badge variant="default" className="bg-primary/15 text-primary border-0">Active</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* User Status & Actions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4" />
+              Account Status
+            </CardTitle>
+            {getStatusBadge()}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {data.userStatus === "active" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActionDialog({ type: "suspend", open: true })}
+                  className="gap-1.5"
+                >
+                  <ShieldX className="h-3.5 w-3.5" />
+                  Suspend
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActionDialog({ type: "ban", open: true })}
+                  className="gap-1.5"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Ban
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActionDialog({ type: "unblock", open: true })}
+                className="gap-1.5"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Unblock User
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* User Info */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -173,8 +283,8 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
         </Card>
       </div>
 
-      {/* Credits & Activity */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* Credits, Cost, Activity & Flags */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -201,6 +311,21 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Generation Cost
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Cost</span>
+              <span className="font-bold text-lg">${data.totalGenerationCost.toFixed(4)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Activity
             </CardTitle>
@@ -213,6 +338,12 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Generations</span>
               <span className="font-bold">{data.recentGenerations?.length || 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Trash2 className="h-3 w-3" /> Deleted
+              </span>
+              <span className="font-bold">{data.deletedProjectsCount}</span>
             </div>
           </CardContent>
         </Card>
@@ -298,14 +429,7 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
                 {data.flags.map((flag) => (
                   <TableRow key={flag.id}>
                     <TableCell>
-                      <Badge 
-                        variant={
-                          flag.flag_type === "banned" ? "secondary" :
-                          flag.flag_type === "suspended" ? "secondary" :
-                          flag.flag_type === "flagged" ? "default" : "outline"
-                        }
-                        className="font-normal"
-                      >
+                      <Badge variant="secondary" className="font-normal">
                         {flag.flag_type}
                       </Badge>
                     </TableCell>
@@ -325,6 +449,43 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Action Dialog */}
+      <Dialog open={actionDialog.open} onOpenChange={(open) => setActionDialog(prev => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {actionDialog.type === "ban" && "Ban User"}
+              {actionDialog.type === "suspend" && "Suspend User"}
+              {actionDialog.type === "unblock" && "Unblock User"}
+            </DialogTitle>
+            <DialogDescription>
+              {actionDialog.type === "ban" && "This will permanently ban the user from accessing the platform."}
+              {actionDialog.type === "suspend" && "This will temporarily suspend the user's access."}
+              {actionDialog.type === "unblock" && "This will resolve all active flags and restore the user's access."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder={actionDialog.type === "unblock" ? "Resolution notes (optional)" : "Reason for this action..."}
+              value={actionReason}
+              onChange={(e) => setActionReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionDialog({ type: "suspend", open: false })}>
+              Cancel
+            </Button>
+            <Button onClick={handleAction} disabled={actionLoading}>
+              {actionLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {actionDialog.type === "ban" && "Ban User"}
+              {actionDialog.type === "suspend" && "Suspend User"}
+              {actionDialog.type === "unblock" && "Unblock User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
