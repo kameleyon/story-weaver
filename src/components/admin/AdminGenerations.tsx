@@ -185,12 +185,12 @@ export function AdminGenerations() {
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Failed</CardTitle>
-            <div className="p-2 rounded-lg bg-red-500/10 shadow-sm">
-              <XCircle className="h-4 w-4 text-red-500" />
+            <div className="p-2 rounded-lg bg-muted shadow-sm">
+              <XCircle className="h-4 w-4 text-muted-foreground" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{data?.byStatus?.error || 0}</div>
+            <div className="text-2xl font-bold text-muted-foreground">{data?.byStatus?.error || 0}</div>
           </CardContent>
         </Card>
 
@@ -336,8 +336,8 @@ export function AdminGenerations() {
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">Success Rate</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-card border border-red-500/20 shadow-sm">
-              <div className="text-2xl sm:text-3xl font-bold text-red-500">
+            <div className="text-center p-4 rounded-lg bg-card border shadow-sm">
+              <div className="text-2xl sm:text-3xl font-bold text-muted-foreground">
                 {data?.total 
                   ? (((data.byStatus?.error || 0) / (data.total - (data.byStatus?.deleted || 0))) * 100).toFixed(1)
                   : 0
