@@ -98,13 +98,13 @@ export function AdminSubscribers() {
     const hasActiveFlags = user.flagCount > 0;
     if (hasActiveFlags) {
       return (
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/15 text-destructive">
+        <span className="text-[10px] text-destructive">
           flagged
         </span>
       );
     }
     return (
-      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+      <span className="text-[10px] text-primary">
         active
       </span>
     );
