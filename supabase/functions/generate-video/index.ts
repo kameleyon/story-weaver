@@ -324,6 +324,11 @@ interface CostTracking {
   audioSeconds: number;
   imagesGenerated: number;
   estimatedCostUsd: number;
+  // Track actual providers used for accurate logging
+  audioProvider?: string;
+  audioModel?: string;
+  imageProvider?: string;
+  imageModel?: string;
 }
 
 // ============= CONSTANTS =============
@@ -3375,12 +3380,28 @@ async function handleAudioPhase(
   }
 
   const results = await Promise.all(batchPromises);
+  let audioProviderUsed = "replicate";
+  let audioModelUsed = "chatterbox-turbo";
+  
   for (const { index, result } of results) {
     audioUrls[index] = result.url;
     if (result.durationSeconds) {
       totalAudioSeconds += result.durationSeconds;
       // Update scene duration with actual audio length (0.1s precision, no padding)
       scenes[index].duration = Math.round(result.durationSeconds * 10) / 10;
+    }
+    // Track which provider was actually used
+    if (result.provider) {
+      if (result.provider.toLowerCase().includes("gemini") || result.provider.toLowerCase().includes("google")) {
+        audioProviderUsed = "google_tts";
+        audioModelUsed = "gemini-tts";
+      } else if (result.provider.toLowerCase().includes("elevenlabs")) {
+        audioProviderUsed = "elevenlabs";
+        audioModelUsed = "elevenlabs-sts";
+      } else {
+        audioProviderUsed = "replicate";
+        audioModelUsed = "chatterbox-turbo";
+      }
     }
   }
 
@@ -3392,6 +3413,8 @@ async function handleAudioPhase(
   phaseTimings.audio = (typeof phaseTimings.audio === "number" ? phaseTimings.audio : 0) + requestTimeMs;
 
   costTracking.audioSeconds = totalAudioSeconds;
+  costTracking.audioProvider = audioProviderUsed;
+  costTracking.audioModel = audioModelUsed;
   costTracking.estimatedCostUsd =
     (typeof costTracking.estimatedCostUsd === "number" ? costTracking.estimatedCostUsd : 0) +
     (totalAudioSeconds - (meta.costTracking?.audioSeconds || 0)) * PRICING.audioPerSecond;
@@ -3818,8 +3841,10 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
     throw new Error("Image generation failed for all images");
   }
 
-  // Update cost tracking
+  // Update cost tracking with actual provider used
   costTracking.imagesGenerated = newCompletedTotal;
+  costTracking.imageProvider = useHypereal ? "hypereal" : "replicate";
+  costTracking.imageModel = useHypereal ? "nano-banana-pro-t2i" : (useProModel ? "google/nano-banana-pro" : "google/nano-banana");
   costTracking.estimatedCostUsd =
     costTracking.scriptTokens * PRICING.scriptPerToken +
     costTracking.audioSeconds * PRICING.audioPerSecond +
@@ -4000,37 +4025,34 @@ async function handleFinalizePhase(
   }
 
   // ============= LOG API CALL SUMMARY =============
-  // Log summary API calls for admin visibility
-  // Script generation (already logged during script phase, but add summary for finalize)
+  // Log summary API calls for admin visibility based on ACTUAL providers used
+  // Extract actual provider info from scene metadata if available
+  const audioProvider = (costTracking.audioProvider || "replicate") as "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  const audioModel = costTracking.audioModel || "chatterbox-turbo";
+  const imageProvider = (costTracking.imageProvider || "replicate") as "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  const imageModel = costTracking.imageModel || "google/nano-banana";
+  
   if (costTracking.imagesGenerated > 0) {
+    // Log actual image provider used (Hypereal or Replicate)
     await logApiCall({
       supabase,
       userId: user.id,
       generationId,
-      provider: "hypereal",
-      model: "nano-banana-pro-t2i",
+      provider: imageProvider,
+      model: imageModel,
       status: "success",
       totalDurationMs: phaseTimings.images || 0,
-      cost: imageCost * 0.7,
-    });
-    await logApiCall({
-      supabase,
-      userId: user.id,
-      generationId,
-      provider: "replicate",
-      model: "nano-banana",
-      status: "success",
-      totalDurationMs: phaseTimings.images || 0,
-      cost: imageCost * 0.3,
+      cost: imageCost,
     });
   }
   if (costTracking.audioSeconds > 0) {
+    // Log actual audio provider used (Replicate Chatterbox or Gemini TTS)
     await logApiCall({
       supabase,
       userId: user.id,
       generationId,
-      provider: "google_tts",
-      model: "gemini-tts",
+      provider: audioProvider,
+      model: audioModel,
       status: "success",
       totalDurationMs: phaseTimings.audio || 0,
       cost: audioCost,
