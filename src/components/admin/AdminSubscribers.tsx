@@ -81,17 +81,32 @@ export function AdminSubscribers() {
   };
 
   const getPlanBadge = (plan: string) => {
-    const variants: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-      free: "secondary",
-      starter: "default",
-      creator: "default",
-      professional: "default",
-      enterprise: "default",
-    };
+    const isDefault = plan === "free";
     return (
-      <Badge variant={variants[plan] || "outline"} className="capitalize font-normal">
+      <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${
+        isDefault 
+          ? "bg-muted text-muted-foreground" 
+          : "bg-primary/15 text-primary"
+      }`}>
         {plan}
-      </Badge>
+      </span>
+    );
+  };
+
+  const getStatusBadge = (user: Subscriber) => {
+    // Check for flags to determine status
+    const hasActiveFlags = user.flagCount > 0;
+    if (hasActiveFlags) {
+      return (
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/15 text-destructive">
+          flagged
+        </span>
+      );
+    }
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+        active
+      </span>
     );
   };
 
@@ -278,7 +293,7 @@ export function AdminSubscribers() {
                         <span className="font-medium truncate">{user.displayName}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {getPlanBadge(user.plan)}
+                        {getStatusBadge(user)}
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button
