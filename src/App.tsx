@@ -16,6 +16,7 @@ import Pricing from "./pages/Pricing";
 import Projects from "./pages/Projects";
 import VoiceLab from "./pages/VoiceLab";
 import PublicShare from "./pages/PublicShare";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -80,6 +81,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <VoiceLab />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <Admin />
                 </ProtectedRoute>
               }
             />
