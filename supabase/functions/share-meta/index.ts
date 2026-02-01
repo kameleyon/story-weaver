@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
     const generationId = url.searchParams.get("id");
-    const debug = url.searchParams.get("debug") === "true"; // ?debug=true to see data without redirect
+    const debug = url.searchParams.get("debug") === "true";
     const v = url.searchParams.get("v") || Date.now().toString();
 
     console.log(
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
       const sharedAny = shared as any;
       const projectTitle = sharedAny?.project?.title as string | undefined;
-      title = projectTitle ? `${projectTitle} | MotionMax` : "MotionMax Video | MotionMax";
+      title = projectTitle ? `${projectTitle}` : "MotionMax Video";
       scenes = sharedAny?.scenes;
       appUrl = `https://motionmax.io/share/${token}`;
     } else if (generationId) {
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         projectTitle = (projectData as { title?: string }).title;
       }
 
-      title = projectTitle ? `${projectTitle} | MotionMax` : "MotionMax Video | MotionMax";
+      title = projectTitle ? `${projectTitle}` : "MotionMax Video";
       scenes = generation.scenes;
       appUrl = `https://motionmax.io/share/${generationId}`;
     }
@@ -92,21 +92,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    // --- GRID LOGIC EXTRACTION ---
     if (Array.isArray(scenes) && scenes.length > 0) {
       const first = scenes[0] as any;
 
       console.log(`[Share-Meta] First scene keys: ${Object.keys(first ?? {}).join(", ")}`);
 
-      // Get Image (Check both single and array)
-      if (first?.imageUrl?.startsWith("http")) {
-        imageUrl = first.imageUrl;
-        console.log(`[Share-Meta] Using imageUrl: ${imageUrl}`);
-      } else if (first?.imageUrls?.[0]?.startsWith("http")) {
-        imageUrl = first.imageUrls[0];
-        console.log(`[Share-Meta] Using imageUrls[0]: ${imageUrl}`);
+      // GRID LOGIC: Check 'imageUrl' first, then 'imageUrls[0]'
+      let rawUrl: string | null = null;
+      
+      if (first?.imageUrl && typeof first.imageUrl === "string" && first.imageUrl.startsWith("http")) {
+        rawUrl = first.imageUrl;
+        console.log(`[Share-Meta] Using imageUrl: ${rawUrl}`);
+      } else if (first?.imageUrls && Array.isArray(first.imageUrls) && first.imageUrls.length > 0) {
+        const firstImageUrl = first.imageUrls[0];
+        if (typeof firstImageUrl === "string" && firstImageUrl.startsWith("http")) {
+          rawUrl = firstImageUrl;
+          console.log(`[Share-Meta] Using imageUrls[0]: ${rawUrl}`);
+        }
       }
 
-      // Get Snippet (Script)
+      if (rawUrl) {
+        // CLEAN UP: Remove query params from public bucket URLs to avoid expiration issues
+        if (rawUrl.includes("supabase.co/storage/v1/object/public")) {
+          try {
+            const u = new URL(rawUrl);
+            u.search = "";
+            imageUrl = u.toString();
+          } catch {
+            imageUrl = rawUrl;
+          }
+        } else {
+          imageUrl = rawUrl;
+        }
+      }
+
+      // Extract Description from Voiceover/Script
       if (typeof first?.voiceover === "string" && first.voiceover.length > 0) {
         description = first.voiceover
           .substring(0, 160)
@@ -114,6 +135,7 @@ Deno.serve(async (req) => {
           .trim() + "...";
       }
     }
+    // -----------------------------
 
     const cacheBustedImageUrl = withCacheBust(imageUrl, v);
 
