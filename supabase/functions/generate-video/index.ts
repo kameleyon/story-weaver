@@ -101,6 +101,74 @@ function sanitizeContent(content: string): string {
   return sanitized.trim();
 }
 
+// ============= CONTENT MODERATION (Basic Level) =============
+// Basic blocklist for obviously inappropriate content - keeps it minimal to avoid over-restriction
+const BLOCKED_TERMS = [
+  // Violence/Gore
+  "murder", "kill children", "child abuse", "torture scene", "graphic violence",
+  // Explicit adult content
+  "pornographic", "explicit sex", "naked children", "child porn",
+  // Hate speech
+  "racial slur", "nazi propaganda", "ethnic cleansing", "genocide tutorial",
+  // Illegal activities
+  "how to make bomb", "terrorism instructions", "drug manufacturing",
+];
+
+interface ModerationResult {
+  passed: boolean;
+  reason?: string;
+  flagType?: "warning" | "flagged" | "suspended" | "banned";
+}
+
+function moderateContent(content: string): ModerationResult {
+  const contentLower = content.toLowerCase();
+  
+  for (const term of BLOCKED_TERMS) {
+    if (contentLower.includes(term.toLowerCase())) {
+      console.log(`[MODERATION] Blocked term detected: "${term}"`);
+      return {
+        passed: false,
+        reason: `Content contains prohibited material. Please revise your input.`,
+        flagType: "warning",
+      };
+    }
+  }
+  
+  return { passed: true };
+}
+
+// Add compliance instructions to AI prompts
+const CONTENT_COMPLIANCE_INSTRUCTION = `
+CONTENT POLICY (MANDATORY):
+- Generate only family-friendly, appropriate content
+- No explicit violence, gore, or disturbing imagery
+- No sexual or adult content
+- No hate speech, discrimination, or offensive stereotypes
+- No content promoting illegal activities
+- Keep all content suitable for general audiences
+`;
+
+async function flagUserForViolation(
+  supabase: any,
+  userId: string,
+  reason: string,
+  details: string,
+  adminUserId?: string,
+): Promise<void> {
+  try {
+    await supabase.from("user_flags").insert({
+      user_id: userId,
+      flag_type: "warning",
+      reason: reason,
+      details: details,
+      flagged_by: adminUserId || userId, // System-flagged uses the user's own ID
+    });
+    console.log(`[MODERATION] User ${userId} flagged for: ${reason}`);
+  } catch (err) {
+    console.error(`[MODERATION] Failed to create flag:`, err);
+  }
+}
+
 // Validate entire request body
 function validateGenerationRequest(body: unknown): GenerationRequest {
   if (!body || typeof body !== "object") {
@@ -2070,7 +2138,7 @@ async function handleSmartFlowScriptPhase(
   // Smart Flow prompt: Editorial-Style Text-Rich Infographics (NotebookLM style)
   // These work STANDALONE without audio - self-explanatory with headlines + descriptions
   const scriptPrompt = `You are a Top tier Elite Editorial Infographic Designer and Content Creator. You excell in making content that caugth the attention regardless of the topic discussed. You have an in deepth knowledge about visual content and how to reach the target population for the topic discussed. You are highly creative, with a touch of boldness, elegant and wow-factor. Your style is dynamic, detailed with catchy, smart choices of illustration and presentation. You are modern and a lavantgarde when it comes to content presentation. You set the tone, turn head, and keep the eyes on your art generated. 
-
+${CONTENT_COMPLIANCE_INSTRUCTION}
 Your goal is to create a modern, detailed SINGLE, MAGAZINE-QUALITY INFOGRAPHIC with rich, self-explanatory text that works as a standalone meaning WITHOUT audio narration.
 
 === DATA SOURCE ===
@@ -2351,7 +2419,7 @@ Include these character details in EVERY visualPrompt that features people.
     : "";
 
   const scriptPrompt = `You are a DYNAMIC video script writer creating engaging, narrative-driven content.
-
+${CONTENT_COMPLIANCE_INSTRUCTION}
 === LANGUAGE REQUIREMENT (CRITICAL) ===
 ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
 The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
@@ -2712,7 +2780,7 @@ async function handleStorytellingScriptPhase(
     : "";
 
   const scriptPrompt = `You are a MASTER STORYTELLER creating an immersive visual narrative.
-
+${CONTENT_COMPLIANCE_INSTRUCTION}
 === LANGUAGE REQUIREMENT (CRITICAL) ===
 ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
 The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
@@ -4227,6 +4295,31 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // ============= CONTENT MODERATION CHECK =============
+      const moderationResult = moderateContent(content);
+      if (!moderationResult.passed) {
+        console.log(`[MODERATION] Content rejected for user ${user.id}: ${moderationResult.reason}`);
+        
+        // Flag the user for policy violation (non-blocking)
+        await flagUserForViolation(
+          supabase,
+          user.id,
+          "Content policy violation",
+          `Attempted to generate content that violated content policy. Auto-detected.`,
+        );
+        
+        return new Response(
+          JSON.stringify({
+            error: moderationResult.reason,
+            code: "CONTENT_POLICY_VIOLATION",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Check daily generation limit (Enterprise: 999/day)
