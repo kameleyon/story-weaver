@@ -117,7 +117,7 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Email Verified</span>
-              <Badge variant={data.user.email_confirmed_at ? "default" : "secondary"}>
+              <Badge variant={data.user.email_confirmed_at ? "default" : "secondary"} className="font-normal">
                 {data.user.email_confirmed_at ? "Yes" : "No"}
               </Badge>
             </div>
@@ -147,13 +147,13 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Plan</span>
-              <Badge variant="default" className="capitalize">
+              <Badge variant="default" className="capitalize font-normal">
                 {data.subscription?.plan_name || "Free"}
               </Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
-              <Badge variant={data.subscription?.status === "active" ? "default" : "secondary"}>
+              <Badge variant={data.subscription?.status === "active" ? "default" : "secondary"} className="font-normal">
                 {data.subscription?.status || "No subscription"}
               </Badge>
             </div>
@@ -166,7 +166,7 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
             {data.subscription?.cancel_at_period_end && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Cancels At</span>
-                <Badge variant="destructive">Period End</Badge>
+                <Badge variant="destructive" className="font-normal">Period End</Badge>
               </div>
             )}
           </CardContent>
