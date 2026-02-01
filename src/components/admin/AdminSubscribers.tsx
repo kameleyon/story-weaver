@@ -94,11 +94,11 @@ export function AdminSubscribers() {
   };
 
   const getStatusBadge = (user: Subscriber) => {
-    // Check for flags to determine status
     const hasActiveFlags = user.flagCount > 0;
     if (hasActiveFlags) {
       return (
-        <span className="text-[10px] text-destructive">
+        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+          <AlertTriangle className="h-2.5 w-2.5" />
           flagged
         </span>
       );
@@ -196,10 +196,10 @@ export function AdminSubscribers() {
                         <TableCell className="py-2 px-2 text-center font-medium">{user.generationCount}</TableCell>
                         <TableCell className="py-2 px-2 text-center">
                           {user.flagCount > 0 ? (
-                            <Badge variant="destructive" className="gap-0.5 text-[10px] px-1.5 py-0">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
                               <AlertTriangle className="h-2.5 w-2.5" />
                               {user.flagCount}
-                            </Badge>
+                            </span>
                           ) : (
                             <span className="text-muted-foreground">0</span>
                           )}
@@ -328,10 +328,10 @@ export function AdminSubscribers() {
                           <span className="text-[10px]">gen</span>
                         </span>
                         {user.flagCount > 0 ? (
-                          <Badge variant="destructive" className="gap-0.5 text-[10px] px-1.5 py-0">
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
                             <AlertTriangle className="h-2.5 w-2.5" />
                             {user.flagCount}
-                          </Badge>
+                          </span>
                         ) : (
                           <span>
                             <span className="font-medium text-foreground">0</span>

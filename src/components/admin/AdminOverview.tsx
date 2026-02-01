@@ -91,8 +91,8 @@ export function AdminOverview() {
       value: stats?.activeFlags || 0,
       description: "Unresolved issues",
       icon: Flag,
-      color: stats?.activeFlags ? "text-red-500" : "text-muted-foreground",
-      bgColor: stats?.activeFlags ? "bg-red-500/10" : "bg-muted",
+      color: stats?.activeFlags ? "text-foreground" : "text-muted-foreground",
+      bgColor: stats?.activeFlags ? "bg-muted" : "bg-muted",
     },
     {
       title: "Credit Purchases",

@@ -33,12 +33,12 @@ interface FlagsResponse {
   limit: number;
 }
 
-// Teal-based color scheme with severity indicators
+// Teal-based color scheme with severity indicators using opacity
 const FLAG_TYPE_CONFIG = {
-  warning: { label: "Warning", icon: AlertTriangle, color: "bg-[hsl(170,40%,50%)]/10 text-[hsl(170,40%,45%)]" },
-  flagged: { label: "Flagged", icon: Flag, color: "bg-[hsl(170,55%,45%)]/10 text-[hsl(170,55%,40%)]" },
-  suspended: { label: "Suspended", icon: Ban, color: "bg-[hsl(170,55%,35%)]/10 text-[hsl(170,55%,30%)]" },
-  banned: { label: "Banned", icon: Ban, color: "bg-red-500/10 text-red-500" },
+  warning: { label: "Warning", icon: AlertTriangle, color: "bg-primary/10 text-primary" },
+  flagged: { label: "Flagged", icon: Flag, color: "bg-primary/15 text-primary" },
+  suspended: { label: "Suspended", icon: Ban, color: "bg-muted text-muted-foreground" },
+  banned: { label: "Banned", icon: Ban, color: "bg-foreground/10 text-foreground" },
 };
 
 export function AdminFlags() {
@@ -213,7 +213,10 @@ export function AdminFlags() {
                             Resolved
                           </Badge>
                         ) : (
-                          <Badge variant="destructive">Active</Badge>
+                          <Badge variant="secondary" className="gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Active
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">

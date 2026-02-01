@@ -166,7 +166,7 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
             {data.subscription?.cancel_at_period_end && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Cancels At</span>
-                <Badge variant="destructive" className="font-normal">Period End</Badge>
+                <Badge variant="secondary" className="font-normal">Period End</Badge>
               </div>
             )}
           </CardContent>
@@ -231,7 +231,7 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Active Flags</span>
-              <span className="font-bold text-destructive">
+              <span className="font-bold">
                 {data.flags?.filter(f => !f.resolved_at).length || 0}
               </span>
             </div>
@@ -263,7 +263,7 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
                         {tx.transaction_type}
                       </Badge>
                     </TableCell>
-                    <TableCell className={tx.amount > 0 ? "text-green-500" : "text-red-500"}>
+                    <TableCell className={tx.amount > 0 ? "text-primary" : "text-muted-foreground"}>
                       {tx.amount > 0 ? "+" : ""}{tx.amount}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{tx.description || "-"}</TableCell>
@@ -300,17 +300,18 @@ export function AdminUserDetails({ userId }: AdminUserDetailsProps) {
                     <TableCell>
                       <Badge 
                         variant={
-                          flag.flag_type === "banned" ? "destructive" :
-                          flag.flag_type === "suspended" ? "destructive" :
-                          flag.flag_type === "flagged" ? "default" : "secondary"
+                          flag.flag_type === "banned" ? "secondary" :
+                          flag.flag_type === "suspended" ? "secondary" :
+                          flag.flag_type === "flagged" ? "default" : "outline"
                         }
+                        className="font-normal"
                       >
                         {flag.flag_type}
                       </Badge>
                     </TableCell>
                     <TableCell>{flag.reason}</TableCell>
                     <TableCell>
-                      <Badge variant={flag.resolved_at ? "outline" : "destructive"}>
+                      <Badge variant={flag.resolved_at ? "outline" : "secondary"} className="font-normal">
                         {flag.resolved_at ? "Resolved" : "Active"}
                       </Badge>
                     </TableCell>
