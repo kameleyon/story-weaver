@@ -141,8 +141,8 @@ export function ResultActionBar({
 
   const handleCopyLink = async () => {
     try {
-      // Copy the edge function URL for social bots to get proper OG meta tags
-      await navigator.clipboard.writeText(shareUrl);
+      // Copy the branded URL for better user experience
+      await navigator.clipboard.writeText(displayUrl);
       setHasCopied(true);
       toast({
         title: "Link copied!",
