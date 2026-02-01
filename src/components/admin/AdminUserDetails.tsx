@@ -207,64 +207,59 @@ export function AdminUserDetails({ userId, onFlagCreated }: AdminUserDetailsProp
         </CardContent>
       </Card>
 
-      {/* User Info */}
+      {/* User Info - Two Column Layout */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Mail className="h-4 w-4" />
-              Account Information
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5" />
+              Account
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+          <CardContent className="space-y-1.5 text-xs">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Email</span>
-              <span className="font-medium">{data.user.email}</span>
+              <span>{data.user.email}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Display Name</span>
-              <span className="font-medium">{data.profile?.display_name || "Not set"}</span>
+              <span>{data.profile?.display_name || "—"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Email Verified</span>
-              <Badge variant={data.user.email_confirmed_at ? "default" : "secondary"} className="font-normal">
+              <span className="text-muted-foreground">Verified</span>
+              <Badge variant={data.user.email_confirmed_at ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 h-4">
                 {data.user.email_confirmed_at ? "Yes" : "No"}
               </Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Created</span>
-              <span>{format(new Date(data.user.created_at), "PPp")}</span>
+              <span>{format(new Date(data.user.created_at), "PP")}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Last Sign In</span>
-              <span>
-                {data.user.last_sign_in_at 
-                  ? format(new Date(data.user.last_sign_in_at), "PPp")
-                  : "Never"
-                }
-              </span>
+              <span>{data.user.last_sign_in_at ? format(new Date(data.user.last_sign_in_at), "PP") : "—"}</span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <CreditCard className="h-3.5 w-3.5" />
               Subscription
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+          <CardContent className="space-y-1.5 text-xs">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Plan</span>
-              <Badge variant="default" className="capitalize font-normal">
+              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 capitalize">
                 {data.subscription?.plan_name || "Free"}
               </Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
-              <Badge variant={data.subscription?.status === "active" ? "default" : "secondary"} className="font-normal">
-                {data.subscription?.status || "No subscription"}
+              <Badge variant={data.subscription?.status === "active" ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 h-4">
+                {data.subscription?.status || "None"}
               </Badge>
             </div>
             {data.subscription?.current_period_end && (
@@ -275,98 +270,56 @@ export function AdminUserDetails({ userId, onFlagCreated }: AdminUserDetailsProp
             )}
             {data.subscription?.cancel_at_period_end && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Cancels At</span>
-                <Badge variant="secondary" className="font-normal">Period End</Badge>
+                <span className="text-muted-foreground">Cancels</span>
+                <span>At period end</span>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Credits, Cost, Activity & Flags */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Coins className="h-4 w-4" />
-              Credits
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Balance</span>
-              <span className="font-bold text-lg">{data.credits?.credits_balance || 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Purchased</span>
-              <span>{data.credits?.total_purchased || 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Used</span>
-              <span>{data.credits?.total_used || 0}</span>
-            </div>
-          </CardContent>
+      {/* Compact Stats Row */}
+      <div className="grid grid-cols-4 gap-3">
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Coins className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-wide">Credits</span>
+          </div>
+          <div className="text-lg">{data.credits?.credits_balance || 0}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            {data.credits?.total_purchased || 0} bought · {data.credits?.total_used || 0} used
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Generation Cost
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Cost</span>
-              <span className="font-bold text-lg">${data.totalGenerationCost.toFixed(4)}</span>
-            </div>
-          </CardContent>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <DollarSign className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-wide">Cost</span>
+          </div>
+          <div className="text-lg">${data.totalGenerationCost.toFixed(2)}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">Total generation</div>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Projects</span>
-              <span className="font-bold">{data.projectsCount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Generations</span>
-              <span className="font-bold">{data.recentGenerations?.length || 0}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground flex items-center gap-1">
-                <Trash2 className="h-3 w-3" /> Deleted
-              </span>
-              <span className="font-bold">{data.deletedProjectsCount}</span>
-            </div>
-          </CardContent>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Activity className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-wide">Activity</span>
+          </div>
+          <div className="text-lg">{data.projectsCount}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            {data.recentGenerations?.length || 0} gens · {data.deletedProjectsCount} deleted
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Flag className="h-4 w-4" />
-              Flags
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Flags</span>
-              <span className="font-bold">{data.flags?.length || 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Active Flags</span>
-              <span className="font-bold">
-                {data.flags?.filter(f => !f.resolved_at).length || 0}
-              </span>
-            </div>
-          </CardContent>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Flag className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-wide">Flags</span>
+          </div>
+          <div className="text-lg">{data.flags?.filter(f => !f.resolved_at).length || 0}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            {data.flags?.length || 0} total
+          </div>
         </Card>
       </div>
 
