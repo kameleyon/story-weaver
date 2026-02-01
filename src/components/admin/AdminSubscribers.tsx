@@ -141,132 +141,123 @@ export function AdminSubscribers() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Plan</TableHead>
-                      <TableHead className="text-center">Credits</TableHead>
-                      <TableHead className="text-center">Generations</TableHead>
-                      <TableHead className="text-center">Flags</TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="h-3 w-3 text-primary" />
-                          <span>API Costs</span>
-                        </div>
-                      </TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data?.users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={user.avatarUrl || undefined} />
-                              <AvatarFallback>
-                                {user.displayName?.charAt(0)?.toUpperCase() || "U"}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium">{user.displayName}</div>
-                              <div className="text-sm text-muted-foreground">{user.email}</div>
-                            </div>
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-xs">
+                    <TableHead className="py-2 px-2">User</TableHead>
+                    <TableHead className="py-2 px-2">Plan</TableHead>
+                    <TableHead className="py-2 px-2 text-center">Credits</TableHead>
+                    <TableHead className="py-2 px-2 text-center">Gens</TableHead>
+                    <TableHead className="py-2 px-2 text-center">Flags</TableHead>
+                    <TableHead className="py-2 px-2">Costs</TableHead>
+                    <TableHead className="py-2 px-2">Joined</TableHead>
+                    <TableHead className="py-2 px-2 w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data?.users.map((user) => (
+                    <TableRow key={user.id} className="text-xs">
+                      <TableCell className="py-2 px-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarImage src={user.avatarUrl || undefined} />
+                            <AvatarFallback className="text-[10px]">
+                              {user.displayName?.charAt(0)?.toUpperCase() || "U"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate max-w-[120px]">{user.displayName}</div>
+                            <div className="text-muted-foreground truncate max-w-[120px]">{user.email}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>{getPlanBadge(user.plan)}</TableCell>
-                        <TableCell className="text-center">
-                          <span className="font-medium">{user.creditsBalance}</span>
-                          <span className="text-muted-foreground text-sm"> / {user.totalPurchased}</span>
-                        </TableCell>
-                        <TableCell className="text-center font-medium">{user.generationCount}</TableCell>
-                        <TableCell className="text-center">
-                          {user.flagCount > 0 ? (
-                            <Badge variant="destructive" className="gap-1">
-                              <AlertTriangle className="h-3 w-3" />
-                              {user.flagCount}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">0</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {user.costs ? (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-left">
-                                  <div className="flex flex-col items-start">
-                                    <span className="font-medium text-primary">
-                                      {formatCost(user.costs.total)}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">View breakdown</span>
-                                  </div>
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-md">
-                                <DialogHeader>
-                                  <DialogTitle>Cost Breakdown for {user.displayName}</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
-                                      <p className="text-sm text-muted-foreground">OpenRouter</p>
-                                      <p className="text-xl font-bold text-primary">{formatCost(user.costs.openrouter)}</p>
-                                    </div>
-                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
-                                      <p className="text-sm text-muted-foreground">Replicate</p>
-                                      <p className="text-xl font-bold text-[hsl(170,55%,40%)]">{formatCost(user.costs.replicate)}</p>
-                                    </div>
-                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
-                                      <p className="text-sm text-muted-foreground">Hypereal</p>
-                                      <p className="text-xl font-bold text-[hsl(170,40%,45%)]">{formatCost(user.costs.hypereal)}</p>
-                                    </div>
-                                    <div className="p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
-                                      <p className="text-sm text-muted-foreground">Google TTS</p>
-                                      <p className="text-xl font-bold text-[hsl(170,55%,45%)]">{formatCost(user.costs.googleTts)}</p>
-                                    </div>
-                                  </div>
-                                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/30 shadow-sm">
-                                    <p className="text-sm text-muted-foreground">Total Cost</p>
-                                    <p className="text-2xl font-bold text-primary">{formatCost(user.costs.total)}</p>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">$0.00</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {format(new Date(user.createdAt), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell className="text-right">
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 px-2">{getPlanBadge(user.plan)}</TableCell>
+                      <TableCell className="py-2 px-2 text-center whitespace-nowrap">
+                        <span className="font-medium">{user.creditsBalance}</span>
+                        <span className="text-muted-foreground">/{user.totalPurchased}</span>
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-center font-medium">{user.generationCount}</TableCell>
+                      <TableCell className="py-2 px-2 text-center">
+                        {user.flagCount > 0 ? (
+                          <Badge variant="destructive" className="gap-0.5 text-[10px] px-1.5 py-0">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            {user.flagCount}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        {user.costs ? (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedUserId(user.id)}
-                              >
-                                <Eye className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" className="h-auto py-0.5 px-1 text-left">
+                                <span className="font-medium text-primary text-xs">
+                                  {formatCost(user.costs.total)}
+                                </span>
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <DialogContent className="max-w-sm">
                               <DialogHeader>
-                                <DialogTitle>User Details</DialogTitle>
+                                <DialogTitle className="text-sm">Costs: {user.displayName}</DialogTitle>
                               </DialogHeader>
-                              <AdminUserDetails userId={user.id} />
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                    <p className="text-xs text-muted-foreground">OpenRouter</p>
+                                    <p className="text-lg font-bold text-primary">{formatCost(user.costs.openrouter)}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                    <p className="text-xs text-muted-foreground">Replicate</p>
+                                    <p className="text-lg font-bold text-primary">{formatCost(user.costs.replicate)}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                    <p className="text-xs text-muted-foreground">Hypereal</p>
+                                    <p className="text-lg font-bold text-primary">{formatCost(user.costs.hypereal)}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                    <p className="text-xs text-muted-foreground">Google TTS</p>
+                                    <p className="text-lg font-bold text-primary">{formatCost(user.costs.googleTts)}</p>
+                                  </div>
+                                </div>
+                                <div className="p-3 rounded-lg bg-card border border-primary shadow-sm">
+                                  <p className="text-xs text-muted-foreground">Total Cost</p>
+                                  <p className="text-xl font-bold text-primary">{formatCost(user.costs.total)}</p>
+                                </div>
+                              </div>
                             </DialogContent>
                           </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                        ) : (
+                          <span className="text-muted-foreground">$0.00</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-muted-foreground whitespace-nowrap">
+                        {format(new Date(user.createdAt), "MM/dd/yy")}
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => setSelectedUserId(user.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>User Details</DialogTitle>
+                            </DialogHeader>
+                            <AdminUserDetails userId={user.id} />
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
               {/* Pagination */}
               {data && data.totalPages > 1 && (
