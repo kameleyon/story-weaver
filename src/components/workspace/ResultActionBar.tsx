@@ -141,15 +141,31 @@ export function ResultActionBar({
 
   const handleCopyLink = async () => {
     try {
-      // Copy the edge function URL which handles bot detection for social previews
-      // This ensures Twitter/Facebook/LinkedIn see the correct OG tags
-      await navigator.clipboard.writeText(shareUrl);
+      // Copy the branded URL (what users expect to share)
+      await navigator.clipboard.writeText(displayUrl);
       setHasCopied(true);
       toast({
         title: "Link copied!",
-        description: "Share this link on social media - thumbnails will show correctly",
+        description: "Share this link with anyone to let them view your video",
       });
       setTimeout(() => setHasCopied(false), 2000);
+    } catch {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the link manually",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopySocialPreviewLink = async () => {
+    try {
+      // Copy the bot-proxy URL that returns OG tags to crawlers (best for social previews)
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "Social preview link copied",
+        description: "Use this if a platform doesn't show the right thumbnail",
+      });
     } catch {
       toast({
         title: "Failed to copy",
@@ -348,9 +364,20 @@ export function ResultActionBar({
                   {hasCopied ? "Copied!" : "Copy Link"}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                This link will remain active until you delete the project.
-              </p>
+               <div className="flex items-center justify-between gap-3">
+                 <p className="text-xs text-muted-foreground">
+                   This link will remain active until you delete the project.
+                 </p>
+                 <Button
+                   type="button"
+                   variant="link"
+                   size="sm"
+                   onClick={handleCopySocialPreviewLink}
+                   className="h-auto p-0"
+                 >
+                   Copy social-preview link
+                 </Button>
+               </div>
             </div>
           )}
         </DialogContent>
