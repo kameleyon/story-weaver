@@ -89,7 +89,7 @@ export function AdminSubscribers() {
       enterprise: "default",
     };
     return (
-      <Badge variant={variants[plan] || "outline"} className="capitalize">
+      <Badge variant={variants[plan] || "outline"} className="capitalize font-normal">
         {plan}
       </Badge>
     );
