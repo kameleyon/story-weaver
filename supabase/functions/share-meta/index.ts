@@ -6,6 +6,35 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Bot User-Agent patterns to detect social media crawlers
+const BOT_PATTERNS = [
+  'Twitterbot',
+  'facebookexternalhit',
+  'LinkedInBot',
+  'WhatsApp',
+  'TelegramBot',
+  'Slackbot',
+  'Discordbot',
+  'Pinterest',
+  'Googlebot',
+  'bingbot',
+  'iMessageLinkPreview',
+  'Applebot',
+  'Embedly',
+  'Quora Link Preview',
+  'Redditbot',
+  'SkypeUri',
+  'Viber',
+  'Line',
+  'Snapchat',
+];
+
+function isBot(userAgent: string): boolean {
+  if (!userAgent) return false;
+  const ua = userAgent.toLowerCase();
+  return BOT_PATTERNS.some(pattern => ua.includes(pattern.toLowerCase()));
+}
+
 Deno.serve(async (req) => {
   // 1. Handle CORS
   if (req.method === "OPTIONS") {
@@ -19,8 +48,12 @@ Deno.serve(async (req) => {
     const debug = url.searchParams.get("debug") === "true";
     const v = url.searchParams.get("v") || Date.now().toString();
 
+    // Get User-Agent for bot detection
+    const userAgent = req.headers.get("user-agent") || "";
+    const isBotRequest = isBot(userAgent);
+
     console.log(
-      `[Share-Meta] Request token=${token ?? ""} id=${generationId ?? ""} debug=${debug} v=${v}`,
+      `[Share-Meta] Request token=${token ?? ""} id=${generationId ?? ""} debug=${debug} v=${v} isBot=${isBotRequest} UA="${userAgent.substring(0, 100)}"`
     );
 
     if (!token && !generationId) {
@@ -139,9 +172,13 @@ Deno.serve(async (req) => {
 
     const cacheBustedImageUrl = withCacheBust(imageUrl, v);
 
-    console.log(`[Share-Meta] Resolved: Title="${title}" | Image="${imageUrl}" | AppUrl="${appUrl}"`);
+    console.log(`[Share-Meta] Resolved: Title="${title}" | Image="${imageUrl}" | AppUrl="${appUrl}" | isBot=${isBotRequest}`);
 
-    // 5. Return HTML (Bot Friendly)
+    // 5. Return HTML (Bot vs Human handling)
+    // For bots: NO meta refresh - let them see OG tags
+    // For humans: meta refresh for instant redirect (unless debug mode)
+    const shouldRedirect = !isBotRequest && !debug;
+
     const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -164,7 +201,7 @@ Deno.serve(async (req) => {
     <meta name="twitter:description" content="${escapeHtml(description)}">
     <meta name="twitter:image" content="${cacheBustedImageUrl}">
 
-    ${!debug ? `<meta http-equiv="refresh" content="0;url=${appUrl}">` : ''}
+    ${shouldRedirect ? `<meta http-equiv="refresh" content="0;url=${appUrl}">` : ''}
     <link rel="canonical" href="${appUrl}">
     
     <style>
@@ -187,10 +224,16 @@ Deno.serve(async (req) => {
            <p><strong>Image URL:</strong> <code>${imageUrl}</code></p>
            <p><strong>Image URL (busted):</strong> <code>${cacheBustedImageUrl}</code></p>
            <p><strong>App URL:</strong> <code>${appUrl}</code></p>
+           <p><strong>Is Bot:</strong> <code>${isBotRequest}</code></p>
+           <p><strong>User-Agent:</strong> <code>${escapeHtml(userAgent.substring(0, 200))}</code></p>
          </div>
          <p style="margin-top: 1rem;"><a href="${appUrl}">→ Go to App</a></p>`
-      : `<p>Redirecting to MotionMax...</p>
-         <a href="${appUrl}">Click here if not redirected</a>`
+      : isBotRequest 
+        ? `<h1>${escapeHtml(title)}</h1>
+           <p>${escapeHtml(description)}</p>
+           <a href="${appUrl}">View on MotionMax</a>`
+        : `<p>Redirecting to MotionMax...</p>
+           <a href="${appUrl}">Click here if not redirected</a>`
     }
   </body>
 </html>`;
@@ -199,7 +242,8 @@ Deno.serve(async (req) => {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "public, max-age=300",
+        // Shorter cache for bots to ensure fresh OG data
+        "Cache-Control": isBotRequest ? "public, max-age=60" : "public, max-age=300",
       },
     });
 
