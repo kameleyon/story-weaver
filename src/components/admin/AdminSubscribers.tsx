@@ -141,57 +141,202 @@ export function AdminSubscribers() {
             </div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow className="text-xs">
-                    <TableHead className="py-2 px-2">User</TableHead>
-                    <TableHead className="py-2 px-2">Plan</TableHead>
-                    <TableHead className="py-2 px-2 text-center">Credits</TableHead>
-                    <TableHead className="py-2 px-2 text-center">Gens</TableHead>
-                    <TableHead className="py-2 px-2 text-center">Flags</TableHead>
-                    <TableHead className="py-2 px-2">Costs</TableHead>
-                    <TableHead className="py-2 px-2">Joined</TableHead>
-                    <TableHead className="py-2 px-2 w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data?.users.map((user) => (
-                    <TableRow key={user.id} className="text-xs">
-                      <TableCell className="py-2 px-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Avatar className="h-6 w-6 shrink-0">
-                            <AvatarImage src={user.avatarUrl || undefined} />
-                            <AvatarFallback className="text-[10px]">
-                              {user.displayName?.charAt(0)?.toUpperCase() || "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <div className="font-medium truncate max-w-[120px]">{user.displayName}</div>
-                            <div className="text-muted-foreground truncate max-w-[120px]">{user.email}</div>
+              {/* Desktop Table */}
+              <div className="hidden lg:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="text-xs">
+                      <TableHead className="py-2 px-2">User</TableHead>
+                      <TableHead className="py-2 px-2">Plan</TableHead>
+                      <TableHead className="py-2 px-2 text-center">Credits</TableHead>
+                      <TableHead className="py-2 px-2 text-center">Gens</TableHead>
+                      <TableHead className="py-2 px-2 text-center">Flags</TableHead>
+                      <TableHead className="py-2 px-2">Costs</TableHead>
+                      <TableHead className="py-2 px-2">Joined</TableHead>
+                      <TableHead className="py-2 px-2 w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data?.users.map((user) => (
+                      <TableRow key={user.id} className="text-xs">
+                        <TableCell className="py-2 px-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-6 w-6 shrink-0">
+                              <AvatarImage src={user.avatarUrl || undefined} />
+                              <AvatarFallback className="text-[10px]">
+                                {user.displayName?.charAt(0)?.toUpperCase() || "U"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="font-medium truncate max-w-[120px]">{user.displayName}</div>
+                              <div className="text-muted-foreground truncate max-w-[120px]">{user.email}</div>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2 px-2">{getPlanBadge(user.plan)}</TableCell>
-                      <TableCell className="py-2 px-2 text-center whitespace-nowrap">
-                        <span className="font-medium">{user.creditsBalance}</span>
-                        <span className="text-muted-foreground">/{user.totalPurchased}</span>
-                      </TableCell>
-                      <TableCell className="py-2 px-2 text-center font-medium">{user.generationCount}</TableCell>
-                      <TableCell className="py-2 px-2 text-center">
+                        </TableCell>
+                        <TableCell className="py-2 px-2">{getPlanBadge(user.plan)}</TableCell>
+                        <TableCell className="py-2 px-2 text-center whitespace-nowrap">
+                          <span className="font-medium">{user.creditsBalance}</span>
+                          <span className="text-muted-foreground">/{user.totalPurchased}</span>
+                        </TableCell>
+                        <TableCell className="py-2 px-2 text-center font-medium">{user.generationCount}</TableCell>
+                        <TableCell className="py-2 px-2 text-center">
+                          {user.flagCount > 0 ? (
+                            <Badge variant="destructive" className="gap-0.5 text-[10px] px-1.5 py-0">
+                              <AlertTriangle className="h-2.5 w-2.5" />
+                              {user.flagCount}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2 px-2">
+                          {user.costs ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-auto py-0.5 px-1 text-left">
+                                  <span className="font-medium text-primary text-xs">
+                                    {formatCost(user.costs.total)}
+                                  </span>
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-sm">
+                                <DialogHeader>
+                                  <DialogTitle className="text-sm">Costs: {user.displayName}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                      <p className="text-xs text-muted-foreground">OpenRouter</p>
+                                      <p className="text-lg font-bold text-primary">{formatCost(user.costs.openrouter)}</p>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                      <p className="text-xs text-muted-foreground">Replicate</p>
+                                      <p className="text-lg font-bold text-primary">{formatCost(user.costs.replicate)}</p>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                      <p className="text-xs text-muted-foreground">Hypereal</p>
+                                      <p className="text-lg font-bold text-primary">{formatCost(user.costs.hypereal)}</p>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-card border shadow-sm">
+                                      <p className="text-xs text-muted-foreground">Google TTS</p>
+                                      <p className="text-lg font-bold text-primary">{formatCost(user.costs.googleTts)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-card border border-primary shadow-sm">
+                                    <p className="text-xs text-muted-foreground">Total Cost</p>
+                                    <p className="text-xl font-bold text-primary">{formatCost(user.costs.total)}</p>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-muted-foreground">$0.00</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2 px-2 text-muted-foreground whitespace-nowrap">
+                          {format(new Date(user.createdAt), "MM/dd/yy")}
+                        </TableCell>
+                        <TableCell className="py-2 px-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => setSelectedUserId(user.id)}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>User Details</DialogTitle>
+                              </DialogHeader>
+                              <AdminUserDetails userId={user.id} />
+                            </DialogContent>
+                          </Dialog>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile/Tablet Card Layout */}
+              <div className="lg:hidden divide-y">
+                {data?.users.map((user) => (
+                  <div key={user.id} className="p-3 space-y-1.5 text-xs">
+                    {/* Row 1: Name | Plan + Eye */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Avatar className="h-6 w-6 shrink-0">
+                          <AvatarImage src={user.avatarUrl || undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {user.displayName?.charAt(0)?.toUpperCase() || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium truncate">{user.displayName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {getPlanBadge(user.plan)}
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => setSelectedUserId(user.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>User Details</DialogTitle>
+                            </DialogHeader>
+                            <AdminUserDetails userId={user.id} />
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Email | Credits, Projects, Flags */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground truncate flex-1">{user.email}</span>
+                      <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                        <span>
+                          <span className="font-medium text-foreground">{user.creditsBalance}</span>
+                          <span className="text-[10px]">cr</span>
+                        </span>
+                        <span>
+                          <span className="font-medium text-foreground">{user.generationCount}</span>
+                          <span className="text-[10px]">gen</span>
+                        </span>
                         {user.flagCount > 0 ? (
                           <Badge variant="destructive" className="gap-0.5 text-[10px] px-1.5 py-0">
                             <AlertTriangle className="h-2.5 w-2.5" />
                             {user.flagCount}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground">0</span>
+                          <span>
+                            <span className="font-medium text-foreground">0</span>
+                            <span className="text-[10px]">fl</span>
+                          </span>
                         )}
-                      </TableCell>
-                      <TableCell className="py-2 px-2">
+                      </div>
+                    </div>
+
+                    {/* Row 3: Joined | Costs */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">
+                        Joined {format(new Date(user.createdAt), "MM/dd/yy")}
+                      </span>
+                      <div className="shrink-0">
                         {user.costs ? (
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-auto py-0.5 px-1 text-left">
+                                <DollarSign className="h-3 w-3 mr-0.5" />
                                 <span className="font-medium text-primary text-xs">
                                   {formatCost(user.costs.total)}
                                 </span>
@@ -228,36 +373,13 @@ export function AdminSubscribers() {
                             </DialogContent>
                           </Dialog>
                         ) : (
-                          <span className="text-muted-foreground">$0.00</span>
+                          <span className="text-muted-foreground text-xs">$0.00</span>
                         )}
-                      </TableCell>
-                      <TableCell className="py-2 px-2 text-muted-foreground whitespace-nowrap">
-                        {format(new Date(user.createdAt), "MM/dd/yy")}
-                      </TableCell>
-                      <TableCell className="py-2 px-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => setSelectedUserId(user.id)}
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>User Details</DialogTitle>
-                            </DialogHeader>
-                            <AdminUserDetails userId={user.id} />
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {/* Pagination */}
               {data && data.totalPages > 1 && (
