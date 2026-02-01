@@ -336,6 +336,48 @@ const PRICING = {
   imagePerImage: 0.02, // ~$0.02 per image
 };
 
+// ============= API CALL LOGGING =============
+interface ApiCallLogParams {
+  supabase: any;
+  userId: string;
+  generationId?: string;
+  provider: "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  model: string;
+  status: "success" | "error";
+  queueTimeMs?: number;
+  runningTimeMs?: number;
+  totalDurationMs: number;
+  cost?: number;
+  errorMessage?: string;
+}
+
+async function logApiCall(params: ApiCallLogParams): Promise<void> {
+  try {
+    const { supabase, userId, generationId, provider, model, status, queueTimeMs, runningTimeMs, totalDurationMs, cost, errorMessage } = params;
+    
+    const { error } = await supabase.from("api_call_logs").insert({
+      user_id: userId,
+      generation_id: generationId || null,
+      provider,
+      model,
+      status,
+      queue_time_ms: queueTimeMs || null,
+      running_time_ms: runningTimeMs || null,
+      total_duration_ms: totalDurationMs,
+      cost: cost || 0,
+      error_message: errorMessage || null,
+    });
+
+    if (error) {
+      console.error(`[API_LOG] Failed to log API call: ${error.message}`);
+    } else {
+      console.log(`[API_LOG] Logged ${provider}/${model} call: ${status}, ${totalDurationMs}ms, $${(cost || 0).toFixed(4)}`);
+    }
+  } catch (err) {
+    console.error(`[API_LOG] Error logging API call:`, err);
+  }
+}
+
 const STYLE_PROMPTS: Record<string, string> = {
   minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
   doodle: `Urban Minimalist Doodle style. Creative, Dynamic, and Catchy Flat 2D vector illustration with indie comic aesthetic. Make the artwork detailed, highly dynamic, catchy and captivating, and filling up the entire page. Add Words to illustrate the artwork. LINE WORK: Bold, consistent-weight black outlines (monoline) that feel hand-drawn but clean, with slightly rounded terminals for a friendly, approachable feel. COLOR PALETTE: Muted Primary tones—desaturated dusty reds, sage greens, mustard yellows, and slate blues—set against a warm, textured background. CHARACTER DESIGN: Object-Head surrealism with symbolic objects creating an instant iconographic look that is relatable yet stylized. TEXTURING: Subtle Lo-Fi distressing with light paper grain, tiny ink flecks, and occasional print misalignments where color doesn't perfectly hit the line. COMPOSITION: Centralized and Floating—main subject grounded surrounded by a halo of smaller floating icons representing the theme without cluttering. Technical style: Flat 2D Vector Illustration, Indie Comic Aesthetic. Vibe: Lo-fi, Chill, Entrepreneurial, Whimsical. Influences: Modern editorial illustration, 90s streetwear graphics, and Lofi Girl aesthetics.`,
@@ -2549,6 +2591,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+  const scriptCallStart = Date.now();
   const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -2562,14 +2605,36 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       max_tokens: 8192,
     }),
   });
+  const scriptCallDuration = Date.now() - scriptCallStart;
 
   if (!scriptResponse.ok) {
+    // Log failed API call
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      provider: "openrouter",
+      model: "google/gemini-3-flash-preview",
+      status: "error",
+      totalDurationMs: scriptCallDuration,
+      errorMessage: `Script generation failed: ${scriptResponse.status}`,
+    });
     throw new Error(`Script generation failed: ${scriptResponse.status}`);
   }
 
   const scriptData = await scriptResponse.json();
   const scriptContent = scriptData.choices?.[0]?.message?.content;
   const tokensUsed = scriptData.usage?.total_tokens || 0;
+
+  // Log successful API call
+  await logApiCall({
+    supabase,
+    userId: user.id,
+    provider: "openrouter",
+    model: "google/gemini-3-flash-preview",
+    status: "success",
+    totalDurationMs: scriptCallDuration,
+    cost: tokensUsed * PRICING.scriptPerToken,
+  });
 
   if (!scriptContent) throw new Error("No script content received");
 
@@ -2910,6 +2975,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+  const scriptCallStart = Date.now();
   const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -2923,15 +2989,37 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       max_tokens: 12000, // More tokens for longer narratives
     }),
   });
+  const scriptCallDuration = Date.now() - scriptCallStart;
 
   if (!scriptResponse.ok) {
     const errText = await scriptResponse.text().catch(() => "");
+    // Log failed API call
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      provider: "openrouter",
+      model: "google/gemini-3-flash-preview",
+      status: "error",
+      totalDurationMs: scriptCallDuration,
+      errorMessage: `Script generation failed: ${scriptResponse.status} - ${errText}`,
+    });
     throw new Error(`Script generation failed: ${scriptResponse.status} - ${errText}`);
   }
 
   const scriptData = await scriptResponse.json();
   const scriptContent = scriptData.choices?.[0]?.message?.content;
   const tokensUsed = scriptData.usage?.total_tokens || 0;
+
+  // Log successful API call
+  await logApiCall({
+    supabase,
+    userId: user.id,
+    provider: "openrouter",
+    model: "google/gemini-3-flash-preview",
+    status: "success",
+    totalDurationMs: scriptCallDuration,
+    cost: tokensUsed * PRICING.scriptPerToken,
+  });
 
   if (!scriptContent) throw new Error("No script content received");
 
@@ -3852,8 +3940,47 @@ async function handleFinalizePhase(
 
   if (costError) {
     console.error("[FINALIZE] Error recording generation costs:", costError);
+    console.error("[FINALIZE] Cost error details:", JSON.stringify(costError));
   } else {
     console.log(`[FINALIZE] Cost recorded: $${costTracking.estimatedCostUsd.toFixed(4)}`);
+  }
+
+  // ============= LOG API CALL SUMMARY =============
+  // Log summary API calls for admin visibility
+  // Script generation (already logged during script phase, but add summary for finalize)
+  if (costTracking.imagesGenerated > 0) {
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      generationId,
+      provider: "hypereal",
+      model: "nano-banana-pro-t2i",
+      status: "success",
+      totalDurationMs: phaseTimings.images || 0,
+      cost: imageCost * 0.7,
+    });
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      generationId,
+      provider: "replicate",
+      model: "nano-banana",
+      status: "success",
+      totalDurationMs: phaseTimings.images || 0,
+      cost: imageCost * 0.3,
+    });
+  }
+  if (costTracking.audioSeconds > 0) {
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      generationId,
+      provider: "google_tts",
+      model: "gemini-tts",
+      status: "success",
+      totalDurationMs: phaseTimings.audio || 0,
+      cost: audioCost,
+    });
   }
   // ============= END RECORD GENERATION COSTS =============
 
