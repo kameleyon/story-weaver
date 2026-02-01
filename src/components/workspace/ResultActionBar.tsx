@@ -141,12 +141,13 @@ export function ResultActionBar({
 
   const handleCopyLink = async () => {
     try {
-      // Copy the branded URL for better user experience
-      await navigator.clipboard.writeText(displayUrl);
+      // Copy the edge function URL which handles bot detection for social previews
+      // This ensures Twitter/Facebook/LinkedIn see the correct OG tags
+      await navigator.clipboard.writeText(shareUrl);
       setHasCopied(true);
       toast({
         title: "Link copied!",
-        description: "Share this link with anyone to let them view your video",
+        description: "Share this link on social media - thumbnails will show correctly",
       });
       setTimeout(() => setHasCopied(false), 2000);
     } catch {
