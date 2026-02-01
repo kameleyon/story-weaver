@@ -46,37 +46,24 @@ export default function PublicShare() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch share data using the secure RPC function
+  // Fetch share data using edge function for fresh signed URLs
   const { data: shareData, isLoading, error } = useQuery({
     queryKey: ["public-share", token],
     queryFn: async () => {
       if (!token) throw new Error("Invalid share link");
 
-      // Use the secure RPC function that bypasses RLS
-      const { data, error } = await supabase.rpc("get_shared_project", {
-        share_token_param: token,
+      // Call edge function to get share data with refreshed URLs
+      const { data, error } = await supabase.functions.invoke("get-shared-project", {
+        body: { token },
       });
 
       if (error) throw error;
       if (!data) throw new Error("Share not found or expired");
 
-      // Cast to the expected shape
-      const result = data as unknown as {
-        project: {
-          id: string;
-          title: string;
-          format: string;
-          style: string;
-          description: string | null;
-        };
-        scenes: Scene[];
-        share: { id: string; view_count: number };
-      };
-
       return {
-        project: result.project,
-        scenes: result.scenes || [],
-        share: result.share,
+        project: data.project,
+        scenes: data.scenes || [],
+        share: data.share,
       };
     },
     enabled: !!token,
@@ -168,7 +155,7 @@ export default function PublicShare() {
 
   if (isLoading) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <div className="min-h-screen bg-background flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -178,7 +165,7 @@ export default function PublicShare() {
 
   if (error || !shareData) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
           <div className="text-center space-y-4">
             <h1 className="text-2xl font-bold">Link Not Found</h1>
@@ -194,7 +181,7 @@ export default function PublicShare() {
   const currentImageUrl = currentScene?.imageUrls?.[0] || currentScene?.imageUrl || "";
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <div className="min-h-screen bg-background">
         {/* Hidden audio element */}
         <audio ref={audioRef} />
