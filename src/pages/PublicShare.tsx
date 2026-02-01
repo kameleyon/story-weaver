@@ -41,6 +41,7 @@ export default function PublicShare() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -74,6 +75,20 @@ export default function PublicShare() {
   const project = shareData?.project;
   const currentScene = scenes[currentSceneIndex];
 
+  // Get all images for current scene
+  const getCurrentSceneImages = (scene: Scene | undefined): string[] => {
+    if (!scene) return [];
+    if (scene.imageUrls && scene.imageUrls.length > 0) {
+      return scene.imageUrls;
+    }
+    if (scene.imageUrl) {
+      return [scene.imageUrl];
+    }
+    return [];
+  };
+
+  const currentSceneImages = getCurrentSceneImages(currentScene);
+
   // Calculate total duration
   useEffect(() => {
     if (scenes.length > 0) {
@@ -82,11 +97,14 @@ export default function PublicShare() {
     }
   }, [scenes]);
 
-  // Playback logic
+  // Playback logic with image rotation
   useEffect(() => {
     if (!isPlaying || !currentScene) return;
 
     const sceneDuration = currentScene.duration || 3;
+    const images = getCurrentSceneImages(currentScene);
+    const imageCount = images.length || 1;
+    const timePerImage = sceneDuration / imageCount;
     const startTime = Date.now();
 
     // Play audio if available
@@ -99,6 +117,13 @@ export default function PublicShare() {
     intervalRef.current = setInterval(() => {
       const elapsed = (Date.now() - startTime) / 1000;
       
+      // Calculate which image to show within this scene
+      const imageIdx = Math.min(
+        Math.floor(elapsed / timePerImage),
+        imageCount - 1
+      );
+      setCurrentImageIndex(imageIdx);
+
       // Calculate overall progress
       const previousDuration = scenes
         .slice(0, currentSceneIndex)
@@ -109,9 +134,11 @@ export default function PublicShare() {
       if (elapsed >= sceneDuration) {
         if (currentSceneIndex < scenes.length - 1) {
           setCurrentSceneIndex(currentSceneIndex + 1);
+          setCurrentImageIndex(0); // Reset image index for new scene
         } else {
           setIsPlaying(false);
           setCurrentSceneIndex(0);
+          setCurrentImageIndex(0);
           setProgress(0);
         }
       }
@@ -123,9 +150,15 @@ export default function PublicShare() {
     };
   }, [isPlaying, currentSceneIndex, currentScene, scenes, isMuted, totalDuration]);
 
+  // Reset image index when scene changes
+  useEffect(() => {
+    setCurrentImageIndex(0);
+  }, [currentSceneIndex]);
+
   const togglePlay = () => {
     if (!isPlaying && currentSceneIndex === scenes.length - 1) {
       setCurrentSceneIndex(0);
+      setCurrentImageIndex(0);
       setProgress(0);
     }
     setIsPlaying(!isPlaying);
@@ -178,7 +211,8 @@ export default function PublicShare() {
     );
   }
 
-  const currentImageUrl = currentScene?.imageUrls?.[0] || currentScene?.imageUrl || "";
+  // Use current image index to show the right image in rotation
+  const currentImageUrl = currentSceneImages[currentImageIndex] || currentSceneImages[0] || "";
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
