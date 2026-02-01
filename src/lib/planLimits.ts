@@ -7,7 +7,6 @@ export type PlanTier = "free" | "starter" | "creator" | "professional" | "enterp
 
 export interface PlanLimits {
   creditsPerMonth: number;
-  dailyGenerationLimit: number;
   allowedLengths: ("short" | "brief" | "presentation")[];
   allowedFormats: ("landscape" | "portrait" | "square")[];
   infographicsPerMonth: number;
@@ -20,7 +19,6 @@ export interface PlanLimits {
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   free: {
     creditsPerMonth: 5,
-    dailyGenerationLimit: 5,
     allowedLengths: ["short"],
     allowedFormats: ["landscape"],
     infographicsPerMonth: 0,
@@ -31,7 +29,6 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   },
   starter: {
     creditsPerMonth: 30,
-    dailyGenerationLimit: 15,
     allowedLengths: ["short", "brief"],
     allowedFormats: ["landscape", "portrait", "square"],
     infographicsPerMonth: 10,
@@ -42,7 +39,6 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   },
   creator: {
     creditsPerMonth: 100,
-    dailyGenerationLimit: 50,
     allowedLengths: ["short", "brief", "presentation"],
     allowedFormats: ["landscape", "portrait", "square"],
     infographicsPerMonth: 50,
@@ -53,21 +49,19 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   },
   professional: {
     creditsPerMonth: 300,
-    dailyGenerationLimit: 100,
     allowedLengths: ["short", "brief", "presentation"],
     allowedFormats: ["landscape", "portrait", "square"],
-    infographicsPerMonth: 999999, // Unlimited
+    infographicsPerMonth: 999999,
     voiceClones: 3,
     allowBrandMark: true,
     allowCustomStyle: true,
     allowVoiceCloning: true,
   },
   enterprise: {
-    creditsPerMonth: 999999, // Unlimited
-    dailyGenerationLimit: 999,
+    creditsPerMonth: 999999,
     allowedLengths: ["short", "brief", "presentation"],
     allowedFormats: ["landscape", "portrait", "square"],
-    infographicsPerMonth: 999999, // Unlimited
+    infographicsPerMonth: 999999,
     voiceClones: 999,
     allowBrandMark: true,
     allowCustomStyle: true,

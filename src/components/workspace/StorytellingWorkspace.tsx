@@ -24,7 +24,7 @@ import { CharacterPreview, type CharacterData } from "./CharacterPreview";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
-import { useSubscription, validateGenerationAccess, getCreditsRequired } from "@/hooks/useSubscription";
+import { useSubscription, validateGenerationAccess, getCreditsRequired, PLAN_LIMITS } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
@@ -68,6 +68,19 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
     const canGenerate = storyIdea.trim().length > 0 && !generationState.isGenerating;
+
+    // Get disabled formats based on plan (free users can only use landscape)
+    const limits = PLAN_LIMITS[plan];
+    const disabledFormats: VideoFormat[] = (["landscape", "portrait", "square"] as VideoFormat[]).filter(
+      f => !limits.allowedFormats.includes(f)
+    );
+    
+    // Auto-switch to allowed format if current format becomes disabled
+    useEffect(() => {
+      if (disabledFormats.includes(format) && limits.allowedFormats.length > 0) {
+        setFormat(limits.allowedFormats[0] as VideoFormat);
+      }
+    }, [plan, format, disabledFormats, limits.allowedFormats]);
 
     // Load project if projectId provided
     useEffect(() => {
@@ -369,7 +382,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
 
                   {/* Technical Configuration */}
                   <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-6 backdrop-blur-sm shadow-sm overflow-hidden">
-                    <FormatSelector selected={format} onSelect={setFormat} />
+                    <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
                     <div className="h-px bg-border/30" />
                     <StorytellingLengthSelector selected={length} onSelect={setLength} />
                     <div className="h-px bg-border/30" />
