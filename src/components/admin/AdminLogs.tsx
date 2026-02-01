@@ -37,24 +37,24 @@ const ACTION_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   info: Info,
 };
 
-// Teal-based color scheme with severity differentiation
+// Teal and neutral color scheme - no red/orange
 const ACTION_COLORS: Record<string, string> = {
-  // Success actions (teal variants)
+  // Success actions (primary teal)
   resolve_flag: "bg-primary/10 text-primary",
-  update_settings: "bg-[hsl(170,55%,45%)]/10 text-[hsl(170,55%,40%)]",
+  update_settings: "bg-primary/10 text-primary",
   
-  // Warning actions (amber/orange for caution)
-  create_flag: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  // Warning actions (muted)
+  create_flag: "bg-muted text-muted-foreground",
+  warning: "bg-muted text-muted-foreground",
   
-  // Error actions (red for critical)
-  error: "bg-red-500/10 text-red-500",
-  delete_user: "bg-red-500/10 text-red-500",
-  ban_user: "bg-red-500/10 text-red-500",
+  // Error actions (muted darker)
+  error: "bg-muted text-muted-foreground",
+  delete_user: "bg-muted text-muted-foreground",
+  ban_user: "bg-muted text-muted-foreground",
   
-  // Info actions (teal variants)
-  update_user: "bg-[hsl(170,40%,50%)]/10 text-[hsl(170,40%,45%)]",
-  update_role: "bg-[hsl(170,55%,50%)]/10 text-[hsl(170,55%,45%)]",
+  // Info actions (primary variants)
+  update_user: "bg-primary/10 text-primary",
+  update_role: "bg-primary/10 text-primary",
   info: "bg-primary/10 text-primary",
   
   // Default
@@ -101,9 +101,9 @@ export function AdminLogs() {
     // Add a subtle left border indicator based on severity
     const borderClass = {
       success: "border-l-2 border-l-primary",
-      warning: "border-l-2 border-l-amber-500",
-      error: "border-l-2 border-l-red-500",
-      info: "border-l-2 border-l-[hsl(170,55%,50%)]",
+      warning: "border-l-2 border-l-muted-foreground",
+      error: "border-l-2 border-l-muted-foreground",
+      info: "border-l-2 border-l-primary",
     }[severity];
     
     return (
@@ -157,15 +157,15 @@ export function AdminLogs() {
           <span className="text-muted-foreground">Success</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[hsl(170,55%,50%)]" />
+          <div className="w-3 h-3 rounded-full bg-primary/60" />
           <span className="text-muted-foreground">Info</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-amber-500" />
+          <div className="w-3 h-3 rounded-full bg-muted-foreground/50" />
           <span className="text-muted-foreground">Warning</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
+          <div className="w-3 h-3 rounded-full bg-muted-foreground" />
           <span className="text-muted-foreground">Error</span>
         </div>
       </div>

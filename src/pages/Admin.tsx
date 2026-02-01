@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Zap, Film } from "lucide-react";
+import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Cable, Film } from "lucide-react";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminSubscribers } from "@/components/admin/AdminSubscribers";
 import { AdminRevenue } from "@/components/admin/AdminRevenue";
@@ -93,6 +93,10 @@ export default function Admin() {
               <Film className="h-4 w-4" />
               <span className="hidden md:inline">Generations</span>
             </TabsTrigger>
+            <TabsTrigger value="api-calls" className="gap-2 flex-shrink-0">
+              <Cable className="h-4 w-4" />
+              <span className="hidden md:inline">API Calls</span>
+            </TabsTrigger>
             <TabsTrigger value="flags" className="gap-2 flex-shrink-0">
               <Flag className="h-4 w-4" />
               <span className="hidden md:inline">Flags</span>
@@ -100,10 +104,6 @@ export default function Admin() {
             <TabsTrigger value="logs" className="gap-2 flex-shrink-0">
               <FileText className="h-4 w-4" />
               <span className="hidden md:inline">Logs</span>
-            </TabsTrigger>
-            <TabsTrigger value="api-calls" className="gap-2 flex-shrink-0">
-              <Zap className="h-4 w-4" />
-              <span className="hidden md:inline">API Calls</span>
             </TabsTrigger>
           </TabsList>
 
@@ -123,16 +123,16 @@ export default function Admin() {
             <AdminGenerations />
           </TabsContent>
 
+          <TabsContent value="api-calls" className="space-y-6">
+            <AdminApiCalls />
+          </TabsContent>
+
           <TabsContent value="flags" className="space-y-6">
             <AdminFlags />
           </TabsContent>
 
           <TabsContent value="logs" className="space-y-6">
             <AdminLogs />
-          </TabsContent>
-
-          <TabsContent value="api-calls" className="space-y-6">
-            <AdminApiCalls />
           </TabsContent>
         </Tabs>
       </main>
