@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_logs: {
+        Row: {
+          action: string
+          admin_id: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          target_id: string | null
+          target_type: string
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_type: string
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_type?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       credit_transactions: {
         Row: {
           amount: number
@@ -41,6 +77,57 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           transaction_type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      generation_archives: {
+        Row: {
+          audio_url: string | null
+          deleted_at: string
+          error_message: string | null
+          id: string
+          original_completed_at: string | null
+          original_created_at: string
+          original_id: string
+          progress: number
+          project_id: string
+          scenes: Json | null
+          script: string | null
+          status: string
+          user_id: string
+          video_url: string | null
+        }
+        Insert: {
+          audio_url?: string | null
+          deleted_at?: string
+          error_message?: string | null
+          id?: string
+          original_completed_at?: string | null
+          original_created_at: string
+          original_id: string
+          progress?: number
+          project_id: string
+          scenes?: Json | null
+          script?: string | null
+          status: string
+          user_id: string
+          video_url?: string | null
+        }
+        Update: {
+          audio_url?: string | null
+          deleted_at?: string
+          error_message?: string | null
+          id?: string
+          original_completed_at?: string | null
+          original_created_at?: string
+          original_id?: string
+          progress?: number
+          project_id?: string
+          scenes?: Json | null
+          script?: string | null
+          status?: string
+          user_id?: string
+          video_url?: string | null
         }
         Relationships: []
       }
@@ -375,6 +462,72 @@ export type Database = {
         }
         Relationships: []
       }
+      user_flags: {
+        Row: {
+          created_at: string
+          details: string | null
+          flag_type: string
+          flagged_by: string
+          id: string
+          reason: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          flag_type: string
+          flagged_by: string
+          id?: string
+          reason: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          flag_type?: string
+          flagged_by?: string
+          id?: string
+          reason?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_voices: {
         Row: {
           created_at: string
@@ -411,8 +564,17 @@ export type Database = {
     }
     Functions: {
       get_shared_project: { Args: { share_token_param: string }; Returns: Json }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       subscription_status:
         | "active"
         | "canceled"
@@ -548,6 +710,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       subscription_status: [
         "active",
         "canceled",
