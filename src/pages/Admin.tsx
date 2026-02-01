@@ -47,50 +47,55 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b bg-card shadow-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
+              <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
                 <Shield className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <h1 className="text-xl font-bold">Admin Control Panel</h1>
-                <p className="text-sm text-muted-foreground">Manage users, subscriptions, and monitor activity</p>
+                <p className="text-sm text-muted-foreground hidden sm:block">Manage users, subscriptions, and monitor activity</p>
               </div>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Logged in as: <span className="font-medium text-foreground">{user?.email}</span>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
+                {user?.email?.charAt(0).toUpperCase() || "A"}
+              </div>
+              <span className="font-medium text-foreground">
+                {user?.email?.split("@")[0] || "Admin"}
+              </span>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-6 overflow-x-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="overview" className="gap-2">
+          <TabsList className="flex w-full overflow-x-auto scrollbar-thin">
+            <TabsTrigger value="overview" className="gap-2 flex-shrink-0">
               <Activity className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="subscribers" className="gap-2">
+            <TabsTrigger value="subscribers" className="gap-2 flex-shrink-0">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Subscribers</span>
             </TabsTrigger>
-            <TabsTrigger value="revenue" className="gap-2">
+            <TabsTrigger value="revenue" className="gap-2 flex-shrink-0">
               <DollarSign className="h-4 w-4" />
               <span className="hidden sm:inline">Revenue</span>
             </TabsTrigger>
-            <TabsTrigger value="generations" className="gap-2">
+            <TabsTrigger value="generations" className="gap-2 flex-shrink-0">
               <Activity className="h-4 w-4" />
               <span className="hidden sm:inline">Generations</span>
             </TabsTrigger>
-            <TabsTrigger value="flags" className="gap-2">
+            <TabsTrigger value="flags" className="gap-2 flex-shrink-0">
               <Flag className="h-4 w-4" />
               <span className="hidden sm:inline">Flags</span>
             </TabsTrigger>
-            <TabsTrigger value="logs" className="gap-2">
+            <TabsTrigger value="logs" className="gap-2 flex-shrink-0">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Logs</span>
             </TabsTrigger>

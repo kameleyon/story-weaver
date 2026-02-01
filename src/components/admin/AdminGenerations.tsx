@@ -143,11 +143,11 @@ export function AdminGenerations() {
       </div>
 
       {/* Stats Cards - Teal themed */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card>
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/10">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <Activity className="h-4 w-4 text-primary" />
             </div>
           </CardHeader>
@@ -156,10 +156,10 @@ export function AdminGenerations() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/15">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <CheckCircle className="h-4 w-4 text-primary" />
             </div>
           </CardHeader>
@@ -168,10 +168,10 @@ export function AdminGenerations() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Processing</CardTitle>
-            <div className="p-2 rounded-lg bg-primary/20">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
               <Clock className="h-4 w-4 text-[hsl(170,55%,45%)]" />
             </div>
           </CardHeader>
@@ -182,10 +182,10 @@ export function AdminGenerations() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Failed</CardTitle>
-            <div className="p-2 rounded-lg bg-red-500/10">
+            <div className="p-2 rounded-lg bg-red-500/10 shadow-sm">
               <XCircle className="h-4 w-4 text-red-500" />
             </div>
           </CardHeader>
@@ -194,10 +194,10 @@ export function AdminGenerations() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm col-span-2 sm:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Deleted</CardTitle>
-            <div className="p-2 rounded-lg bg-muted/50">
+            <div className="p-2 rounded-lg bg-muted shadow-sm">
               <Trash2 className="h-4 w-4 text-muted-foreground" />
             </div>
           </CardHeader>
@@ -209,25 +209,27 @@ export function AdminGenerations() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Daily Chart - Elegant thin bars with rounded corners */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 shadow-sm">
           <CardHeader>
             <CardTitle>Generations Over Time</CardTitle>
           </CardHeader>
           <CardContent>
             {data?.byDay && data.byDay.length > 0 ? (
-              <div className="h-[350px]">
+              <div className="h-[300px] sm:h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.byDay} barCategoryGap="20%">
+                  <BarChart data={data.byDay} barCategoryGap="25%">
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
                     <XAxis 
                       dataKey="date" 
                       tickFormatter={(value) => format(new Date(value), "MMM d")}
                       stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
+                      fontSize={11}
+                      tick={{ fontSize: 10 }}
                     />
                     <YAxis 
                       stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
+                      fontSize={11}
+                      width={35}
                     />
                     <Tooltip 
                       labelFormatter={(label) => format(new Date(label), "PPP")}
@@ -237,14 +239,14 @@ export function AdminGenerations() {
                         borderRadius: "8px",
                       }}
                     />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar 
                       dataKey="completed" 
                       name="Completed" 
                       fill={STATUS_COLORS.complete} 
                       stackId="a" 
                       radius={[0, 0, 0, 0]}
-                      maxBarSize={24}
+                      maxBarSize={16}
                     />
                     <Bar 
                       dataKey="failed" 
@@ -252,21 +254,21 @@ export function AdminGenerations() {
                       fill={STATUS_COLORS.error} 
                       stackId="a" 
                       radius={[0, 0, 0, 0]}
-                      maxBarSize={24}
+                      maxBarSize={16}
                     />
                     <Bar 
                       dataKey="deleted" 
                       name="Deleted" 
                       fill={STATUS_COLORS.deleted} 
                       stackId="a" 
-                      radius={[4, 4, 0, 0]}
-                      maxBarSize={24}
+                      radius={[3, 3, 0, 0]}
+                      maxBarSize={16}
                     />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+              <div className="flex items-center justify-center h-[300px] sm:h-[350px] text-muted-foreground">
                 No generation data available for this period
               </div>
             )}
@@ -274,21 +276,21 @@ export function AdminGenerations() {
         </Card>
 
         {/* Status Distribution */}
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Status Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             {pieData.length > 0 ? (
-              <div className="h-[350px]">
+              <div className="h-[300px] sm:h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={70}
-                      outerRadius={110}
+                      innerRadius={50}
+                      outerRadius={80}
                       paddingAngle={3}
                       dataKey="value"
                       strokeWidth={0}
@@ -310,7 +312,7 @@ export function AdminGenerations() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+              <div className="flex items-center justify-center h-[300px] sm:h-[350px] text-muted-foreground">
                 No data available
               </div>
             )}
@@ -319,38 +321,38 @@ export function AdminGenerations() {
       </div>
 
       {/* Success Rate - Teal themed */}
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Performance Metrics</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="text-center p-4 rounded-lg bg-primary/10">
-              <div className="text-3xl font-bold text-primary">
+          <div className="grid gap-4 grid-cols-3">
+            <div className="text-center p-4 rounded-lg bg-card border border-primary/20 shadow-sm">
+              <div className="text-2xl sm:text-3xl font-bold text-primary">
                 {data?.total 
                   ? (((data.byStatus?.complete || 0) / (data.total - (data.byStatus?.deleted || 0))) * 100).toFixed(1)
                   : 0
                 }%
               </div>
-              <p className="text-sm text-muted-foreground mt-1">Success Rate</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Success Rate</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-red-500/10">
-              <div className="text-3xl font-bold text-red-500">
+            <div className="text-center p-4 rounded-lg bg-card border border-red-500/20 shadow-sm">
+              <div className="text-2xl sm:text-3xl font-bold text-red-500">
                 {data?.total 
                   ? (((data.byStatus?.error || 0) / (data.total - (data.byStatus?.deleted || 0))) * 100).toFixed(1)
                   : 0
                 }%
               </div>
-              <p className="text-sm text-muted-foreground mt-1">Failure Rate</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Failure Rate</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-muted/50">
-              <div className="text-3xl font-bold text-muted-foreground">
+            <div className="text-center p-4 rounded-lg bg-card border border-border shadow-sm">
+              <div className="text-2xl sm:text-3xl font-bold text-muted-foreground">
                 {data?.total 
                   ? (((data.byStatus?.deleted || 0) / data.total) * 100).toFixed(1)
                   : 0
                 }%
               </div>
-              <p className="text-sm text-muted-foreground mt-1">Deletion Rate</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Deletion Rate</p>
             </div>
           </div>
         </CardContent>

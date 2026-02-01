@@ -170,43 +170,44 @@ export function AdminLogs() {
         </div>
       </div>
 
-      <Card>
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle className="text-lg">Activity Log</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 sm:p-6">
           {data?.logs && data.logs.length > 0 ? (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Target Type</TableHead>
-                    <TableHead>Target ID</TableHead>
-                    <TableHead>Details</TableHead>
+                    <TableHead className="min-w-[120px]">Timestamp</TableHead>
+                    <TableHead className="min-w-[100px]">Action</TableHead>
+                    <TableHead className="min-w-[80px]">Target</TableHead>
+                    <TableHead className="min-w-[100px]">Target ID</TableHead>
+                    <TableHead className="min-w-[150px]">Details</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.logs.map((log) => (
                     <TableRow key={log.id}>
-                      <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-                        {format(new Date(log.created_at), "PPpp")}
+                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                        {format(new Date(log.created_at), "PP p")}
                       </TableCell>
                       <TableCell>{getActionBadge(log.action)}</TableCell>
-                      <TableCell className="capitalize">{log.target_type}</TableCell>
+                      <TableCell className="capitalize text-sm">{log.target_type}</TableCell>
                       <TableCell className="font-mono text-xs">
                         {log.target_id ? (
-                          <span className="truncate max-w-[150px] block" title={log.target_id}>
+                          <span className="truncate max-w-[100px] block" title={log.target_id}>
                             {log.target_id.substring(0, 8)}...
                           </span>
                         ) : (
                           "-"
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[200px]">
+                      <TableCell className="max-w-[150px]">
                         {log.details ? (
-                          <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-w-[200px]">
+                          <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-w-[150px]">
                             {JSON.stringify(log.details, null, 2)}
                           </pre>
                         ) : (
@@ -217,11 +218,12 @@ export function AdminLogs() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t px-4 sm:px-0">
                 <p className="text-sm text-muted-foreground">
-                  Page {page} • {data.total} total logs
+                  Page {page} • {data.total} logs
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -231,7 +233,7 @@ export function AdminLogs() {
                     disabled={page === 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    Previous
+                    <span className="hidden sm:inline">Previous</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -239,7 +241,7 @@ export function AdminLogs() {
                     onClick={() => setPage(p => p + 1)}
                     disabled={!data.logs || data.logs.length < 50}
                   >
-                    Next
+                    <span className="hidden sm:inline">Next</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
