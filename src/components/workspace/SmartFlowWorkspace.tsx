@@ -16,6 +16,10 @@ import { SmartFlowStyleSelector, type SmartFlowStyle } from "./SmartFlowStyleSel
 import { SmartFlowResult } from "./SmartFlowResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
+import { useSubscription, validateGenerationAccess } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
+import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
+import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
@@ -42,6 +46,14 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     const [brandMarkText, setBrandMarkText] = useState("");
 
     const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+    
+    // Subscription and plan validation
+    const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
+    const { toast } = useToast();
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeReason, setUpgradeReason] = useState("");
+    const [showSuspendedModal, setShowSuspendedModal] = useState(false);
+    const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
     const canGenerate = dataContent.trim().length > 0 && extractionPrompt.trim().length > 0 && !generationState.isGenerating;
 
@@ -88,28 +100,61 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       }
     }, [generationState.projectId, generationState.isGenerating, generationState.step, loadProject]);
 
-    const handleGenerate = () => {
-      if (canGenerate) {
-        startGeneration({
-          content: dataContent,
-          presenterFocus: extractionPrompt, // Reusing presenterFocus for extraction prompt
-          format,
-          style,
-          customStyle: style === "custom" ? customStyle : undefined,
-          customStyleImage: style === "custom" ? customStyleImage : undefined,
-          length: "short", // Fixed for Smart Flow - single scene
-          brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
-          projectType: "smartflow", // Smart Flow uses dedicated single-scene backend
-          // Voice selection (only if enabled)
-          voiceType: enableVoice ? voice.type : undefined,
-          voiceId: enableVoice ? voice.voiceId : undefined,
-          // For standard voices, pass gender as voiceName (e.g., "male" or "female")
-          // For custom voices, pass the actual voice name
-          voiceName: enableVoice 
-            ? (voice.type === "custom" ? voice.voiceName : voice.gender) 
-            : undefined,
-        });
+    const handleGenerate = async () => {
+      if (!canGenerate) return;
+
+      // Check for subscription issues first
+      if (subscriptionStatus === "past_due" || subscriptionStatus === "unpaid") {
+        setSuspendedStatus(subscriptionStatus as "past_due" | "unpaid");
+        setShowSuspendedModal(true);
+        return;
       }
+
+      // Validate plan access - infographics require Starter+
+      const validation = validateGenerationAccess(
+        plan,
+        creditsBalance,
+        "smartflow",
+        "short",
+        format,
+        brandMarkEnabled && brandMarkText.trim().length > 0,
+        style === "custom",
+        subscriptionStatus || undefined
+      );
+
+      if (!validation.canGenerate) {
+        toast({
+          variant: "destructive",
+          title: "Cannot Generate",
+          description: validation.error,
+        });
+        setUpgradeReason(validation.error || "Please upgrade your plan to continue.");
+        setShowUpgradeModal(true);
+        return;
+      }
+
+      startGeneration({
+        content: dataContent,
+        presenterFocus: extractionPrompt, // Reusing presenterFocus for extraction prompt
+        format,
+        style,
+        customStyle: style === "custom" ? customStyle : undefined,
+        customStyleImage: style === "custom" ? customStyleImage : undefined,
+        length: "short", // Fixed for Smart Flow - single scene
+        brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+        projectType: "smartflow", // Smart Flow uses dedicated single-scene backend
+        // Voice selection (only if enabled)
+        voiceType: enableVoice ? voice.type : undefined,
+        voiceId: enableVoice ? voice.voiceId : undefined,
+        // For standard voices, pass gender as voiceName (e.g., "male" or "female")
+        // For custom voices, pass the actual voice name
+        voiceName: enableVoice 
+          ? (voice.type === "custom" ? voice.voiceName : voice.gender) 
+          : undefined,
+      });
+
+      // Refresh subscription state after starting generation
+      setTimeout(() => checkSubscription(), 2000);
     };
 
     const handleNewProject = () => {
@@ -357,6 +402,20 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
             </AnimatePresence>
           </div>
         </main>
+
+        {/* Modals */}
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onOpenChange={setShowUpgradeModal}
+          reason={upgradeReason}
+          showCreditsOption={plan !== "free"}
+        />
+
+        <SubscriptionSuspendedModal
+          open={showSuspendedModal}
+          onOpenChange={setShowSuspendedModal}
+          status={suspendedStatus}
+        />
       </div>
     );
   }

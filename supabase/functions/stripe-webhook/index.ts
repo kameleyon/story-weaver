@@ -206,16 +206,54 @@ serve(async (req) => {
           const productId = subscription.items.data[0].price.product as string;
           const planName = subscriptionProducts[productId] || "starter";
 
+          // Map Stripe status to our status
+          // Handle past_due specially - we want to track this
+          let dbStatus = subscription.status as any;
+          
           await supabaseAdmin
             .from("subscriptions")
             .update({
               plan_name: planName,
-              status: subscription.status as any,
+              status: dbStatus,
               current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
               current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
               cancel_at_period_end: subscription.cancel_at_period_end,
             })
             .eq("stripe_customer_id", customerId);
+
+          // If subscription is past_due, log it for tracking
+          if (subscription.status === "past_due") {
+            logStep("Subscription past_due - user will be notified", { 
+              userId: subData.user_id, 
+              customerId 
+            });
+          }
+        }
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+        
+        logStep("Invoice payment failed", { invoiceId: invoice.id, customerId });
+
+        // Update subscription status to past_due if not already
+        const { data: subData } = await supabaseAdmin
+          .from("subscriptions")
+          .select("user_id, status")
+          .eq("stripe_customer_id", customerId)
+          .single();
+
+        if (subData && subData.status === "active") {
+          await supabaseAdmin
+            .from("subscriptions")
+            .update({ status: "past_due" })
+            .eq("stripe_customer_id", customerId);
+          
+          logStep("Subscription marked as past_due due to payment failure", { 
+            userId: subData.user_id 
+          });
         }
         break;
       }

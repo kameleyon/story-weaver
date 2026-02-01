@@ -4346,8 +4346,154 @@ serve(async (req) => {
         );
       }
 
-      // Check daily generation limit (Enterprise: 999/day)
-      const DAILY_LIMIT = 999;
+      // Check daily generation limit based on plan
+      const PLAN_DAILY_LIMITS: Record<string, number> = {
+        free: 5,
+        starter: 15,
+        creator: 50,
+        professional: 100,
+        enterprise: 999,
+      };
+
+      // Get user subscription and credits
+      const { data: subscriptionData } = await supabase
+        .from("subscriptions")
+        .select("plan_name, status")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .single();
+
+      const userPlan = subscriptionData?.plan_name || "free";
+      const subscriptionStatus = subscriptionData?.status || null;
+      const dailyLimit = PLAN_DAILY_LIMITS[userPlan] || PLAN_DAILY_LIMITS.free;
+
+      // Get user credits
+      const { data: creditData } = await supabase
+        .from("user_credits")
+        .select("credits_balance")
+        .eq("user_id", user.id)
+        .single();
+
+      const creditsBalance = creditData?.credits_balance || 0;
+
+      // Calculate credits required based on project type and length
+      const projectType = body.projectType || "doc2video";
+      const CREDIT_COSTS: Record<string, number> = {
+        short: 1,
+        brief: 2,
+        presentation: 4,
+      };
+      const creditsRequired = projectType === "smartflow" ? 1 : (CREDIT_COSTS[length] || 1);
+
+      // ============= PLAN RESTRICTION VALIDATION =============
+      
+      // Check subscription status - block if past_due or unpaid
+      if (subscriptionStatus === "past_due" || subscriptionStatus === "unpaid") {
+        console.log(`[generate-video] User ${user.id} subscription is ${subscriptionStatus}, blocking generation`);
+        return new Response(
+          JSON.stringify({
+            error: "Your subscription payment is overdue. Please update your payment method to continue creating.",
+            code: "SUBSCRIPTION_PAST_DUE",
+          }),
+          {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check credits BEFORE starting generation
+      if (creditsBalance < creditsRequired) {
+        console.log(`[generate-video] User ${user.id} has insufficient credits: ${creditsBalance}/${creditsRequired}`);
+        return new Response(
+          JSON.stringify({
+            error: `Insufficient credits. You need ${creditsRequired} credit(s) but have ${creditsBalance}. Please add credits or upgrade your plan.`,
+            code: "INSUFFICIENT_CREDITS",
+            creditsRequired,
+            creditsBalance,
+          }),
+          {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check plan restrictions for length
+      const PLAN_ALLOWED_LENGTHS: Record<string, string[]> = {
+        free: ["short"],
+        starter: ["short", "brief"],
+        creator: ["short", "brief", "presentation"],
+        professional: ["short", "brief", "presentation"],
+        enterprise: ["short", "brief", "presentation"],
+      };
+      const allowedLengths = PLAN_ALLOWED_LENGTHS[userPlan] || PLAN_ALLOWED_LENGTHS.free;
+      
+      if (!allowedLengths.includes(length)) {
+        const requiredPlan = length === "presentation" ? "Creator" : "Starter";
+        console.log(`[generate-video] User ${user.id} on ${userPlan} cannot use length ${length}`);
+        return new Response(
+          JSON.stringify({
+            error: `${length.charAt(0).toUpperCase() + length.slice(1)} videos are not available on the ${userPlan} plan. Please upgrade to ${requiredPlan} or higher.`,
+            code: "PLAN_RESTRICTION",
+            requiredPlan: requiredPlan.toLowerCase(),
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check format restrictions for free plan
+      if (userPlan === "free" && format !== "landscape") {
+        console.log(`[generate-video] Free user ${user.id} cannot use format ${format}`);
+        return new Response(
+          JSON.stringify({
+            error: "Portrait and square formats require a Starter plan or higher. Free users can only create landscape videos.",
+            code: "PLAN_RESTRICTION",
+            requiredPlan: "starter",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check infographics restriction for free plan
+      if (projectType === "smartflow" && userPlan === "free") {
+        console.log(`[generate-video] Free user ${user.id} cannot create infographics`);
+        return new Response(
+          JSON.stringify({
+            error: "Infographics are not available on the Free plan. Please upgrade to Starter or higher.",
+            code: "PLAN_RESTRICTION",
+            requiredPlan: "starter",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check brand mark restriction
+      if (body.brandMark && (userPlan === "free" || userPlan === "starter")) {
+        console.log(`[generate-video] User ${user.id} on ${userPlan} cannot use brand mark`);
+        return new Response(
+          JSON.stringify({
+            error: "Brand mark feature requires Creator plan or higher.",
+            code: "PLAN_RESTRICTION",
+            requiredPlan: "creator",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check daily limit based on plan
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
@@ -4359,11 +4505,12 @@ serve(async (req) => {
 
       if (countError) {
         console.error("[generate-video] Error checking daily limit:", countError);
-      } else if ((todayGenerations ?? 0) >= DAILY_LIMIT) {
-        console.log(`[generate-video] User ${user.id} has reached daily limit: ${todayGenerations}/${DAILY_LIMIT}`);
+      } else if ((todayGenerations ?? 0) >= dailyLimit) {
+        console.log(`[generate-video] User ${user.id} has reached daily limit: ${todayGenerations}/${dailyLimit}`);
         return new Response(
           JSON.stringify({
-            error: `Daily limit reached. You can only create ${DAILY_LIMIT} videos per day. Please try again tomorrow.`,
+            error: `Daily limit reached. You can create ${dailyLimit} videos per day on your ${userPlan} plan. Please try again tomorrow or upgrade for higher limits.`,
+            code: "DAILY_LIMIT_REACHED",
           }),
           {
             status: 429,
@@ -4372,7 +4519,8 @@ serve(async (req) => {
         );
       }
 
-      console.log(`[generate-video] User daily usage: ${todayGenerations ?? 0}/${DAILY_LIMIT}`);
+      console.log(`[generate-video] User ${user.id} (${userPlan}): Credits ${creditsBalance}/${creditsRequired}, Daily ${todayGenerations ?? 0}/${dailyLimit}`);
+      // ============= END PLAN RESTRICTION VALIDATION =============
 
       // Route based on project type
       if (body.projectType === "smartflow") {

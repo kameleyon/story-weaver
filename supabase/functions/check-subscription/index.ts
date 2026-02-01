@@ -92,6 +92,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         subscribed: true,
         plan: dbSubscription.plan_name,
+        subscription_status: "active",
         subscription_end: dbSubscription.current_period_end,
         cancel_at_period_end: dbSubscription.cancel_at_period_end || false,
         credits_balance: creditData?.credits_balance || 0,
@@ -183,6 +184,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       subscribed: plan !== "free",
       plan,
+      subscription_status: plan !== "free" ? (cancelAtPeriodEnd ? "canceling" : "active") : null,
       subscription_end: subscriptionEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       credits_balance: creditData?.credits_balance || 0,
