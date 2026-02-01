@@ -53,30 +53,38 @@ export function AdminOverview() {
     );
   }
 
+  // Teal palette shades
+  const tealShades = {
+    primary: "text-primary", // #49cdbf
+    light: "text-[hsl(170,55%,65%)]", // Lighter teal
+    dark: "text-[hsl(170,55%,40%)]", // Darker teal
+    muted: "text-[hsl(170,30%,50%)]", // Muted teal
+  };
+
   const statCards = [
     {
       title: "Total Users",
       value: stats?.totalUsers || 0,
       description: "Registered accounts",
       icon: Users,
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
+      color: tealShades.primary,
+      bgColor: "bg-primary/10",
     },
     {
       title: "Active Subscribers",
       value: stats?.subscriberCount || 0,
       description: "Paid subscriptions",
       icon: CreditCard,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
+      color: tealShades.light,
+      bgColor: "bg-primary/15",
     },
     {
       title: "Total Generations",
       value: stats?.totalGenerations || 0,
       description: `${stats?.activeGenerations || 0} active, ${stats?.archivedGenerations || 0} deleted`,
       icon: Activity,
-      color: "text-purple-500",
-      bgColor: "bg-purple-500/10",
+      color: tealShades.dark,
+      bgColor: "bg-primary/20",
     },
     {
       title: "Active Flags",
@@ -91,16 +99,16 @@ export function AdminOverview() {
       value: stats?.creditPurchases || 0,
       description: "Total transactions",
       icon: Coins,
-      color: "text-amber-500",
-      bgColor: "bg-amber-500/10",
+      color: tealShades.muted,
+      bgColor: "bg-primary/10",
     },
     {
       title: "Archived Generations",
       value: stats?.archivedGenerations || 0,
       description: "Deleted by users",
       icon: Archive,
-      color: "text-slate-500",
-      bgColor: "bg-slate-500/10",
+      color: "text-muted-foreground",
+      bgColor: "bg-muted/50",
     },
   ];
 
@@ -142,7 +150,7 @@ export function AdminOverview() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Paid Subscribers</span>
-                <span className="font-medium text-green-500">{stats?.subscriberCount || 0}</span>
+                <span className="font-medium text-primary">{stats?.subscriberCount || 0}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Conversion Rate</span>
@@ -164,11 +172,11 @@ export function AdminOverview() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Active Generations</span>
-                <span className="font-medium text-green-500">{stats?.activeGenerations || 0}</span>
+                <span className="font-medium text-primary">{stats?.activeGenerations || 0}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Deleted Generations</span>
-                <span className="font-medium text-slate-500">{stats?.archivedGenerations || 0}</span>
+                <span className="font-medium text-muted-foreground">{stats?.archivedGenerations || 0}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Retention Rate</span>

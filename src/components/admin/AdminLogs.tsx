@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { Loader2, FileText, RefreshCw, ChevronLeft, ChevronRight, Shield, User, Flag, Settings } from "lucide-react";
+import { Loader2, FileText, RefreshCw, ChevronLeft, ChevronRight, Shield, User, Flag, Settings, AlertCircle, CheckCircle, Info } from "lucide-react";
 import { format } from "date-fns";
 
 interface AdminLog {
@@ -28,18 +28,45 @@ interface LogsResponse {
 
 const ACTION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   create_flag: Flag,
-  resolve_flag: Flag,
+  resolve_flag: CheckCircle,
   update_user: User,
   update_role: Shield,
   update_settings: Settings,
+  error: AlertCircle,
+  warning: AlertCircle,
+  info: Info,
 };
 
+// Teal-based color scheme with severity differentiation
 const ACTION_COLORS: Record<string, string> = {
-  create_flag: "bg-orange-500/10 text-orange-500",
-  resolve_flag: "bg-green-500/10 text-green-500",
-  update_user: "bg-blue-500/10 text-blue-500",
-  update_role: "bg-purple-500/10 text-purple-500",
-  update_settings: "bg-slate-500/10 text-slate-500",
+  // Success actions (teal variants)
+  resolve_flag: "bg-primary/10 text-primary",
+  update_settings: "bg-[hsl(170,55%,45%)]/10 text-[hsl(170,55%,40%)]",
+  
+  // Warning actions (amber/orange for caution)
+  create_flag: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  
+  // Error actions (red for critical)
+  error: "bg-red-500/10 text-red-500",
+  delete_user: "bg-red-500/10 text-red-500",
+  ban_user: "bg-red-500/10 text-red-500",
+  
+  // Info actions (teal variants)
+  update_user: "bg-[hsl(170,40%,50%)]/10 text-[hsl(170,40%,45%)]",
+  update_role: "bg-[hsl(170,55%,50%)]/10 text-[hsl(170,55%,45%)]",
+  info: "bg-primary/10 text-primary",
+  
+  // Default
+  default: "bg-muted text-muted-foreground",
+};
+
+// Get severity level for logs
+const getLogSeverity = (action: string): "info" | "warning" | "error" | "success" => {
+  if (["resolve_flag", "update_settings"].includes(action)) return "success";
+  if (["create_flag", "suspend_user"].includes(action)) return "warning";
+  if (["error", "delete_user", "ban_user"].includes(action)) return "error";
+  return "info";
 };
 
 export function AdminLogs() {
@@ -68,9 +95,19 @@ export function AdminLogs() {
 
   const getActionBadge = (action: string) => {
     const Icon = ACTION_ICONS[action] || FileText;
-    const color = ACTION_COLORS[action] || "bg-muted text-muted-foreground";
+    const color = ACTION_COLORS[action] || ACTION_COLORS.default;
+    const severity = getLogSeverity(action);
+    
+    // Add a subtle left border indicator based on severity
+    const borderClass = {
+      success: "border-l-2 border-l-primary",
+      warning: "border-l-2 border-l-amber-500",
+      error: "border-l-2 border-l-red-500",
+      info: "border-l-2 border-l-[hsl(170,55%,50%)]",
+    }[severity];
+    
     return (
-      <Badge className={`gap-1 ${color}`}>
+      <Badge className={`gap-1 ${color} ${borderClass}`}>
         <Icon className="h-3 w-3" />
         {action.replace(/_/g, " ")}
       </Badge>
@@ -111,6 +148,26 @@ export function AdminLogs() {
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
+      </div>
+
+      {/* Legend for log severity */}
+      <div className="flex flex-wrap gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-primary" />
+          <span className="text-muted-foreground">Success</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-[hsl(170,55%,50%)]" />
+          <span className="text-muted-foreground">Info</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-amber-500" />
+          <span className="text-muted-foreground">Warning</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-red-500" />
+          <span className="text-muted-foreground">Error</span>
+        </div>
       </div>
 
       <Card>

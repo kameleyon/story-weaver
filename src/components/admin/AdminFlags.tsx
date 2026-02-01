@@ -33,11 +33,12 @@ interface FlagsResponse {
   limit: number;
 }
 
+// Teal-based color scheme with severity indicators
 const FLAG_TYPE_CONFIG = {
-  warning: { label: "Warning", icon: AlertTriangle, color: "bg-yellow-500/10 text-yellow-500" },
-  flagged: { label: "Flagged", icon: Flag, color: "bg-orange-500/10 text-orange-500" },
-  suspended: { label: "Suspended", icon: Ban, color: "bg-red-500/10 text-red-500" },
-  banned: { label: "Banned", icon: Ban, color: "bg-red-700/10 text-red-700" },
+  warning: { label: "Warning", icon: AlertTriangle, color: "bg-[hsl(170,40%,50%)]/10 text-[hsl(170,40%,45%)]" },
+  flagged: { label: "Flagged", icon: Flag, color: "bg-[hsl(170,55%,45%)]/10 text-[hsl(170,55%,40%)]" },
+  suspended: { label: "Suspended", icon: Ban, color: "bg-[hsl(170,55%,35%)]/10 text-[hsl(170,55%,30%)]" },
+  banned: { label: "Banned", icon: Ban, color: "bg-red-500/10 text-red-500" },
 };
 
 export function AdminFlags() {
@@ -148,7 +149,7 @@ export function AdminFlags() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Teal themed */}
       <div className="grid gap-4 md:grid-cols-4">
         {Object.entries(FLAG_TYPE_CONFIG).map(([type, config]) => {
           const Icon = config.icon;
@@ -157,7 +158,9 @@ export function AdminFlags() {
             <Card key={type}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium capitalize">{type}</CardTitle>
-                <Icon className={`h-4 w-4 ${config.color.split(" ")[1]}`} />
+                <div className={`p-2 rounded-lg ${config.color.split(" ")[0]}`}>
+                  <Icon className={`h-4 w-4 ${config.color.split(" ")[1]}`} />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{count}</div>
@@ -204,8 +207,8 @@ export function AdminFlags() {
                       </TableCell>
                       <TableCell>
                         {flag.resolved_at ? (
-                          <Badge variant="outline" className="gap-1">
-                            <CheckCircle className="h-3 w-3 text-green-500" />
+                          <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20">
+                            <CheckCircle className="h-3 w-3" />
                             Resolved
                           </Badge>
                         ) : (

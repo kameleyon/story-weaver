@@ -165,6 +165,24 @@ serve(async (req) => {
           flagCounts[f.user_id] = (flagCounts[f.user_id] || 0) + 1;
         });
 
+        // Get costs per user from generation_costs table
+        const { data: costsData } = await supabaseAdmin
+          .from("generation_costs")
+          .select("user_id, openrouter_cost, replicate_cost, hypereal_cost, google_tts_cost, total_cost");
+
+        // Aggregate costs per user
+        const userCosts: Record<string, { openrouter: number; replicate: number; hypereal: number; googleTts: number; total: number }> = {};
+        costsData?.forEach(c => {
+          if (!userCosts[c.user_id]) {
+            userCosts[c.user_id] = { openrouter: 0, replicate: 0, hypereal: 0, googleTts: 0, total: 0 };
+          }
+          userCosts[c.user_id].openrouter += Number(c.openrouter_cost) || 0;
+          userCosts[c.user_id].replicate += Number(c.replicate_cost) || 0;
+          userCosts[c.user_id].hypereal += Number(c.hypereal_cost) || 0;
+          userCosts[c.user_id].googleTts += Number(c.google_tts_cost) || 0;
+          userCosts[c.user_id].total += Number(c.total_cost) || 0;
+        });
+
         // Combine data
         let users = authUsers?.users.map(user => {
           const profile = profiles?.find(p => p.user_id === user.id);
@@ -185,6 +203,7 @@ serve(async (req) => {
             totalUsed: userCredits?.total_used || 0,
             generationCount: generationCounts[user.id] || 0,
             flagCount: flagCounts[user.id] || 0,
+            costs: userCosts[user.id] || { openrouter: 0, replicate: 0, hypereal: 0, googleTts: 0, total: 0 },
           };
         }) || [];
 

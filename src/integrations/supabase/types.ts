@@ -131,6 +131,42 @@ export type Database = {
         }
         Relationships: []
       }
+      generation_costs: {
+        Row: {
+          created_at: string
+          generation_id: string
+          google_tts_cost: number | null
+          hypereal_cost: number | null
+          id: string
+          openrouter_cost: number | null
+          replicate_cost: number | null
+          total_cost: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          generation_id: string
+          google_tts_cost?: number | null
+          hypereal_cost?: number | null
+          id?: string
+          openrouter_cost?: number | null
+          replicate_cost?: number | null
+          total_cost?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          generation_id?: string
+          google_tts_cost?: number | null
+          hypereal_cost?: number | null
+          id?: string
+          openrouter_cost?: number | null
+          replicate_cost?: number | null
+          total_cost?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       generations: {
         Row: {
           audio_url: string | null

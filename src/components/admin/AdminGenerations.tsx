@@ -26,12 +26,13 @@ interface GenerationStats {
 
 type TimePeriod = "7d" | "30d" | "90d" | "all";
 
+// Teal-based color palette
 const STATUS_COLORS = {
-  pending: "#f59e0b",
-  processing: "#3b82f6",
-  complete: "#22c55e",
-  error: "#ef4444",
-  deleted: "#6b7280",
+  pending: "hsl(170, 40%, 55%)", // Muted teal
+  processing: "hsl(170, 55%, 45%)", // Medium teal
+  complete: "hsl(170, 55%, 54%)", // Primary teal #49cdbf
+  error: "hsl(0, 70%, 55%)", // Keep red for errors for visibility
+  deleted: "hsl(200, 8%, 50%)", // Neutral gray
 };
 
 export function AdminGenerations() {
@@ -141,12 +142,14 @@ export function AdminGenerations() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Teal themed */}
       <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total</CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Activity className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data?.total || 0}</div>
@@ -156,20 +159,24 @@ export function AdminGenerations() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
+            <div className="p-2 rounded-lg bg-primary/15">
+              <CheckCircle className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{data?.byStatus?.complete || 0}</div>
+            <div className="text-2xl font-bold text-primary">{data?.byStatus?.complete || 0}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Processing</CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <div className="p-2 rounded-lg bg-primary/20">
+              <Clock className="h-4 w-4 text-[hsl(170,55%,45%)]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">
+            <div className="text-2xl font-bold text-[hsl(170,55%,45%)]">
               {(data?.byStatus?.processing || 0) + (data?.byStatus?.pending || 0)}
             </div>
           </CardContent>
@@ -178,7 +185,9 @@ export function AdminGenerations() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Failed</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
+            <div className="p-2 rounded-lg bg-red-500/10">
+              <XCircle className="h-4 w-4 text-red-500" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">{data?.byStatus?.error || 0}</div>
@@ -188,16 +197,18 @@ export function AdminGenerations() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Deleted</CardTitle>
-            <Trash2 className="h-4 w-4 text-slate-500" />
+            <div className="p-2 rounded-lg bg-muted/50">
+              <Trash2 className="h-4 w-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-500">{data?.byStatus?.deleted || 0}</div>
+            <div className="text-2xl font-bold text-muted-foreground">{data?.byStatus?.deleted || 0}</div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Daily Chart */}
+        {/* Daily Chart - Elegant thin bars with rounded corners */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Generations Over Time</CardTitle>
@@ -206,14 +217,18 @@ export function AdminGenerations() {
             {data?.byDay && data.byDay.length > 0 ? (
               <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.byDay}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <BarChart data={data.byDay} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
                     <XAxis 
                       dataKey="date" 
                       tickFormatter={(value) => format(new Date(value), "MMM d")}
-                      className="text-xs"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
                     />
-                    <YAxis className="text-xs" />
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
                     <Tooltip 
                       labelFormatter={(label) => format(new Date(label), "PPP")}
                       contentStyle={{
@@ -223,9 +238,30 @@ export function AdminGenerations() {
                       }}
                     />
                     <Legend />
-                    <Bar dataKey="completed" name="Completed" fill={STATUS_COLORS.complete} stackId="a" />
-                    <Bar dataKey="failed" name="Failed" fill={STATUS_COLORS.error} stackId="a" />
-                    <Bar dataKey="deleted" name="Deleted" fill={STATUS_COLORS.deleted} stackId="a" />
+                    <Bar 
+                      dataKey="completed" 
+                      name="Completed" 
+                      fill={STATUS_COLORS.complete} 
+                      stackId="a" 
+                      radius={[0, 0, 0, 0]}
+                      maxBarSize={24}
+                    />
+                    <Bar 
+                      dataKey="failed" 
+                      name="Failed" 
+                      fill={STATUS_COLORS.error} 
+                      stackId="a" 
+                      radius={[0, 0, 0, 0]}
+                      maxBarSize={24}
+                    />
+                    <Bar 
+                      dataKey="deleted" 
+                      name="Deleted" 
+                      fill={STATUS_COLORS.deleted} 
+                      stackId="a" 
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={24}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -251,10 +287,11 @@ export function AdminGenerations() {
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
+                      innerRadius={70}
+                      outerRadius={110}
+                      paddingAngle={3}
                       dataKey="value"
+                      strokeWidth={0}
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
                     >
@@ -281,15 +318,15 @@ export function AdminGenerations() {
         </Card>
       </div>
 
-      {/* Success Rate */}
+      {/* Success Rate - Teal themed */}
       <Card>
         <CardHeader>
           <CardTitle>Performance Metrics</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="text-center p-4 rounded-lg bg-green-500/10">
-              <div className="text-3xl font-bold text-green-500">
+            <div className="text-center p-4 rounded-lg bg-primary/10">
+              <div className="text-3xl font-bold text-primary">
                 {data?.total 
                   ? (((data.byStatus?.complete || 0) / (data.total - (data.byStatus?.deleted || 0))) * 100).toFixed(1)
                   : 0
@@ -306,8 +343,8 @@ export function AdminGenerations() {
               </div>
               <p className="text-sm text-muted-foreground mt-1">Failure Rate</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-slate-500/10">
-              <div className="text-3xl font-bold text-slate-500">
+            <div className="text-center p-4 rounded-lg bg-muted/50">
+              <div className="text-3xl font-bold text-muted-foreground">
                 {data?.total 
                   ? (((data.byStatus?.deleted || 0) / data.total) * 100).toFixed(1)
                   : 0
