@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Shield, Users, DollarSign, Activity, Flag, FileText, AlertTriangle, Zap } from "lucide-react";
+import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Zap, Film } from "lucide-react";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminSubscribers } from "@/components/admin/AdminSubscribers";
 import { AdminRevenue } from "@/components/admin/AdminRevenue";
@@ -50,24 +50,25 @@ export default function Admin() {
       {/* Header */}
       <header className="border-b bg-card shadow-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
-                <Shield className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">Admin Control Panel</h1>
-                <p className="text-sm text-muted-foreground hidden sm:block">Manage users, subscriptions, and monitor activity</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
+              <Shield className="h-6 w-6 text-primary" />
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
-                {user?.email?.charAt(0).toUpperCase() || "A"}
-              </div>
-              <span className="font-medium text-foreground">
-                {user?.email?.split("@")[0] || "Admin"}
-              </span>
+            <h1 className="text-xl font-bold">Admin Control Panel</h1>
+            <p className="text-sm text-muted-foreground hidden lg:block">Manage users, subscriptions, and monitor activity</p>
+            {/* Mobile/Tablet: Avatar next to title */}
+            <div className="flex lg:hidden items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground font-semibold text-xs shadow-sm ml-auto">
+              {user?.email?.charAt(0).toUpperCase() || "A"}
             </div>
+          </div>
+          {/* Desktop: Full user info */}
+          <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
+              {user?.email?.charAt(0).toUpperCase() || "A"}
+            </div>
+            <span className="font-medium text-foreground">
+              {user?.email?.split("@")[0] || "Admin"}
+            </span>
           </div>
         </div>
       </header>
@@ -77,32 +78,32 @@ export default function Admin() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="flex w-full overflow-x-auto scrollbar-thin">
             <TabsTrigger value="overview" className="gap-2 flex-shrink-0">
-              <Activity className="h-4 w-4" />
-              <span className="hidden sm:inline">Overview</span>
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden md:inline">Overview</span>
             </TabsTrigger>
             <TabsTrigger value="subscribers" className="gap-2 flex-shrink-0">
               <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Subscribers</span>
+              <span className="hidden md:inline">Subscribers</span>
             </TabsTrigger>
             <TabsTrigger value="revenue" className="gap-2 flex-shrink-0">
               <DollarSign className="h-4 w-4" />
-              <span className="hidden sm:inline">Revenue</span>
+              <span className="hidden md:inline">Revenue</span>
             </TabsTrigger>
             <TabsTrigger value="generations" className="gap-2 flex-shrink-0">
-              <Activity className="h-4 w-4" />
-              <span className="hidden sm:inline">Generations</span>
+              <Film className="h-4 w-4" />
+              <span className="hidden md:inline">Generations</span>
             </TabsTrigger>
             <TabsTrigger value="flags" className="gap-2 flex-shrink-0">
               <Flag className="h-4 w-4" />
-              <span className="hidden sm:inline">Flags</span>
+              <span className="hidden md:inline">Flags</span>
             </TabsTrigger>
             <TabsTrigger value="logs" className="gap-2 flex-shrink-0">
               <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Logs</span>
+              <span className="hidden md:inline">Logs</span>
             </TabsTrigger>
             <TabsTrigger value="api-calls" className="gap-2 flex-shrink-0">
               <Zap className="h-4 w-4" />
-              <span className="hidden sm:inline">API Calls</span>
+              <span className="hidden md:inline">API Calls</span>
             </TabsTrigger>
           </TabsList>
 
