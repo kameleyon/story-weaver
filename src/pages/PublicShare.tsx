@@ -155,7 +155,7 @@ export default function PublicShare() {
 
   if (isLoading) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light">
         <div className="min-h-screen bg-background flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -165,7 +165,7 @@ export default function PublicShare() {
 
   if (error || !shareData) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light">
         <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
           <div className="text-center space-y-4">
             <h1 className="text-2xl font-bold">Link Not Found</h1>
@@ -181,7 +181,7 @@ export default function PublicShare() {
   const currentImageUrl = currentScene?.imageUrls?.[0] || currentScene?.imageUrl || "";
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light">
       <div className="min-h-screen bg-background">
         {/* Hidden audio element */}
         <audio ref={audioRef} />
