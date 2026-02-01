@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Cable, Film } from "lucide-react";
+import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Cable, Film, LogOut } from "lucide-react";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminSubscribers } from "@/components/admin/AdminSubscribers";
 import { AdminRevenue } from "@/components/admin/AdminRevenue";
@@ -10,6 +10,7 @@ import { AdminGenerations } from "@/components/admin/AdminGenerations";
 import { AdminFlags } from "@/components/admin/AdminFlags";
 import { AdminLogs } from "@/components/admin/AdminLogs";
 import { AdminApiCalls } from "@/components/admin/AdminApiCalls";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Admin() {
   const { isAdmin, loading, user } = useAdminAuth();
@@ -68,6 +69,13 @@ export default function Admin() {
               <span className="hidden sm:block text-sm text-foreground">
                 {user?.email?.split("@")[0] || "Admin"}
               </span>
+              <button
+                onClick={() => supabase.auth.signOut().then(() => navigate("/auth"))}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>
