@@ -50,25 +50,25 @@ export default function Admin() {
       {/* Header */}
       <header className="border-b bg-card shadow-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
-              <Shield className="h-6 w-6 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">Admin Control Panel</h1>
+                <p className="text-sm text-muted-foreground hidden md:block">Manage users, subscriptions, and monitor activity</p>
+              </div>
             </div>
-            <h1 className="text-xl font-bold">Admin Control Panel</h1>
-            <p className="text-sm text-muted-foreground hidden lg:block">Manage users, subscriptions, and monitor activity</p>
-            {/* Mobile/Tablet: Avatar next to title */}
-            <div className="flex lg:hidden items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground font-semibold text-xs shadow-sm ml-auto">
-              {user?.email?.charAt(0).toUpperCase() || "A"}
+            {/* User info - right aligned */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
+                {user?.email?.charAt(0).toUpperCase() || "A"}
+              </div>
+              <span className="hidden sm:block text-sm text-foreground">
+                {user?.email?.split("@")[0] || "Admin"}
+              </span>
             </div>
-          </div>
-          {/* Desktop: Full user info */}
-          <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
-              {user?.email?.charAt(0).toUpperCase() || "A"}
-            </div>
-            <span className="font-medium text-foreground">
-              {user?.email?.split("@")[0] || "Admin"}
-            </span>
           </div>
         </div>
       </header>
