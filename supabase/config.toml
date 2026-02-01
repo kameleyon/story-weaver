@@ -23,3 +23,12 @@ verify_jwt = false
 
 [functions.delete-voice]
 verify_jwt = false
+
+[functions.get-shared-project]
+verify_jwt = false
+
+[functions.share-meta]
+verify_jwt = false
+
+[functions.admin-stats]
+verify_jwt = false

@@ -36,6 +36,9 @@ interface UserDetails {
   projectsCount: number;
   deletedProjectsCount: number;
   totalGenerationCost: number;
+  totalGenerations: number;
+  activeGenerations: number;
+  archivedGenerations: number;
   userStatus: "active" | "suspended" | "banned";
   recentGenerations: Array<{
     id: string;
@@ -305,9 +308,9 @@ export function AdminUserDetails({ userId, onFlagCreated }: AdminUserDetailsProp
             <Activity className="h-3.5 w-3.5" />
             <span className="text-[10px] uppercase tracking-wide">Activity</span>
           </div>
-          <div className="text-lg">{data.projectsCount}</div>
+          <div className="text-lg">{data.totalGenerations || 0}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">
-            {data.recentGenerations?.length || 0} gens · {data.deletedProjectsCount} deleted
+            {data.activeGenerations || 0} active · {data.archivedGenerations || 0} deleted
           </div>
         </Card>
 

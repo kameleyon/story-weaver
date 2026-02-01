@@ -496,11 +496,15 @@ serve(async (req) => {
           .select("*", { count: "exact", head: true })
           .eq("user_id", targetUserId);
 
-        // Get deleted (archived) projects count
-        const { count: deletedProjectsCount } = await supabaseAdmin
+        // Get deleted projects count - count distinct project_ids in generation_archives
+        const { data: archivedProjects } = await supabaseAdmin
           .from("generation_archives")
-          .select("project_id", { count: "exact", head: true })
+          .select("project_id")
           .eq("user_id", targetUserId);
+        
+        // Get unique deleted project IDs (projects may have multiple generations)
+        const deletedProjectIds = new Set(archivedProjects?.map(a => a.project_id) || []);
+        const deletedProjectsCount = deletedProjectIds.size;
 
         // Get total generation costs for this user
         const { data: costsData } = await supabaseAdmin
@@ -510,7 +514,19 @@ serve(async (req) => {
 
         const totalGenerationCost = costsData?.reduce((sum, c) => sum + (Number(c.total_cost) || 0), 0) || 0;
 
-        // Get generations
+        // Get active generations count
+        const { count: activeGenerationsCount } = await supabaseAdmin
+          .from("generations")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", targetUserId);
+
+        // Get archived generations count
+        const { count: archivedGenerationsCount } = await supabaseAdmin
+          .from("generation_archives")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", targetUserId);
+
+        // Get recent generations for display
         const { data: generations } = await supabaseAdmin
           .from("generations")
           .select("*")
@@ -545,8 +561,11 @@ serve(async (req) => {
           subscription,
           credits,
           projectsCount: projectsCount || 0,
-          deletedProjectsCount: deletedProjectsCount || 0,
+          deletedProjectsCount: deletedProjectsCount,
           totalGenerationCost,
+          totalGenerations: (activeGenerationsCount || 0) + (archivedGenerationsCount || 0),
+          activeGenerations: activeGenerationsCount || 0,
+          archivedGenerations: archivedGenerationsCount || 0,
           userStatus,
           recentGenerations: generations,
           flags,
