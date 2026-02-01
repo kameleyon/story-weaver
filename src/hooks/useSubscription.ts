@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { 
+  PLAN_LIMITS, 
+  getCreditsRequired, 
+  validateGenerationAccess,
+  type PlanTier, 
+  type ValidationResult 
+} from "@/lib/planLimits";
 
 // Stripe product/price mappings - Updated pricing structure
 export const STRIPE_PLANS = {
@@ -29,9 +36,19 @@ export const CREDIT_PACKS = {
   500: { priceId: "price_1SuJk46hfVkBDzkSSkkal5QG", productId: "prod_Ts3rl1zDT9oLVt", price: 249.99 },
 } as const;
 
+// Re-export for convenience
+export { PLAN_LIMITS, getCreditsRequired, validateGenerationAccess };
+export type { PlanTier, ValidationResult };
+
+// Helper to check if user can use character consistency feature
+export function canUseCharacterConsistency(plan: PlanTier): boolean {
+  return plan === "professional";
+}
+
 export interface SubscriptionState {
   subscribed: boolean;
-  plan: "free" | "starter" | "creator" | "professional" | "enterprise";
+  plan: PlanTier;
+  subscriptionStatus: string | null; // "active", "past_due", "unpaid", "canceled", etc.
   subscriptionEnd: string | null;
   cancelAtPeriodEnd: boolean;
   creditsBalance: number;
@@ -39,16 +56,12 @@ export interface SubscriptionState {
   error: string | null;
 }
 
-// Helper to check if user can use character consistency feature
-export function canUseCharacterConsistency(plan: "free" | "starter" | "creator" | "professional"): boolean {
-  return plan === "professional";
-}
-
 export function useSubscription() {
   const { user, session } = useAuth();
   const [state, setState] = useState<SubscriptionState>({
     subscribed: false,
     plan: "free",
+    subscriptionStatus: null,
     subscriptionEnd: null,
     cancelAtPeriodEnd: false,
     creditsBalance: 0,
@@ -89,6 +102,7 @@ export function useSubscription() {
       setState({
         subscribed: data.subscribed || false,
         plan: data.plan || "free",
+        subscriptionStatus: data.subscription_status || (data.subscribed ? "active" : null),
         subscriptionEnd: data.subscription_end || null,
         cancelAtPeriodEnd: data.cancel_at_period_end || false,
         creditsBalance: data.credits_balance || 0,

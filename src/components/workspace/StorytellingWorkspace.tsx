@@ -24,6 +24,10 @@ import { CharacterPreview, type CharacterData } from "./CharacterPreview";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
+import { useSubscription, validateGenerationAccess, getCreditsRequired } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
+import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
+import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
 import type { WorkspaceHandle } from "./Doc2VideoWorkspace";
 
 interface StorytellingWorkspaceProps {
@@ -54,6 +58,14 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [brandMarkText, setBrandMarkText] = useState("");
 
     const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+
+    // Subscription and plan validation  
+    const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
+    const { toast } = useToast();
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeReason, setUpgradeReason] = useState("");
+    const [showSuspendedModal, setShowSuspendedModal] = useState(false);
+    const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
     const canGenerate = storyIdea.trim().length > 0 && !generationState.isGenerating;
 
@@ -98,37 +110,69 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       }
     }, [generationState.projectId, generationState.isGenerating, generationState.step, loadProject]);
 
-    const handleGenerate = () => {
-      if (canGenerate) {
-        // Map story length to standard length for backend
-        const lengthMap: Record<StoryLength, string> = {
-          short: "short",
-          brief: "brief",
-          extended: "presentation",
-        };
+    const handleGenerate = async () => {
+      if (!canGenerate) return;
 
-        startGeneration({
-          content: storyIdea,
-          format,
-          length: lengthMap[length],
-          style,
-          customStyle: style === "custom" ? customStyle : undefined,
-          customStyleImage: style === "custom" ? customStyleImage : undefined,
-          brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
-          characterDescription: characterDescription.trim() || undefined,
-          projectType: "storytelling",
-          inspirationStyle: inspiration !== "none" ? inspiration : undefined,
-          storyTone: tone,
-          storyGenre: genre,
-          disableExpressions: disableVoiceExpressions,
-          brandName: brandName.trim() || undefined,
-          characterConsistencyEnabled, // Pass the flag for Hypereal character generation
-          // Voice selection - pass gender for standard voices, voiceName for custom
-          voiceType: voice.type,
-          voiceId: voice.voiceId,
-          voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
-        });
+      // Check for subscription issues first
+      if (subscriptionStatus === "past_due" || subscriptionStatus === "unpaid") {
+        setSuspendedStatus(subscriptionStatus as "past_due" | "unpaid");
+        setShowSuspendedModal(true);
+        return;
       }
+
+      // Map story length to standard length for backend
+      const lengthMap: Record<StoryLength, string> = {
+        short: "short",
+        brief: "brief",
+        extended: "presentation",
+      };
+      const mappedLength = lengthMap[length];
+
+      // Validate plan access
+      const validation = validateGenerationAccess(
+        plan,
+        creditsBalance,
+        "storytelling",
+        mappedLength,
+        format,
+        brandMarkEnabled && brandMarkText.trim().length > 0,
+        style === "custom",
+        subscriptionStatus || undefined
+      );
+
+      if (!validation.canGenerate) {
+        toast({
+          variant: "destructive",
+          title: "Cannot Generate",
+          description: validation.error,
+        });
+        setUpgradeReason(validation.error || "Please upgrade your plan to continue.");
+        setShowUpgradeModal(true);
+        return;
+      }
+
+      startGeneration({
+        content: storyIdea,
+        format,
+        length: mappedLength,
+        style,
+        customStyle: style === "custom" ? customStyle : undefined,
+        customStyleImage: style === "custom" ? customStyleImage : undefined,
+        brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+        characterDescription: characterDescription.trim() || undefined,
+        projectType: "storytelling",
+        inspirationStyle: inspiration !== "none" ? inspiration : undefined,
+        storyTone: tone,
+        storyGenre: genre,
+        disableExpressions: disableVoiceExpressions,
+        brandName: brandName.trim() || undefined,
+        characterConsistencyEnabled,
+        voiceType: voice.type,
+        voiceId: voice.voiceId,
+        voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
+      });
+
+      setTimeout(() => checkSubscription(), 2000);
     };
 
     const handleNewProject = () => {
@@ -410,6 +454,20 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
             </AnimatePresence>
           </div>
         </main>
+
+        {/* Modals */}
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onOpenChange={setShowUpgradeModal}
+          reason={upgradeReason}
+          showCreditsOption={plan !== "free"}
+        />
+
+        <SubscriptionSuspendedModal
+          open={showSuspendedModal}
+          onOpenChange={setShowSuspendedModal}
+          status={suspendedStatus}
+        />
       </div>
     );
   }
