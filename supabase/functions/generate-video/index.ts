@@ -3833,6 +3833,30 @@ async function handleFinalizePhase(
   }
   // ============= END CREDIT DEDUCTION =============
 
+  // ============= RECORD GENERATION COSTS =============
+  // Calculate cost breakdown by provider based on what was tracked
+  const scriptCost = costTracking.scriptTokens * PRICING.scriptPerToken; // OpenRouter (script gen)
+  const audioCost = costTracking.audioSeconds * PRICING.audioPerSecond;  // Replicate/Google TTS
+  const imageCost = costTracking.imagesGenerated * PRICING.imagePerImage; // Hypereal/Replicate
+  
+  // Record to generation_costs table for admin analytics
+  const { error: costError } = await supabase.from("generation_costs").insert({
+    generation_id: generationId,
+    user_id: user.id,
+    openrouter_cost: scriptCost,
+    replicate_cost: imageCost * 0.3, // Estimate: ~30% of images via Replicate fallback
+    hypereal_cost: imageCost * 0.7,  // Estimate: ~70% of images via Hypereal
+    google_tts_cost: audioCost,
+    total_cost: costTracking.estimatedCostUsd,
+  });
+
+  if (costError) {
+    console.error("[FINALIZE] Error recording generation costs:", costError);
+  } else {
+    console.log(`[FINALIZE] Cost recorded: $${costTracking.estimatedCostUsd.toFixed(4)}`);
+  }
+  // ============= END RECORD GENERATION COSTS =============
+
   // Mark complete
   await supabase
     .from("generations")
