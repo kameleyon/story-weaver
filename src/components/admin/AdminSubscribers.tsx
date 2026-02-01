@@ -300,9 +300,9 @@ export function AdminSubscribers() {
                       </div>
                     </div>
 
-                    {/* Row 2: Email | Credits, Projects, Flags */}
+                    {/* Row 2: Plan | Credits, Projects, Flags */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground truncate flex-1">{user.email}</span>
+                      {getPlanBadge(user.plan)}
                       <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
                         <span>
                           <span className="font-medium text-foreground">{user.creditsBalance}</span>
