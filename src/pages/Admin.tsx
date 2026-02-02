@@ -63,12 +63,17 @@ export default function Admin() {
             </div>
             {/* User info - right aligned */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
-                {user?.email?.charAt(0).toUpperCase() || "A"}
-              </div>
-              <span className="hidden sm:block text-sm text-foreground">
-                {user?.email?.split("@")[0] || "Admin"}
-              </span>
+              <button
+                onClick={() => navigate("/settings")}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">
+                  {user?.email?.charAt(0).toUpperCase() || "A"}
+                </div>
+                <span className="hidden sm:block text-sm text-foreground">
+                  {user?.email?.split("@")[0] || "Admin"}
+                </span>
+              </button>
               <button
                 onClick={() => supabase.auth.signOut().then(() => navigate("/auth"))}
                 className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
