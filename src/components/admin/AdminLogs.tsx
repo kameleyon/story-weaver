@@ -330,17 +330,17 @@ export function AdminLogs() {
                     </pre>
                     <div className="mt-3 pt-2 border-t border-primary/20 space-y-1">
                       {log.generation_id && (
-                        <p className="text-xs text-foreground/60">
+                        <p className="text-xs text-white/75">
                           <span className="text-primary font-medium">Generation:</span> {log.generation_id}
                         </p>
                       )}
                       {log.project_id && (
-                        <p className="text-xs text-foreground/60">
+                        <p className="text-xs text-white/75">
                           <span className="text-primary font-medium">Project:</span> {log.project_id}
                         </p>
                       )}
                       {log.user_id && (
-                        <p className="text-xs text-foreground/60">
+                        <p className="text-xs text-white/75">
                           <span className="text-primary font-medium">User:</span> {log.user_id}
                         </p>
                       )}
