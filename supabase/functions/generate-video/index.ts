@@ -3779,7 +3779,26 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               
               // Fallback to Replicate nano-banana (not pro) if Hypereal fails
               if (!result.ok) {
-                console.log(`[IMG] Hypereal failed (${result.error}), falling back to Replicate nano-banana for task ${task.taskIndex}`);
+                const hyperealError = result.error || "Unknown Hypereal error";
+                console.log(`[IMG] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana for task ${task.taskIndex}`);
+                
+                // LOG TO SYSTEM_LOGS so it shows in admin panel!
+                await logSystemEvent({
+                  supabase,
+                  userId: user.id,
+                  eventType: "hypereal_fallback",
+                  category: "system_warning",
+                  message: `Hypereal API failed, falling back to Replicate nano-banana`,
+                  details: {
+                    taskIndex: task.taskIndex,
+                    sceneIndex: task.sceneIndex,
+                    error: hyperealError,
+                    fallbackProvider: "replicate_nano_banana",
+                  },
+                  generationId,
+                  projectId,
+                });
+                
                 result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false); // false = use regular nano-banana
                 actualProvider = "replicate_fallback";
               } else {
@@ -4377,7 +4396,27 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       
       // Fallback to Replicate nano-banana if Hypereal fails
       if (!imageResult.ok) {
-        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate nano-banana`);
+        const hyperealError = imageResult.error || "Unknown Hypereal error";
+        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana`);
+        
+        // LOG TO SYSTEM_LOGS so it shows in admin panel!
+        await logSystemEvent({
+          supabase,
+          userId: user.id,
+          eventType: "hypereal_fallback",
+          category: "system_warning",
+          message: `Hypereal API failed during image regeneration, falling back to Replicate`,
+          details: {
+            sceneIndex,
+            targetImageIndex,
+            error: hyperealError,
+            fallbackProvider: "replicate_nano_banana",
+            phase: "regenerate-image",
+          },
+          generationId,
+          projectId,
+        });
+        
         imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, false);
       }
     } else {
