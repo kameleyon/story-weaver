@@ -353,13 +353,13 @@ const PRICING = {
 };
 
 // ============= API CALL LOGGING =============
-// IMPORTANT: "lovable_ai" is the correct provider for ai.gateway.lovable.dev
-// "openrouter" was incorrectly used before - we don't use OpenRouter!
+// OpenRouter is used for script generation with google/gemini-3-flash-preview
+// Lovable AI Gateway is used for image generation (nano-banana)
 interface ApiCallLogParams {
   supabase: any;
   userId: string;
   generationId?: string;
-  provider: "lovable_ai" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  provider: "openrouter" | "lovable_ai" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
   model: string;
   status: "success" | "error" | "started";
   queueTimeMs?: number;
@@ -2677,17 +2677,19 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: SCRIPT - Generating via Lovable AI with Gemini 3 Flash Preview...");
+  console.log("Phase: SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
 
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
   const scriptCallStart = Date.now();
-  const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://audiomax.lovable.app",
+      "X-Title": "AudioMax",
     },
     body: JSON.stringify({
       model: "google/gemini-3-flash-preview",
@@ -2699,35 +2701,36 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const scriptCallDuration = Date.now() - scriptCallStart;
 
   if (!scriptResponse.ok) {
-    // Log failed API call - Using Lovable AI Gateway (NOT OpenRouter!)
+    const errText = await scriptResponse.text().catch(() => "");
+    // Log failed API call - OpenRouter
     await logApiCall({
       supabase,
       userId: user.id,
-      provider: "lovable_ai",
+      provider: "openrouter",
       model: "google/gemini-3-flash-preview",
       status: "error",
       totalDurationMs: scriptCallDuration,
-      errorMessage: `Script generation failed: ${scriptResponse.status}`,
+      errorMessage: `Script generation failed: ${scriptResponse.status} - ${errText}`,
     });
-    throw new Error(`Script generation failed: ${scriptResponse.status}`);
+    throw new Error(`Script generation failed: ${scriptResponse.status} - ${errText}`);
   }
 
   const scriptData = await scriptResponse.json();
   const scriptContent = scriptData.choices?.[0]?.message?.content;
   const tokensUsed = scriptData.usage?.total_tokens || 0;
 
-  // Log successful API call - Lovable AI Gateway (ai.gateway.lovable.dev)
+  // Log successful API call - OpenRouter (openrouter.ai)
   const scriptCost = Math.max(tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
-    provider: "lovable_ai",
+    provider: "openrouter",
     model: "google/gemini-3-flash-preview",
     status: "success",
     totalDurationMs: scriptCallDuration,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] Script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  console.log(`[API_LOG] OpenRouter script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
 
   if (!scriptContent) throw new Error("No script content received");
 
@@ -3081,17 +3084,19 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via Lovable AI with Gemini 3 Flash Preview...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
 
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
   const scriptCallStart = Date.now();
-  const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://audiomax.lovable.app",
+      "X-Title": "AudioMax",
     },
     body: JSON.stringify({
       model: "google/gemini-3-flash-preview",
@@ -3104,11 +3109,11 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   if (!scriptResponse.ok) {
     const errText = await scriptResponse.text().catch(() => "");
-    // Log failed API call - Lovable AI Gateway (NOT OpenRouter!)
+    // Log failed API call - OpenRouter
     await logApiCall({
       supabase,
       userId: user.id,
-      provider: "lovable_ai",
+      provider: "openrouter",
       model: "google/gemini-3-flash-preview",
       status: "error",
       totalDurationMs: scriptCallDuration,
@@ -3121,18 +3126,18 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const scriptContent = scriptData.choices?.[0]?.message?.content;
   const tokensUsed = scriptData.usage?.total_tokens || 0;
 
-  // Log successful API call - Lovable AI Gateway (ai.gateway.lovable.dev)
+  // Log successful API call - OpenRouter (openrouter.ai)
   const scriptCost = Math.max(tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
-    provider: "lovable_ai",
+    provider: "openrouter",
     model: "google/gemini-3-flash-preview",
     status: "success",
     totalDurationMs: scriptCallDuration,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] Storytelling script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  console.log(`[API_LOG] OpenRouter storytelling script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
 
   if (!scriptContent) throw new Error("No script content received");
 
