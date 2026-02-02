@@ -339,9 +339,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 // Pricing based on ACTUAL provider costs (updated to match billing)
 const PRICING = {
-  // Lovable AI Gateway (Gemini models) - NOT OpenRouter
-  // Lovable AI charges per request, not per token for most use cases
-  scriptPerToken: 0.0000015, // ~$1.50 per 1M tokens (Gemini 3 Flash estimate)
+  // OpenRouter (Primary for script generation) - google/gemini-3-flash-preview
+  scriptPerToken: 0.0000015, // ~$1.50 per 1M tokens (Gemini 3 Flash via OpenRouter)
   scriptPerCall: 0.005, // Flat estimate per script generation call
   // Audio - Chatterbox TTS on Replicate 
   audioPerCall: 0.01, // ~$0.01 per audio generation call (Replicate chatterbox)
@@ -351,6 +350,120 @@ const PRICING = {
   imageNanoBananaPro: 0.05, // $0.05 per image (nano-banana-pro higher res)
   imageHypereal: 0.03, // $0.03 per image (Hypereal nano-banana-pro-t2i estimate)
 };
+
+// ============= LLM CALL HELPER (OpenRouter Primary, Lovable AI Fallback) =============
+interface LLMCallResult {
+  content: string;
+  tokensUsed: number;
+  provider: "openrouter" | "lovable_ai";
+  durationMs: number;
+}
+
+async function callLLMWithFallback(
+  prompt: string,
+  options: {
+    temperature?: number;
+    maxTokens?: number;
+    model?: string;
+  } = {}
+): Promise<LLMCallResult> {
+  const model = options.model || "google/gemini-3-flash-preview";
+  const temperature = options.temperature ?? 0.7;
+  const maxTokens = options.maxTokens ?? 8192;
+  
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  // Try OpenRouter first (primary)
+  if (OPENROUTER_API_KEY) {
+    const startTime = Date.now();
+    try {
+      console.log(`[LLM] Calling OpenRouter with ${model}...`);
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://audiomax.lovable.app",
+          "X-Title": "AudioMax",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      });
+      
+      const durationMs = Date.now() - startTime;
+      
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (content) {
+          console.log(`[LLM] OpenRouter success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
+          return {
+            content,
+            tokensUsed: data.usage?.total_tokens || 0,
+            provider: "openrouter",
+            durationMs,
+          };
+        }
+      }
+      
+      const errText = await response.text().catch(() => "");
+      console.warn(`[LLM] OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
+    } catch (err) {
+      console.warn(`[LLM] OpenRouter error:`, err);
+    }
+  } else {
+    console.warn(`[LLM] OPENROUTER_API_KEY not configured, using Lovable AI directly`);
+  }
+  
+  // Fallback to Lovable AI Gateway
+  if (!LOVABLE_API_KEY) {
+    throw new Error("Neither OPENROUTER_API_KEY nor LOVABLE_API_KEY is configured");
+  }
+  
+  console.log(`[LLM] Falling back to Lovable AI Gateway with ${model}...`);
+  const startTime = Date.now();
+  
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+  
+  const durationMs = Date.now() - startTime;
+  
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Lovable AI failed (${response.status}): ${errText.substring(0, 200)}`);
+  }
+  
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  
+  if (!content) {
+    throw new Error("No content received from Lovable AI");
+  }
+  
+  console.log(`[LLM] Lovable AI fallback success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
+  return {
+    content,
+    tokensUsed: data.usage?.total_tokens || 0,
+    provider: "lovable_ai",
+    durationMs,
+  };
+}
 
 // ============= API CALL LOGGING =============
 // OpenRouter is used for script generation with google/gemini-3-flash-preview
@@ -2350,39 +2463,30 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Create magazine-editorial quality that looks professional
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
-  // Call LLM for script generation via Lovable AI (Gemini 3 Flash Preview)
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
-  }
-
-  const scriptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [{ role: "user", content: scriptPrompt }],
-      temperature: 0.7,
-      max_tokens: 4000,
-    }),
+  // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
+  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
+  
+  const llmResult = await callLLMWithFallback(scriptPrompt, {
+    temperature: 0.7,
+    maxTokens: 4000,
+    model: "google/gemini-3-flash-preview",
   });
-
-  if (!scriptResponse.ok) {
-    const errorText = await scriptResponse.text();
-    console.error("[generate-video] Smart Flow LLM error:", errorText);
-    throw new Error("Failed to generate Smart Flow script");
-  }
-
-  const scriptData = await scriptResponse.json();
-  const scriptContent = scriptData.choices?.[0]?.message?.content;
-  const tokensUsed = scriptData.usage?.total_tokens || 1000;
-
-  if (!scriptContent) {
-    throw new Error("No script content received from LLM");
-  }
+  
+  // Log API call
+  const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
+  await logApiCall({
+    supabase,
+    userId: user.id,
+    provider: llmResult.provider,
+    model: "google/gemini-3-flash-preview",
+    status: "success",
+    totalDurationMs: llmResult.durationMs,
+    cost: scriptCost,
+  });
+  console.log(`[API_LOG] ${llmResult.provider} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  
+  const scriptContent = llmResult.content;
+  const tokensUsed = llmResult.tokensUsed;
 
   // Parse the script
   let parsedScript: {
@@ -2677,60 +2781,29 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
+  console.log("Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
 
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
-
-  const scriptCallStart = Date.now();
-  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://audiomax.lovable.app",
-      "X-Title": "AudioMax",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [{ role: "user", content: scriptPrompt }],
-      temperature: 0.7,
-      max_tokens: 8192,
-    }),
+  const llmResult = await callLLMWithFallback(scriptPrompt, {
+    temperature: 0.7,
+    maxTokens: 8192,
+    model: "google/gemini-3-flash-preview",
   });
-  const scriptCallDuration = Date.now() - scriptCallStart;
-
-  if (!scriptResponse.ok) {
-    const errText = await scriptResponse.text().catch(() => "");
-    // Log failed API call - OpenRouter
-    await logApiCall({
-      supabase,
-      userId: user.id,
-      provider: "openrouter",
-      model: "google/gemini-3-flash-preview",
-      status: "error",
-      totalDurationMs: scriptCallDuration,
-      errorMessage: `Script generation failed: ${scriptResponse.status} - ${errText}`,
-    });
-    throw new Error(`Script generation failed: ${scriptResponse.status} - ${errText}`);
-  }
-
-  const scriptData = await scriptResponse.json();
-  const scriptContent = scriptData.choices?.[0]?.message?.content;
-  const tokensUsed = scriptData.usage?.total_tokens || 0;
-
-  // Log successful API call - OpenRouter (openrouter.ai)
-  const scriptCost = Math.max(tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
+  
+  // Log API call
+  const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
-    provider: "openrouter",
+    provider: llmResult.provider,
     model: "google/gemini-3-flash-preview",
     status: "success",
-    totalDurationMs: scriptCallDuration,
+    totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] OpenRouter script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  console.log(`[API_LOG] ${llmResult.provider} Doc2Video script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+
+  const scriptContent = llmResult.content;
+  const tokensUsed = llmResult.tokensUsed;
 
   if (!scriptContent) throw new Error("No script content received");
 
@@ -3086,58 +3159,27 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
 
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
-
-  const scriptCallStart = Date.now();
-  const scriptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://audiomax.lovable.app",
-      "X-Title": "AudioMax",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [{ role: "user", content: scriptPrompt }],
-      temperature: 0.8, // Slightly higher for creative storytelling
-      max_tokens: 12000, // More tokens for longer narratives
-    }),
+  const llmResult = await callLLMWithFallback(scriptPrompt, {
+    temperature: 0.8, // Slightly higher for creative storytelling
+    maxTokens: 12000, // More tokens for longer narratives
+    model: "google/gemini-3-flash-preview",
   });
-  const scriptCallDuration = Date.now() - scriptCallStart;
-
-  if (!scriptResponse.ok) {
-    const errText = await scriptResponse.text().catch(() => "");
-    // Log failed API call - OpenRouter
-    await logApiCall({
-      supabase,
-      userId: user.id,
-      provider: "openrouter",
-      model: "google/gemini-3-flash-preview",
-      status: "error",
-      totalDurationMs: scriptCallDuration,
-      errorMessage: `Script generation failed: ${scriptResponse.status} - ${errText}`,
-    });
-    throw new Error(`Script generation failed: ${scriptResponse.status} - ${errText}`);
-  }
-
-  const scriptData = await scriptResponse.json();
-  const scriptContent = scriptData.choices?.[0]?.message?.content;
-  const tokensUsed = scriptData.usage?.total_tokens || 0;
-
-  // Log successful API call - OpenRouter (openrouter.ai)
-  const scriptCost = Math.max(tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
+  
+  // Log API call
+  const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
-    provider: "openrouter",
+    provider: llmResult.provider,
     model: "google/gemini-3-flash-preview",
     status: "success",
-    totalDurationMs: scriptCallDuration,
+    totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] OpenRouter storytelling script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  console.log(`[API_LOG] ${llmResult.provider} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+
+  const scriptContent = llmResult.content;
+  const tokensUsed = llmResult.tokensUsed;
 
   if (!scriptContent) throw new Error("No script content received");
 
