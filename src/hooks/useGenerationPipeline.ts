@@ -87,13 +87,24 @@ interface GenerationParams {
   brandName?: string;
 }
 
-type ProjectRow = {
+export type ProjectRow = {
   id: string;
   title: string;
   content: string;
   format: string;
   length: string;
   style: string;
+  presenter_focus?: string | null;
+  character_description?: string | null;
+  voice_type?: string | null;
+  voice_id?: string | null;
+  voice_name?: string | null;
+  brand_mark?: string | null;
+  character_consistency_enabled?: boolean | null;
+  inspiration_style?: string | null;
+  story_tone?: string | null;
+  story_genre?: string | null;
+  voice_inclination?: string | null;
 };
 
 const normalizeScenes = (raw: unknown): Scene[] | undefined => {
@@ -506,7 +517,7 @@ export function useGenerationPipeline() {
 
       const { data: project, error: projectError } = await supabase
         .from("projects")
-        .select("id,title,content,format,length,style")
+        .select("id,title,content,format,length,style,presenter_focus,character_description,voice_type,voice_id,voice_name,brand_mark,character_consistency_enabled,inspiration_style,story_tone,story_genre,voice_inclination")
         .eq("id", projectId)
         .eq("user_id", userId)
         .maybeSingle();
