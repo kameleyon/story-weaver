@@ -100,16 +100,20 @@ export function AdminApiCalls() {
   const getProviderColor = (provider: string) => {
     // Use teal theme shades for all providers per admin UI spec
     switch (provider.toLowerCase()) {
-      case "openrouter":
-        return "text-primary"; // Main teal
+      case "lovable_ai":
+        return "text-primary"; // Main teal - for Lovable AI Gateway (Gemini)
       case "replicate":
         return "text-[hsl(170,55%,65%)]"; // Lighter teal
+      case "replicate_fallback":
+        return "text-[hsl(30,70%,50%)]"; // Orange for fallback
       case "hypereal":
         return "text-[hsl(170,55%,40%)]"; // Darker teal
       case "google_tts":
         return "text-[hsl(170,30%,50%)]"; // Muted teal
       case "elevenlabs":
         return "text-[hsl(170,45%,55%)]"; // Mid teal
+      case "openrouter":
+        return "text-muted-foreground"; // Legacy - should not appear anymore
       default:
         return "text-muted-foreground";
     }
@@ -138,15 +142,16 @@ export function AdminApiCalls() {
                 </SelectContent>
               </Select>
               <Select value={providerFilter} onValueChange={setProviderFilter}>
-                <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectTrigger className="w-[130px] h-8 text-xs">
                   <SelectValue placeholder="Provider" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Providers</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  <SelectItem value="lovable_ai">Lovable AI</SelectItem>
                   <SelectItem value="replicate">Replicate</SelectItem>
                   <SelectItem value="hypereal">Hypereal</SelectItem>
                   <SelectItem value="google_tts">Google TTS</SelectItem>
+                  <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
                 </SelectContent>
               </Select>
               <Button

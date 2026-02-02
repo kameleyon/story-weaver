@@ -337,27 +337,31 @@ interface CostTracking {
 // ============= CONSTANTS =============
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Pricing based on ACTUAL Replicate/provider costs (updated to match billing)
+// Pricing based on ACTUAL provider costs (updated to match billing)
 const PRICING = {
-  // OpenRouter / LLM costs
-  scriptPerToken: 0.000001, // ~$1 per 1M tokens (rough Gemini estimate)
+  // Lovable AI Gateway (Gemini models) - NOT OpenRouter
+  // Lovable AI charges per request, not per token for most use cases
+  scriptPerToken: 0.0000015, // ~$1.50 per 1M tokens (Gemini 3 Flash estimate)
+  scriptPerCall: 0.005, // Flat estimate per script generation call
   // Audio - Chatterbox TTS on Replicate 
   audioPerCall: 0.01, // ~$0.01 per audio generation call (Replicate chatterbox)
   audioPerSecond: 0.002, // fallback estimate
-  // Images - Replicate nano-banana pricing
+  // Images - Replicate nano-banana pricing (verified from Replicate dashboard)
   imageNanoBanana: 0.04, // $0.04 per image (google/nano-banana on Replicate)
   imageNanoBananaPro: 0.05, // $0.05 per image (nano-banana-pro higher res)
   imageHypereal: 0.03, // $0.03 per image (Hypereal nano-banana-pro-t2i estimate)
 };
 
 // ============= API CALL LOGGING =============
+// IMPORTANT: "lovable_ai" is the correct provider for ai.gateway.lovable.dev
+// "openrouter" was incorrectly used before - we don't use OpenRouter!
 interface ApiCallLogParams {
   supabase: any;
   userId: string;
   generationId?: string;
-  provider: "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  provider: "lovable_ai" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
   model: string;
-  status: "success" | "error";
+  status: "success" | "error" | "started";
   queueTimeMs?: number;
   runningTimeMs?: number;
   totalDurationMs: number;
@@ -2695,11 +2699,11 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const scriptCallDuration = Date.now() - scriptCallStart;
 
   if (!scriptResponse.ok) {
-    // Log failed API call
+    // Log failed API call - Using Lovable AI Gateway (NOT OpenRouter!)
     await logApiCall({
       supabase,
       userId: user.id,
-      provider: "openrouter",
+      provider: "lovable_ai",
       model: "google/gemini-3-flash-preview",
       status: "error",
       totalDurationMs: scriptCallDuration,
@@ -2712,16 +2716,18 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const scriptContent = scriptData.choices?.[0]?.message?.content;
   const tokensUsed = scriptData.usage?.total_tokens || 0;
 
-  // Log successful API call
+  // Log successful API call - Lovable AI Gateway (ai.gateway.lovable.dev)
+  const scriptCost = Math.max(tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
-    provider: "openrouter",
+    provider: "lovable_ai",
     model: "google/gemini-3-flash-preview",
     status: "success",
     totalDurationMs: scriptCallDuration,
-    cost: tokensUsed * PRICING.scriptPerToken,
+    cost: scriptCost,
   });
+  console.log(`[API_LOG] Script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
 
   if (!scriptContent) throw new Error("No script content received");
 
@@ -3098,11 +3104,11 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   if (!scriptResponse.ok) {
     const errText = await scriptResponse.text().catch(() => "");
-    // Log failed API call
+    // Log failed API call - Lovable AI Gateway (NOT OpenRouter!)
     await logApiCall({
       supabase,
       userId: user.id,
-      provider: "openrouter",
+      provider: "lovable_ai",
       model: "google/gemini-3-flash-preview",
       status: "error",
       totalDurationMs: scriptCallDuration,
@@ -3115,16 +3121,18 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   const scriptContent = scriptData.choices?.[0]?.message?.content;
   const tokensUsed = scriptData.usage?.total_tokens || 0;
 
-  // Log successful API call
+  // Log successful API call - Lovable AI Gateway (ai.gateway.lovable.dev)
+  const scriptCost = Math.max(tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
-    provider: "openrouter",
+    provider: "lovable_ai",
     model: "google/gemini-3-flash-preview",
     status: "success",
     totalDurationMs: scriptCallDuration,
-    cost: tokensUsed * PRICING.scriptPerToken,
+    cost: scriptCost,
   });
+  console.log(`[API_LOG] Storytelling script call: ${tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
 
   if (!scriptContent) throw new Error("No script content received");
 
@@ -3923,12 +3931,29 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
             
             if (useHypereal && hyperealApiKey) {
               console.log(`[IMG] Using Hypereal nano-banana-pro for task ${task.taskIndex}`);
+              
+              // LOG HYPEREAL API CALL START for accurate tracking
+              const hyperealStartTime = Date.now();
               result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
+              const hyperealDuration = Date.now() - hyperealStartTime;
               
               // Fallback to Replicate nano-banana (not pro) if Hypereal fails
               if (!result.ok) {
                 const hyperealError = result.error || "Unknown Hypereal error";
                 console.log(`[IMG] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana for task ${task.taskIndex}`);
+                
+                // LOG HYPEREAL FAILURE to api_call_logs
+                await logApiCall({
+                  supabase,
+                  userId: user.id,
+                  generationId,
+                  provider: "hypereal",
+                  model: "nano-banana-pro-t2i",
+                  status: "error",
+                  totalDurationMs: hyperealDuration,
+                  cost: 0, // No cost on failure
+                  errorMessage: hyperealError,
+                });
                 
                 // LOG TO SYSTEM_LOGS so it shows in admin panel!
                 await logSystemEvent({
@@ -3941,6 +3966,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                     taskIndex: task.taskIndex,
                     sceneIndex: task.sceneIndex,
                     error: hyperealError,
+                    durationMs: hyperealDuration,
                     fallbackProvider: "replicate_nano_banana",
                   },
                   generationId,
