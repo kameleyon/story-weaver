@@ -71,29 +71,32 @@ serve(async (req) => {
       );
     }
 
-    const { audioUrl, voiceName, description } = await req.json();
+    const { storagePath, voiceName, description } = await req.json();
 
-    if (!audioUrl || !voiceName) {
+    if (!storagePath || !voiceName) {
       return new Response(
-        JSON.stringify({ error: "audioUrl and voiceName are required" }),
+        JSON.stringify({ error: "storagePath and voiceName are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log(`Cloning voice for user ${user.id}: ${voiceName}`);
-    console.log(`Audio URL: ${audioUrl}`);
+    console.log(`Storage path: ${storagePath}`);
 
-    // Fetch the audio file
-    const audioResponse = await fetch(audioUrl);
-    if (!audioResponse.ok) {
-      console.error("Failed to fetch audio:", audioResponse.status);
+    // Download audio file from private bucket using service role
+    const { data: audioData, error: downloadError } = await supabaseAdmin.storage
+      .from("voice_samples")
+      .download(storagePath);
+
+    if (downloadError || !audioData) {
+      console.error("Failed to download audio:", downloadError);
       return new Response(
-        JSON.stringify({ error: "Failed to fetch audio file" }),
+        JSON.stringify({ error: "Failed to download audio file from storage" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const audioBlob = await audioResponse.blob();
+    const audioBlob = audioData;
     console.log(`Audio file size: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
     // Prepare multipart form data for ElevenLabs
@@ -150,7 +153,7 @@ serve(async (req) => {
     const testPhrase = "I'm going to read for twenty seconds without rushing: The goal is steady rhythm, clear diction, and natural breath pauses—no robotic cadence, no random pitch jumps.";
     console.log("Generating test phrase audio with cloned voice...");
     
-    let sampleUrl = audioUrl; // Default to original audio if TTS fails
+    let sampleUrl = ""; // Will be set by TTS generation
     
     try {
       const ttsResponse = await fetch(
