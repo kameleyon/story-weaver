@@ -414,12 +414,43 @@ async function logSystemEvent(params: SystemLogParams): Promise<void> {
 
     if (error) {
       console.error(`[SYSTEM_LOG] Failed to log event: ${error.message}`);
-    } else {
-      console.log(`[SYSTEM_LOG] Logged ${category}/${eventType}: ${message}`);
     }
+    // Always output to console as well for edge function logs
+    console.log(`[${category.toUpperCase()}] ${eventType}: ${message}`);
   } catch (err) {
     console.error(`[SYSTEM_LOG] Error logging event:`, err);
   }
+}
+
+// Helper to log API calls to system_logs for visibility
+async function logApiCallToSystem(
+  supabase: any,
+  userId: string,
+  provider: string,
+  model: string,
+  status: "started" | "success" | "error",
+  details: Record<string, unknown>,
+  generationId?: string,
+  projectId?: string,
+): Promise<void> {
+  const category = status === "error" ? "system_error" : status === "started" ? "system_info" : "system_info";
+  const eventType = `api_${provider}_${status}`;
+  const message = status === "started" 
+    ? `${provider}/${model} API call started`
+    : status === "success"
+    ? `${provider}/${model} API call succeeded`
+    : `${provider}/${model} API call failed`;
+  
+  await logSystemEvent({
+    supabase,
+    userId,
+    eventType,
+    category,
+    message,
+    details: { provider, model, status, ...details },
+    generationId,
+    projectId,
+  });
 }
 
 const STYLE_PROMPTS: Record<string, string> = {
@@ -3347,6 +3378,25 @@ async function handleAudioPhase(
 
   console.log(`Phase: AUDIO - Chunk ${batchStart}-${batchEnd - 1} of ${scenes.length}`);
 
+  // Log audio phase start to system_logs
+  await logSystemEvent({
+    supabase,
+    userId: user.id,
+    eventType: "audio_phase_started",
+    category: "system_info",
+    message: `Audio generation started for scenes ${batchStart + 1}-${batchEnd}`,
+    details: { 
+      batchStart, 
+      batchEnd, 
+      totalScenes: scenes.length,
+      voiceType,
+      voiceGender,
+      hasCustomVoice: !!customVoiceId,
+    },
+    generationId,
+    projectId,
+  });
+
   // Update progress before doing work
   await supabase
     .from("generations")
@@ -3370,21 +3420,44 @@ async function handleAudioPhase(
     if (audioUrls[i]) continue;
 
     batchPromises.push(
-      generateSceneAudio(
-        scenes[i],
-        i,
-        replicateApiKey,
-        googleApiKey,
-        supabase,
-        user.id,
-        projectId,
-        false,
-        customVoiceId,
-        voiceGender,
-      ).then((result) => ({
-        index: i,
-        result,
-      })),
+      (async () => {
+        const startTime = Date.now();
+        const result = await generateSceneAudio(
+          scenes[i],
+          i,
+          replicateApiKey,
+          googleApiKey,
+          supabase,
+          user.id,
+          projectId,
+          false,
+          customVoiceId,
+          voiceGender,
+        );
+        const durationMs = Date.now() - startTime;
+        
+        // Log each scene's audio result
+        await logSystemEvent({
+          supabase,
+          userId: user.id,
+          eventType: result.url ? "audio_scene_success" : "audio_scene_failed",
+          category: result.url ? "system_info" : "system_error",
+          message: result.url 
+            ? `Scene ${i + 1} audio generated via ${result.provider || "unknown"}` 
+            : `Scene ${i + 1} audio failed: ${result.error}`,
+          details: {
+            sceneIndex: i,
+            provider: result.provider || "unknown",
+            durationMs,
+            audioSeconds: result.durationSeconds,
+            error: result.error,
+          },
+          generationId,
+          projectId,
+        });
+        
+        return { index: i, result };
+      })(),
     );
   }
 
@@ -3484,6 +3557,25 @@ async function handleAudioPhase(
   console.log(
     `Phase: AUDIO complete (chunked) in ${phaseTimings.audio}ms - ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`,
   );
+
+  // Log audio phase completion
+  await logSystemEvent({
+    supabase,
+    userId: user.id,
+    eventType: "audio_phase_complete",
+    category: "system_info",
+    message: `Audio generation complete: ${successfulAudio}/${scenes.length} scenes, ${totalAudioSeconds.toFixed(1)}s total`,
+    details: {
+      successfulScenes: successfulAudio,
+      totalScenes: scenes.length,
+      totalAudioSeconds,
+      audioProvider: audioProviderUsed,
+      audioModel: audioModelUsed,
+      phaseTimeMs: phaseTimings.audio,
+    },
+    generationId,
+    projectId,
+  });
 
   return new Response(
     JSON.stringify({
@@ -3706,6 +3798,29 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
   console.log(`Phase: IMAGES - Chunk ${startIndex}-${endIndex} of ${totalImages} images...`);
 
+  // Log images phase start to system_logs
+  await logSystemEvent({
+    supabase,
+    userId: user.id,
+    eventType: "images_phase_started",
+    category: "system_info",
+    message: `Image generation started: chunk ${startIndex + 1}-${endIndex} of ${totalImages} total images`,
+    details: {
+      startIndex,
+      endIndex,
+      totalImages,
+      useHypereal,
+      useProModel,
+      isProUser,
+      primaryProvider: useHypereal ? "hypereal" : "replicate",
+      model: useHypereal ? "nano-banana-pro-t2i" : (useProModel ? "nano-banana-pro" : "nano-banana"),
+      format,
+      style,
+    },
+    generationId,
+    projectId,
+  });
+
   // Load existing image URLs from scenes
   const sceneImageUrls: (string | null)[][] = scenes.map((s) => {
     if (s.imageUrls && Array.isArray(s.imageUrls)) {
@@ -3878,6 +3993,24 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
   // If we reached the end and still have 0 images, fail loudly (avoids "successful" runs with no visuals).
   if (!hasMore && newCompletedTotal === 0) {
+    // Log the failure
+    await logSystemEvent({
+      supabase,
+      userId: user.id,
+      eventType: "images_phase_failed",
+      category: "system_error",
+      message: "Image generation failed for ALL images - generation aborted",
+      details: {
+        totalAttempted: totalImages,
+        hyperealAttempts: totalHyperalSuccess,
+        replicateFallbacks: totalReplicateFallback,
+        useHypereal,
+        useProModel,
+      },
+      generationId,
+      projectId,
+    });
+
     await supabase
       .from("generations")
       .update({
@@ -3956,6 +4089,29 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   console.log(
     `Phase: IMAGES chunk complete - ${completedThisChunk} this chunk, ${newCompletedTotal}/${totalImages} total, hasMore: ${hasMore}`,
   );
+
+  // Log images phase completion (or chunk completion)
+  if (!hasMore) {
+    await logSystemEvent({
+      supabase,
+      userId: user.id,
+      eventType: "images_phase_complete",
+      category: "system_info",
+      message: `Image generation complete: ${newCompletedTotal}/${totalImages} images`,
+      details: {
+        imagesGenerated: newCompletedTotal,
+        totalImages,
+        hyperealSuccessCount: totalHyperalSuccess,
+        replicateFallbackCount: totalReplicateFallback,
+        imageProvider: costTracking.imageProvider,
+        imageModel: costTracking.imageModel,
+        phaseTimeMs: phaseTimings.images,
+        estimatedCostUsd: costTracking.estimatedCostUsd,
+      },
+      generationId,
+      projectId,
+    });
+  }
 
   return new Response(
     JSON.stringify({
@@ -4155,19 +4311,35 @@ async function handleFinalizePhase(
 
   await supabase.from("projects").update({ status: "complete" }).eq("id", projectId).eq("user_id", user.id);
 
-  // Log generation completed event
+  // Log generation completed event with FULL cost breakdown
   await logSystemEvent({
     supabase,
     userId: user.id,
     eventType: "generation_completed",
     category: "user_activity",
-    message: `Generation completed: "${generation.projects.title}"`,
+    message: `Generation completed: "${generation.projects.title}" - $${costTracking.estimatedCostUsd.toFixed(4)} total`,
     details: {
       projectType: generation.projects.project_type || "doc2video",
+      projectTitle: generation.projects.title,
       totalTimeMs: totalTime,
-      estimatedCost: costTracking.estimatedCostUsd,
       creditsUsed: creditsToDeduct,
       sceneCount: finalScenes.length,
+      // Cost breakdown
+      estimatedCostUsd: costTracking.estimatedCostUsd,
+      scriptCost,
+      audioCost,
+      imageCost,
+      // Provider details
+      audioProvider: costTracking.audioProvider,
+      audioModel: costTracking.audioModel,
+      audioSeconds: costTracking.audioSeconds,
+      imageProvider: costTracking.imageProvider,
+      imageModel: costTracking.imageModel,
+      imagesGenerated: costTracking.imagesGenerated,
+      hyperealSuccessCount: costTracking.hyperealSuccessCount,
+      replicateFallbackCount: costTracking.replicateFallbackCount,
+      // Phase timings
+      phaseTimings,
     },
     generationId,
     projectId,
