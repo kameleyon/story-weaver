@@ -329,6 +329,9 @@ interface CostTracking {
   audioModel?: string;
   imageProvider?: string;
   imageModel?: string;
+  // Track actual image generation provider usage (to detect fallbacks)
+  hyperealSuccessCount?: number;
+  replicateFallbackCount?: number;
 }
 
 // ============= CONSTANTS =============
@@ -3714,6 +3717,10 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   });
 
   let completedThisChunk = 0;
+  
+  // Track actual providers used across ALL batches in this chunk (for accurate cost logging)
+  let totalHyperalSuccess = costTracking.hyperealSuccessCount || 0;
+  let totalReplicateFallback = costTracking.replicateFallbackCount || 0;
 
   // Process this chunk in batches.
   // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
@@ -3750,6 +3757,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       .eq("id", generationId);
 
     const batchPromises = [];
+    
     for (let t = batchStart; t < batchEnd; t++) {
       const task = tasksThisChunk[t];
       // Stagger requests within batch to avoid rate limits (1.5s between each)
@@ -3758,6 +3766,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         (async () => {
           // Wait for stagger delay before starting this request
           if (staggerDelay > 0) await sleep(staggerDelay);
+          
+          let actualProvider = "replicate"; // Track which provider actually succeeded
           
           for (let attempt = 1; attempt <= 4; attempt++) {
             // Pro/Enterprise users get Hypereal nano-banana-pro, with Replicate as fallback
@@ -3769,12 +3779,16 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               
               // Fallback to Replicate nano-banana (not pro) if Hypereal fails
               if (!result.ok) {
-                console.log(`[IMG] Hypereal failed, falling back to Replicate nano-banana for task ${task.taskIndex}`);
+                console.log(`[IMG] Hypereal failed (${result.error}), falling back to Replicate nano-banana for task ${task.taskIndex}`);
                 result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false); // false = use regular nano-banana
+                actualProvider = "replicate_fallback";
+              } else {
+                actualProvider = "hypereal";
               }
             } else {
               console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
               result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+              actualProvider = "replicate";
             }
             
             if (result.ok) {
@@ -3787,7 +3801,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
               if (uploadError) {
                 console.error(`[IMG] Upload failed for ${path}: ${uploadError.message}`);
-                return { task, url: null };
+                return { task, url: null, provider: actualProvider };
               }
 
               // Use signed URL for secure access (7 days expiration)
@@ -3797,9 +3811,11 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
               if (signError || !signedData?.signedUrl) {
                 console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
-                return { task, url: null };
+                return { task, url: null, provider: actualProvider };
               }
-              return { task, url: signedData.signedUrl };
+              
+              console.log(`[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}`);
+              return { task, url: signedData.signedUrl, provider: actualProvider };
             }
 
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
@@ -3812,18 +3828,27 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               await sleep(baseDelay + Math.random() * 2000);
             }
           }
-          return { task, url: null };
+          return { task, url: null, provider: "none" };
         })(),
       );
     }
 
     const results = await Promise.all(batchPromises);
-    for (const { task, url } of results) {
+    for (const { task, url, provider } of results) {
       while (sceneImageUrls[task.sceneIndex].length <= task.subIndex) {
         sceneImageUrls[task.sceneIndex].push(null);
       }
       sceneImageUrls[task.sceneIndex][task.subIndex] = url;
-      if (url) completedThisChunk++;
+      if (url) {
+        completedThisChunk++;
+        if (provider === "hypereal") totalHyperalSuccess++;
+        if (provider === "replicate_fallback") totalReplicateFallback++;
+      }
+    }
+    
+    // Log actual provider usage for this batch
+    if (totalHyperalSuccess > 0 || totalReplicateFallback > 0) {
+      console.log(`[IMG] Chunk provider stats so far: Hypereal=${totalHyperalSuccess}, Replicate-fallback=${totalReplicateFallback}`);
     }
 
     if (batchEnd < tasksThisChunk.length) await sleep(1000);
@@ -3847,10 +3872,32 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
     throw new Error("Image generation failed for all images");
   }
 
-  // Update cost tracking with actual provider used
+  // Update cost tracking with ACTUAL provider used (not just intent)
   costTracking.imagesGenerated = newCompletedTotal;
-  costTracking.imageProvider = useHypereal ? "hypereal" : "replicate";
-  costTracking.imageModel = useHypereal ? "nano-banana-pro-t2i" : (useProModel ? "google/nano-banana-pro" : "google/nano-banana");
+  costTracking.hyperealSuccessCount = totalHyperalSuccess;
+  costTracking.replicateFallbackCount = totalReplicateFallback;
+  
+  // Determine actual primary provider based on what succeeded
+  // If ANY images used Replicate fallback, mark it as mixed/replicate for accurate billing
+  if (totalReplicateFallback > 0 && totalHyperalSuccess === 0) {
+    costTracking.imageProvider = "replicate";
+    costTracking.imageModel = "google/nano-banana";
+  } else if (totalReplicateFallback > 0 && totalHyperalSuccess > 0) {
+    costTracking.imageProvider = "mixed"; // Some Hypereal, some Replicate fallback
+    costTracking.imageModel = "nano-banana-pro-t2i + google/nano-banana (fallback)";
+  } else if (totalHyperalSuccess > 0) {
+    costTracking.imageProvider = "hypereal";
+    costTracking.imageModel = "nano-banana-pro-t2i";
+  } else if (useHypereal) {
+    costTracking.imageProvider = "hypereal";
+    costTracking.imageModel = "nano-banana-pro-t2i";
+  } else {
+    costTracking.imageProvider = "replicate";
+    costTracking.imageModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  }
+  
+  console.log(`[IMG] Final provider stats: Hypereal=${totalHyperalSuccess}, Replicate-fallback=${totalReplicateFallback}, Provider=${costTracking.imageProvider}`);
+  
   costTracking.estimatedCostUsd =
     costTracking.scriptTokens * PRICING.scriptPerToken +
     costTracking.audioSeconds * PRICING.audioPerSecond +
