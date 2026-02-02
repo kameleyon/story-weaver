@@ -304,10 +304,10 @@ export function AdminLogs() {
               >
                 {/* Main Log Line - BIGGER TEXT */}
                 <div className="flex items-start gap-3 text-base leading-relaxed">
-                  <span className="text-foreground/50 shrink-0 text-sm">
+                  <span className="text-white/75 shrink-0 text-sm">
                     {formatDate(log.created_at)}
                   </span>
-                  <span className="text-foreground/70 shrink-0 text-sm font-medium">
+                  <span className="text-white/75 shrink-0 text-sm font-medium">
                     {formatTimestamp(log.created_at)}
                   </span>
                   <span className={`shrink-0 font-bold text-sm ${getLogColor(log.category)}`}>
