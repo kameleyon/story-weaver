@@ -1817,10 +1817,16 @@ async function generateSceneAudio(
   isRegeneration: boolean = false,
   customVoiceId?: string,
   voiceGender: string = "female", // "male" or "female" - used for standard Replicate voices
+  forceHaitianCreole: boolean = false, // Force HC routing from presenter_focus language setting
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
   const voiceoverText = sanitizeVoiceover(scene.voiceover);
   const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
-  const isHC = isHaitianCreole(voiceoverText);
+  // HC detection: either from voiceover text OR from presenter_focus language setting
+  const isHC = forceHaitianCreole || isHaitianCreole(voiceoverText);
+  
+  if (forceHaitianCreole && !isHaitianCreole(voiceoverText)) {
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Forcing Haitian Creole from presenter_focus (text detection was false)`);
+  }
 
   // ========== CASE 1: Haitian Creole + Cloned Voice ==========
   // Generate with Google TTS → Transform with ElevenLabs Speech-to-Speech
@@ -4136,10 +4142,10 @@ async function handleRegenerateAudio(
 ): Promise<Response> {
   console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Starting audio regeneration...`);
 
-  // Fetch generation WITH project voice settings (same as main audio phase)
+  // Fetch generation WITH project voice settings AND presenter_focus (for language detection)
   const { data: generation } = await supabase
     .from("generations")
-    .select("scenes, projects!inner(voice_type, voice_id, voice_name)")
+    .select("scenes, projects!inner(voice_type, voice_id, voice_name, presenter_focus)")
     .eq("id", generationId)
     .eq("user_id", user.id)
     .single();
@@ -4155,6 +4161,7 @@ async function handleRegenerateAudio(
   const voiceType = generation.projects?.voice_type;
   const voiceId = generation.projects?.voice_id;
   const voiceName = generation.projects?.voice_name;
+  const presenterFocus = generation.projects?.presenter_focus;
 
   // Determine if custom voice should be used
   const customVoiceId = voiceType === "custom" && voiceId ? voiceId : undefined;
@@ -4167,11 +4174,22 @@ async function handleRegenerateAudio(
     ? voiceName 
     : "female";
 
+  // Detect Haitian Creole from presenter_focus (language setting)
+  // Check if presenter_focus contains "Haitian Creole", "Kreyòl", "Creole", etc.
+  const presenterFocusLower = (presenterFocus || "").toLowerCase();
+  const forceHaitianCreole = presenterFocusLower.includes("haitian") || 
+                              presenterFocusLower.includes("kreyòl") || 
+                              presenterFocusLower.includes("kreyol") ||
+                              presenterFocusLower.includes("creole");
+
   console.log(
     `[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings from project: type=${voiceType}, id=${voiceId}, name=${voiceName}`,
   );
   console.log(
     `[regenerate-audio] Scene ${sceneIndex + 1} - Resolved voice: isStandard=${isStandardVoice}, gender=${voiceGender}, customId=${customVoiceId || "none"}`,
+  );
+  console.log(
+    `[regenerate-audio] Scene ${sceneIndex + 1} - Language: presenterFocus="${presenterFocus || 'none'}", forceHaitianCreole=${forceHaitianCreole}`,
   );
   if (customVoiceId) {
     console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using custom cloned voice: ${customVoiceId}`);
@@ -4183,7 +4201,7 @@ async function handleRegenerateAudio(
   scenes[sceneIndex].voiceover = newVoiceover;
 
   // Generate new audio (with isRegeneration=true to create unique filename and bypass cache)
-  // IMPORTANT: Pass customVoiceId to follow the same 4-scenario workflow as main generation:
+  // IMPORTANT: Pass customVoiceId and forceHaitianCreole to follow the same 4-scenario workflow as main generation:
   // - HC + Cloned Voice: Gemini TTS → ElevenLabs STS
   // - HC + Standard Voice: Gemini TTS only (3 retries)
   // - Non-HC + Cloned Voice: ElevenLabs TTS directly
@@ -4200,6 +4218,7 @@ async function handleRegenerateAudio(
     true, // isRegeneration - creates unique filename to bypass browser cache
     customVoiceId, // Pass custom voice ID for proper routing
     voiceGender, // Pass voice gender for standard Replicate voices (Ethan/Marisol)
+    forceHaitianCreole, // Force HC detection from presenter_focus language setting
   );
 
   if (!audioResult.url) {
