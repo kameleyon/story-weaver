@@ -82,7 +82,7 @@ export function AdminApiCalls() {
         );
       case "running":
         return (
-          <Badge variant="outline" className="text-amber-500 border-amber-500 text-xs">
+          <Badge variant="outline" className="text-primary border-primary text-xs">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             Running
           </Badge>
@@ -98,15 +98,18 @@ export function AdminApiCalls() {
   };
 
   const getProviderColor = (provider: string) => {
+    // Use teal theme shades for all providers per admin UI spec
     switch (provider.toLowerCase()) {
       case "openrouter":
-        return "text-purple-500";
+        return "text-primary"; // Main teal
       case "replicate":
-        return "text-blue-500";
+        return "text-[hsl(170,55%,65%)]"; // Lighter teal
       case "hypereal":
-        return "text-orange-500";
+        return "text-[hsl(170,55%,40%)]"; // Darker teal
       case "google_tts":
-        return "text-green-500";
+        return "text-[hsl(170,30%,50%)]"; // Muted teal
+      case "elevenlabs":
+        return "text-[hsl(170,45%,55%)]"; // Mid teal
       default:
         return "text-muted-foreground";
     }
@@ -219,7 +222,7 @@ export function AdminApiCalls() {
                         {formatDuration(log.total_duration_ms)}
                       </TableCell>
                       <TableCell className="py-2 px-2 text-right">
-                        <span className={log.cost && log.cost > 0 ? "text-amber-500 font-medium" : "text-muted-foreground"}>
+                        <span className={log.cost && log.cost > 0 ? "text-primary font-medium" : "text-muted-foreground"}>
                           {formatCost(log.cost)}
                         </span>
                       </TableCell>
