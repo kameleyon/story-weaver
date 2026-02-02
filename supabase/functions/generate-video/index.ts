@@ -4835,10 +4835,10 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
       imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format);
       
-      // Fallback to Replicate nano-banana if Hypereal fails
+      // Fallback to Replicate nano-banana-pro if Hypereal fails
       if (!imageResult.ok) {
         const hyperealError = imageResult.error || "Unknown Hypereal error";
-        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana`);
+        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana-pro`);
         
         // LOG TO SYSTEM_LOGS so it shows in admin panel!
         await logSystemEvent({
@@ -4846,61 +4846,78 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
           userId: user.id,
           eventType: "hypereal_fallback",
           category: "system_warning",
-          message: `Hypereal API failed during image regeneration, falling back to Replicate`,
+          message: `Hypereal API failed during image regeneration, falling back to Replicate nano-banana-pro`,
           details: {
             sceneIndex,
             targetImageIndex,
             error: hyperealError,
-            fallbackProvider: "replicate_nano_banana",
+            fallbackProvider: "replicate_nano_banana_pro",
             phase: "regenerate-image",
+            action: "regenerate_new",
           },
           generationId,
           projectId,
         });
         
-        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, false);
+        // Always use nano-banana-pro for Regenerate fallback
+        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
       }
     } else {
-      // Use Replicate - Pro users get nano-banana-pro at 1K
-      console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for regeneration`);
-      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
+      // No Hypereal key - use Replicate nano-banana-pro directly
+      console.log(`[regenerate-image] Using Replicate nano-banana-pro for regeneration (no Hypereal key)`);
+      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
     }
-  } else if (sourceImageUrl) {
-    // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
-    console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using true image editing with Nano Banana`,
-    );
-    imageResult = await editImageWithNanoBanana(sourceImageUrl, imageModification, styleDescription, {
-      title: scene.title,
-      subtitle: scene.subtitle,
-    });
   } else {
-    // Fallback to prompt-based generation if no source image
+    // Apply Edit - use Hypereal/Replicate for prompt-based modification
+    // (No longer using Nano Banana image editing - user requested Hypereal primary with Replicate fallback)
     console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - No source image, falling back to prompt-based generation`,
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Applying edit with Hypereal/Replicate`,
     );
+    
     const modifiedPrompt = `${scene.visualPrompt}
 
 USER MODIFICATION REQUEST: ${imageModification}
 
 STYLE: ${styleDescription}
 
-Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image.`;
+Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
 
-    // Try Hypereal first for Pro users, fallback to Replicate
+    // Try Hypereal first (primary), fallback to Replicate nano-banana-pro
     if (useHypereal && hyperealApiKey) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for modified regeneration`);
+      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for Apply Edit`);
       imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format);
       
-      // Fallback to Replicate nano-banana if Hypereal fails
+      // Fallback to Replicate nano-banana-pro if Hypereal fails
       if (!imageResult.ok) {
-        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate nano-banana`);
-        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, false);
+        const hyperealError = imageResult.error || "Unknown Hypereal error";
+        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana-pro`);
+        
+        // LOG TO SYSTEM_LOGS so it shows in admin panel!
+        await logSystemEvent({
+          supabase,
+          userId: user.id,
+          eventType: "hypereal_fallback",
+          category: "system_warning",
+          message: `Hypereal API failed during Apply Edit, falling back to Replicate nano-banana-pro`,
+          details: {
+            sceneIndex,
+            targetImageIndex,
+            error: hyperealError,
+            fallbackProvider: "replicate_nano_banana_pro",
+            phase: "regenerate-image",
+            action: "apply_edit",
+          },
+          generationId,
+          projectId,
+        });
+        
+        // Always use nano-banana-pro for Apply Edit fallback
+        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
       }
     } else {
-      // Use Replicate - Pro users get nano-banana-pro at 1K
-      console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for modified regeneration`);
-      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
+      // No Hypereal key - use Replicate nano-banana-pro directly
+      console.log(`[regenerate-image] Using Replicate nano-banana-pro for Apply Edit (no Hypereal key)`);
+      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
     }
   }
 
