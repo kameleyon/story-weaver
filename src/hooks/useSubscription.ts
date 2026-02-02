@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { 
@@ -23,7 +24,7 @@ export const STRIPE_PLANS = {
     yearly: { priceId: "price_1SqN2D6hfVkBDzkS6ywVTBEt", productId: "prod_Tnz0KUQX2J5VBH" },
   },
   professional: {
-    // Stripe: "Platinum Plan" (recurring monthly)
+    // Stripe: "Pro Plan" (recurring monthly)
     monthly: { priceId: "price_1SqN2U6hfVkBDzkSNCDvRyeP", productId: "prod_Tnz0BeRmJDdh0V" },
     yearly: { priceId: "price_1SqN2U6hfVkBDzkSNCDvRyeP", productId: "prod_Tnz0BeRmJDdh0V" },
   },
@@ -48,88 +49,87 @@ export function canUseCharacterConsistency(plan: PlanTier): boolean {
 export interface SubscriptionState {
   subscribed: boolean;
   plan: PlanTier;
-  subscriptionStatus: string | null; // "active", "past_due", "unpaid", "canceled", etc.
+  subscriptionStatus: string | null;
   subscriptionEnd: string | null;
   cancelAtPeriodEnd: boolean;
   creditsBalance: number;
-  isLoading: boolean;
-  error: string | null;
+}
+
+const SUBSCRIPTION_QUERY_KEY = ["subscription"] as const;
+
+// Fetch function for React Query
+async function fetchSubscription(accessToken: string | undefined): Promise<SubscriptionState> {
+  if (!accessToken) {
+    return {
+      subscribed: false,
+      plan: "free",
+      subscriptionStatus: null,
+      subscriptionEnd: null,
+      cancelAtPeriodEnd: false,
+      creditsBalance: 0,
+    };
+  }
+
+  const { data, error } = await supabase.functions.invoke("check-subscription", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  // Handle token expiration
+  if (error?.message?.includes("401") || data?.code === "TOKEN_EXPIRED") {
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshData.session) {
+      throw new Error("Session expired. Please log in again.");
+    }
+    // Retry with refreshed token
+    const { data: retryData, error: retryError } = await supabase.functions.invoke("check-subscription", {
+      headers: {
+        Authorization: `Bearer ${refreshData.session.access_token}`,
+      },
+    });
+    if (retryError) throw retryError;
+    return {
+      subscribed: retryData.subscribed || false,
+      plan: retryData.plan || "free",
+      subscriptionStatus: retryData.subscription_status || (retryData.subscribed ? "active" : null),
+      subscriptionEnd: retryData.subscription_end || null,
+      cancelAtPeriodEnd: retryData.cancel_at_period_end || false,
+      creditsBalance: retryData.credits_balance || 0,
+    };
+  }
+
+  if (error) throw error;
+
+  return {
+    subscribed: data.subscribed || false,
+    plan: data.plan || "free",
+    subscriptionStatus: data.subscription_status || (data.subscribed ? "active" : null),
+    subscriptionEnd: data.subscription_end || null,
+    cancelAtPeriodEnd: data.cancel_at_period_end || false,
+    creditsBalance: data.credits_balance || 0,
+  };
 }
 
 export function useSubscription() {
-  const { user, session } = useAuth();
-  const [state, setState] = useState<SubscriptionState>({
-    subscribed: false,
-    plan: "free",
-    subscriptionStatus: null,
-    subscriptionEnd: null,
-    cancelAtPeriodEnd: false,
-    creditsBalance: 0,
-    isLoading: true,
-    error: null,
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: SUBSCRIPTION_QUERY_KEY,
+    queryFn: () => fetchSubscription(session?.access_token),
+    enabled: !!session?.access_token,
+    staleTime: 60_000, // Consider data fresh for 60 seconds
+    gcTime: 5 * 60_000, // Keep in cache for 5 minutes
+    refetchInterval: 60_000, // Auto-refresh every 60 seconds when window is focused
+    refetchOnWindowFocus: false, // Avoid extra calls on tab switch
+    retry: 1, // Only retry once on failure
   });
 
+  // Manual refresh function
   const checkSubscription = useCallback(async () => {
-    if (!session?.access_token) {
-      setState(prev => ({ ...prev, isLoading: false }));
-      return;
-    }
-
-    try {
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
-      
-      const { data, error } = await supabase.functions.invoke("check-subscription", {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      // Handle token expiration - try to refresh the session
-      if (error?.message?.includes("401") || data?.code === "TOKEN_EXPIRED") {
-        console.log("Token expired, attempting session refresh...");
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError || !refreshData.session) {
-          // Refresh failed, user needs to re-login
-          setState(prev => ({ ...prev, isLoading: false, error: "Session expired. Please log in again." }));
-          return;
-        }
-        // Retry with new token - will be picked up on next interval or manual call
-        return;
-      }
-
-      if (error) throw error;
-
-      setState({
-        subscribed: data.subscribed || false,
-        plan: data.plan || "free",
-        subscriptionStatus: data.subscription_status || (data.subscribed ? "active" : null),
-        subscriptionEnd: data.subscription_end || null,
-        cancelAtPeriodEnd: data.cancel_at_period_end || false,
-        creditsBalance: data.credits_balance || 0,
-        isLoading: false,
-        error: null,
-      });
-    } catch (error) {
-      console.error("Error checking subscription:", error);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to check subscription",
-      }));
-    }
-  }, [session?.access_token]);
-
-  useEffect(() => {
-    checkSubscription();
-  }, [checkSubscription]);
-
-  // Auto-refresh subscription status every 60 seconds
-  useEffect(() => {
-    if (!session?.access_token) return;
-    
-    const interval = setInterval(checkSubscription, 60000);
-    return () => clearInterval(interval);
-  }, [session?.access_token, checkSubscription]);
+    await refetch();
+  }, [refetch]);
 
   const createCheckout = useCallback(async (priceId: string, mode: "subscription" | "payment" = "subscription") => {
     if (!session?.access_token) {
@@ -146,7 +146,6 @@ export function useSubscription() {
     if (error) throw error;
     if (!data?.url) throw new Error("Failed to create checkout session");
 
-    // Open in new tab
     window.open(data.url, "_blank");
     return data.url;
   }, [session?.access_token]);
@@ -164,7 +163,6 @@ export function useSubscription() {
 
     if (error) throw error;
     
-    // Handle manual enterprise subscriptions
     if (data?.error === "MANUAL_SUBSCRIPTION") {
       throw new Error(data.message || "Your subscription is managed directly. Please contact support for billing inquiries.");
     }
@@ -175,10 +173,23 @@ export function useSubscription() {
     return data.url;
   }, [session?.access_token]);
 
+  // Invalidate subscription cache (useful after checkout completes)
+  const invalidateSubscription = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_QUERY_KEY });
+  }, [queryClient]);
+
   return {
-    ...state,
+    subscribed: data?.subscribed ?? false,
+    plan: data?.plan ?? "free",
+    subscriptionStatus: data?.subscriptionStatus ?? null,
+    subscriptionEnd: data?.subscriptionEnd ?? null,
+    cancelAtPeriodEnd: data?.cancelAtPeriodEnd ?? false,
+    creditsBalance: data?.creditsBalance ?? 0,
+    isLoading,
+    error: error instanceof Error ? error.message : null,
     checkSubscription,
     createCheckout,
     openCustomerPortal,
+    invalidateSubscription,
   };
 }
