@@ -305,6 +305,9 @@ export function useGenerationPipeline() {
         }));
 
         // Script phase needs longer timeout due to character analysis
+        // Smart Flow without voice should skip audio entirely
+        const isSmartFlowNoVoice = params.projectType === "smartflow" && !params.voiceType;
+
         const scriptResult = await callPhase(
           {
             phase: "script",
@@ -328,6 +331,7 @@ export function useGenerationPipeline() {
             storyGenre: params.storyGenre,
             voiceInclination: params.voiceInclination,
             brandName: params.brandName,
+            skipAudio: isSmartFlowNoVoice, // Tell backend to skip audio phase
           },
           180000 // 3 minutes for script + character analysis
         );
@@ -345,51 +349,56 @@ export function useGenerationPipeline() {
           title,
           sceneCount,
           totalImages,
-          statusMessage: "Script complete. Starting audio...",
+          statusMessage: isSmartFlowNoVoice 
+            ? "Script complete. Starting images..." 
+            : "Script complete. Starting audio...",
           costTracking,
           phaseTimings: { script: scriptResult.phaseTime },
         }));
 
         // ============= PHASE 2: AUDIO (chunked) =============
-        setState((prev) => ({ 
-          ...prev, 
-          step: "visuals", 
-          progress: 15,
-          statusMessage: "Generating voiceover audio..." 
-        }));
-
-        // Audio is chunked in the backend to avoid long-running requests/timeouts.
-        // Each call generates up to a small batch of scene audios.
-        let audioStartIndex = 0;
-        let audioResult: any;
-
-        do {
-          audioResult = await callPhase(
-            {
-              phase: "audio",
-              generationId,
-              projectId,
-              audioStartIndex,
-            },
-            300000 // 5 minutes (safety buffer)
-          );
-
-          if (!audioResult.success) throw new Error(audioResult.error || "Audio generation failed");
-
-          setState((prev) => ({
-            ...prev,
-            progress: typeof audioResult.progress === "number" ? audioResult.progress : prev.progress,
-            statusMessage: audioResult.hasMore
-              ? `Generating voiceover... (${audioResult.audioGenerated || 0}/${prev.sceneCount})`
-              : `Audio complete (${audioResult.audioSeconds?.toFixed(1) || 0}s). Starting images...`,
-            costTracking: audioResult.costTracking,
-            phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
+        // Skip audio phase entirely for Smart Flow without voice
+        if (!isSmartFlowNoVoice) {
+          setState((prev) => ({ 
+            ...prev, 
+            step: "visuals", 
+            progress: 15,
+            statusMessage: "Generating voiceover audio..." 
           }));
 
-          if (audioResult.hasMore && typeof audioResult.nextStartIndex === "number") {
-            audioStartIndex = audioResult.nextStartIndex;
-          }
-        } while (audioResult.hasMore);
+          // Audio is chunked in the backend to avoid long-running requests/timeouts.
+          // Each call generates up to a small batch of scene audios.
+          let audioStartIndex = 0;
+          let audioResult: any;
+
+          do {
+            audioResult = await callPhase(
+              {
+                phase: "audio",
+                generationId,
+                projectId,
+                audioStartIndex,
+              },
+              300000 // 5 minutes (safety buffer)
+            );
+
+            if (!audioResult.success) throw new Error(audioResult.error || "Audio generation failed");
+
+            setState((prev) => ({
+              ...prev,
+              progress: typeof audioResult.progress === "number" ? audioResult.progress : prev.progress,
+              statusMessage: audioResult.hasMore
+                ? `Generating voiceover... (${audioResult.audioGenerated || 0}/${prev.sceneCount})`
+                : `Audio complete (${audioResult.audioSeconds?.toFixed(1) || 0}s). Starting images...`,
+              costTracking: audioResult.costTracking,
+              phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
+            }));
+
+            if (audioResult.hasMore && typeof audioResult.nextStartIndex === "number") {
+              audioStartIndex = audioResult.nextStartIndex;
+            }
+          } while (audioResult.hasMore);
+        }
 
         // ============= PHASE 3: IMAGES (chunked) =============
         setState((prev) => ({ 
