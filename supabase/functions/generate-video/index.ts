@@ -4137,7 +4137,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           if (staggerDelay > 0) await sleep(staggerDelay);
           
           let actualProvider = "replicate"; // Track which provider actually succeeded
-          let actualModel = useProModel ? "nano-banana-pro" : "google/nano-banana";
+          let actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
           const imageCallStart = Date.now();
           
           for (let attempt = 1; attempt <= 4; attempt++) {
@@ -4199,7 +4199,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
               result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
               actualProvider = "replicate";
-              actualModel = useProModel ? "nano-banana-pro" : "google/nano-banana";
+              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
             }
             
             if (result.ok) {
