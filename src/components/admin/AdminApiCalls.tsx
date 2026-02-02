@@ -100,8 +100,10 @@ export function AdminApiCalls() {
   const getProviderColor = (provider: string) => {
     // Use teal theme shades for all providers per admin UI spec
     switch (provider.toLowerCase()) {
+      case "openrouter":
+        return "text-primary"; // Main teal - for OpenRouter (script generation)
       case "lovable_ai":
-        return "text-primary"; // Main teal - for Lovable AI Gateway (Gemini)
+        return "text-[hsl(170,45%,55%)]"; // Mid teal - for image editing
       case "replicate":
         return "text-[hsl(170,55%,65%)]"; // Lighter teal
       case "replicate_fallback":
@@ -112,8 +114,6 @@ export function AdminApiCalls() {
         return "text-[hsl(170,30%,50%)]"; // Muted teal
       case "elevenlabs":
         return "text-[hsl(170,45%,55%)]"; // Mid teal
-      case "openrouter":
-        return "text-muted-foreground"; // Legacy - should not appear anymore
       default:
         return "text-muted-foreground";
     }
@@ -147,11 +147,12 @@ export function AdminApiCalls() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Providers</SelectItem>
-                  <SelectItem value="lovable_ai">Lovable AI</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
                   <SelectItem value="replicate">Replicate</SelectItem>
                   <SelectItem value="hypereal">Hypereal</SelectItem>
                   <SelectItem value="google_tts">Google TTS</SelectItem>
                   <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                  <SelectItem value="lovable_ai">Lovable AI</SelectItem>
                 </SelectContent>
               </Select>
               <Button
