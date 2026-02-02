@@ -20,6 +20,7 @@ import {
   Mic,
   Wallpaper,
   MicVocal,
+  Shield,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -68,6 +69,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useSubscription, STRIPE_PLANS } from "@/hooks/useSubscription";
 import { ProjectSearch } from "@/components/layout/ProjectSearch";
 import { useState, useEffect } from "react";
@@ -92,6 +94,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
   const isCollapsed = state === "collapsed" && !isMobile;
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdminAuth();
   const { plan, cancelAtPeriodEnd, createCheckout, isLoading: subscriptionLoading } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
@@ -238,6 +241,12 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   <History className="mr-2 h-4 w-4" />
                   <span>Usage & Billing</span>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => { navigate("/admin"); toggleSidebar(); }}>
+                    <Shield className="mr-2 h-4 w-4" />
+                    <span>Admin</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator className="bg-border/50" />
                 <DropdownMenuItem
                   className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
@@ -551,6 +560,12 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 <History className="mr-2 h-4 w-4" />
                 <span>Usage & Billing</span>
               </DropdownMenuItem>
+              {isAdmin && (
+                <DropdownMenuItem className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground" onClick={() => navigate("/admin")}>
+                  <Shield className="mr-2 h-4 w-4" />
+                  <span>Admin</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator className="bg-border/50" />
               <DropdownMenuItem
                 className="cursor-pointer rounded-lg focus:bg-accent focus:text-accent-foreground"
