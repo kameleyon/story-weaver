@@ -4007,6 +4007,7 @@ async function handleFinalizePhase(
   const imageCost = costTracking.imagesGenerated * PRICING.imagePerImage; // Hypereal/Replicate
   
   // Record to generation_costs table for admin analytics
+  // Note: total_cost is a generated column (auto-calculated), so we don't insert it
   const { error: costError } = await supabase.from("generation_costs").insert({
     generation_id: generationId,
     user_id: user.id,
@@ -4014,7 +4015,7 @@ async function handleFinalizePhase(
     replicate_cost: imageCost * 0.3, // Estimate: ~30% of images via Replicate fallback
     hypereal_cost: imageCost * 0.7,  // Estimate: ~70% of images via Hypereal
     google_tts_cost: audioCost,
-    total_cost: costTracking.estimatedCostUsd,
+    // total_cost is auto-calculated by the database
   });
 
   if (costError) {
