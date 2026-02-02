@@ -4159,11 +4159,24 @@ async function handleRegenerateAudio(
   // Determine if custom voice should be used
   const customVoiceId = voiceType === "custom" && voiceId ? voiceId : undefined;
 
+  // Determine voice gender for standard voices
+  // voiceName stores "male" or "female" for standard voices, or the actual name for custom voices
+  // For standard voices, use the stored gender; default to "female" if not set
+  const isStandardVoice = voiceType === "standard" || !voiceType;
+  const voiceGender = isStandardVoice && voiceName && (voiceName === "male" || voiceName === "female") 
+    ? voiceName 
+    : "female";
+
   console.log(
-    `[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings: type=${voiceType}, id=${voiceId}, name=${voiceName}`,
+    `[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings from project: type=${voiceType}, id=${voiceId}, name=${voiceName}`,
+  );
+  console.log(
+    `[regenerate-audio] Scene ${sceneIndex + 1} - Resolved voice: isStandard=${isStandardVoice}, gender=${voiceGender}, customId=${customVoiceId || "none"}`,
   );
   if (customVoiceId) {
     console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using custom cloned voice: ${customVoiceId}`);
+  } else {
+    console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using standard voice: ${voiceGender === "male" ? "Ethan" : "Marisol"}`);
   }
 
   // Update the scene with new voiceover
@@ -4175,8 +4188,6 @@ async function handleRegenerateAudio(
   // - HC + Standard Voice: Gemini TTS only (3 retries)
   // - Non-HC + Cloned Voice: ElevenLabs TTS directly
   // - Non-HC + Standard Voice: Replicate Chatterbox
-  // Determine voice gender for standard voices (voiceName stores "male" or "female")
-  const voiceGender = voiceName || "female";
 
   const audioResult = await generateSceneAudio(
     scenes[sceneIndex],
@@ -4261,15 +4272,16 @@ async function handleRegenerateImage(
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
 
-  // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
+  // Check if user is Pro/Enterprise tier - they get Hypereal nano-banana-pro at 2K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
-  // DISABLED: Hypereal is commented out - using Replicate only
-  // const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-  // const useHypereal = isProUser && !!hyperealApiKey;
-  const useProModel = isProUser; // Pro/Enterprise users get nano-banana-pro at 1K
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  const useHypereal = isProUser && !!hyperealApiKey;
+  const useProModel = isProUser; // Fallback: Pro/Enterprise users get Replicate nano-banana-pro at 1K
   
-  if (useProModel) {
-    console.log(`[regenerate-image] Pro/Enterprise user - will use Replicate nano-banana-pro (1K)`);
+  if (useHypereal) {
+    console.log(`[regenerate-image] Pro/Enterprise user - will use Hypereal nano-banana-pro-t2i (2K) with Replicate fallback`);
+  } else if (useProModel) {
+    console.log(`[regenerate-image] Pro/Enterprise user - will use Replicate nano-banana-pro (1K) - no Hypereal key`);
   }
 
   // Get existing imageUrls or create from single imageUrl
@@ -4292,9 +4304,21 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Use Replicate - Pro users get nano-banana-pro at 1K
-    console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for regeneration`);
-    imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
+    // Try Hypereal first for Pro users, fallback to Replicate
+    if (useHypereal && hyperealApiKey) {
+      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
+      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format);
+      
+      // Fallback to Replicate nano-banana if Hypereal fails
+      if (!imageResult.ok) {
+        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate nano-banana`);
+        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, false);
+      }
+    } else {
+      // Use Replicate - Pro users get nano-banana-pro at 1K
+      console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for regeneration`);
+      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
+    }
   } else if (sourceImageUrl) {
     // True image editing with Nano Banana (google/gemini-2.5-flash-image-preview)
     console.log(
@@ -4317,9 +4341,21 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image.`;
 
-    // Use Replicate - Pro users get nano-banana-pro at 1K
-    console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for modified regeneration`);
-    imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
+    // Try Hypereal first for Pro users, fallback to Replicate
+    if (useHypereal && hyperealApiKey) {
+      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for modified regeneration`);
+      imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format);
+      
+      // Fallback to Replicate nano-banana if Hypereal fails
+      if (!imageResult.ok) {
+        console.log(`[regenerate-image] Hypereal failed, falling back to Replicate nano-banana`);
+        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, false);
+      }
+    } else {
+      // Use Replicate - Pro users get nano-banana-pro at 1K
+      console.log(`[regenerate-image] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for modified regeneration`);
+      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
+    }
   }
 
   if (!imageResult.ok) {
