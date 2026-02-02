@@ -36,7 +36,7 @@ export function useVoiceCloning() {
     enabled: !!user?.id,
   });
 
-  // Upload audio file to storage
+  // Upload audio file to storage and return storage path (not URL)
   const uploadAudio = async (file: Blob, fileName: string): Promise<string> => {
     if (!user?.id) throw new Error("User not authenticated");
 
@@ -54,12 +54,8 @@ export function useVoiceCloning() {
       throw new Error("Failed to upload audio file");
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from("voice_samples")
-      .getPublicUrl(filePath);
-
-    return urlData.publicUrl;
+    // Return storage path for edge function to download via service role
+    return filePath;
   };
 
   // Clone voice mutation
@@ -67,12 +63,12 @@ export function useVoiceCloning() {
     mutationFn: async ({ file, name, description }: { file: Blob; name: string; description?: string }) => {
       setIsCloning(true);
       
-      // Upload audio file first
-      const audioUrl = await uploadAudio(file, `${name.replace(/\s+/g, "_")}.mp3`);
+      // Upload audio file first - returns storage path (not URL)
+      const storagePath = await uploadAudio(file, `${name.replace(/\s+/g, "_")}.mp3`);
       
-      // Call clone-voice edge function
+      // Call clone-voice edge function with storage path
       const { data, error } = await supabase.functions.invoke("clone-voice", {
-        body: { audioUrl, voiceName: name, description },
+        body: { storagePath, voiceName: name, description },
       });
 
       if (error) {
