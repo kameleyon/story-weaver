@@ -339,9 +339,9 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 // Pricing based on ACTUAL provider costs (updated to match billing)
 const PRICING = {
-  // OpenRouter (Primary for script generation) - google/gemini-3-flash-preview
-  scriptPerToken: 0.0000015, // ~$1.50 per 1M tokens (Gemini 3 Flash via OpenRouter)
-  scriptPerCall: 0.005, // Flat estimate per script generation call
+  // OpenRouter (Primary for script generation) - google/gemini-3-pro-preview
+  scriptPerToken: 0.000003, // ~$3.00 per 1M tokens (Gemini 3 Pro via OpenRouter - higher quality)
+  scriptPerCall: 0.01, // Flat estimate per script generation call
   // Audio - Chatterbox TTS on Replicate 
   audioPerCall: 0.01, // ~$0.01 per audio generation call (Replicate chatterbox)
   audioPerSecond: 0.002, // fallback estimate
@@ -367,7 +367,7 @@ async function callLLMWithFallback(
     model?: string;
   } = {}
 ): Promise<LLMCallResult> {
-  const model = options.model || "google/gemini-3-flash-preview";
+  const model = options.model || "google/gemini-3-pro-preview";
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 8192;
   
@@ -466,7 +466,7 @@ async function callLLMWithFallback(
 }
 
 // ============= API CALL LOGGING =============
-// OpenRouter is used for script generation with google/gemini-3-flash-preview
+// OpenRouter is used for script generation with google/gemini-3-pro-preview
 // Lovable AI Gateway is used for image generation (nano-banana)
 interface ApiCallLogParams {
   supabase: any;
@@ -2632,12 +2632,12 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
   // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
-  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
+  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
   
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 4000,
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-3-pro-preview",
   });
   
   // Log API call
@@ -2646,7 +2646,7 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-3-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
@@ -2949,12 +2949,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
+  console.log("Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 8192,
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-3-pro-preview",
   });
   
   // Log API call
@@ -2963,7 +2963,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-3-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
@@ -3325,12 +3325,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3-flash-preview...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.8, // Slightly higher for creative storytelling
     maxTokens: 12000, // More tokens for longer narratives
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-3-pro-preview",
   });
   
   // Log API call
@@ -3339,7 +3339,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-flash-preview",
+    model: "google/gemini-3-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
