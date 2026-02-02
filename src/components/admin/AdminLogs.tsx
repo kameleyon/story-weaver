@@ -4,7 +4,20 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, RefreshCw, Shield, Activity, AlertCircle, AlertTriangle, Info, Zap, CheckCircle, Pause, Play, Terminal } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  Shield,
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  Zap,
+  CheckCircle,
+  Pause,
+  Play,
+  Terminal,
+} from "lucide-react";
 import { format } from "date-fns";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
@@ -30,7 +43,10 @@ interface LogsResponse {
   limit: number;
 }
 
-const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; prefix: string }> = {
+const CATEGORY_CONFIG: Record<
+  string,
+  { label: string; icon: React.ComponentType<{ className?: string }>; color: string; prefix: string }
+> = {
   admin_action: { label: "ADMIN", icon: Shield, color: "text-primary", prefix: "[ADMIN]" },
   user_activity: { label: "USER", icon: Activity, color: "text-[hsl(170,55%,65%)]", prefix: "[USER]" },
   system_error: { label: "ERROR", icon: AlertCircle, color: "text-destructive", prefix: "[ERROR]" },
@@ -52,7 +68,11 @@ export function AdminLogs() {
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await callAdminApi("admin_logs", { page: 1, limit: 200, category: categoryFilter }) as LogsResponse;
+      const result = (await callAdminApi("admin_logs", {
+        page: 1,
+        limit: 200,
+        category: categoryFilter,
+      })) as LogsResponse;
       setLogs(result.logs || []);
       setError(null);
     } catch (err) {
@@ -71,73 +91,65 @@ export function AdminLogs() {
     if (isPaused) return;
 
     const channel = supabase
-      .channel('admin-logs-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'system_logs' },
-        (payload) => {
-          const newLog = payload.new as {
-            id: string;
-            created_at: string;
-            category: string;
-            event_type: string;
-            message: string;
-            user_id: string | null;
-            details: Record<string, unknown> | null;
-            generation_id?: string | null;
-            project_id?: string | null;
-          };
-          
-          // Transform to unified format
-          const unifiedLog: UnifiedLog = {
-            id: newLog.id,
-            created_at: newLog.created_at,
-            category: newLog.category as UnifiedLog['category'],
-            event_type: newLog.event_type,
-            message: newLog.message,
-            user_id: newLog.user_id,
-            details: newLog.details,
-            generation_id: newLog.generation_id,
-            project_id: newLog.project_id,
-          };
+      .channel("admin-logs-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "system_logs" }, (payload) => {
+        const newLog = payload.new as {
+          id: string;
+          created_at: string;
+          category: string;
+          event_type: string;
+          message: string;
+          user_id: string | null;
+          details: Record<string, unknown> | null;
+          generation_id?: string | null;
+          project_id?: string | null;
+        };
 
-          // Apply category filter
-          if (categoryFilter === "all" || unifiedLog.category === categoryFilter) {
-            setLogs(prev => [unifiedLog, ...prev].slice(0, 500));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'admin_logs' },
-        (payload) => {
-          const newLog = payload.new as {
-            id: string;
-            created_at: string;
-            action: string;
-            admin_id: string;
-            target_type: string;
-            target_id: string | null;
-            details: Record<string, unknown> | null;
-          };
-          
-          const unifiedLog: UnifiedLog = {
-            id: newLog.id,
-            created_at: newLog.created_at,
-            category: "admin_action",
-            event_type: newLog.action,
-            message: `${newLog.action.replace(/_/g, " ")} on ${newLog.target_type}`,
-            user_id: newLog.admin_id,
-            details: newLog.details,
-            target_id: newLog.target_id,
-            target_type: newLog.target_type,
-          };
+        // Transform to unified format
+        const unifiedLog: UnifiedLog = {
+          id: newLog.id,
+          created_at: newLog.created_at,
+          category: newLog.category as UnifiedLog["category"],
+          event_type: newLog.event_type,
+          message: newLog.message,
+          user_id: newLog.user_id,
+          details: newLog.details,
+          generation_id: newLog.generation_id,
+          project_id: newLog.project_id,
+        };
 
-          if (categoryFilter === "all" || categoryFilter === "admin_action") {
-            setLogs(prev => [unifiedLog, ...prev].slice(0, 500));
-          }
+        // Apply category filter
+        if (categoryFilter === "all" || unifiedLog.category === categoryFilter) {
+          setLogs((prev) => [unifiedLog, ...prev].slice(0, 500));
         }
-      )
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "admin_logs" }, (payload) => {
+        const newLog = payload.new as {
+          id: string;
+          created_at: string;
+          action: string;
+          admin_id: string;
+          target_type: string;
+          target_id: string | null;
+          details: Record<string, unknown> | null;
+        };
+
+        const unifiedLog: UnifiedLog = {
+          id: newLog.id,
+          created_at: newLog.created_at,
+          category: "admin_action",
+          event_type: newLog.action,
+          message: `${newLog.action.replace(/_/g, " ")} on ${newLog.target_type}`,
+          user_id: newLog.admin_id,
+          details: newLog.details,
+          target_id: newLog.target_id,
+          target_type: newLog.target_type,
+        };
+
+        if (categoryFilter === "all" || categoryFilter === "admin_action") {
+          setLogs((prev) => [unifiedLog, ...prev].slice(0, 500));
+        }
+      })
       .subscribe();
 
     return () => {
@@ -173,12 +185,10 @@ export function AdminLogs() {
     return JSON.stringify(details, null, 2);
   };
 
-  const filteredLogs = categoryFilter === "all" 
-    ? logs 
-    : logs.filter(log => log.category === categoryFilter);
+  const filteredLogs = categoryFilter === "all" ? logs : logs.filter((log) => log.category === categoryFilter);
 
   const getCategoryCount = (category: string) => {
-    return logs.filter(log => log.category === category).length;
+    return logs.filter((log) => log.category === category).length;
   };
 
   if (loading && logs.length === 0) {
@@ -229,17 +239,17 @@ export function AdminLogs() {
               <SelectItem value="system_info">Info ({getCategoryCount("system_info")})</SelectItem>
             </SelectContent>
           </Select>
-          
-          <Button 
-            onClick={() => setIsPaused(!isPaused)} 
-            variant="outline" 
+
+          <Button
+            onClick={() => setIsPaused(!isPaused)}
+            variant="outline"
             size="sm"
             className={isPaused ? "border-yellow-500 text-yellow-500" : "border-primary text-primary"}
           >
             {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
             {isPaused ? "Resume" : "Pause"}
           </Button>
-          
+
           <Button onClick={fetchLogs} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -266,7 +276,7 @@ export function AdminLogs() {
       </div>
 
       {/* Terminal Log Viewer */}
-      <div 
+      <div
         ref={terminalRef}
         className="bg-black border border-primary/30 rounded-lg overflow-hidden shadow-xl"
         style={{ fontFamily: "'IBM Plex Mono', monospace" }}
@@ -297,31 +307,25 @@ export function AdminLogs() {
             </div>
           ) : (
             filteredLogs.map((log) => (
-              <div 
+              <div
                 key={log.id}
                 className="group hover:bg-white/10 rounded-md px-3 py-2 cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary/50"
                 onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
               >
                 {/* Main Log Line - BIGGER TEXT */}
                 <div className="flex items-start gap-3 text-base leading-relaxed">
-                  <span className="text-white/75 shrink-0 text-sm">
-                    {formatDate(log.created_at)}
-                  </span>
-                  <span className="text-white/75 shrink-0 text-sm font-medium">
-                    {formatTimestamp(log.created_at)}
-                  </span>
+                  <span className="text-white/75 shrink-0 text-sm">{formatDate(log.created_at)}</span>
+                  <span className="text-white/75 shrink-0 text-sm font-medium">{formatTimestamp(log.created_at)}</span>
                   <span className={`shrink-0 font-bold text-sm ${getLogColor(log.category)}`}>
                     {getLogPrefix(log.category)}
                   </span>
-                  <span className="text-white break-all font-medium">
-                    {log.message}
-                  </span>
+                  <span className="text-white break-all font-medium">{log.message}</span>
                 </div>
 
                 {/* Expanded Details - CLEARER FORMATTING */}
                 {expandedLog === log.id && log.details && (
                   <div className="mt-3 ml-4 pl-4 border-l-2 border-primary/40 bg-primary/5 rounded-r-md py-3 pr-3">
-                    <pre className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">
+                    <pre className="text-sm text-white/75 whitespace-pre-wrap leading-relaxed">
                       {formatDetails(log.details)}
                     </pre>
                     <div className="mt-3 pt-2 border-t border-primary/20 space-y-1">
