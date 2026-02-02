@@ -182,6 +182,40 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
         setStyle("custom");
         setCustomStyle(project.style);
       }
+
+      // Restore presenter focus and character description
+      setPresenterFocus(project.presenter_focus ?? "");
+      setCharacterDescription(project.character_description ?? "");
+      
+      // Expand sections if they have content
+      if (project.presenter_focus) setPresenterFocusOpen(true);
+      if (project.character_description) setCharacterDescOpen(true);
+
+      // Restore voice settings
+      if (project.voice_type === "custom" && project.voice_id) {
+        setVoice({ 
+          type: "custom", 
+          voiceId: project.voice_id, 
+          voiceName: project.voice_name ?? undefined 
+        });
+      } else {
+        const gender = (project.voice_name === "male" || project.voice_name === "female") 
+          ? project.voice_name 
+          : "female";
+        setVoice({ type: "standard", gender });
+      }
+
+      // Restore brand mark
+      if (project.brand_mark) {
+        setBrandMarkEnabled(true);
+        setBrandMarkText(project.brand_mark);
+      } else {
+        setBrandMarkEnabled(false);
+        setBrandMarkText("");
+      }
+
+      // Restore character consistency
+      setCharacterConsistencyEnabled(project.character_consistency_enabled ?? false);
     };
 
     useImperativeHandle(ref, () => ({
