@@ -278,6 +278,7 @@ interface GenerationRequest {
   storyGenre?: string;
   voiceInclination?: string;
   brandName?: string;
+  skipAudio?: boolean; // For Smart Flow without voice
   // For chunked phases
   phase?: "script" | "audio" | "images" | "finalize" | "regenerate-audio" | "regenerate-image";
   generationId?: string;
@@ -2542,6 +2543,7 @@ async function handleSmartFlowScriptPhase(
   voiceType?: string,
   voiceId?: string,
   voiceName?: string,
+  skipAudio: boolean = false,
 ): Promise<Response> {
   const phaseStart = Date.now();
   console.log(`[generate-video] Starting SMART FLOW pipeline - text-rich infographic`);
@@ -2742,12 +2744,16 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
       scenes: parsedScript.scenes.map((s, idx) => ({
         ...s,
         _meta: {
-          statusMessage: "Script complete. Ready for audio/image generation.",
+          statusMessage: skipAudio 
+            ? "Script complete. Ready for image generation (no audio)." 
+            : "Script complete. Ready for audio/image generation.",
           totalImages,
           completedImages: 0,
           sceneIndex: idx,
           costTracking,
           phaseTimings: { script: phaseTime },
+          skipAudio, // Store skipAudio flag for images phase
+          projectType: "smartflow",
         },
       })),
       started_at: new Date().toISOString(),
@@ -4003,13 +4009,16 @@ ${characterInstructions}
 OUTPUT: Ultra high resolution, professional illustration with dynamic composition, clear visual hierarchy, cinematic quality, bold creativity, and meticulous attention to detail.`;
   };
 
+  // Check if this is a Smart Flow project (single infographic = 1 image only)
+  const isSmartFlow = generation.projects.project_type === "smartflow";
+
   let taskIndex = 0;
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     
-    // ALWAYS generate exactly 3 images per scene: 1 primary + 2 sub-visuals
-    // This ensures consistent visual density across all scenes
-    const IMAGES_PER_SCENE = 3;
+    // Smart Flow: Only 1 image per scene (single infographic)
+    // Other project types: 3 images per scene (1 primary + 2 sub-visuals)
+    const IMAGES_PER_SCENE = isSmartFlow ? 1 : 3;
     
     // Primary image (subIndex 0)
     allImageTasks.push({
@@ -4019,29 +4028,32 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       taskIndex: taskIndex++,
     });
 
-    // Generate exactly 2 sub-visuals (subIndex 1 and 2)
-    for (let j = 0; j < 2; j++) {
-      let subPrompt: string;
-      
-      if (scene.subVisuals && scene.subVisuals.length > j && scene.subVisuals[j]) {
-        // Use provided sub-visual prompt
-        subPrompt = scene.subVisuals[j];
-      } else {
-        // Synthesize fallback sub-visual from primary prompt with variation
-        const basePrompt = scene.visualPrompt || "";
-        const variations = [
-          "close-up detail shot, different angle, ",
-          "wide establishing shot, alternative perspective, ",
-        ];
-        subPrompt = variations[j] + basePrompt;
+    // Only generate sub-visuals for non-Smart Flow projects
+    if (!isSmartFlow) {
+      // Generate exactly 2 sub-visuals (subIndex 1 and 2)
+      for (let j = 0; j < 2; j++) {
+        let subPrompt: string;
+        
+        if (scene.subVisuals && scene.subVisuals.length > j && scene.subVisuals[j]) {
+          // Use provided sub-visual prompt
+          subPrompt = scene.subVisuals[j];
+        } else {
+          // Synthesize fallback sub-visual from primary prompt with variation
+          const basePrompt = scene.visualPrompt || "";
+          const variations = [
+            "close-up detail shot, different angle, ",
+            "wide establishing shot, alternative perspective, ",
+          ];
+          subPrompt = variations[j] + basePrompt;
+        }
+        
+        allImageTasks.push({
+          sceneIndex: i,
+          subIndex: j + 1,
+          prompt: buildImagePrompt(subPrompt, scene, j + 1),
+          taskIndex: taskIndex++,
+        });
       }
-      
-      allImageTasks.push({
-        sceneIndex: i,
-        subIndex: j + 1,
-        prompt: buildImagePrompt(subPrompt, scene, j + 1),
-        taskIndex: taskIndex++,
-      });
     }
   }
 
@@ -5436,7 +5448,7 @@ serve(async (req) => {
 
       // Route based on project type
       if (body.projectType === "smartflow") {
-        console.log(`[generate-video] Routing to SMART FLOW pipeline (single infographic)`);
+        console.log(`[generate-video] Routing to SMART FLOW pipeline (single infographic, skipAudio=${body.skipAudio ?? false})`);
         return await handleSmartFlowScriptPhase(
           supabase,
           user,
@@ -5448,6 +5460,7 @@ serve(async (req) => {
           body.voiceType,
           body.voiceId,
           body.voiceName,
+          body.skipAudio ?? false, // Pass skipAudio flag
         );
       }
 
