@@ -337,11 +337,17 @@ interface CostTracking {
 // ============= CONSTANTS =============
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Pricing estimates (approximate)
+// Pricing based on ACTUAL Replicate/provider costs (updated to match billing)
 const PRICING = {
-  scriptPerToken: 0.000001, // ~$1 per 1M tokens
-  audioPerSecond: 0.002, // ~$0.002 per second
-  imagePerImage: 0.02, // ~$0.02 per image
+  // OpenRouter / LLM costs
+  scriptPerToken: 0.000001, // ~$1 per 1M tokens (rough Gemini estimate)
+  // Audio - Chatterbox TTS on Replicate 
+  audioPerCall: 0.01, // ~$0.01 per audio generation call (Replicate chatterbox)
+  audioPerSecond: 0.002, // fallback estimate
+  // Images - Replicate nano-banana pricing
+  imageNanoBanana: 0.04, // $0.04 per image (google/nano-banana on Replicate)
+  imageNanoBananaPro: 0.05, // $0.05 per image (nano-banana-pro higher res)
+  imageHypereal: 0.03, // $0.03 per image (Hypereal nano-banana-pro-t2i estimate)
 };
 
 // ============= API CALL LOGGING =============
@@ -3467,23 +3473,48 @@ async function handleAudioPhase(
   
   for (const { index, result } of results) {
     audioUrls[index] = result.url;
+    const audioDurationMs = result.durationSeconds ? result.durationSeconds * 1000 : 0;
+    
     if (result.durationSeconds) {
       totalAudioSeconds += result.durationSeconds;
       // Update scene duration with actual audio length (0.1s precision, no padding)
       scenes[index].duration = Math.round(result.durationSeconds * 10) / 10;
     }
     // Track which provider was actually used
+    let currentProvider: "replicate" | "google_tts" | "elevenlabs" = "replicate";
+    let currentModel = "chatterbox-turbo";
+    
     if (result.provider) {
       if (result.provider.toLowerCase().includes("gemini") || result.provider.toLowerCase().includes("google")) {
         audioProviderUsed = "google_tts";
         audioModelUsed = "gemini-tts";
+        currentProvider = "google_tts";
+        currentModel = "gemini-tts";
       } else if (result.provider.toLowerCase().includes("elevenlabs")) {
         audioProviderUsed = "elevenlabs";
         audioModelUsed = "elevenlabs-sts";
+        currentProvider = "elevenlabs";
+        currentModel = "elevenlabs-sts";
       } else {
         audioProviderUsed = "replicate";
         audioModelUsed = "chatterbox-turbo";
+        currentProvider = "replicate";
+        currentModel = "chatterbox-turbo";
       }
+    }
+    
+    // LOG EACH INDIVIDUAL AUDIO API CALL with accurate per-call cost
+    if (result.url) {
+      await logApiCall({
+        supabase,
+        userId: user.id,
+        generationId,
+        provider: currentProvider,
+        model: currentModel,
+        status: "success",
+        totalDurationMs: Math.round(audioDurationMs),
+        cost: PRICING.audioPerCall, // ~$0.01 per audio call
+      });
     }
   }
 
@@ -3883,6 +3914,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           if (staggerDelay > 0) await sleep(staggerDelay);
           
           let actualProvider = "replicate"; // Track which provider actually succeeded
+          let actualModel = useProModel ? "nano-banana-pro" : "google/nano-banana";
+          const imageCallStart = Date.now();
           
           for (let attempt = 1; attempt <= 4; attempt++) {
             // Pro/Enterprise users get Hypereal nano-banana-pro, with Replicate as fallback
@@ -3916,16 +3949,20 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                 
                 result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false); // false = use regular nano-banana
                 actualProvider = "replicate_fallback";
+                actualModel = "google/nano-banana";
               } else {
                 actualProvider = "hypereal";
+                actualModel = "nano-banana-pro-t2i";
               }
             } else {
               console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
               result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
               actualProvider = "replicate";
+              actualModel = useProModel ? "nano-banana-pro" : "google/nano-banana";
             }
             
             if (result.ok) {
+              const imageCallDuration = Date.now() - imageCallStart;
               const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
               const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
 
@@ -3935,7 +3972,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
               if (uploadError) {
                 console.error(`[IMG] Upload failed for ${path}: ${uploadError.message}`);
-                return { task, url: null, provider: actualProvider };
+                return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
               }
 
               // Use signed URL for secure access (7 days expiration)
@@ -3945,11 +3982,11 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
               if (signError || !signedData?.signedUrl) {
                 console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
-                return { task, url: null, provider: actualProvider };
+                return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
               }
               
-              console.log(`[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}`);
-              return { task, url: signedData.signedUrl, provider: actualProvider };
+              console.log(`[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}, ${imageCallDuration}ms`);
+              return { task, url: signedData.signedUrl, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
             }
 
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
@@ -3962,13 +3999,13 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               await sleep(baseDelay + Math.random() * 2000);
             }
           }
-          return { task, url: null, provider: "none" };
+          return { task, url: null, provider: "none", model: "none", durationMs: Date.now() - imageCallStart };
         })(),
       );
     }
 
     const results = await Promise.all(batchPromises);
-    for (const { task, url, provider } of results) {
+    for (const { task, url, provider, model, durationMs } of results) {
       while (sceneImageUrls[task.sceneIndex].length <= task.subIndex) {
         sceneImageUrls[task.sceneIndex].push(null);
       }
@@ -3976,13 +4013,27 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       if (url) {
         completedThisChunk++;
         if (provider === "hypereal") totalHyperalSuccess++;
-        if (provider === "replicate_fallback") totalReplicateFallback++;
+        if (provider === "replicate_fallback" || provider === "replicate") totalReplicateFallback++;
+        
+        // LOG EACH INDIVIDUAL IMAGE API CALL with accurate per-image cost
+        const perImageCost = provider === "hypereal" ? PRICING.imageHypereal : PRICING.imageNanoBanana;
+        const apiProvider = provider === "hypereal" ? "hypereal" : "replicate";
+        await logApiCall({
+          supabase,
+          userId: user.id,
+          generationId,
+          provider: apiProvider as "replicate" | "hypereal",
+          model: model || "google/nano-banana",
+          status: "success",
+          totalDurationMs: durationMs || 0,
+          cost: perImageCost,
+        });
       }
     }
     
     // Log actual provider usage for this batch
     if (totalHyperalSuccess > 0 || totalReplicateFallback > 0) {
-      console.log(`[IMG] Chunk provider stats so far: Hypereal=${totalHyperalSuccess}, Replicate-fallback=${totalReplicateFallback}`);
+      console.log(`[IMG] Chunk provider stats so far: Hypereal=${totalHyperalSuccess}, Replicate=${totalReplicateFallback}`);
     }
 
     if (batchEnd < tasksThisChunk.length) await sleep(1000);
@@ -4050,10 +4101,13 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   
   console.log(`[IMG] Final provider stats: Hypereal=${totalHyperalSuccess}, Replicate-fallback=${totalReplicateFallback}, Provider=${costTracking.imageProvider}`);
   
+  // Calculate costs based on actual providers used
+  const hyperealCost = totalHyperalSuccess * PRICING.imageHypereal;
+  const replicateCost = totalReplicateFallback * PRICING.imageNanoBanana;
   costTracking.estimatedCostUsd =
     costTracking.scriptTokens * PRICING.scriptPerToken +
     costTracking.audioSeconds * PRICING.audioPerSecond +
-    newCompletedTotal * PRICING.imagePerImage;
+    hyperealCost + replicateCost;
 
   if (!hasMore) {
     phaseTimings.images = (phaseTimings.images || 0) + (Date.now() - phaseStart);
@@ -4229,10 +4283,16 @@ async function handleFinalizePhase(
   // ============= END CREDIT DEDUCTION =============
 
   // ============= RECORD GENERATION COSTS =============
-  // Calculate cost breakdown by provider based on what was tracked
+  // Calculate cost breakdown by provider based on ACTUAL tracking data
   const scriptCost = costTracking.scriptTokens * PRICING.scriptPerToken; // OpenRouter (script gen)
   const audioCost = costTracking.audioSeconds * PRICING.audioPerSecond;  // Replicate/Google TTS
-  const imageCost = costTracking.imagesGenerated * PRICING.imagePerImage; // Hypereal/Replicate
+  
+  // Use actual Hypereal/Replicate counts for accurate cost tracking
+  const hyperealCount = costTracking.hyperealSuccessCount || 0;
+  const replicateCount = costTracking.replicateFallbackCount || 0;
+  const hyperealImageCost = hyperealCount * PRICING.imageHypereal;
+  const replicateImageCost = replicateCount * PRICING.imageNanoBanana;
+  const imageCost = hyperealImageCost + replicateImageCost;
   
   // Record to generation_costs table for admin analytics
   // Note: total_cost is a generated column (auto-calculated), so we don't insert it
@@ -4240,9 +4300,9 @@ async function handleFinalizePhase(
     generation_id: generationId,
     user_id: user.id,
     openrouter_cost: scriptCost,
-    replicate_cost: imageCost * 0.3, // Estimate: ~30% of images via Replicate fallback
-    hypereal_cost: imageCost * 0.7,  // Estimate: ~70% of images via Hypereal
-    google_tts_cost: audioCost,
+    replicate_cost: replicateImageCost + audioCost, // Replicate handles both fallback images + audio
+    hypereal_cost: hyperealImageCost,
+    google_tts_cost: 0, // Gemini TTS is separate, track if used
     // total_cost is auto-calculated by the database
   });
 
@@ -4250,43 +4310,11 @@ async function handleFinalizePhase(
     console.error("[FINALIZE] Error recording generation costs:", costError);
     console.error("[FINALIZE] Cost error details:", JSON.stringify(costError));
   } else {
-    console.log(`[FINALIZE] Cost recorded: $${costTracking.estimatedCostUsd.toFixed(4)}`);
+    console.log(`[FINALIZE] Cost recorded: $${costTracking.estimatedCostUsd.toFixed(4)} (Hypereal: $${hyperealImageCost.toFixed(4)}, Replicate: $${replicateImageCost.toFixed(4)})`);
   }
 
-  // ============= LOG API CALL SUMMARY =============
-  // Log summary API calls for admin visibility based on ACTUAL providers used
-  // Extract actual provider info from scene metadata if available
-  const audioProvider = (costTracking.audioProvider || "replicate") as "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
-  const audioModel = costTracking.audioModel || "chatterbox-turbo";
-  const imageProvider = (costTracking.imageProvider || "replicate") as "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
-  const imageModel = costTracking.imageModel || "google/nano-banana";
-  
-  if (costTracking.imagesGenerated > 0) {
-    // Log actual image provider used (Hypereal or Replicate)
-    await logApiCall({
-      supabase,
-      userId: user.id,
-      generationId,
-      provider: imageProvider,
-      model: imageModel,
-      status: "success",
-      totalDurationMs: phaseTimings.images || 0,
-      cost: imageCost,
-    });
-  }
-  if (costTracking.audioSeconds > 0) {
-    // Log actual audio provider used (Replicate Chatterbox or Gemini TTS)
-    await logApiCall({
-      supabase,
-      userId: user.id,
-      generationId,
-      provider: audioProvider,
-      model: audioModel,
-      status: "success",
-      totalDurationMs: phaseTimings.audio || 0,
-      cost: audioCost,
-    });
-  }
+  // NOTE: Per-image and per-audio API calls are now logged in real-time during generation phases
+  // The aggregated summary below is kept for backward compatibility but individual calls are more accurate
   // ============= END RECORD GENERATION COSTS =============
 
   // Mark complete
