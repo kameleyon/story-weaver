@@ -313,7 +313,7 @@ export function AdminLogs() {
                   <span className={`shrink-0 font-bold text-sm ${getLogColor(log.category)}`}>
                     {getLogPrefix(log.category)}
                   </span>
-                  <span className="text-foreground break-all font-medium">
+                  <span className="text-white break-all font-medium">
                     {log.message}
                   </span>
                 </div>
@@ -321,7 +321,7 @@ export function AdminLogs() {
                 {/* Expanded Details - CLEARER FORMATTING */}
                 {expandedLog === log.id && log.details && (
                   <div className="mt-3 ml-4 pl-4 border-l-2 border-primary/40 bg-primary/5 rounded-r-md py-3 pr-3">
-                    <pre className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                    <pre className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">
                       {formatDetails(log.details)}
                     </pre>
                     <div className="mt-3 pt-2 border-t border-primary/20 space-y-1">
