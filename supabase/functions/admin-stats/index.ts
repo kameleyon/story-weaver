@@ -110,6 +110,57 @@ serve(async (req) => {
           .select("*")
           .eq("transaction_type", "purchase");
 
+        // Get total costs from generation_costs table (money spent)
+        const { data: costsData } = await supabaseAdmin
+          .from("generation_costs")
+          .select("openrouter_cost, replicate_cost, hypereal_cost, google_tts_cost, total_cost");
+
+        // Aggregate costs by provider
+        let totalOpenRouterCost = 0;
+        let totalReplicateCost = 0;
+        let totalHyperealCost = 0;
+        let totalGoogleTtsCost = 0;
+        let totalSpent = 0;
+
+        costsData?.forEach(c => {
+          totalOpenRouterCost += Number(c.openrouter_cost) || 0;
+          totalReplicateCost += Number(c.replicate_cost) || 0;
+          totalHyperealCost += Number(c.hypereal_cost) || 0;
+          totalGoogleTtsCost += Number(c.google_tts_cost) || 0;
+          totalSpent += Number(c.total_cost) || 0;
+        });
+
+        // Get revenue from Stripe
+        let totalRevenue = 0;
+        let subscriptionRevenue = 0;
+        let creditPackRevenue = 0;
+        const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+        
+        if (stripeKey) {
+          try {
+            const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+            
+            // Get all successful charges
+            const charges = await stripe.charges.list({
+              limit: 100,
+            });
+            
+            const successfulCharges = charges.data.filter((c: { status: string }) => c.status === "succeeded");
+            totalRevenue = successfulCharges.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0) / 100;
+            
+            // Separate subscription vs one-time (credit pack) payments
+            for (const charge of successfulCharges) {
+              if (charge.invoice) {
+                subscriptionRevenue += charge.amount / 100;
+              } else {
+                creditPackRevenue += charge.amount / 100;
+              }
+            }
+          } catch (stripeErr) {
+            console.error("Stripe error in dashboard_stats:", stripeErr);
+          }
+        }
+
         result = {
           totalUsers,
           subscriberCount,
@@ -119,6 +170,20 @@ serve(async (req) => {
           archivedGenerations: archivedCount || 0,
           activeFlags,
           creditPurchases: transactions?.length || 0,
+          // Financial data
+          costs: {
+            openrouter: totalOpenRouterCost,
+            replicate: totalReplicateCost,
+            hypereal: totalHyperealCost,
+            googleTts: totalGoogleTtsCost,
+            total: totalSpent,
+          },
+          revenue: {
+            total: totalRevenue,
+            subscriptions: subscriptionRevenue,
+            creditPacks: creditPackRevenue,
+          },
+          profitMargin: totalRevenue - totalSpent,
         };
         break;
       }

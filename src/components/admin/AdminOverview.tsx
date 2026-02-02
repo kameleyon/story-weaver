@@ -1,7 +1,21 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { Users, CreditCard, Activity, Flag, Coins, Archive, Loader2 } from "lucide-react";
+import { Users, CreditCard, Activity, Flag, Coins, Archive, Loader2, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+
+interface CostBreakdown {
+  openrouter: number;
+  replicate: number;
+  hypereal: number;
+  googleTts: number;
+  total: number;
+}
+
+interface RevenueBreakdown {
+  total: number;
+  subscriptions: number;
+  creditPacks: number;
+}
 
 interface DashboardStats {
   totalUsers: number;
@@ -12,6 +26,9 @@ interface DashboardStats {
   archivedGenerations: number;
   activeFlags: number;
   creditPurchases: number;
+  costs: CostBreakdown;
+  revenue: RevenueBreakdown;
+  profitMargin: number;
 }
 
 export function AdminOverview() {
@@ -112,6 +129,13 @@ export function AdminOverview() {
     },
   ];
 
+  const formatCurrency = (amount: number) => {
+    return `$${amount.toFixed(2)}`;
+  };
+
+  const profitMargin = stats?.profitMargin || 0;
+  const profitColor = profitMargin >= 0 ? "text-primary" : "text-destructive";
+
   return (
     <div className="space-y-6">
       <div>
@@ -134,6 +158,119 @@ export function AdminOverview() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Financial Overview Section */}
+      <div>
+        <h3 className="text-xl font-semibold mb-4">Financial Overview</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Total Revenue */}
+          <Card className="shadow-sm border-primary/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">{formatCurrency(stats?.revenue?.total || 0)}</div>
+              <CardDescription>All-time earnings</CardDescription>
+            </CardContent>
+          </Card>
+
+          {/* Total Spent */}
+          <Card className="shadow-sm border-destructive/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
+              <div className="p-2 rounded-lg bg-destructive/10 shadow-sm">
+                <TrendingDown className="h-4 w-4 text-destructive" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{formatCurrency(stats?.costs?.total || 0)}</div>
+              <CardDescription>API costs</CardDescription>
+            </CardContent>
+          </Card>
+
+          {/* Profit Margin */}
+          <Card className="shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+              <div className={`p-2 rounded-lg ${profitMargin >= 0 ? "bg-primary/10" : "bg-destructive/10"} shadow-sm`}>
+                <DollarSign className={`h-4 w-4 ${profitColor}`} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${profitColor}`}>
+                {profitMargin >= 0 ? "+" : ""}{formatCurrency(profitMargin)}
+              </div>
+              <CardDescription>Revenue - Costs</CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Revenue & Cost Breakdown */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Revenue Breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Revenue Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Subscriptions</span>
+                <span className="font-medium text-primary">{formatCurrency(stats?.revenue?.subscriptions || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Credit Packs</span>
+                <span className="font-medium text-primary">{formatCurrency(stats?.revenue?.creditPacks || 0)}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between items-center font-semibold">
+                <span>Total Revenue</span>
+                <span className="text-primary">{formatCurrency(stats?.revenue?.total || 0)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cost Breakdown by Provider */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-destructive" />
+              Cost Breakdown (by Provider)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">OpenRouter (LLM)</span>
+                <span className="font-medium">{formatCurrency(stats?.costs?.openrouter || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Hypereal (Images)</span>
+                <span className="font-medium">{formatCurrency(stats?.costs?.hypereal || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Replicate (Images/TTS)</span>
+                <span className="font-medium">{formatCurrency(stats?.costs?.replicate || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Google TTS</span>
+                <span className="font-medium">{formatCurrency(stats?.costs?.googleTts || 0)}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between items-center font-semibold">
+                <span>Total Spent</span>
+                <span className="text-destructive">{formatCurrency(stats?.costs?.total || 0)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Quick Status Cards */}
