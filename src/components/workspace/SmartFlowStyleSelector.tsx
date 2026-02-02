@@ -1,4 +1,4 @@
-import { Wand2, Pencil, Users, Camera, Palette, Laugh, PenTool, Baby, ChevronLeft, ChevronRight, Upload, X } from "lucide-react";
+import { Wand2, Pencil, Users, Camera, Palette, Laugh, PenTool, Baby, ChevronLeft, ChevronRight, Upload, X, GraduationCap } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,10 @@ import storybookPreview from "@/assets/styles/painterly-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
 import sketchPreview from "@/assets/styles/sketch-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
+import chalkboardPreview from "@/assets/styles/chalkboard-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 
-export type SmartFlowStyle = "minimalist" | "doodle" | "stick" | "realistic" | "storybook" | "caricature" | "sketch" | "crayon" | "custom";
+export type SmartFlowStyle = "minimalist" | "doodle" | "stick" | "realistic" | "storybook" | "caricature" | "sketch" | "crayon" | "chalkboard" | "custom";
 
 interface SmartFlowStyleSelectorProps {
   selected: SmartFlowStyle;
@@ -42,6 +43,7 @@ const styles: { id: SmartFlowStyle; label: string; icon: React.ElementType; prev
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
   { id: "crayon", label: "Crayon", icon: Baby, preview: crayonPreview },
+  { id: "chalkboard", label: "Chalkboard", icon: GraduationCap, preview: chalkboardPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
 
