@@ -268,77 +268,79 @@ export function AdminLogs() {
       {/* Terminal Log Viewer */}
       <div 
         ref={terminalRef}
-        className="bg-black/90 border border-border rounded-lg overflow-hidden"
+        className="bg-black border border-primary/30 rounded-lg overflow-hidden shadow-xl"
         style={{ fontFamily: "'IBM Plex Mono', monospace" }}
       >
         {/* Terminal Header */}
-        <div className="flex items-center gap-2 px-4 py-2 bg-muted/20 border-b border-border">
-          <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-destructive/80" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-            <div className="w-3 h-3 rounded-full bg-primary/80" />
+        <div className="flex items-center gap-2 px-4 py-3 bg-primary/10 border-b border-primary/30">
+          <div className="flex gap-2">
+            <div className="w-3.5 h-3.5 rounded-full bg-destructive" />
+            <div className="w-3.5 h-3.5 rounded-full bg-yellow-500" />
+            <div className="w-3.5 h-3.5 rounded-full bg-primary" />
           </div>
-          <span className="text-xs text-muted-foreground ml-2">motionmax-system-logs</span>
+          <span className="text-sm text-foreground/80 ml-2 font-medium">motionmax-system-logs</span>
           {!isPaused && (
-            <span className="ml-auto flex items-center gap-1 text-xs text-primary">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="ml-auto flex items-center gap-2 text-sm text-primary font-medium">
+              <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
               LIVE
             </span>
           )}
         </div>
 
-        {/* Log Content */}
-        <div className="h-[600px] overflow-y-auto p-4 space-y-1">
+        {/* Log Content - LARGER FONTS AND BETTER CONTRAST */}
+        <div className="h-[650px] overflow-y-auto p-4 space-y-2">
           {filteredLogs.length === 0 ? (
-            <div className="text-muted-foreground text-center py-8">
-              <Terminal className="h-12 w-12 mx-auto mb-4 opacity-30" />
-              <p>No logs to display</p>
-              <p className="text-xs mt-1">Logs will appear here as events occur</p>
+            <div className="text-muted-foreground text-center py-12">
+              <Terminal className="h-16 w-16 mx-auto mb-4 opacity-40" />
+              <p className="text-lg">No logs to display</p>
+              <p className="text-sm mt-2">Logs will appear here as events occur</p>
             </div>
           ) : (
             filteredLogs.map((log) => (
               <div 
                 key={log.id}
-                className="group hover:bg-white/5 rounded px-2 py-1 cursor-pointer transition-colors"
+                className="group hover:bg-white/10 rounded-md px-3 py-2 cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary/50"
                 onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
               >
-                {/* Main Log Line */}
-                <div className="flex items-start gap-2 text-sm">
-                  <span className="text-muted-foreground/60 shrink-0">
+                {/* Main Log Line - BIGGER TEXT */}
+                <div className="flex items-start gap-3 text-base leading-relaxed">
+                  <span className="text-foreground/50 shrink-0 text-sm">
                     {formatDate(log.created_at)}
                   </span>
-                  <span className="text-muted-foreground shrink-0">
+                  <span className="text-foreground/70 shrink-0 text-sm font-medium">
                     {formatTimestamp(log.created_at)}
                   </span>
-                  <span className={`shrink-0 font-medium ${getLogColor(log.category)}`}>
+                  <span className={`shrink-0 font-bold text-sm ${getLogColor(log.category)}`}>
                     {getLogPrefix(log.category)}
                   </span>
-                  <span className="text-foreground/90 break-all">
+                  <span className="text-foreground break-all font-medium">
                     {log.message}
                   </span>
                 </div>
 
-                {/* Expanded Details */}
+                {/* Expanded Details - CLEARER FORMATTING */}
                 {expandedLog === log.id && log.details && (
-                  <div className="mt-2 ml-[180px] pl-4 border-l-2 border-primary/30">
-                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  <div className="mt-3 ml-4 pl-4 border-l-2 border-primary/40 bg-primary/5 rounded-r-md py-3 pr-3">
+                    <pre className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
                       {formatDetails(log.details)}
                     </pre>
-                    {log.generation_id && (
-                      <p className="text-xs text-muted-foreground/70 mt-1">
-                        Generation: {log.generation_id}
-                      </p>
-                    )}
-                    {log.project_id && (
-                      <p className="text-xs text-muted-foreground/70">
-                        Project: {log.project_id}
-                      </p>
-                    )}
-                    {log.user_id && (
-                      <p className="text-xs text-muted-foreground/70">
-                        User: {log.user_id}
-                      </p>
-                    )}
+                    <div className="mt-3 pt-2 border-t border-primary/20 space-y-1">
+                      {log.generation_id && (
+                        <p className="text-xs text-foreground/60">
+                          <span className="text-primary font-medium">Generation:</span> {log.generation_id}
+                        </p>
+                      )}
+                      {log.project_id && (
+                        <p className="text-xs text-foreground/60">
+                          <span className="text-primary font-medium">Project:</span> {log.project_id}
+                        </p>
+                      )}
+                      {log.user_id && (
+                        <p className="text-xs text-foreground/60">
+                          <span className="text-primary font-medium">User:</span> {log.user_id}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -346,10 +348,10 @@ export function AdminLogs() {
           )}
         </div>
 
-        {/* Terminal Footer */}
-        <div className="px-4 py-2 bg-muted/10 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-          <span>Click on a log entry to expand details</span>
-          <span>{filteredLogs.length} entries</span>
+        {/* Terminal Footer - BETTER VISIBILITY */}
+        <div className="px-4 py-3 bg-primary/10 border-t border-primary/30 flex items-center justify-between text-sm text-foreground/70">
+          <span className="font-medium">Click on a log entry to expand details</span>
+          <span className="text-primary font-bold">{filteredLogs.length} entries</span>
         </div>
       </div>
     </div>
