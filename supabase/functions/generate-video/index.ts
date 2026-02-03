@@ -766,8 +766,8 @@ async function generateImageWithHypereal(
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   // Map format to Hypereal aspect ratios
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  // Use higher resolution for scene images
-  const resolution = "2k";
+  // Use 1K resolution for cost efficiency
+  const resolution = "1k";
 
   try {
     console.log(
