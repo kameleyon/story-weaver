@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useRefreshThumbnails } from "@/hooks/useRefreshThumbnails";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -109,6 +110,7 @@ export default function Projects() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { refreshThumbnails } = useRefreshThumbnails();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("updated_at");
@@ -150,7 +152,7 @@ export default function Projects() {
         .eq("status", "complete")
         .order("created_at", { ascending: false });
       
-      // Create thumbnail map
+      // Create initial thumbnail map
       const thumbnailMap: Record<string, string | null> = {};
       if (generations) {
         for (const gen of generations) {
@@ -168,9 +170,17 @@ export default function Projects() {
         }
       }
       
+      // Refresh signed URLs that may have expired
+      const thumbnailInputs = projectsData.map(p => ({
+        projectId: p.id,
+        thumbnailUrl: thumbnailMap[p.id] || null,
+      }));
+      
+      const refreshedMap = await refreshThumbnails(thumbnailInputs);
+      
       return projectsData.map(p => ({
         ...p,
-        thumbnailUrl: thumbnailMap[p.id] || null,
+        thumbnailUrl: refreshedMap.get(p.id) || null,
       })) as Project[];
     },
     enabled: !!user?.id,
