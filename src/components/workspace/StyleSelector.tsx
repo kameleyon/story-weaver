@@ -48,8 +48,8 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "moody", label: "Moody", icon: CloudMoon, preview: moodyPreview },
   { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
-  { id: "sketch", label: "Papercut 3D", icon: PenTool, preview: sketchPreview },
   { id: "crayon", label: "Crayon", icon: Baby, preview: crayonPreview },
+  { id: "sketch", label: "Papercut 3D", icon: PenTool, preview: sketchPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
 
