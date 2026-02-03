@@ -4258,21 +4258,23 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                   userId: user.id,
                   eventType: "hypereal_fallback",
                   category: "system_warning",
-                  message: `Hypereal API failed, falling back to Replicate nano-banana`,
+                  message: `Hypereal API failed, falling back to Replicate nano-banana-pro`,
                   details: {
                     taskIndex: task.taskIndex,
                     sceneIndex: task.sceneIndex,
                     error: hyperealError,
                     durationMs: hyperealDuration,
-                    fallbackProvider: "replicate_nano_banana",
+                    fallbackProvider: "replicate_nano_banana_pro",
+                    isPremiumRequiredStyle,
                   },
                   generationId,
                   projectId,
                 });
 
-                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false); // false = use regular nano-banana
+                // ALWAYS use nano-banana-pro as fallback (useProModel is already true when useHypereal is true)
+                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, true); // true = use nano-banana-pro
                 actualProvider = "replicate_fallback";
-                actualModel = "google/nano-banana";
+                actualModel = "google/nano-banana-pro";
               } else {
                 actualProvider = "hypereal";
                 actualModel = "nano-banana-pro-t2i";
