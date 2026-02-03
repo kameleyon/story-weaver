@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useRefreshThumbnails } from "@/hooks/useRefreshThumbnails";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
@@ -84,6 +85,7 @@ const CircularProgress = ({ percentage, size = 80 }: { percentage: number; size?
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { refreshThumbnails } = useRefreshThumbnails();
   const [currentTip, setCurrentTip] = useState(0);
   const [projectScrollIndex, setProjectScrollIndex] = useState(0);
   const [greetingIndex] = useState(() => Math.floor(Math.random() * GREETINGS.length));
@@ -179,10 +181,18 @@ export default function Dashboard() {
         }
       }
       
-      // Attach thumbnails to projects
+      // Refresh signed URLs that may have expired
+      const thumbnailInputs = projects.map(p => ({
+        projectId: p.id,
+        thumbnailUrl: thumbnailMap[p.id] || null,
+      }));
+      
+      const refreshedMap = await refreshThumbnails(thumbnailInputs);
+      
+      // Attach refreshed thumbnails to projects
       return projects.map(p => ({
         ...p,
-        thumbnailUrl: thumbnailMap[p.id] || null,
+        thumbnailUrl: refreshedMap.get(p.id) || null,
       }));
     },
     enabled: !!user?.id,
