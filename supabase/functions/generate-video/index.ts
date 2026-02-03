@@ -758,20 +758,25 @@ REQUIREMENTS:
   }
 }
 
-// ============= IMAGE GENERATION WITH HYPEREAL PRO (for Pro/Enterprise scene images) =============
+// ============= IMAGE GENERATION WITH HYPEREAL (Tiered: Pro uses nano-banana-pro-t2i, Standard uses nano-banana-t2i) =============
 async function generateImageWithHypereal(
   prompt: string,
   hyperealApiKey: string,
   format: string,
+  useProModel: boolean = true, // Pro/Enterprise users get nano-banana-pro-t2i, others get nano-banana-t2i
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   // Map format to Hypereal aspect ratios
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
   // Use 1K resolution for cost efficiency
   const resolution = "1k";
+  
+  // Select model based on subscription tier
+  const model = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
+  const modelLabel = useProModel ? "Hypereal Pro" : "Hypereal Standard";
 
   try {
     console.log(
-      `[HYPEREAL-PRO] Generating scene image with nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
+      `[HYPEREAL] Generating scene image with ${model}, format: ${format}, aspect_ratio: ${aspectRatio}`,
     );
 
     const response = await fetch("https://api.hypereal.tech/v1/images/generate", {
@@ -782,7 +787,7 @@ async function generateImageWithHypereal(
       },
       body: JSON.stringify({
         prompt,
-        model: "nano-banana-pro-t2i",
+        model,
         resolution,
         aspect_ratio: aspectRatio,
         output_format: "png",
@@ -791,7 +796,7 @@ async function generateImageWithHypereal(
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[HYPEREAL-PRO] API error: ${response.status} - ${errText}`);
+      console.error(`[HYPEREAL] ${modelLabel} API error: ${response.status} - ${errText}`);
       return { ok: false, error: `Hypereal API failed: ${response.status}` };
     }
 
@@ -805,7 +810,7 @@ async function generateImageWithHypereal(
     const imageUrl = data.data?.[0]?.url || data.image_url;
 
     if (imageUrl) {
-      console.log(`[HYPEREAL-PRO] Downloading image from URL: ${imageUrl.substring(0, 80)}...`);
+      console.log(`[HYPEREAL] ${modelLabel} downloading image from URL: ${imageUrl.substring(0, 80)}...`);
       const imgResponse = await fetch(imageUrl);
       if (!imgResponse.ok) {
         return { ok: false, error: "Failed to download Hypereal image" };
@@ -814,15 +819,15 @@ async function generateImageWithHypereal(
     } else if (data.image) {
       imageBytes = base64Decode(data.image);
     } else {
-      console.error(`[HYPEREAL-PRO] No image data in response:`, JSON.stringify(data).substring(0, 200));
+      console.error(`[HYPEREAL] ${modelLabel} no image data in response:`, JSON.stringify(data).substring(0, 200));
       return { ok: false, error: "No image data in Hypereal response" };
     }
 
-    console.log(`[HYPEREAL-PRO] Image generated successfully: ${imageBytes.length} bytes`);
+    console.log(`[HYPEREAL] ${modelLabel} image generated successfully: ${imageBytes.length} bytes`);
     return { ok: true, bytes: imageBytes };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown Hypereal error";
-    console.error(`[HYPEREAL-PRO] Error:`, errorMsg);
+    console.error(`[HYPEREAL] ${modelLabel} error:`, errorMsg);
     return { ok: false, error: errorMsg };
   }
 }
@@ -4933,6 +4938,12 @@ async function handleRegenerateImage(
 
   let imageResult: { ok: true; bytes: Uint8Array } | { ok: false; error: string };
 
+  // Determine the model names based on tier
+  const hyperealModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
+  const replicateModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  const replicateModelLabel = useProModel ? "nano-banana-pro" : "nano-banana";
+  const replicatePricing = useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana;
+
   // Check if we should do a full regeneration (empty imageModification) or edit
   if (!imageModification) {
     // Full regeneration from original visual prompt
@@ -4945,11 +4956,11 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Try Hypereal first for Pro users, fallback to Replicate
+    // Try Hypereal first for Pro users or premium styles, fallback to Replicate
     if (useHypereal && hyperealApiKey) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
+      console.log(`[regenerate-image] Using Hypereal ${hyperealModel} for regeneration (Pro: ${isProUser}, PremiumStyle: ${isPremiumRequiredStyle})`);
       const hyperealStartTime = Date.now();
-      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format);
+      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format, useProModel);
       const hyperealDurationMs = Date.now() - hyperealStartTime;
 
       // Log Hypereal API call
@@ -4958,17 +4969,17 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
         userId: user.id,
         generationId,
         provider: "hypereal",
-        model: "nano-banana-pro-t2i",
+        model: hyperealModel,
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: hyperealDurationMs,
         cost: imageResult.ok ? PRICING.imageHypereal : 0,
         errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
 
-      // Fallback to Replicate nano-banana-pro if Hypereal fails
+      // Fallback to Replicate if Hypereal fails
       if (!imageResult.ok) {
         const hyperealError = imageResult.error || "Unknown Hypereal error";
-        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana-pro`);
+        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate ${replicateModelLabel}`);
 
         // LOG TO SYSTEM_LOGS so it shows in admin panel!
         await logSystemEvent({
@@ -4976,12 +4987,15 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
           userId: user.id,
           eventType: "hypereal_fallback",
           category: "system_warning",
-          message: `Hypereal API failed during image regeneration, falling back to Replicate nano-banana-pro`,
+          message: `Hypereal API failed during image regeneration, falling back to Replicate ${replicateModelLabel}`,
           details: {
             sceneIndex,
             targetImageIndex,
             error: hyperealError,
-            fallbackProvider: "replicate_nano_banana_pro",
+            fallbackProvider: `replicate_${replicateModelLabel.replace("-", "_")}`,
+            hyperealModel,
+            replicateModel,
+            isProUser,
             phase: "regenerate-image",
             action: "regenerate_new",
           },
@@ -4989,9 +5003,9 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
           projectId,
         });
 
-        // Always use nano-banana-pro for Regenerate fallback
+        // Use tiered Replicate model for fallback
         const replicateStartTime = Date.now();
-        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
+        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
         const replicateDurationMs = Date.now() - replicateStartTime;
 
         // Log Replicate fallback API call
@@ -5000,18 +5014,18 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
           userId: user.id,
           generationId,
           provider: "replicate",
-          model: "google/nano-banana-pro",
+          model: replicateModel,
           status: imageResult.ok ? "success" : "error",
           totalDurationMs: replicateDurationMs,
-          cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+          cost: imageResult.ok ? replicatePricing : 0,
           errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
       }
     } else {
-      // No Hypereal key - use Replicate nano-banana-pro directly
-      console.log(`[regenerate-image] Using Replicate nano-banana-pro for regeneration (no Hypereal key)`);
+      // No Hypereal key - use Replicate directly with tiered model
+      console.log(`[regenerate-image] Using Replicate ${replicateModelLabel} for regeneration (no Hypereal key, Pro: ${isProUser})`);
       const replicateStartTime = Date.now();
-      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
+      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
       const replicateDurationMs = Date.now() - replicateStartTime;
 
       // Log Replicate API call
@@ -5020,10 +5034,10 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
         userId: user.id,
         generationId,
         provider: "replicate",
-        model: "google/nano-banana-pro",
+        model: replicateModel,
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: replicateDurationMs,
-        cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+        cost: imageResult.ok ? replicatePricing : 0,
         errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
     }
@@ -5094,11 +5108,12 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
 
-      // Try Hypereal first (primary), fallback to Replicate nano-banana-pro
+      // Try Hypereal first (tiered: Pro uses nano-banana-pro-t2i, Standard uses nano-banana-t2i)
+      // Fallback to Replicate with tiered model (Pro uses nano-banana-pro, Standard uses nano-banana)
       if (useHypereal && hyperealApiKey) {
-        console.log(`[regenerate-image] Fallback: Using Hypereal nano-banana-pro-t2i`);
+        console.log(`[regenerate-image] Fallback: Using Hypereal ${hyperealModel} (Pro: ${isProUser})`);
         const hyperealStartTime = Date.now();
-        imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format);
+        imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format, useProModel);
         const hyperealDurationMs = Date.now() - hyperealStartTime;
 
         // Log Hypereal API call
@@ -5107,20 +5122,20 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
           userId: user.id,
           generationId,
           provider: "hypereal",
-          model: "nano-banana-pro-t2i",
+          model: hyperealModel,
           status: imageResult.ok ? "success" : "error",
           totalDurationMs: hyperealDurationMs,
           cost: imageResult.ok ? PRICING.imageHypereal : 0,
           errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
 
-        // Fallback to Replicate nano-banana-pro if Hypereal fails
+        // Fallback to Replicate with tiered model if Hypereal fails
         if (!imageResult.ok) {
           const hyperealError = imageResult.error || "Unknown Hypereal error";
-          console.log(`[regenerate-image] Hypereal fallback also failed (${hyperealError}), trying Replicate`);
+          console.log(`[regenerate-image] Hypereal fallback also failed (${hyperealError}), trying Replicate ${replicateModelLabel}`);
 
           const replicateStartTime = Date.now();
-          imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
+          imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
           const replicateDurationMs = Date.now() - replicateStartTime;
 
           await logApiCall({
@@ -5128,18 +5143,18 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
             userId: user.id,
             generationId,
             provider: "replicate",
-            model: "google/nano-banana-pro",
+            model: replicateModel,
             status: imageResult.ok ? "success" : "error",
             totalDurationMs: replicateDurationMs,
-            cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+            cost: imageResult.ok ? replicatePricing : 0,
             errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
           });
         }
       } else {
-        // No Hypereal key - use Replicate nano-banana-pro directly
-        console.log(`[regenerate-image] Fallback: Using Replicate nano-banana-pro`);
+        // No Hypereal key - use Replicate with tiered model directly
+        console.log(`[regenerate-image] Fallback: Using Replicate ${replicateModelLabel} (Pro: ${isProUser})`);
         const replicateStartTime = Date.now();
-        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
+        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
         const replicateDurationMs = Date.now() - replicateStartTime;
 
         await logApiCall({
@@ -5147,10 +5162,10 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
           userId: user.id,
           generationId,
           provider: "replicate",
-          model: "google/nano-banana-pro",
+          model: replicateModel,
           status: imageResult.ok ? "success" : "error",
           totalDurationMs: replicateDurationMs,
-          cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+          cost: imageResult.ok ? replicatePricing : 0,
           errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
       }
