@@ -22,13 +22,8 @@ export function useAdminAuth() {
         });
 
         if (error) {
-          // 403 means not admin, which is expected for non-admins
-          if (error.message?.includes("403") || error.message?.includes("Access denied")) {
-            setIsAdmin(false);
-          } else {
-            console.error("Error checking admin status:", error);
-            setIsAdmin(false);
-          }
+          // Non-2xx responses (403, etc.) are expected for non-admin users - don't log these
+          setIsAdmin(false);
         } else {
           setIsAdmin(true);
         }
