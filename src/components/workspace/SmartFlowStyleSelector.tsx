@@ -14,13 +14,12 @@ import stickPreview from "@/assets/styles/stick-preview.png";
 import realisticPreview from "@/assets/styles/realistic-preview.png";
 import storybookPreview from "@/assets/styles/painterly-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
-// import sketchPreview from "@/assets/styles/sketch-preview.png"; // Commented out - replaced by papercut
-import papercutPreview from "@/assets/styles/papercut-preview.png";
+import sketchPreview from "@/assets/styles/sketch-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
 import chalkboardPreview from "@/assets/styles/chalkboard-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 
-export type SmartFlowStyle = "minimalist" | "doodle" | "stick" | "realistic" | "storybook" | "caricature" | "papercut" | "crayon" | "chalkboard" | "custom";
+export type SmartFlowStyle = "minimalist" | "doodle" | "stick" | "realistic" | "storybook" | "caricature" | "sketch" | "crayon" | "chalkboard" | "custom";
 
 interface SmartFlowStyleSelectorProps {
   selected: SmartFlowStyle;
@@ -42,8 +41,7 @@ const styles: { id: SmartFlowStyle; label: string; icon: React.ElementType; prev
   { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
   { id: "storybook", label: "Storybook", icon: Palette, preview: storybookPreview },
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
-  // { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview }, // Replaced by Papercut
-  { id: "papercut", label: "Papercut", icon: PenTool, preview: papercutPreview },
+  { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
   { id: "crayon", label: "Crayon", icon: Baby, preview: crayonPreview },
   { id: "chalkboard", label: "Chalkboard", icon: GraduationCap, preview: chalkboardPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },

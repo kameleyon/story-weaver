@@ -182,7 +182,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       setFormat(["landscape", "portrait", "square"].includes(nextFormat) ? nextFormat : "portrait");
 
       const savedStyle = (project.style ?? "minimalist") as SmartFlowStyle;
-      const validStyles: SmartFlowStyle[] = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "papercut", "crayon", "chalkboard"];
+      const validStyles: SmartFlowStyle[] = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "sketch", "crayon", "chalkboard"];
       setStyle(validStyles.includes(savedStyle) ? savedStyle : "minimalist");
       
       // Restore voice setting - if voice_type is set and not undefined, voice was enabled
