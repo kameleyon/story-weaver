@@ -105,13 +105,25 @@ function sanitizeContent(content: string): string {
 // Basic blocklist for obviously inappropriate content - keeps it minimal to avoid over-restriction
 const BLOCKED_TERMS = [
   // Violence/Gore
-  "murder", "kill children", "child abuse", "torture scene", "graphic violence",
+  "murder",
+  "kill children",
+  "child abuse",
+  "torture scene",
+  "graphic violence",
   // Explicit adult content
-  "pornographic", "explicit sex", "naked children", "child porn",
+  "pornographic",
+  "explicit sex",
+  "naked children",
+  "child porn",
   // Hate speech
-  "racial slur", "nazi propaganda", "ethnic cleansing", "genocide tutorial",
+  "racial slur",
+  "nazi propaganda",
+  "ethnic cleansing",
+  "genocide tutorial",
   // Illegal activities
-  "how to make bomb", "terrorism instructions", "drug manufacturing",
+  "how to make bomb",
+  "terrorism instructions",
+  "drug manufacturing",
 ];
 
 interface ModerationResult {
@@ -122,7 +134,7 @@ interface ModerationResult {
 
 function moderateContent(content: string): ModerationResult {
   const contentLower = content.toLowerCase();
-  
+
   for (const term of BLOCKED_TERMS) {
     if (contentLower.includes(term.toLowerCase())) {
       console.log(`[MODERATION] Blocked term detected: "${term}"`);
@@ -133,7 +145,7 @@ function moderateContent(content: string): ModerationResult {
       };
     }
   }
-  
+
   return { passed: true };
 }
 
@@ -343,7 +355,7 @@ const PRICING = {
   // OpenRouter (Primary for script generation) - google/gemini-3-pro-preview
   scriptPerToken: 0.000003, // ~$3.00 per 1M tokens (Gemini 3 Pro via OpenRouter - higher quality)
   scriptPerCall: 0.01, // Flat estimate per script generation call
-  // Audio - Chatterbox TTS on Replicate 
+  // Audio - Chatterbox TTS on Replicate
   audioPerCall: 0.01, // ~$0.01 per audio generation call (Replicate chatterbox)
   audioPerSecond: 0.002, // fallback estimate
   // Images - Replicate nano-banana pricing (verified from Replicate dashboard)
@@ -366,15 +378,15 @@ async function callLLMWithFallback(
     temperature?: number;
     maxTokens?: number;
     model?: string;
-  } = {}
+  } = {},
 ): Promise<LLMCallResult> {
   const model = options.model || "google/gemini-3-pro-preview";
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 8192;
-  
+
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  
+
   // Try OpenRouter first (primary)
   if (OPENROUTER_API_KEY) {
     const startTime = Date.now();
@@ -395,9 +407,9 @@ async function callLLMWithFallback(
           max_tokens: maxTokens,
         }),
       });
-      
+
       const durationMs = Date.now() - startTime;
-      
+
       if (response.ok) {
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content;
@@ -411,7 +423,7 @@ async function callLLMWithFallback(
           };
         }
       }
-      
+
       const errText = await response.text().catch(() => "");
       console.warn(`[LLM] OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
     } catch (err) {
@@ -420,15 +432,15 @@ async function callLLMWithFallback(
   } else {
     console.warn(`[LLM] OPENROUTER_API_KEY not configured, using Lovable AI directly`);
   }
-  
+
   // Fallback to Lovable AI Gateway
   if (!LOVABLE_API_KEY) {
     throw new Error("Neither OPENROUTER_API_KEY nor LOVABLE_API_KEY is configured");
   }
-  
+
   console.log(`[LLM] Falling back to Lovable AI Gateway with ${model}...`);
   const startTime = Date.now();
-  
+
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -442,21 +454,21 @@ async function callLLMWithFallback(
       max_tokens: maxTokens,
     }),
   });
-  
+
   const durationMs = Date.now() - startTime;
-  
+
   if (!response.ok) {
     const errText = await response.text().catch(() => "");
     throw new Error(`Lovable AI failed (${response.status}): ${errText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
-  
+
   if (!content) {
     throw new Error("No content received from Lovable AI");
   }
-  
+
   console.log(`[LLM] Lovable AI fallback success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
   return {
     content,
@@ -485,8 +497,20 @@ interface ApiCallLogParams {
 
 async function logApiCall(params: ApiCallLogParams): Promise<void> {
   try {
-    const { supabase, userId, generationId, provider, model, status, queueTimeMs, runningTimeMs, totalDurationMs, cost, errorMessage } = params;
-    
+    const {
+      supabase,
+      userId,
+      generationId,
+      provider,
+      model,
+      status,
+      queueTimeMs,
+      runningTimeMs,
+      totalDurationMs,
+      cost,
+      errorMessage,
+    } = params;
+
     const { error } = await supabase.from("api_call_logs").insert({
       user_id: userId,
       generation_id: generationId || null,
@@ -503,7 +527,9 @@ async function logApiCall(params: ApiCallLogParams): Promise<void> {
     if (error) {
       console.error(`[API_LOG] Failed to log API call: ${error.message}`);
     } else {
-      console.log(`[API_LOG] Logged ${provider}/${model} call: ${status}, ${totalDurationMs}ms, $${(cost || 0).toFixed(4)}`);
+      console.log(
+        `[API_LOG] Logged ${provider}/${model} call: ${status}, ${totalDurationMs}ms, $${(cost || 0).toFixed(4)}`,
+      );
     }
   } catch (err) {
     console.error(`[API_LOG] Error logging API call:`, err);
@@ -525,7 +551,7 @@ interface SystemLogParams {
 async function logSystemEvent(params: SystemLogParams): Promise<void> {
   try {
     const { supabase, userId, eventType, category, message, details, generationId, projectId } = params;
-    
+
     const { error } = await supabase.from("system_logs").insert({
       user_id: userId || null,
       event_type: eventType,
@@ -559,12 +585,13 @@ async function logApiCallToSystem(
 ): Promise<void> {
   const category = status === "error" ? "system_error" : status === "started" ? "system_info" : "system_info";
   const eventType = `api_${provider}_${status}`;
-  const message = status === "started" 
-    ? `${provider}/${model} API call started`
-    : status === "success"
-    ? `${provider}/${model} API call succeeded`
-    : `${provider}/${model} API call failed`;
-  
+  const message =
+    status === "started"
+      ? `${provider}/${model} API call started`
+      : status === "success"
+        ? `${provider}/${model} API call succeeded`
+        : `${provider}/${model} API call failed`;
+
   await logSystemEvent({
     supabase,
     userId,
@@ -583,10 +610,10 @@ const STYLE_PROMPTS: Record<string, string> = {
   stick: `Hand-drawn stick figure comic style. Crude, expressive black marker lines on a pure white. Extremely simple character designs (circles for heads, single lines for limbs). No fill colors—strictly black and white line art. Focus on humor and clarity. Rough, sketchy aesthetic similar to 'XKCD' or 'Wait But Why'. Imperfect circles and wobbly lines to emphasize the handmade, napkin-sketch quality. The background MUST be solid pure white (#FFFFFF)—just clean solid white.`,
   realistic: `Photorealistic cinematic photography. 4K UHD, HDR, 8k resolution. Shot on 35mm lens with shallow depth of field (bokeh) to isolate subjects. Hyper-realistic textures, dramatic studio lighting with rim lights. Natural skin tones and accurate material physics. Look of high-end stock photography or a Netflix documentary. Sharp focus, rich contrast, and true-to-life color grading. Unreal Engine 5 render quality.`,
   anime: `Expressive Modern Manga-Style Sketchbook. An expressive modern manga-style sketchbook illustration. Anatomy: Large-eye expressive anime/manga influence focusing on high emotional impact and kawaii but relatable proportions. Line Work: Very loose, visible rough sketch lines—looks like a final drawing made over a messy pencil draft. Coloring: Natural tones with focus on skin-glow, painterly approach with visible thick brush strokes. Vibe: Cozy, chaotic, and sentimental slice-of-life moments. Features loose sketchy digital pencil lines and painterly slice-of-life aesthetic. High-detail facial expressions with large emotive eyes. Visible brush strokes. Set in detailed, slightly messy environment that feels lived-in. Cozy, relatable, and artistically sophisticated.`,
-  "3d-pixar": `Cinematic 3D Animation. A stunning 3D cinematic animation-style render in the aesthetic of modern Disney-Pixar films. Surface Geometry: Squash and Stretch—appealing rounded shapes with soft exaggerated features, avoiding sharp angles unless part of mechanical design. Material Science: Subsurface Scattering—that Disney glow where light slightly penetrates the surface like real skin or wax, textures are stylized realism with soft fur, knit fabrics, or polished plastic. Lighting Design: Three-Point Cinematic—strong key light, soft fill light to eliminate harsh shadows, bright rim light (backlight) creating glowing silhouette separating from background. Eyes: The Soul Focal Point—large, highly detailed eyes with realistic specular highlights and deep iris colors making character feel sentient and emotive. Atmosphere: Volumetric Depth—light fog, dust motes, or god rays creating sense of physical space, background has soft bokeh blur keeping focus on subject. High-detail textures, expressive large eyes, soft rounded features. Vibrant saturated colors with high-end subsurface scattering on all surfaces. Rendered in 8k using Octane, shallow depth of field, whimsical softly blurred background. Masterpiece quality, charming, tactile, and highly emotive.`,
+  "3D Pix": `Cinematic 3D Animation. A stunning 3D cinematic animation-style render in the aesthetic of modern Disney-Pixar films. Surface Geometry: Squash and Stretch—appealing rounded shapes with soft exaggerated features, avoiding sharp angles unless part of mechanical design. Material Science: Subsurface Scattering—that Disney glow where light slightly penetrates the surface like real skin or wax, textures are stylized realism with soft fur, knit fabrics, or polished plastic. Lighting Design: Three-Point Cinematic—strong key light, soft fill light to eliminate harsh shadows, bright rim light (backlight) creating glowing silhouette separating from background. Eyes: The Soul Focal Point—large, highly detailed eyes with realistic specular highlights and deep iris colors making character feel sentient and emotive. Atmosphere: Volumetric Depth—light fog, dust motes, or god rays creating sense of physical space, background has soft bokeh blur keeping focus on subject. High-detail textures, expressive large eyes, soft rounded features. Vibrant saturated colors with high-end subsurface scattering on all surfaces. Rendered in 8k using Octane, shallow depth of field, whimsical softly blurred background. Masterpiece quality, charming, tactile, and highly emotive.`,
   claymation: `Handcrafted Digital Clay. A high-detail 3D claymation-style render. Material Texture: Matte & Tactile—surfaces must show subtle, realistic imperfections like tiny thumbprints, slight molding creases, and a soft matte finish that mimics polymer clay (like Sculpey or Fimo). Lighting: Miniature Macro Lighting—soft, high-contrast studio lighting that makes the subject look like a small physical object, includes Rim Lighting to make the edges glow and deep, soft-edge shadows. Proportions: Chunky & Appealing—thick, rounded limbs and exaggerated squashy features, avoid any sharp digital edges, everything should look like it was rolled between two palms. Atmosphere: Depth of Field—heavy background blur (bokeh) essential to sell the small toy scale, making the subject pop as the central focus. Color Palette: Saturated & Playful—bold, solid primary colors that look like they came straight out of a clay pack, avoiding complex gradients. 8k resolution, Octane Render, masterpiece quality.`,
   // sketch: `Traditional graphite pencil sketch on textured paper with a gritty 'film noir' aesthetic. High contrast black and white rendering with dramatic, theatrical lighting—think deep shadows, stark highlights, and venetian blind patterns. Visible, aggressive pencil strokes, cross-hatching for shading, and intentional graphite smudges. Raw, hand-drawn quality showing the paper tooth. Cinematic composition reminiscent of a vintage detective graphic novel like Sin City.`,
-  sketch: `Minimal Noir Storyboard. Paper Cutout 3D Drop Shadows. Hand-drawn thick noire graphite texture, modern stick figure simplicity mixed with indie comic illustration. High contrast black and white with one single accent color. Crucial Effect: Apply strong "paper cutout" 3D drop shadows behind the characters and objects to make them pop off the page like a diorama. Imperfect, hand-drawn monoline strokes.`,
+  Papercut: `Minimal Noir Storyboard. Paper Cutout 3D Drop Shadows. Hand-drawn thick noire graphite texture, modern stick figure simplicity mixed with indie comic illustration. High contrast black and white with one single accent color. Crucial Effect: Apply strong "paper cutout" 3D drop shadows behind the characters and objects to make them pop off the page like a diorama. Imperfect, hand-drawn monoline strokes.`,
   caricature: `Humorous caricature illustration. Highly exaggerated facial features and distorted body proportions (oversized heads, tiny bodies) designed to emphasize personality quirks or famous traits. Stylized digital painting with expressive, thick brushwork and vibrant, slightly saturated colors. Playful, satirical, and expressive rendering. The look of high-quality political cartoons or MAD magazine cover art.`,
   moody: `Moody monochrome indie comic illustration in black, white, and grays. Thick clean outlines with hand-inked crosshatching and scratchy pen texture for shading. Slightly uneven line quality like traditional ink on paper. Cute-but-unsettling character design: oversized head, huge simple eyes empty, tiny mouth, minimal nose; small body with simplified hands. Cinematic centered framing, quiet tension, lots of flat mid-gray tones. Subtle paper grain and faint smudges. Background is minimal but grounded with simple interior props drawn in the same inked style. Overall vibe: moody, not happy, melancholic, eerie, storybook graphic novel panel, high contrast, no color. 2D ink drawing.`,
   storybook: `Whimsical storybook hand-drawn ink style. Hand-drawn black ink outlines with visible rough sketch construction lines, slightly uneven strokes, and occasional line overlap (imperfect but intentional). Bold vivid natural color palette. Crosshatching and scribbly pen shading for depth and texture, especially in shadows and on fabric folds. Watercolor + gouache-like washes: layered, semi-opaque paint with soft gradients. Edges slightly loose (not crisp), with gentle paint bleed and dry-brush texture in places. Cartoon-proportioned character design: slightly exaggerated features (large eyes, long limbs, expressive faces), but grounded in believable anatomy and posture. Background detailed but painterly: textured walls, props with sketchy detail, and atmospheric depth. Subtle grain + ink flecks for a handmade print feel. Cinematic framing, shallow depth cues, soft focus in far background. Editorial illustration / indie animation concept art aesthetic. Charming, cozy, slightly messy, richly textured, high detail, UHD. No 3D render, no clean vector, no flat icon style, no anime/manga linework, no glossy neon gradients, no photorealism.`,
@@ -664,7 +691,7 @@ REQUIREMENTS:
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${hyperealApiKey}`,
+        Authorization: `Bearer ${hyperealApiKey}`,
       },
       body: JSON.stringify({
         prompt,
@@ -682,7 +709,7 @@ REQUIREMENTS:
     }
 
     const data = await response.json();
-    
+
     // Hypereal returns the image URL or base64
     let imageBytes: Uint8Array;
     if (data.image_url) {
@@ -702,7 +729,7 @@ REQUIREMENTS:
     // Upload to Supabase storage
     const safeName = characterName.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
     const path = `${userId}/${projectId}/characters/${safeName}-ref-${Date.now()}.png`;
-    
+
     const { error: uploadError } = await supabase.storage
       .from("audio")
       .upload(path, imageBytes, { contentType: "image/png", upsert: true });
@@ -713,9 +740,7 @@ REQUIREMENTS:
     }
 
     // Get signed URL
-    const { data: signedData, error: signError } = await supabase.storage
-      .from("audio")
-      .createSignedUrl(path, 604800); // 7 days
+    const { data: signedData, error: signError } = await supabase.storage.from("audio").createSignedUrl(path, 604800); // 7 days
 
     if (signError || !signedData?.signedUrl) {
       return { url: null, error: "Failed to create signed URL" };
@@ -742,13 +767,15 @@ async function generateImageWithHypereal(
   const resolution = "2k";
 
   try {
-    console.log(`[HYPEREAL-PRO] Generating scene image with nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`);
+    console.log(
+      `[HYPEREAL-PRO] Generating scene image with nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
+    );
 
     const response = await fetch("https://api.hypereal.tech/v1/images/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${hyperealApiKey}`,
+        Authorization: `Bearer ${hyperealApiKey}`,
       },
       body: JSON.stringify({
         prompt,
@@ -773,7 +800,7 @@ async function generateImageWithHypereal(
     // 3. data.image (base64)
     let imageBytes: Uint8Array;
     const imageUrl = data.data?.[0]?.url || data.image_url;
-    
+
     if (imageUrl) {
       console.log(`[HYPEREAL-PRO] Downloading image from URL: ${imageUrl.substring(0, 80)}...`);
       const imgResponse = await fetch(imageUrl);
@@ -1602,7 +1629,7 @@ async function generateSceneAudioLovableAI(
         body: JSON.stringify({
           model,
           modalities: ["audio", "text"],
-          audio: { 
+          audio: {
             voice: "Enceladus",
             format: "wav",
           },
@@ -1657,10 +1684,10 @@ async function generateSceneAudioLovableAI(
       }
 
       console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} ✅ SUCCESS with ${label}`);
-      return { 
-        url: signedData.signedUrl, 
-        durationSeconds, 
-        provider: `Lovable AI ${label} TTS` 
+      return {
+        url: signedData.signedUrl,
+        durationSeconds,
+        provider: `Lovable AI ${label} TTS`,
       };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown Lovable AI TTS error";
@@ -2101,9 +2128,11 @@ async function generateSceneAudio(
   const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
   // HC detection: either from voiceover text OR from presenter_focus language setting
   const isHC = forceHaitianCreole || isHaitianCreole(voiceoverText);
-  
+
   if (forceHaitianCreole && !isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Forcing Haitian Creole from presenter_focus (text detection was false)`);
+    console.log(
+      `[TTS] Scene ${sceneIndex + 1} - Forcing Haitian Creole from presenter_focus (text detection was false)`,
+    );
   }
 
   // ========== CASE 1: Haitian Creole + Cloned Voice ==========
@@ -2158,7 +2187,7 @@ async function generateSceneAudio(
           projectId,
           isRegeneration,
         );
-        
+
         if (lovableResult.url) {
           geminiAudioUrl = lovableResult.url;
           console.log(`[TTS] Scene ${sceneIndex + 1} - Lovable AI TTS base audio ready (fallback)`);
@@ -2167,7 +2196,9 @@ async function generateSceneAudio(
     }
 
     if (!geminiAudioUrl) {
-      console.error(`[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation (tried Gemini + Lovable AI)`);
+      console.error(
+        `[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation (tried Gemini + Lovable AI)`,
+      );
       return { url: null, error: "All TTS options failed - cannot proceed with voice transformation" };
     }
 
@@ -2219,7 +2250,9 @@ async function generateSceneAudio(
   // Use Gemini TTS with extended fallback (3 models × 5 retries = up to 15 attempts)
   // Fallback: Lovable AI Gateway as last resort
   if (isHC) {
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with extended fallback chain`);
+    console.log(
+      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with extended fallback chain`,
+    );
 
     if (googleApiKey) {
       const MAX_GEMINI_RETRIES = 5; // More retries with text variations
@@ -2264,7 +2297,7 @@ async function generateSceneAudio(
         projectId,
         isRegeneration,
       );
-      
+
       if (lovableResult.url) {
         console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lovable AI Gateway TTS (fallback)`);
         return lovableResult;
@@ -2310,7 +2343,7 @@ async function generateImageWithReplicate(
 > {
   // Map format to nano-banana supported aspect ratios
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
+
   // Pro users get nano-banana-pro at 1K resolution for higher quality
   const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
   const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana";
@@ -2324,7 +2357,7 @@ async function generateImageWithReplicate(
       aspect_ratio: aspectRatio,
       output_format: "png",
     };
-    
+
     // Add resolution for Pro model (1K = 1024px on the long side)
     if (useProModel) {
       input.resolution = "1K";
@@ -2380,7 +2413,10 @@ async function generateImageWithReplicate(
           : null;
 
     if (!imageUrl) {
-      console.error(`[IMG] ${modelName} no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
+      console.error(
+        `[IMG] ${modelName} no image URL in response:`,
+        JSON.stringify(prediction.output).substring(0, 200),
+      );
       return { ok: false, error: `No image URL returned from ${modelName}` };
     }
 
@@ -2637,13 +2673,13 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 
   // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
   console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
-  
+
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 4000,
     model: "google/gemini-3-pro-preview",
   });
-  
+
   // Log API call
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
@@ -2655,8 +2691,10 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] ${llmResult.provider} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
-  
+  console.log(
+    `[API_LOG] ${llmResult.provider} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+  );
+
   const scriptContent = llmResult.content;
   const tokensUsed = llmResult.tokensUsed;
 
@@ -2745,8 +2783,8 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
       scenes: parsedScript.scenes.map((s, idx) => ({
         ...s,
         _meta: {
-          statusMessage: skipAudio 
-            ? "Script complete. Ready for image generation (no audio)." 
+          statusMessage: skipAudio
+            ? "Script complete. Ready for image generation (no audio)."
             : "Script complete. Ready for audio/image generation.",
           totalImages,
           completedImages: 0,
@@ -2964,7 +3002,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     maxTokens: 8192,
     model: "google/gemini-3-pro-preview",
   });
-  
+
   // Log API call
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
@@ -2976,7 +3014,9 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] ${llmResult.provider} Doc2Video script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  console.log(
+    `[API_LOG] ${llmResult.provider} Doc2Video script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+  );
 
   const scriptContent = llmResult.content;
   const tokensUsed = llmResult.tokensUsed;
@@ -3340,7 +3380,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     maxTokens: 12000, // More tokens for longer narratives
     model: "google/gemini-3-pro-preview",
   });
-  
+
   // Log API call
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
@@ -3352,7 +3392,9 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
-  console.log(`[API_LOG] ${llmResult.provider} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`);
+  console.log(
+    `[API_LOG] ${llmResult.provider} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+  );
 
   const scriptContent = llmResult.content;
   const tokensUsed = llmResult.tokensUsed;
@@ -3371,17 +3413,19 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   // ============= HYPEREAL CHARACTER REFERENCE GENERATION (Pro/Enterprise only) =============
   let characterReferences: Record<string, string> = {}; // Maps character name to reference image URL
-  
+
   if (characterConsistencyEnabled && parsedScript.characters && Object.keys(parsedScript.characters).length > 0) {
     const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-    
+
     if (hyperealApiKey) {
-      console.log(`[HYPEREAL] Character Consistency enabled - generating ${Object.keys(parsedScript.characters).length} character references with nano-banana-pro-t2i`);
-      
+      console.log(
+        `[HYPEREAL] Character Consistency enabled - generating ${Object.keys(parsedScript.characters).length} character references with nano-banana-pro-t2i`,
+      );
+
       // Generate reference images for each character in parallel (max 4 at a time)
       const characterEntries = Object.entries(parsedScript.characters);
       const BATCH_SIZE = 4;
-      
+
       for (let i = 0; i < characterEntries.length; i += BATCH_SIZE) {
         const batch = characterEntries.slice(i, i + BATCH_SIZE);
         const batchPromises = batch.map(async ([charName, charDescription]) => {
@@ -3395,9 +3439,9 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
           );
           return { charName, result };
         });
-        
+
         const batchResults = await Promise.all(batchPromises);
-        
+
         for (const { charName, result } of batchResults) {
           if (result.url) {
             characterReferences[charName] = result.url;
@@ -3407,8 +3451,10 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
           }
         }
       }
-      
-      console.log(`[HYPEREAL] Successfully generated ${Object.keys(characterReferences).length}/${characterEntries.length} character references`);
+
+      console.log(
+        `[HYPEREAL] Successfully generated ${Object.keys(characterReferences).length}/${characterEntries.length} character references`,
+      );
     } else {
       console.warn("[HYPEREAL] HYPEREAL_API_KEY not configured - skipping character reference generation");
     }
@@ -3418,7 +3464,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   // Also inject character references into prompts if available
   parsedScript.scenes = parsedScript.scenes.map((s) => {
     let visualPrompt = s.visualPrompt || "";
-    
+
     // If we have character references, add them to the prompt for conditioning
     if (Object.keys(characterReferences).length > 0) {
       const refSection = Object.entries(characterReferences)
@@ -3426,7 +3472,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
         .join("\n");
       visualPrompt = `${visualPrompt}\n\n=== CHARACTER REFERENCES (use for visual consistency) ===\n${refSection}`;
     }
-    
+
     return {
       ...s,
       voiceover: sanitizeVoiceover(s.voiceover),
@@ -3480,8 +3526,10 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   // Store character references in project_characters table (for Pro/Enterprise users)
   if (Object.keys(characterReferences).length > 0 && parsedScript.characters) {
-    console.log(`[HYPEREAL] Storing ${Object.keys(characterReferences).length} character references in project_characters table`);
-    
+    console.log(
+      `[HYPEREAL] Storing ${Object.keys(characterReferences).length} character references in project_characters table`,
+    );
+
     const characterInserts = Object.entries(characterReferences).map(([charName, refUrl]) => ({
       project_id: project.id,
       user_id: user.id,
@@ -3489,11 +3537,9 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       description: (parsedScript.characters as Record<string, string>)[charName] || charName,
       reference_image_url: refUrl,
     }));
-    
-    const { error: charError } = await supabase
-      .from("project_characters")
-      .insert(characterInserts);
-    
+
+    const { error: charError } = await supabase.from("project_characters").insert(characterInserts);
+
     if (charError) {
       console.warn(`[HYPEREAL] Failed to store character references: ${charError.message}`);
       // Non-fatal - continue with generation
@@ -3622,9 +3668,9 @@ async function handleAudioPhase(
     eventType: "audio_phase_started",
     category: "system_info",
     message: `Audio generation started for scenes ${batchStart + 1}-${batchEnd}`,
-    details: { 
-      batchStart, 
-      batchEnd, 
+    details: {
+      batchStart,
+      batchEnd,
       totalScenes: scenes.length,
       voiceType,
       voiceGender,
@@ -3672,15 +3718,15 @@ async function handleAudioPhase(
           voiceGender,
         );
         const durationMs = Date.now() - startTime;
-        
+
         // Log each scene's audio result
         await logSystemEvent({
           supabase,
           userId: user.id,
           eventType: result.url ? "audio_scene_success" : "audio_scene_failed",
           category: result.url ? "system_info" : "system_error",
-          message: result.url 
-            ? `Scene ${i + 1} audio generated via ${result.provider || "unknown"}` 
+          message: result.url
+            ? `Scene ${i + 1} audio generated via ${result.provider || "unknown"}`
             : `Scene ${i + 1} audio failed: ${result.error}`,
           details: {
             sceneIndex: i,
@@ -3692,7 +3738,7 @@ async function handleAudioPhase(
           generationId,
           projectId,
         });
-        
+
         return { index: i, result };
       })(),
     );
@@ -3701,11 +3747,11 @@ async function handleAudioPhase(
   const results = await Promise.all(batchPromises);
   let audioProviderUsed = "replicate";
   let audioModelUsed = "chatterbox-turbo";
-  
+
   for (const { index, result } of results) {
     audioUrls[index] = result.url;
     const audioDurationMs = result.durationSeconds ? result.durationSeconds * 1000 : 0;
-    
+
     if (result.durationSeconds) {
       totalAudioSeconds += result.durationSeconds;
       // Update scene duration with actual audio length (0.1s precision, no padding)
@@ -3714,7 +3760,7 @@ async function handleAudioPhase(
     // Track which provider was actually used
     let currentProvider: "replicate" | "google_tts" | "elevenlabs" = "replicate";
     let currentModel = "chatterbox-turbo";
-    
+
     if (result.provider) {
       if (result.provider.toLowerCase().includes("gemini") || result.provider.toLowerCase().includes("google")) {
         audioProviderUsed = "google_tts";
@@ -3733,7 +3779,7 @@ async function handleAudioPhase(
         currentModel = "chatterbox-turbo";
       }
     }
-    
+
     // LOG EACH INDIVIDUAL AUDIO API CALL with accurate per-call cost
     if (result.url) {
       await logApiCall({
@@ -3882,20 +3928,26 @@ async function handleImagesPhase(
 
   // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
-  
+
   // Hypereal nano-banana-pro for Pro/Enterprise users
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   const useHypereal = isProUser && !!hyperealApiKey;
   const useProModel = isProUser; // Pro/Enterprise users get nano-banana-pro at 1K
 
   const maxImagesPerCall = useHypereal ? MAX_IMAGES_PER_CALL_HYPEREAL : MAX_IMAGES_PER_CALL_DEFAULT;
-  
+
   if (useHypereal) {
-    console.log(`[IMAGES] Using Hypereal nano-banana-pro for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
+    console.log(
+      `[IMAGES] Using Hypereal nano-banana-pro for Pro/Enterprise user (project type: ${generation.projects.project_type})`,
+    );
   } else if (useProModel) {
-    console.log(`[IMAGES] Using Replicate nano-banana-pro (1K) for Pro/Enterprise user (project type: ${generation.projects.project_type})`);
+    console.log(
+      `[IMAGES] Using Replicate nano-banana-pro (1K) for Pro/Enterprise user (project type: ${generation.projects.project_type})`,
+    );
   } else {
-    console.log(`[IMAGES] Using Replicate nano-banana for non-Pro user (project type: ${generation.projects.project_type})`);
+    console.log(
+      `[IMAGES] Using Replicate nano-banana for non-Pro user (project type: ${generation.projects.project_type})`,
+    );
   }
 
   const scenes = generation.scenes as Scene[];
@@ -4016,11 +4068,11 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let taskIndex = 0;
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    
+
     // Smart Flow: Only 1 image per scene (single infographic)
     // Other project types: 3 images per scene (1 primary + 2 sub-visuals)
     const IMAGES_PER_SCENE = isSmartFlow ? 1 : 3;
-    
+
     // Primary image (subIndex 0)
     allImageTasks.push({
       sceneIndex: i,
@@ -4034,7 +4086,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       // Generate exactly 2 sub-visuals (subIndex 1 and 2)
       for (let j = 0; j < 2; j++) {
         let subPrompt: string;
-        
+
         if (scene.subVisuals && scene.subVisuals.length > j && scene.subVisuals[j]) {
           // Use provided sub-visual prompt
           subPrompt = scene.subVisuals[j];
@@ -4047,7 +4099,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           ];
           subPrompt = variations[j] + basePrompt;
         }
-        
+
         allImageTasks.push({
           sceneIndex: i,
           subIndex: j + 1,
@@ -4081,7 +4133,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       useProModel,
       isProUser,
       primaryProvider: useHypereal ? "hypereal" : "replicate",
-      model: useHypereal ? "nano-banana-pro-t2i" : (useProModel ? "nano-banana-pro" : "nano-banana"),
+      model: useHypereal ? "nano-banana-pro-t2i" : useProModel ? "nano-banana-pro" : "nano-banana",
       format,
       style,
     },
@@ -4100,7 +4152,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   });
 
   let completedThisChunk = 0;
-  
+
   // Track actual providers used across ALL batches in this chunk (for accurate cost logging)
   let totalHyperalSuccess = costTracking.hyperealSuccessCount || 0;
   let totalReplicateFallback = costTracking.replicateFallbackCount || 0;
@@ -4140,7 +4192,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       .eq("id", generationId);
 
     const batchPromises = [];
-    
+
     for (let t = batchStart; t < batchEnd; t++) {
       const task = tasksThisChunk[t];
       // Stagger requests within batch to avoid rate limits (1.5s between each)
@@ -4149,28 +4201,30 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         (async () => {
           // Wait for stagger delay before starting this request
           if (staggerDelay > 0) await sleep(staggerDelay);
-          
+
           let actualProvider = "replicate"; // Track which provider actually succeeded
           let actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
           const imageCallStart = Date.now();
-          
+
           for (let attempt = 1; attempt <= 4; attempt++) {
             // Pro/Enterprise users get Hypereal nano-banana-pro, with Replicate as fallback
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
-            
+
             if (useHypereal && hyperealApiKey) {
               console.log(`[IMG] Using Hypereal nano-banana-pro for task ${task.taskIndex}`);
-              
+
               // LOG HYPEREAL API CALL START for accurate tracking
               const hyperealStartTime = Date.now();
               result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
               const hyperealDuration = Date.now() - hyperealStartTime;
-              
+
               // Fallback to Replicate nano-banana (not pro) if Hypereal fails
               if (!result.ok) {
                 const hyperealError = result.error || "Unknown Hypereal error";
-                console.log(`[IMG] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana for task ${task.taskIndex}`);
-                
+                console.log(
+                  `[IMG] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana for task ${task.taskIndex}`,
+                );
+
                 // LOG HYPEREAL FAILURE to api_call_logs
                 await logApiCall({
                   supabase,
@@ -4183,7 +4237,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                   cost: 0, // No cost on failure
                   errorMessage: hyperealError,
                 });
-                
+
                 // LOG TO SYSTEM_LOGS so it shows in admin panel!
                 await logSystemEvent({
                   supabase,
@@ -4201,7 +4255,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                   generationId,
                   projectId,
                 });
-                
+
                 result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false); // false = use regular nano-banana
                 actualProvider = "replicate_fallback";
                 actualModel = "google/nano-banana";
@@ -4210,12 +4264,14 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                 actualModel = "nano-banana-pro-t2i";
               }
             } else {
-              console.log(`[IMG] Using Replicate ${useProModel ? 'nano-banana-pro (1K)' : 'nano-banana'} for task ${task.taskIndex}`);
+              console.log(
+                `[IMG] Using Replicate ${useProModel ? "nano-banana-pro (1K)" : "nano-banana"} for task ${task.taskIndex}`,
+              );
               result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
               actualProvider = "replicate";
               actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
             }
-            
+
             if (result.ok) {
               const imageCallDuration = Date.now() - imageCallStart;
               const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
@@ -4239,18 +4295,27 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
                 console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
                 return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
               }
-              
-              console.log(`[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}, ${imageCallDuration}ms`);
-              return { task, url: signedData.signedUrl, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+
+              console.log(
+                `[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}, ${imageCallDuration}ms`,
+              );
+              return {
+                task,
+                url: signedData.signedUrl,
+                provider: actualProvider,
+                model: actualModel,
+                durationMs: imageCallDuration,
+              };
             }
 
             console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
 
             if (attempt < 4) {
               // Use server's retry-after or exponential backoff (3s, 6s, 12s)
-              const baseDelay = 'retryAfterSeconds' in result && result.retryAfterSeconds 
-                ? result.retryAfterSeconds * 1000 
-                : 3000 * Math.pow(2, attempt - 1);
+              const baseDelay =
+                "retryAfterSeconds" in result && result.retryAfterSeconds
+                  ? result.retryAfterSeconds * 1000
+                  : 3000 * Math.pow(2, attempt - 1);
               await sleep(baseDelay + Math.random() * 2000);
             }
           }
@@ -4269,7 +4334,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         completedThisChunk++;
         if (provider === "hypereal") totalHyperalSuccess++;
         if (provider === "replicate_fallback" || provider === "replicate") totalReplicateFallback++;
-        
+
         // LOG EACH INDIVIDUAL IMAGE API CALL with accurate per-image cost
         const perImageCost = provider === "hypereal" ? PRICING.imageHypereal : PRICING.imageNanoBanana;
         const apiProvider = provider === "hypereal" ? "hypereal" : "replicate";
@@ -4285,10 +4350,12 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         });
       }
     }
-    
+
     // Log actual provider usage for this batch
     if (totalHyperalSuccess > 0 || totalReplicateFallback > 0) {
-      console.log(`[IMG] Chunk provider stats so far: Hypereal=${totalHyperalSuccess}, Replicate=${totalReplicateFallback}`);
+      console.log(
+        `[IMG] Chunk provider stats so far: Hypereal=${totalHyperalSuccess}, Replicate=${totalReplicateFallback}`,
+      );
     }
 
     if (batchEnd < tasksThisChunk.length) await sleep(1000);
@@ -4334,7 +4401,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   costTracking.imagesGenerated = newCompletedTotal;
   costTracking.hyperealSuccessCount = totalHyperalSuccess;
   costTracking.replicateFallbackCount = totalReplicateFallback;
-  
+
   // Determine actual primary provider based on what succeeded
   // If ANY images used Replicate fallback, mark it as mixed/replicate for accurate billing
   if (totalReplicateFallback > 0 && totalHyperalSuccess === 0) {
@@ -4353,16 +4420,19 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
     costTracking.imageProvider = "replicate";
     costTracking.imageModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
   }
-  
-  console.log(`[IMG] Final provider stats: Hypereal=${totalHyperalSuccess}, Replicate-fallback=${totalReplicateFallback}, Provider=${costTracking.imageProvider}`);
-  
+
+  console.log(
+    `[IMG] Final provider stats: Hypereal=${totalHyperalSuccess}, Replicate-fallback=${totalReplicateFallback}, Provider=${costTracking.imageProvider}`,
+  );
+
   // Calculate costs based on actual providers used
   const hyperealCost = totalHyperalSuccess * PRICING.imageHypereal;
   const replicateCost = totalReplicateFallback * PRICING.imageNanoBanana;
   costTracking.estimatedCostUsd =
     costTracking.scriptTokens * PRICING.scriptPerToken +
     costTracking.audioSeconds * PRICING.audioPerSecond +
-    hyperealCost + replicateCost;
+    hyperealCost +
+    replicateCost;
 
   if (!hasMore) {
     phaseTimings.images = (phaseTimings.images || 0) + (Date.now() - phaseStart);
@@ -4479,7 +4549,7 @@ async function handleFinalizePhase(
   // Calculate credits based on length: Short/SmartFlow=1, Brief=2, Presentation=4
   const projectLength = generation.projects.length || "short";
   const projectType = generation.projects.project_type || "doc2video";
-  
+
   let creditsToDeduct = 1; // Default for short
   if (projectType === "smartflow") {
     creditsToDeduct = 1; // Smart Flow always 1 credit
@@ -4540,15 +4610,15 @@ async function handleFinalizePhase(
   // ============= RECORD GENERATION COSTS =============
   // Calculate cost breakdown by provider based on ACTUAL tracking data
   const scriptCost = costTracking.scriptTokens * PRICING.scriptPerToken; // OpenRouter (script gen)
-  const audioCost = costTracking.audioSeconds * PRICING.audioPerSecond;  // Replicate/Google TTS
-  
+  const audioCost = costTracking.audioSeconds * PRICING.audioPerSecond; // Replicate/Google TTS
+
   // Use actual Hypereal/Replicate counts for accurate cost tracking
   const hyperealCount = costTracking.hyperealSuccessCount || 0;
   const replicateCount = costTracking.replicateFallbackCount || 0;
   const hyperealImageCost = hyperealCount * PRICING.imageHypereal;
   const replicateImageCost = replicateCount * PRICING.imageNanoBanana;
   const imageCost = hyperealImageCost + replicateImageCost;
-  
+
   // Record to generation_costs table for admin analytics
   // Note: total_cost is a generated column (auto-calculated), so we don't insert it
   const { error: costError } = await supabase.from("generation_costs").insert({
@@ -4565,7 +4635,9 @@ async function handleFinalizePhase(
     console.error("[FINALIZE] Error recording generation costs:", costError);
     console.error("[FINALIZE] Cost error details:", JSON.stringify(costError));
   } else {
-    console.log(`[FINALIZE] Cost recorded: $${costTracking.estimatedCostUsd.toFixed(4)} (Hypereal: $${hyperealImageCost.toFixed(4)}, Replicate: $${replicateImageCost.toFixed(4)})`);
+    console.log(
+      `[FINALIZE] Cost recorded: $${costTracking.estimatedCostUsd.toFixed(4)} (Hypereal: $${hyperealImageCost.toFixed(4)}, Replicate: $${replicateImageCost.toFixed(4)})`,
+    );
   }
 
   // NOTE: Per-image and per-audio API calls are now logged in real-time during generation phases
@@ -4691,17 +4763,17 @@ async function handleRegenerateAudio(
   // voiceName stores "male" or "female" for standard voices, or the actual name for custom voices
   // For standard voices, use the stored gender; default to "female" if not set
   const isStandardVoice = voiceType === "standard" || !voiceType;
-  const voiceGender = isStandardVoice && voiceName && (voiceName === "male" || voiceName === "female") 
-    ? voiceName 
-    : "female";
+  const voiceGender =
+    isStandardVoice && voiceName && (voiceName === "male" || voiceName === "female") ? voiceName : "female";
 
   // Detect Haitian Creole from presenter_focus (language setting)
   // Check if presenter_focus contains "Haitian Creole", "Kreyòl", "Creole", etc.
   const presenterFocusLower = (presenterFocus || "").toLowerCase();
-  const forceHaitianCreole = presenterFocusLower.includes("haitian") || 
-                              presenterFocusLower.includes("kreyòl") || 
-                              presenterFocusLower.includes("kreyol") ||
-                              presenterFocusLower.includes("creole");
+  const forceHaitianCreole =
+    presenterFocusLower.includes("haitian") ||
+    presenterFocusLower.includes("kreyòl") ||
+    presenterFocusLower.includes("kreyol") ||
+    presenterFocusLower.includes("creole");
 
   console.log(
     `[regenerate-audio] Scene ${sceneIndex + 1} - Voice settings from project: type=${voiceType}, id=${voiceId}, name=${voiceName}`,
@@ -4710,12 +4782,14 @@ async function handleRegenerateAudio(
     `[regenerate-audio] Scene ${sceneIndex + 1} - Resolved voice: isStandard=${isStandardVoice}, gender=${voiceGender}, customId=${customVoiceId || "none"}`,
   );
   console.log(
-    `[regenerate-audio] Scene ${sceneIndex + 1} - Language: presenterFocus="${presenterFocus || 'none'}", forceHaitianCreole=${forceHaitianCreole}`,
+    `[regenerate-audio] Scene ${sceneIndex + 1} - Language: presenterFocus="${presenterFocus || "none"}", forceHaitianCreole=${forceHaitianCreole}`,
   );
   if (customVoiceId) {
     console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using custom cloned voice: ${customVoiceId}`);
   } else {
-    console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Using standard voice: ${voiceGender === "male" ? "Ethan" : "Marisol"}`);
+    console.log(
+      `[regenerate-audio] Scene ${sceneIndex + 1} - Using standard voice: ${voiceGender === "male" ? "Ethan" : "Marisol"}`,
+    );
   }
 
   // Update the scene with new voiceover
@@ -4817,9 +4891,11 @@ async function handleRegenerateImage(
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   const useHypereal = isProUser && !!hyperealApiKey;
   const useProModel = isProUser; // Fallback: Pro/Enterprise users get Replicate nano-banana-pro at 1K
-  
+
   if (useHypereal) {
-    console.log(`[regenerate-image] Pro/Enterprise user - will use Hypereal nano-banana-pro-t2i (2K) with Replicate fallback`);
+    console.log(
+      `[regenerate-image] Pro/Enterprise user - will use Hypereal nano-banana-pro-t2i (2K) with Replicate fallback`,
+    );
   } else if (useProModel) {
     console.log(`[regenerate-image] Pro/Enterprise user - will use Replicate nano-banana-pro (1K) - no Hypereal key`);
   }
@@ -4850,7 +4926,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       const hyperealStartTime = Date.now();
       imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format);
       const hyperealDurationMs = Date.now() - hyperealStartTime;
-      
+
       // Log Hypereal API call
       await logApiCall({
         supabase,
@@ -4861,14 +4937,14 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: hyperealDurationMs,
         cost: imageResult.ok ? PRICING.imageHypereal : 0,
-        errorMessage: imageResult.ok ? undefined : (imageResult.error || "Unknown error"),
+        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
-      
+
       // Fallback to Replicate nano-banana-pro if Hypereal fails
       if (!imageResult.ok) {
         const hyperealError = imageResult.error || "Unknown Hypereal error";
         console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana-pro`);
-        
+
         // LOG TO SYSTEM_LOGS so it shows in admin panel!
         await logSystemEvent({
           supabase,
@@ -4887,12 +4963,12 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
           generationId,
           projectId,
         });
-        
+
         // Always use nano-banana-pro for Regenerate fallback
         const replicateStartTime = Date.now();
         imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
         const replicateDurationMs = Date.now() - replicateStartTime;
-        
+
         // Log Replicate fallback API call
         await logApiCall({
           supabase,
@@ -4903,7 +4979,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
           status: imageResult.ok ? "success" : "error",
           totalDurationMs: replicateDurationMs,
           cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-          errorMessage: imageResult.ok ? undefined : (imageResult.error || "Unknown error"),
+          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
       }
     } else {
@@ -4912,7 +4988,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       const replicateStartTime = Date.now();
       imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
       const replicateDurationMs = Date.now() - replicateStartTime;
-      
+
       // Log Replicate API call
       await logApiCall({
         supabase,
@@ -4923,7 +4999,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: replicateDurationMs,
         cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-        errorMessage: imageResult.ok ? undefined : (imageResult.error || "Unknown error"),
+        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
     }
   } else {
@@ -4932,7 +5008,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
     console.log(
       `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Applying edit with Hypereal/Replicate`,
     );
-    
+
     const modifiedPrompt = `${scene.visualPrompt}
 
 USER MODIFICATION REQUEST: ${imageModification}
@@ -4947,7 +5023,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
       const hyperealStartTime = Date.now();
       imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format);
       const hyperealDurationMs = Date.now() - hyperealStartTime;
-      
+
       // Log Hypereal API call
       await logApiCall({
         supabase,
@@ -4958,14 +5034,14 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: hyperealDurationMs,
         cost: imageResult.ok ? PRICING.imageHypereal : 0,
-        errorMessage: imageResult.ok ? undefined : (imageResult.error || "Unknown error"),
+        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
-      
+
       // Fallback to Replicate nano-banana-pro if Hypereal fails
       if (!imageResult.ok) {
         const hyperealError = imageResult.error || "Unknown Hypereal error";
         console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana-pro`);
-        
+
         // LOG TO SYSTEM_LOGS so it shows in admin panel!
         await logSystemEvent({
           supabase,
@@ -4984,12 +5060,12 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
           generationId,
           projectId,
         });
-        
+
         // Always use nano-banana-pro for Apply Edit fallback
         const replicateStartTime = Date.now();
         imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
         const replicateDurationMs = Date.now() - replicateStartTime;
-        
+
         // Log Replicate fallback API call
         await logApiCall({
           supabase,
@@ -5000,7 +5076,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
           status: imageResult.ok ? "success" : "error",
           totalDurationMs: replicateDurationMs,
           cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-          errorMessage: imageResult.ok ? undefined : (imageResult.error || "Unknown error"),
+          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
       }
     } else {
@@ -5009,7 +5085,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
       const replicateStartTime = Date.now();
       imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
       const replicateDurationMs = Date.now() - replicateStartTime;
-      
+
       // Log Replicate API call
       await logApiCall({
         supabase,
@@ -5020,7 +5096,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: replicateDurationMs,
         cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-        errorMessage: imageResult.ok ? undefined : (imageResult.error || "Unknown error"),
+        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
     }
   }
@@ -5250,7 +5326,7 @@ serve(async (req) => {
       const moderationResult = moderateContent(content);
       if (!moderationResult.passed) {
         console.log(`[MODERATION] Content rejected for user ${user.id}: ${moderationResult.reason}`);
-        
+
         // Flag the user for policy violation (non-blocking)
         await flagUserForViolation(
           supabase,
@@ -5258,7 +5334,7 @@ serve(async (req) => {
           "Content policy violation",
           `Attempted to generate content that violated content policy. Auto-detected.`,
         );
-        
+
         return new Response(
           JSON.stringify({
             error: moderationResult.reason,
@@ -5308,10 +5384,10 @@ serve(async (req) => {
         brief: 2,
         presentation: 4,
       };
-      const creditsRequired = projectType === "smartflow" ? 1 : (CREDIT_COSTS[length] || 1);
+      const creditsRequired = projectType === "smartflow" ? 1 : CREDIT_COSTS[length] || 1;
 
       // ============= PLAN RESTRICTION VALIDATION =============
-      
+
       // Check subscription status - block if past_due or unpaid
       if (subscriptionStatus === "past_due" || subscriptionStatus === "unpaid") {
         console.log(`[generate-video] User ${user.id} subscription is ${subscriptionStatus}, blocking generation`);
@@ -5353,7 +5429,7 @@ serve(async (req) => {
         enterprise: ["short", "brief", "presentation"],
       };
       const allowedLengths = PLAN_ALLOWED_LENGTHS[userPlan] || PLAN_ALLOWED_LENGTHS.free;
-      
+
       if (!allowedLengths.includes(length)) {
         const requiredPlan = length === "presentation" ? "Creator" : "Starter";
         console.log(`[generate-video] User ${user.id} on ${userPlan} cannot use length ${length}`);
@@ -5375,7 +5451,8 @@ serve(async (req) => {
         console.log(`[generate-video] Free user ${user.id} cannot use format ${format}`);
         return new Response(
           JSON.stringify({
-            error: "Portrait and square formats require a Starter plan or higher. Free users can only create landscape videos.",
+            error:
+              "Portrait and square formats require a Starter plan or higher. Free users can only create landscape videos.",
             code: "PLAN_RESTRICTION",
             requiredPlan: "starter",
           }),
@@ -5444,12 +5521,16 @@ serve(async (req) => {
         );
       }
 
-      console.log(`[generate-video] User ${user.id} (${userPlan}): Credits ${creditsBalance}/${creditsRequired}, Daily ${todayGenerations ?? 0}/${dailyLimit}`);
+      console.log(
+        `[generate-video] User ${user.id} (${userPlan}): Credits ${creditsBalance}/${creditsRequired}, Daily ${todayGenerations ?? 0}/${dailyLimit}`,
+      );
       // ============= END PLAN RESTRICTION VALIDATION =============
 
       // Route based on project type
       if (body.projectType === "smartflow") {
-        console.log(`[generate-video] Routing to SMART FLOW pipeline (single infographic, skipAudio=${body.skipAudio ?? false})`);
+        console.log(
+          `[generate-video] Routing to SMART FLOW pipeline (single infographic, skipAudio=${body.skipAudio ?? false})`,
+        );
         return await handleSmartFlowScriptPhase(
           supabase,
           user,
@@ -5579,7 +5660,7 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error("Generation error:", error);
-    
+
     // Try to log the error to system_logs (best-effort)
     try {
       const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -5601,7 +5682,7 @@ serve(async (req) => {
     } catch (logError) {
       console.error("Failed to log generation error:", logError);
     }
-    
+
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
