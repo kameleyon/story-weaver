@@ -4946,11 +4946,37 @@ async function handleRegenerateImage(
 
   // Check if we should do a full regeneration (empty imageModification) or edit
   if (!imageModification) {
-    // Full regeneration from original visual prompt
-    console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Full regeneration from original prompt`,
-    );
-    const fullPrompt = `${scene.visualPrompt}
+    // Full regeneration - use the CORRECT prompt for the target image index
+    // Image 0 = visualPrompt (primary)
+    // Image 1 = subVisuals[0] (first sub-visual)
+    // Image 2 = subVisuals[1] (second sub-visual)
+    let basePrompt = scene.visualPrompt;
+    
+    if (targetImageIndex > 0 && scene.subVisuals && scene.subVisuals.length > 0) {
+      const subVisualIndex = targetImageIndex - 1; // Image 1 -> subVisuals[0], Image 2 -> subVisuals[1]
+      if (scene.subVisuals[subVisualIndex]) {
+        basePrompt = scene.subVisuals[subVisualIndex];
+        console.log(
+          `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using subVisuals[${subVisualIndex}] prompt`,
+        );
+      } else {
+        // Fallback: synthesize variation from primary prompt
+        const variations = [
+          "close-up detail shot, different angle, ",
+          "wide establishing shot, alternative perspective, ",
+        ];
+        basePrompt = variations[subVisualIndex] + scene.visualPrompt;
+        console.log(
+          `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - No subVisual[${subVisualIndex}], synthesizing variation`,
+        );
+      }
+    } else {
+      console.log(
+        `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using primary visualPrompt`,
+      );
+    }
+
+    const fullPrompt = `${basePrompt}
 
 STYLE: ${styleDescription}
 
