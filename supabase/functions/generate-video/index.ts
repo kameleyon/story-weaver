@@ -623,6 +623,10 @@ const STYLE_PROMPTS: Record<string, string> = {
 
 const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
 
+// Styles that ALWAYS use premium image generation (Hypereal → Replicate Pro fallback)
+// These styles require higher quality rendering regardless of subscription tier
+const PREMIUM_REQUIRED_STYLES = ["sketch"]; // Papercut 3D style
+
 // Pro/Enterprise tiers that get Hypereal access
 const PRO_TIER_PLANS = ["professional", "enterprise"];
 
@@ -3926,23 +3930,34 @@ async function handleImagesPhase(
 
   if (!generation) throw new Error("Generation not found");
 
+  const projectStyle = generation.projects.style?.toLowerCase() || "";
+  
+  // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
+  const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
+  
   // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
-  // Hypereal nano-banana-pro for Pro/Enterprise users
+  // Hypereal nano-banana-pro for Pro/Enterprise users OR premium-required styles
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-  const useHypereal = isProUser && !!hyperealApiKey;
-  const useProModel = isProUser; // Pro/Enterprise users get nano-banana-pro at 1K
+  const useHypereal = (isProUser || isPremiumRequiredStyle) && !!hyperealApiKey;
+  const useProModel = isProUser || isPremiumRequiredStyle; // Pro/Enterprise users OR premium styles get nano-banana-pro at 1K
 
   const maxImagesPerCall = useHypereal ? MAX_IMAGES_PER_CALL_HYPEREAL : MAX_IMAGES_PER_CALL_DEFAULT;
 
+  if (isPremiumRequiredStyle && !isProUser) {
+    console.log(
+      `[IMAGES] Style "${projectStyle}" requires premium model - forcing Hypereal/Pro model for non-Pro user (project type: ${generation.projects.project_type})`,
+    );
+  }
+  
   if (useHypereal) {
     console.log(
-      `[IMAGES] Using Hypereal nano-banana-pro for Pro/Enterprise user (project type: ${generation.projects.project_type})`,
+      `[IMAGES] Using Hypereal nano-banana-pro for ${isPremiumRequiredStyle ? `premium style "${projectStyle}"` : "Pro/Enterprise user"} (project type: ${generation.projects.project_type})`,
     );
   } else if (useProModel) {
     console.log(
-      `[IMAGES] Using Replicate nano-banana-pro (1K) for Pro/Enterprise user (project type: ${generation.projects.project_type})`,
+      `[IMAGES] Using Replicate nano-banana-pro (1K) for ${isPremiumRequiredStyle ? `premium style "${projectStyle}"` : "Pro/Enterprise user"} (project type: ${generation.projects.project_type})`,
     );
   } else {
     console.log(
@@ -4885,19 +4900,30 @@ async function handleRegenerateImage(
   const style = generation.projects.style;
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
+  
+  const projectStyle = style?.toLowerCase() || "";
+  
+  // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
+  const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
 
   // Check if user is Pro/Enterprise tier - they get Hypereal nano-banana-pro at 2K resolution
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-  const useHypereal = isProUser && !!hyperealApiKey;
-  const useProModel = isProUser; // Fallback: Pro/Enterprise users get Replicate nano-banana-pro at 1K
+  const useHypereal = (isProUser || isPremiumRequiredStyle) && !!hyperealApiKey;
+  const useProModel = isProUser || isPremiumRequiredStyle; // Fallback: Pro/Enterprise users OR premium styles get Replicate nano-banana-pro at 1K
+
+  if (isPremiumRequiredStyle && !isProUser) {
+    console.log(
+      `[regenerate-image] Style "${projectStyle}" requires premium model - forcing Hypereal/Pro model for non-Pro user`,
+    );
+  }
 
   if (useHypereal) {
     console.log(
-      `[regenerate-image] Pro/Enterprise user - will use Hypereal nano-banana-pro-t2i (2K) with Replicate fallback`,
+      `[regenerate-image] ${isPremiumRequiredStyle ? `Premium style "${projectStyle}"` : "Pro/Enterprise user"} - will use Hypereal nano-banana-pro-t2i (2K) with Replicate fallback`,
     );
   } else if (useProModel) {
-    console.log(`[regenerate-image] Pro/Enterprise user - will use Replicate nano-banana-pro (1K) - no Hypereal key`);
+    console.log(`[regenerate-image] ${isPremiumRequiredStyle ? `Premium style "${projectStyle}"` : "Pro/Enterprise user"} - will use Replicate nano-banana-pro (1K) - no Hypereal key`);
   }
 
   // Get existing imageUrls or create from single imageUrl
