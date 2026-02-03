@@ -41,8 +41,8 @@ const styles: { id: SmartFlowStyle; label: string; icon: React.ElementType; prev
   { id: "realistic", label: "Realistic", icon: Camera, preview: realisticPreview },
   { id: "storybook", label: "Storybook", icon: Palette, preview: storybookPreview },
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
-  { id: "sketch", label: "Papercut 3D", icon: PenTool, preview: sketchPreview },
   { id: "crayon", label: "Crayon", icon: Baby, preview: crayonPreview },
+  { id: "sketch", label: "Papercut 3D", icon: PenTool, preview: sketchPreview },
   { id: "chalkboard", label: "Chalkboard", icon: GraduationCap, preview: chalkboardPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
