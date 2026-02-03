@@ -237,7 +237,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
         savedStyle === "realistic" ||
         savedStyle === "3d-pixar" ||
         savedStyle === "claymation" ||
-        savedStyle === "papercut-sketch" ||
+        savedStyle === "sketch" ||
         savedStyle === "caricature" ||
         savedStyle === "storybook" ||
         savedStyle === "crayon" ||
