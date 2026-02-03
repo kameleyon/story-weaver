@@ -5028,13 +5028,65 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       });
     }
   } else {
-    // Apply Edit - use Hypereal/Replicate for prompt-based modification
-    // (No longer using Nano Banana image editing - user requested Hypereal primary with Replicate fallback)
+    // Apply Edit - use TRUE IMAGE EDITING with Nano Banana (Gemini)
+    // This preserves the original image and only modifies the requested section/element
     console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Applying edit with Hypereal/Replicate`,
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - TRUE IMAGE EDIT with Nano Banana`,
     );
 
-    const modifiedPrompt = `${scene.visualPrompt}
+    if (!sourceImageUrl) {
+      throw new Error("No source image available for editing");
+    }
+
+    // Use the existing editImageWithNanoBanana function for true image editing
+    const editStartTime = Date.now();
+    imageResult = await editImageWithNanoBanana(
+      sourceImageUrl,
+      imageModification,
+      styleDescription,
+      scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined
+    );
+    const editDurationMs = Date.now() - editStartTime;
+
+    // Log the Nano Banana edit API call
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      generationId,
+      provider: "lovable_ai",
+      model: "gemini-2.5-flash-image",
+      status: imageResult.ok ? "success" : "error",
+      totalDurationMs: editDurationMs,
+      cost: imageResult.ok ? PRICING.imageNanoBanana : 0, // Use standard Nano Banana pricing
+      errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+    });
+
+    // If Nano Banana edit fails, fall back to Hypereal/Replicate text-to-image as last resort
+    if (!imageResult.ok) {
+      const editError = imageResult.error || "Unknown edit error";
+      console.log(`[regenerate-image] Nano Banana edit failed (${editError}), falling back to text-to-image generation`);
+
+      // LOG TO SYSTEM_LOGS so it shows in admin panel!
+      await logSystemEvent({
+        supabase,
+        userId: user.id,
+        eventType: "nano_banana_edit_fallback",
+        category: "system_warning",
+        message: `Nano Banana image edit failed, falling back to text-to-image generation`,
+        details: {
+          sceneIndex,
+          targetImageIndex,
+          error: editError,
+          fallbackProvider: useHypereal && hyperealApiKey ? "hypereal" : "replicate",
+          phase: "regenerate-image",
+          action: "apply_edit",
+        },
+        generationId,
+        projectId,
+      });
+
+      // Fallback to text-to-image generation with modified prompt
+      const modifiedPrompt = `${scene.visualPrompt}
 
 USER MODIFICATION REQUEST: ${imageModification}
 
@@ -5042,56 +5094,54 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
 
-    // Try Hypereal first (primary), fallback to Replicate nano-banana-pro
-    if (useHypereal && hyperealApiKey) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for Apply Edit`);
-      const hyperealStartTime = Date.now();
-      imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format);
-      const hyperealDurationMs = Date.now() - hyperealStartTime;
+      // Try Hypereal first (primary), fallback to Replicate nano-banana-pro
+      if (useHypereal && hyperealApiKey) {
+        console.log(`[regenerate-image] Fallback: Using Hypereal nano-banana-pro-t2i`);
+        const hyperealStartTime = Date.now();
+        imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format);
+        const hyperealDurationMs = Date.now() - hyperealStartTime;
 
-      // Log Hypereal API call
-      await logApiCall({
-        supabase,
-        userId: user.id,
-        generationId,
-        provider: "hypereal",
-        model: "nano-banana-pro-t2i",
-        status: imageResult.ok ? "success" : "error",
-        totalDurationMs: hyperealDurationMs,
-        cost: imageResult.ok ? PRICING.imageHypereal : 0,
-        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-      });
-
-      // Fallback to Replicate nano-banana-pro if Hypereal fails
-      if (!imageResult.ok) {
-        const hyperealError = imageResult.error || "Unknown Hypereal error";
-        console.log(`[regenerate-image] Hypereal failed (${hyperealError}), falling back to Replicate nano-banana-pro`);
-
-        // LOG TO SYSTEM_LOGS so it shows in admin panel!
-        await logSystemEvent({
+        // Log Hypereal API call
+        await logApiCall({
           supabase,
           userId: user.id,
-          eventType: "hypereal_fallback",
-          category: "system_warning",
-          message: `Hypereal API failed during Apply Edit, falling back to Replicate nano-banana-pro`,
-          details: {
-            sceneIndex,
-            targetImageIndex,
-            error: hyperealError,
-            fallbackProvider: "replicate_nano_banana_pro",
-            phase: "regenerate-image",
-            action: "apply_edit",
-          },
           generationId,
-          projectId,
+          provider: "hypereal",
+          model: "nano-banana-pro-t2i",
+          status: imageResult.ok ? "success" : "error",
+          totalDurationMs: hyperealDurationMs,
+          cost: imageResult.ok ? PRICING.imageHypereal : 0,
+          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
 
-        // Always use nano-banana-pro for Apply Edit fallback
+        // Fallback to Replicate nano-banana-pro if Hypereal fails
+        if (!imageResult.ok) {
+          const hyperealError = imageResult.error || "Unknown Hypereal error";
+          console.log(`[regenerate-image] Hypereal fallback also failed (${hyperealError}), trying Replicate`);
+
+          const replicateStartTime = Date.now();
+          imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
+          const replicateDurationMs = Date.now() - replicateStartTime;
+
+          await logApiCall({
+            supabase,
+            userId: user.id,
+            generationId,
+            provider: "replicate",
+            model: "google/nano-banana-pro",
+            status: imageResult.ok ? "success" : "error",
+            totalDurationMs: replicateDurationMs,
+            cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+            errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+          });
+        }
+      } else {
+        // No Hypereal key - use Replicate nano-banana-pro directly
+        console.log(`[regenerate-image] Fallback: Using Replicate nano-banana-pro`);
         const replicateStartTime = Date.now();
         imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
         const replicateDurationMs = Date.now() - replicateStartTime;
 
-        // Log Replicate fallback API call
         await logApiCall({
           supabase,
           userId: user.id,
@@ -5104,25 +5154,6 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
           errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
         });
       }
-    } else {
-      // No Hypereal key - use Replicate nano-banana-pro directly
-      console.log(`[regenerate-image] Using Replicate nano-banana-pro for Apply Edit (no Hypereal key)`);
-      const replicateStartTime = Date.now();
-      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
-      const replicateDurationMs = Date.now() - replicateStartTime;
-
-      // Log Replicate API call
-      await logApiCall({
-        supabase,
-        userId: user.id,
-        generationId,
-        provider: "replicate",
-        model: "google/nano-banana-pro",
-        status: imageResult.ok ? "success" : "error",
-        totalDurationMs: replicateDurationMs,
-        cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-      });
     }
   }
 
