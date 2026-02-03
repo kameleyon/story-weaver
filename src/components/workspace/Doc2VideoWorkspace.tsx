@@ -170,7 +170,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
         savedStyle === "realistic" ||
         savedStyle === "3d-pixar" ||
         savedStyle === "claymation" ||
-        savedStyle === "sketch" ||
+        savedStyle === "papercut-sketch" ||
         savedStyle === "caricature" ||
         savedStyle === "storybook" ||
         savedStyle === "crayon" ||

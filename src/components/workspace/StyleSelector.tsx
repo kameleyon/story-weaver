@@ -15,14 +15,15 @@ import animePreview from "@/assets/styles/anime-preview.png";
 import realisticPreview from "@/assets/styles/realistic-preview.png";
 import pixarPreview from "@/assets/styles/3d-pixar-preview.png";
 import claymationPreview from "@/assets/styles/claymation-preview.png";
-import sketchPreview from "@/assets/styles/sketch-preview.png";
+// import sketchPreview from "@/assets/styles/sketch-preview.png"; // Commented out - replaced by Papercut Sketch
+import papercutSketchPreview from "@/assets/styles/papercut-sketch-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
 import storybookPreview from "@/assets/styles/painterly-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
 import moodyPreview from "@/assets/styles/moody-preview.png";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "storybook" | "crayon" | "moody" | "custom";
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "papercut-sketch" | "caricature" | "storybook" | "crayon" | "moody" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
@@ -48,7 +49,8 @@ const styles: { id: VisualStyle; label: string; icon: React.ElementType; preview
   { id: "caricature", label: "Caricature", icon: Laugh, preview: caricaturePreview },
   { id: "moody", label: "Moody", icon: CloudMoon, preview: moodyPreview },
   { id: "claymation", label: "Claymation", icon: Hand, preview: claymationPreview },
-  { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview },
+  // { id: "sketch", label: "Sketch", icon: PenTool, preview: sketchPreview }, // Commented out - replaced by Papercut Sketch
+  { id: "papercut-sketch", label: "Papercut Sketch", icon: PenTool, preview: papercutSketchPreview },
   { id: "crayon", label: "Crayon", icon: Baby, preview: crayonPreview },
   { id: "custom", label: "Custom", icon: Wand2, preview: customPreview },
 ];
