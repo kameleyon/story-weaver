@@ -1358,13 +1358,12 @@ function sanitizeForGeminiTTS(text: string): string {
   return sanitized;
 }
 
-// ============= GEMINI TTS MODELS (with extended fallback chain) =============
-// Primary: 2.5 Pro TTS (best quality)
-// Fallback chain: 2.5 Flash TTS → Preview variants → Lovable AI Gateway as last resort
+// ============= GEMINI TTS MODELS (Haitian Creole only) =============
+// Primary: 2.5 Pro Preview TTS (best quality for HC)
+// Fallback: 2.5 Flash Preview TTS → Lovable AI Gateway (2.5 Flash → 2.5 Pro)
 const GEMINI_TTS_MODELS = [
   { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
   { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
-  { name: "gemini-2.0-flash-live-001", label: "2.0 Flash Live TTS" },
 ];
 
 async function generateSceneAudioGeminiWithModel(
