@@ -1,95 +1,73 @@
 
+# Fix Haitian Creole TTS Fallback Chain
 
-# Plan: Add Admin Link to User Menu and Clickable User Name in Admin Panel
+## Summary
+Remove the invalid `gemini-2.0-flash-live-001` model from the TTS fallback chain and ensure the correct model order as you specified.
 
-## Overview
-This plan adds an "Admin" menu item to the user dropdown menu for admin users, and makes the user's name in the Admin Control Panel header clickable to navigate to Settings.
+## Changes
 
----
+### 1. Update GEMINI_TTS_MODELS array
+**File:** `supabase/functions/generate-video/index.ts` (lines 1364-1368)
 
-## Changes Required
+**Before:**
+```typescript
+const GEMINI_TTS_MODELS = [
+  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
+  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
+  { name: "gemini-2.0-flash-live-001", label: "2.0 Flash Live TTS" },  // INVALID
+];
+```
 
-### 1. Add Admin Menu Item to AppSidebar User Dropdown
+**After:**
+```typescript
+const GEMINI_TTS_MODELS = [
+  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
+  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
+];
+```
 
-**File: `src/components/layout/AppSidebar.tsx`**
+### 2. Update the Lovable AI fallback chain order
+**File:** `supabase/functions/generate-video/index.ts` (lines 1621-1624)
 
-- Import the `useAdminAuth` hook to check admin status
-- Import the `Shield` icon from lucide-react
-- Add "Admin" menu item conditionally (only shown to admin users)
-- Add in both locations:
-  - **Mobile header dropdown** (lines 232-258)
-  - **Desktop footer dropdown** (lines 545-571)
+The Lovable AI fallback currently tries Flash first, then Pro. This should match your intended order where the preview TTS models are primary, then fallback to non-TTS models in the same order (Pro quality first for the non-TTS fallbacks).
 
-The Admin menu item will:
-- Appear after "Settings" and "Usage & Billing"
-- Use a Shield icon to match the Admin page branding
-- Navigate to `/admin` when clicked
+**After:**
+```typescript
+const LOVABLE_TTS_MODELS = [
+  { model: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },  // Faster fallback
+  { model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },       // Higher quality fallback
+];
+```
 
-### 2. Make User Name Clickable in Admin Panel Header
+This order is already correct (Flash first for speed, Pro as final resort).
 
-**File: `src/pages/Admin.tsx`**
+### 3. Update the memory documentation comment
+Update the comment at line 1361-1363 to accurately reflect the new chain:
 
-- Wrap the user avatar and name in a clickable element
-- Navigate to `/settings` when clicked
-- Add hover styles to indicate it's clickable
+```typescript
+// ============= GEMINI TTS MODELS (Haitian Creole only) =============
+// Primary: 2.5 Pro Preview TTS (best quality for HC)
+// Fallback: 2.5 Flash Preview TTS → Lovable AI Gateway (2.5 Flash → 2.5 Pro)
+```
 
----
+## Resulting Fallback Chain
+
+```text
+Haitian Creole TTS Fallback Order:
+┌─────────────────────────────────────────────────────────────┐
+│ 1. gemini-2.5-pro-preview-tts    (Direct Google API)        │
+│ 2. gemini-2.5-flash-preview-tts  (Direct Google API)        │
+│ 3. google/gemini-2.5-flash       (Lovable AI Gateway)       │
+│ 4. google/gemini-2.5-pro         (Lovable AI Gateway)       │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Technical Details
 
-### AppSidebar Changes
+- Each model gets up to 5 retries with text variations to bypass content filters
+- Total attempts: 2 models × 5 retries = 10 attempts via Direct Google API
+- Then 2 more models × standard retries via Lovable AI Gateway
+- The invalid `gemini-2.0-flash-live-001` was causing wasted 404 errors on every generation
 
-```tsx
-// Import additions
-import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { Shield } from "lucide-react";
-
-// In component body, add admin check
-const { isAdmin } = useAdminAuth();
-
-// Mobile dropdown - add after Usage & Billing
-{isAdmin && (
-  <DropdownMenuItem onClick={() => { navigate("/admin"); toggleSidebar(); }}>
-    <Shield className="mr-2 h-4 w-4" />
-    <span>Admin</span>
-  </DropdownMenuItem>
-)}
-
-// Desktop dropdown - add after Usage & Billing
-{isAdmin && (
-  <DropdownMenuItem onClick={() => navigate("/admin")}>
-    <Shield className="mr-2 h-4 w-4" />
-    <span>Admin</span>
-  </DropdownMenuItem>
-)}
-```
-
-### Admin.tsx Changes
-
-```tsx
-// User section - make clickable
-<button
-  onClick={() => navigate("/settings")}
-  className="flex items-center gap-2 cursor-pointer hover:opacity-80"
->
-  <div className="w-8 h-8 rounded-full bg-primary...">
-    {user?.email?.charAt(0).toUpperCase()}
-  </div>
-  <span className="hidden sm:block text-sm">
-    {user?.email?.split("@")[0]}
-  </span>
-</button>
-```
-
----
-
-## Summary
-
-| Location | Change |
-|----------|--------|
-| AppSidebar (Mobile) | Add Admin menu item for admin users |
-| AppSidebar (Desktop) | Add Admin menu item for admin users |
-| Admin.tsx | Make user avatar/name clickable → navigates to Settings |
-
-No database changes required. The existing `useAdminAuth` hook already provides the admin status check.
-
+## Deployment
+After approval, the `generate-video` Edge Function will be redeployed to apply the fix.
