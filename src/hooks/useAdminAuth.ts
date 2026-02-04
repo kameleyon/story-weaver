@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
@@ -6,6 +6,10 @@ export function useAdminAuth() {
   const { user, session, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Use ref to track the session for stable callback
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -38,8 +42,10 @@ export function useAdminAuth() {
     checkAdminStatus();
   }, [user, authLoading]);
 
+  // Stable callback that won't change between renders
   const callAdminApi = useCallback(async (action: string, params?: Record<string, unknown>) => {
-    if (!session) {
+    const currentSession = sessionRef.current;
+    if (!currentSession) {
       throw new Error("Not authenticated");
     }
 
@@ -52,7 +58,7 @@ export function useAdminAuth() {
     }
 
     return data;
-  }, [session]);
+  }, []); // Empty deps = stable reference
 
   return {
     isAdmin,

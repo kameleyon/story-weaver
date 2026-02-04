@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useQuery } from "@tanstack/react-query";
 import { Users, CreditCard, Activity, Flag, Coins, Archive, Loader2, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 
 interface CostBreakdown {
@@ -32,27 +32,20 @@ interface DashboardStats {
 }
 
 export function AdminOverview() {
-  const { callAdminApi } = useAdminAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { callAdminApi, isAdmin } = useAdminAuth();
+  
+  const { data: stats, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["admin-dashboard-stats"],
+    queryFn: async () => {
+      const data = await callAdminApi("dashboard_stats");
+      return data as DashboardStats;
+    },
+    enabled: isAdmin,
+    staleTime: 60000, // Cache for 60 seconds - prevents duplicate calls
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        const data = await callAdminApi("dashboard_stats");
-        setStats(data);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load stats");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [callAdminApi]);
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "Failed to load stats") : null;
 
   if (loading) {
     return (
