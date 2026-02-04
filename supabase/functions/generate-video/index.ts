@@ -2975,7 +2975,7 @@ When generating the 'visualPrompt' for each scene, you MUST:
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera). NEVER mention style names like "stick figure", "anime", "realistic", etc. in your descriptions - just describe the subject as "a person", "a man", "a woman", etc.
-${brandMark ? `7. End with: "Small subtle brand watermark '${brandMark}' in bottom-center with semi-transparent black background (15% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
+${brandMark ? `7. End with: "Small subtle brand watermark reading exactly '${brandMark}' (no additional text or numbers) in bottom-center with nearly transparent dark background pill, Inter Light font, thin weight, white text, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -3352,7 +3352,7 @@ When generating the 'visualPrompt' for each scene, you MUST:
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera). NEVER mention style names like "stick figure", "anime", "realistic", etc. in your descriptions - just describe the subject as "a person", "a man", "a woman", etc.
-${brandName ? `7. End with: "Small subtle brand watermark '${brandName}' in bottom-center with semi-transparent black background (15% opacity rounded pill), Inter Light font, thin weight, white text at 90% opacity, minimal size"` : ""}
+${brandName ? `7. End with: "Small subtle brand watermark reading exactly '${brandName}' (no additional text or numbers) in bottom-center with nearly transparent dark background pill, Inter Light font, thin weight, white text, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -4022,7 +4022,7 @@ Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     let brandMarkInstructions = "";
     if (brandMark && brandMark.trim()) {
       brandMarkInstructions = `
-BRANDING: Overlay the text "${brandMark}" as a SMALL, SUBTLE watermark in the bottom-center of the image. Place it on a semi-transparent black background pill (15% opacity, rounded corners). Use the font "Inter" in LIGHT weight (thin, not bold)—small font size approximately 2-3% of the image height. The text must be white at 90% opacity for visibility against any background. Keep it understated like a professional media trademark, NOT large or prominent. Consistently placed at the very bottom edge with minimal visual impact.`;
+BRANDING: Overlay ONLY the exact text "${brandMark}" (no additional text, numbers, or percentages) as a SMALL, SUBTLE watermark in the bottom-center of the image. Place it on a nearly transparent dark background pill with rounded corners. Use a light sans-serif font in thin weight, small size. The text must be white for visibility. Keep it understated like a professional media trademark, NOT large or prominent. CRITICAL: The watermark text must be EXACTLY "${brandMark}" with nothing else added.`;
     }
 
     // Add character consistency instructions if we have a character bible
