@@ -320,7 +320,7 @@ export default function VoiceLab() {
                     </div>
                     <div className="space-y-1">
                       <p className="font-medium">Click to upload, or drag and drop</p>
-                      <p className="text-sm text-muted-foreground">Audio or video files up to 10MB each</p>
+                      <p className="text-sm text-muted-foreground">MP3, WAV, or M4A files up to 10MB</p>
                     </div>
                     
                     <div className="flex items-center justify-center">
