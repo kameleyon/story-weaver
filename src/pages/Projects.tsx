@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -127,7 +127,12 @@ export default function Projects() {
   const [projectToRename, setProjectToRename] = useState<Project | null>(null);
   const [projectToShare, setProjectToShare] = useState<Project | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  
+  // Track refreshed thumbnails separately to avoid blocking initial load
+  const [refreshedThumbnails, setRefreshedThumbnails] = useState<Map<string, string | null>>(new Map());
+  const refreshInProgressRef = useRef(false);
 
+  // Fast initial load - just fetch projects and basic thumbnails (no refresh)
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["all-projects", user?.id],
     queryFn: async () => {
@@ -152,7 +157,7 @@ export default function Projects() {
         .eq("status", "complete")
         .order("created_at", { ascending: false });
       
-      // Create initial thumbnail map
+      // Create initial thumbnail map (using stored URLs, may be expired)
       const thumbnailMap: Record<string, string | null> = {};
       if (generations) {
         for (const gen of generations) {
@@ -170,21 +175,48 @@ export default function Projects() {
         }
       }
       
-      // Refresh signed URLs that may have expired
-      const thumbnailInputs = projectsData.map(p => ({
-        projectId: p.id,
-        thumbnailUrl: thumbnailMap[p.id] || null,
-      }));
-      
-      const refreshedMap = await refreshThumbnails(thumbnailInputs);
-      
       return projectsData.map(p => ({
         ...p,
-        thumbnailUrl: refreshedMap.get(p.id) || null,
+        thumbnailUrl: thumbnailMap[p.id] || null,
       })) as Project[];
     },
     enabled: !!user?.id,
+    staleTime: 30000, // Cache for 30 seconds
   });
+
+  // Background refresh of thumbnails after initial load
+  useEffect(() => {
+    if (projects.length === 0 || refreshInProgressRef.current) return;
+    
+    const thumbnailInputs = projects
+      .filter(p => p.thumbnailUrl && p.thumbnailUrl.includes("/storage/v1/object/sign/"))
+      .map(p => ({ projectId: p.id, thumbnailUrl: p.thumbnailUrl }));
+    
+    if (thumbnailInputs.length === 0) return;
+    
+    refreshInProgressRef.current = true;
+    
+    // Run in background, don't block UI
+    refreshThumbnails(thumbnailInputs)
+      .then(refreshedMap => {
+        setRefreshedThumbnails(refreshedMap);
+      })
+      .catch(err => {
+        console.warn("[Projects] Background thumbnail refresh failed:", err);
+      })
+      .finally(() => {
+        refreshInProgressRef.current = false;
+      });
+  }, [projects, refreshThumbnails]);
+
+  // Merge refreshed thumbnails with projects
+  const projectsWithThumbnails = useMemo(() => {
+    if (refreshedThumbnails.size === 0) return projects;
+    return projects.map(p => ({
+      ...p,
+      thumbnailUrl: refreshedThumbnails.get(p.id) ?? p.thumbnailUrl,
+    }));
+  }, [projects, refreshedThumbnails]);
 
   // Mutations
   const deleteProjectMutation = useMutation({
@@ -239,9 +271,9 @@ export default function Projects() {
     onError: (error) => toast.error("Failed to update: " + error.message),
   });
 
-  // Filter and sort
+  // Filter and sort - use projectsWithThumbnails for refreshed URLs
   const filteredProjects = useMemo(() => {
-    let result = projects.filter((p) =>
+    let result = projectsWithThumbnails.filter((p) =>
       p.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -269,7 +301,7 @@ export default function Projects() {
     });
 
     return result;
-  }, [projects, searchQuery, sortField, sortOrder]);
+  }, [projectsWithThumbnails, searchQuery, sortField, sortOrder]);
 
   // Paginated projects
   const paginatedProjects = useMemo(() => {

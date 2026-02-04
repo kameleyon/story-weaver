@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -89,6 +89,10 @@ export default function Dashboard() {
   const [currentTip, setCurrentTip] = useState(0);
   const [projectScrollIndex, setProjectScrollIndex] = useState(0);
   const [greetingIndex] = useState(() => Math.floor(Math.random() * GREETINGS.length));
+  
+  // Track refreshed thumbnails separately
+  const [refreshedThumbnails, setRefreshedThumbnails] = useState<Map<string, string | null>>(new Map());
+  const refreshInProgressRef = useRef(false);
 
   // Rotate tips
   useEffect(() => {
@@ -135,8 +139,8 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Fetch recent projects with their first generated image
-  const { data: recentProjects = [] } = useQuery({
+  // Fetch recent projects - fast initial load without thumbnail refresh
+  const { data: recentProjectsRaw = [] } = useQuery({
     queryKey: ["dashboard-recent", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -160,16 +164,14 @@ export default function Dashboard() {
         .eq("status", "complete")
         .order("created_at", { ascending: false });
       
-      // Create a map of project_id -> first image URL
+      // Create a map of project_id -> first image URL (may be expired)
       const thumbnailMap: Record<string, string | null> = {};
       if (generations) {
         for (const gen of generations) {
-          // Only use the first generation found for each project
           if (thumbnailMap[gen.project_id] !== undefined) continue;
           
           const scenes = gen.scenes as any[];
           if (Array.isArray(scenes) && scenes.length > 0) {
-            // Get first scene's image
             const firstScene = scenes[0];
             const imageUrl = firstScene?.imageUrl || 
                             firstScene?.image_url || 
@@ -181,22 +183,47 @@ export default function Dashboard() {
         }
       }
       
-      // Refresh signed URLs that may have expired
-      const thumbnailInputs = projects.map(p => ({
-        projectId: p.id,
-        thumbnailUrl: thumbnailMap[p.id] || null,
-      }));
-      
-      const refreshedMap = await refreshThumbnails(thumbnailInputs);
-      
-      // Attach refreshed thumbnails to projects
       return projects.map(p => ({
         ...p,
-        thumbnailUrl: refreshedMap.get(p.id) || null,
+        thumbnailUrl: thumbnailMap[p.id] || null,
       }));
     },
     enabled: !!user?.id,
+    staleTime: 30000, // Cache for 30 seconds
   });
+
+  // Background refresh of thumbnails
+  useEffect(() => {
+    if (recentProjectsRaw.length === 0 || refreshInProgressRef.current) return;
+    
+    const thumbnailInputs = recentProjectsRaw
+      .filter(p => p.thumbnailUrl && p.thumbnailUrl.includes("/storage/v1/object/sign/"))
+      .map(p => ({ projectId: p.id, thumbnailUrl: p.thumbnailUrl }));
+    
+    if (thumbnailInputs.length === 0) return;
+    
+    refreshInProgressRef.current = true;
+    
+    refreshThumbnails(thumbnailInputs)
+      .then(refreshedMap => {
+        setRefreshedThumbnails(refreshedMap);
+      })
+      .catch(err => {
+        console.warn("[Dashboard] Background thumbnail refresh failed:", err);
+      })
+      .finally(() => {
+        refreshInProgressRef.current = false;
+      });
+  }, [recentProjectsRaw, refreshThumbnails]);
+
+  // Merge refreshed thumbnails
+  const recentProjects = useMemo(() => {
+    if (refreshedThumbnails.size === 0) return recentProjectsRaw;
+    return recentProjectsRaw.map(p => ({
+      ...p,
+      thumbnailUrl: refreshedThumbnails.get(p.id) ?? p.thumbnailUrl,
+    }));
+  }, [recentProjectsRaw, refreshedThumbnails]);
 
   const creditsUsed = credits ? credits.total - credits.balance : 0;
   const usagePercentage = credits ? Math.round((creditsUsed / credits.total) * 100) : 0;

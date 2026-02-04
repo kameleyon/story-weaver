@@ -1,10 +1,12 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, DollarSign, TrendingUp, CreditCard, RefreshCw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { subDays, format } from "date-fns";
+import { useState } from "react";
 
 interface RevenueStats {
   totalRevenue: number;
@@ -17,10 +19,7 @@ interface RevenueStats {
 type TimePeriod = "7d" | "30d" | "90d" | "1y" | "all";
 
 export function AdminRevenue() {
-  const { callAdminApi } = useAdminAuth();
-  const [data, setData] = useState<RevenueStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { callAdminApi, isAdmin } = useAdminAuth();
   const [period, setPeriod] = useState<TimePeriod>("30d");
 
   const getDateRange = useCallback((p: TimePeriod) => {
@@ -51,23 +50,19 @@ export function AdminRevenue() {
     };
   }, []);
 
-  const fetchRevenue = useCallback(async () => {
-    try {
-      setLoading(true);
+  const { data, isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ["admin-revenue-stats", period],
+    queryFn: async () => {
       const { startDate, endDate } = getDateRange(period);
       const result = await callAdminApi("revenue_stats", { startDate, endDate });
-      setData(result);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load revenue stats");
-    } finally {
-      setLoading(false);
-    }
-  }, [callAdminApi, period, getDateRange]);
+      return result as RevenueStats;
+    },
+    enabled: isAdmin,
+    staleTime: 60000, // Cache for 60 seconds
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    fetchRevenue();
-  }, [fetchRevenue]);
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "Failed to load revenue stats") : null;
 
   const periodOptions: { value: TimePeriod; label: string }[] = [
     { value: "7d", label: "7 Days" },
@@ -89,7 +84,7 @@ export function AdminRevenue() {
     return (
       <div className="text-center py-12 space-y-4">
         <p className="text-destructive">{error}</p>
-        <Button onClick={fetchRevenue} variant="outline">
+        <Button onClick={() => refetch()} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Retry
         </Button>
