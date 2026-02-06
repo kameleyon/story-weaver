@@ -3690,10 +3690,10 @@ async function handleAudioPhase(
 }
 
 // Images phase now processes in chunks to avoid request timeouts.
-// IMPORTANT: Smaller chunk size (4) prevents "failed to fetch" timeouts during image generation.
-// Pro model (nano-banana-pro 1K) is slower, so we keep chunks small and manageable.
-const MAX_IMAGES_PER_CALL_DEFAULT = 4;
-const MAX_IMAGES_PER_CALL_HYPEREAL = 4;
+// Increased chunk size (8) to reduce round trips for large generations (36+ images).
+// Each Edge Function call has overhead, so fewer calls = less timeout risk.
+const MAX_IMAGES_PER_CALL_DEFAULT = 8;
+const MAX_IMAGES_PER_CALL_HYPEREAL = 8;
 
 async function handleImagesPhase(
   supabase: any,
@@ -3955,8 +3955,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let totalReplicateFallback = costTracking.replicateFallbackCount || 0;
 
   // Process this chunk in batches.
-  // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
-  const BATCH_SIZE = useProModel ? 3 : 5;
+  // Increased batch size to reduce total time. Rate limits are handled by stagger delay.
+  const BATCH_SIZE = useProModel ? 4 : 6;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
@@ -3992,8 +3992,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
     for (let t = batchStart; t < batchEnd; t++) {
       const task = tasksThisChunk[t];
-      // Stagger requests within batch to avoid rate limits (1.5s between each)
-      const staggerDelay = (t - batchStart) * 1500;
+      // Reduced stagger delay (500ms) to speed up generation while avoiding rate limits
+      const staggerDelay = (t - batchStart) * 500;
       batchPromises.push(
         (async () => {
           // Wait for stagger delay before starting this request
