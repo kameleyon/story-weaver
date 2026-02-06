@@ -4,36 +4,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Concurrency limits to prevent "Failed to fetch" from browser connection limits
-const AUDIO_CONCURRENCY = 3;  // Max 3 audio requests in parallel
-const IMAGE_CONCURRENCY = 2;  // Max 2 image requests in parallel (heavier)
-
-// Helper: Run promises with a concurrency limit (Batching)
-// This ensures we have at most `concurrency` active requests at once
-async function processWithConcurrency<T, R>(
-  items: T[], 
-  concurrency: number, 
-  task: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const results: Promise<R>[] = [];
-  const executing = new Set<Promise<R>>();
-
-  for (const [index, item] of items.entries()) {
-    const p = task(item, index).then((res) => {
-      executing.delete(p);
-      return res;
-    });
-    
-    results.push(p);
-    executing.add(p);
-
-    if (executing.size >= concurrency) {
-      await Promise.race(executing);
-    }
-  }
-  return Promise.all(results);
-}
-
 export type GenerationStep =
   | "idle"
   | "analysis"
@@ -424,11 +394,10 @@ export function useGenerationPipeline() {
               phaseTimings: { ...prev.phaseTimings, audio: audioResult.phaseTime },
             }));
 
-          if (audioResult.hasMore && typeof audioResult.nextStartIndex === "number") {
-            audioStartIndex = audioResult.nextStartIndex;
-            await sleep(100); // Small stagger to prevent connection flooding
-          }
-        } while (audioResult.hasMore);
+            if (audioResult.hasMore && typeof audioResult.nextStartIndex === "number") {
+              audioStartIndex = audioResult.nextStartIndex;
+            }
+          } while (audioResult.hasMore);
         }
 
         // ============= PHASE 3: IMAGES (chunked) =============
@@ -468,7 +437,6 @@ export function useGenerationPipeline() {
 
           if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
             imageStartIndex = imagesResult.nextStartIndex;
-            await sleep(100); // Small stagger to prevent connection flooding
           }
         } while (imagesResult.hasMore);
 
