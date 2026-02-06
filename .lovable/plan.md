@@ -1,73 +1,100 @@
 
-# Fix Haitian Creole TTS Fallback Chain
 
-## Summary
-Remove the invalid `gemini-2.0-flash-live-001` model from the TTS fallback chain and ensure the correct model order as you specified.
+# Plan: Apply Batched Concurrency Fix to Generation Pipeline
 
-## Changes
+## Problem Analysis
 
-### 1. Update GEMINI_TTS_MODELS array
-**File:** `supabase/functions/generate-video/index.ts` (lines 1364-1368)
+The current `useGenerationPipeline.ts` uses a **backend-chunked architecture** where:
+- Frontend sends requests with a start index
+- Backend processes a batch internally
+- Backend returns `hasMore` + `nextStartIndex` for continuation
 
-**Before:**
-```typescript
-const GEMINI_TTS_MODELS = [
-  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
-  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
-  { name: "gemini-2.0-flash-live-001", label: "2.0 Flash Live TTS" },  // INVALID
-];
-```
+The suggested fix assumes a **frontend-orchestrated scene-by-scene** architecture. To apply the batching principle effectively, I need to adapt the concept to work with your existing architecture.
 
-**After:**
-```typescript
-const GEMINI_TTS_MODELS = [
-  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
-  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
-];
-```
+## Solution: Add Concurrency Control Helper + Optimize Chunked Calls
 
-### 2. Update the Lovable AI fallback chain order
-**File:** `supabase/functions/generate-video/index.ts` (lines 1621-1624)
+### Changes to `src/hooks/useGenerationPipeline.ts`
 
-The Lovable AI fallback currently tries Flash first, then Pro. This should match your intended order where the preview TTS models are primary, then fallback to non-TTS models in the same order (Pro quality first for the non-TTS fallbacks).
-
-**After:**
-```typescript
-const LOVABLE_TTS_MODELS = [
-  { model: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },  // Faster fallback
-  { model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },       // Higher quality fallback
-];
-```
-
-This order is already correct (Flash first for speed, Pro as final resort).
-
-### 3. Update the memory documentation comment
-Update the comment at line 1361-1363 to accurately reflect the new chain:
+**1. Add the `processWithConcurrency` helper function** (near the top of the file, after the `sleep` helper):
 
 ```typescript
-// ============= GEMINI TTS MODELS (Haitian Creole only) =============
-// Primary: 2.5 Pro Preview TTS (best quality for HC)
-// Fallback: 2.5 Flash Preview TTS → Lovable AI Gateway (2.5 Flash → 2.5 Pro)
+// Helper: Run promises with a concurrency limit (Batching)
+// This ensures we have at most `concurrency` active requests at once
+async function processWithConcurrency<T, R>(
+  items: T[], 
+  concurrency: number, 
+  task: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: Promise<R>[] = [];
+  const executing = new Set<Promise<R>>();
+
+  for (const [index, item] of items.entries()) {
+    const p = task(item, index).then((res) => {
+      executing.delete(p);
+      return res;
+    });
+    
+    results.push(p);
+    executing.add(p);
+
+    if (executing.size >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+  return Promise.all(results);
+}
 ```
 
-## Resulting Fallback Chain
+**2. Add constants for concurrency limits:**
 
-```text
-Haitian Creole TTS Fallback Order:
-┌─────────────────────────────────────────────────────────────┐
-│ 1. gemini-2.5-pro-preview-tts    (Direct Google API)        │
-│ 2. gemini-2.5-flash-preview-tts  (Direct Google API)        │
-│ 3. google/gemini-2.5-flash       (Lovable AI Gateway)       │
-│ 4. google/gemini-2.5-pro         (Lovable AI Gateway)       │
-└─────────────────────────────────────────────────────────────┘
+```typescript
+// Concurrency limits to prevent "Failed to fetch" from browser connection limits
+const AUDIO_CONCURRENCY = 3;  // Max 3 audio requests in parallel
+const IMAGE_CONCURRENCY = 2;  // Max 2 image requests in parallel (heavier)
 ```
+
+**3. Update the Audio Phase loop (if needed for parallel chunk calls):**
+
+The current audio loop is sequential (one chunk at a time). If the backend supports parallel chunk requests, we can batch them. However, since audio uses `audioStartIndex` sequentially, the fix here is to ensure the existing sequential approach doesn't fire too many rapid requests:
+
+```typescript
+// Add a small stagger delay between chunk requests to prevent connection flooding
+if (audioResult.hasMore && typeof audioResult.nextStartIndex === "number") {
+  audioStartIndex = audioResult.nextStartIndex;
+  await sleep(100); // Small stagger to prevent connection flooding
+}
+```
+
+**4. Update the Images Phase loop similarly:**
+
+```typescript
+// Add stagger delay for image chunks
+if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
+  imageStartIndex = imagesResult.nextStartIndex;
+  await sleep(100); // Small stagger to prevent connection flooding
+}
+```
+
+## Why This Approach
+
+1. **Compatible with existing backend** - The backend already handles chunking internally. We don't need to change it.
+
+2. **Prevents "Failed to fetch"** - The small stagger delay prevents rapid-fire sequential requests from overwhelming the browser's connection pool.
+
+3. **`processWithConcurrency` ready for future use** - If you later want to make multiple phase calls in parallel (e.g., audio for scenes 1-3 while images for scenes 1-3), this helper is ready.
+
+4. **Maintains existing retry logic** - The `callPhase` helper already has 3-attempt retry with exponential backoff for transient failures.
 
 ## Technical Details
 
-- Each model gets up to 5 retries with text variations to bypass content filters
-- Total attempts: 2 models × 5 retries = 10 attempts via Direct Google API
-- Then 2 more models × standard retries via Lovable AI Gateway
-- The invalid `gemini-2.0-flash-live-001` was causing wasted 404 errors on every generation
+| Component | Current Behavior | After Fix |
+|-----------|-----------------|-----------|
+| Audio Phase | Sequential chunked calls | Sequential with 100ms stagger delay |
+| Images Phase | Sequential chunked calls | Sequential with 100ms stagger delay |
+| Network Retries | 3 attempts with backoff | Unchanged |
+| Concurrency Helper | Not present | Added for future parallel operations |
 
-## Deployment
-After approval, the `generate-video` Edge Function will be redeployed to apply the fix.
+## Files to Modify
+
+- `src/hooks/useGenerationPipeline.ts` - Add helper function, constants, and stagger delays
+
