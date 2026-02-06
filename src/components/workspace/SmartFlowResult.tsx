@@ -44,6 +44,7 @@ interface SmartFlowResultProps {
   generationId?: string;
   projectId?: string;
   onScenesUpdate?: (scenes: Scene[]) => void;
+  brandMark?: string;
 }
 
 export function SmartFlowResult({
@@ -57,6 +58,7 @@ export function SmartFlowResult({
   generationId,
   projectId,
   onScenesUpdate,
+  brandMark,
 }: SmartFlowResultProps) {
   const [scenes, setScenes] = useState(initialScenes);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -442,7 +444,7 @@ export function SmartFlowResult({
           ]);
           setExportLogsVersion((v) => v + 1);
           shouldAutoDownloadRef.current = true;
-          void exportVideo(scenes, format).catch(() => {
+          void exportVideo(scenes, format, brandMark).catch(() => {
             setExportLogsVersion((v) => v + 1);
           });
         }}

@@ -391,6 +391,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                   costTracking={generationState.costTracking}
                   generationId={generationState.generationId}
                   projectId={generationState.projectId}
+                  brandMark={brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined}
                 />
               </motion.div>
             ) : (

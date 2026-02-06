@@ -390,6 +390,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     onScenesUpdate={(updatedScenes) => {
                       // Update local state if needed for regeneration
                     }}
+                    brandMark={brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined}
                   />
                 </motion.div>
               ) : (
