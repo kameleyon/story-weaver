@@ -2258,21 +2258,105 @@ async function generateImageWithReplicate(
   }
 }
 
-// ============= TRUE IMAGE EDITING WITH NANO BANANA =============
-async function editImageWithNanoBanana(
-  _sourceImageUrl: string,
-  _editPrompt: string,
-  _styleDescription: string,
-  _overlayText?: { title?: string; subtitle?: string },
+// ============= TRUE IMAGE EDITING WITH REPLICATE NANO BANANA =============
+// This function uses Replicate's nano-banana-pro/nano-banana with image_input parameter
+// for true image editing (img2img) rather than text-to-image regeneration.
+async function editImageWithReplicate(
+  sourceImageUrl: string,
+  editPrompt: string,
+  replicateApiKey: string,
+  format: string,
+  useProModel: boolean = false,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  // IMPORTANT:
-  // This project no longer uses Lovable AI Gateway for image editing.
-  // "Apply Edit" must run through Hypereal/Replicate so provider + cost logging stays consistent.
-  console.warn("[editImage] Nano Banana (Lovable AI Gateway) image editing is disabled in this project");
-  return {
-    ok: false,
-    error: "Nano Banana (Lovable AI Gateway) image editing disabled - use Hypereal/Replicate pipeline",
-  };
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  const modelName = useProModel ? "Nano Banana Pro" : "Nano Banana";
+
+  try {
+    console.log(`[IMG-EDIT] Editing image with ${modelName}, format: ${format}, aspect_ratio: ${aspectRatio}`);
+    console.log(`[IMG-EDIT] Source image: ${sourceImageUrl.substring(0, 80)}...`);
+    console.log(`[IMG-EDIT] Edit prompt: ${editPrompt.substring(0, 200)}...`);
+
+    // Build input with image_input parameter for true image editing
+    const input: Record<string, unknown> = {
+      prompt: editPrompt,
+      aspect_ratio: aspectRatio,
+      output_format: "png",
+      // Pass the source image for editing - this is the key difference from T2I
+      image_input: [sourceImageUrl],
+    };
+
+    // Add resolution for Pro model (1K = 1024px on the long side)
+    if (useProModel) {
+      input.resolution = "1K";
+    }
+
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({ input }),
+    });
+
+    if (!createResponse.ok) {
+      const status = createResponse.status;
+      const errText = await createResponse.text().catch(() => "");
+      console.error(`[IMG-EDIT] ${modelName} create failed: ${status} - ${errText}`);
+      return {
+        ok: false,
+        error: `Replicate ${modelName} edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+      };
+    }
+
+    let prediction = await createResponse.json();
+    console.log(`[IMG-EDIT] ${modelName} prediction started: ${prediction.id}, status: ${prediction.status}`);
+
+    // Poll for completion if not finished
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await sleep(2000);
+      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${replicateApiKey}` },
+      });
+      prediction = await pollResponse.json();
+    }
+
+    if (prediction.status === "failed") {
+      console.error(`[IMG-EDIT] ${modelName} prediction failed: ${prediction.error}`);
+      return { ok: false, error: prediction.error || "Image editing failed" };
+    }
+
+    // Nano Banana returns output as URL string or array of URLs
+    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    const imageUrl =
+      typeof first === "string"
+        ? first
+        : first && typeof first === "object" && typeof first.url === "string"
+          ? first.url
+          : null;
+
+    if (!imageUrl) {
+      console.error(
+        `[IMG-EDIT] ${modelName} no image URL in response:`,
+        JSON.stringify(prediction.output).substring(0, 200),
+      );
+      return { ok: false, error: `No image URL returned from ${modelName} edit` };
+    }
+
+    console.log(`[IMG-EDIT] ${modelName} success, downloading from: ${imageUrl.substring(0, 80)}...`);
+
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) return { ok: false, error: "Failed to download edited image" };
+
+    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+    console.log(`[IMG-EDIT] ${modelName} edited image downloaded: ${bytes.length} bytes`);
+    return { ok: true, bytes };
+  } catch (err) {
+    console.error(`[IMG-EDIT] ${modelName} error:`, err);
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
 }
 
 // ============= PHASE HANDLERS =============
@@ -4762,131 +4846,48 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       });
     }
   } else {
-    // Apply Edit - DO NOT use Lovable AI Gateway.
-    // Instead, run through the same Hypereal -> Replicate pipeline so costs/logging are consistent.
+    // Apply Edit - Use TRUE IMAGE EDITING via Replicate nano-banana with image_input
+    // This passes the source image to the model so it can edit the specific parts requested
+    // rather than regenerating from scratch using only text prompts.
     console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Apply Edit via Hypereal/Replicate (no gateway)`,
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Apply Edit via Replicate img2img (true editing)`,
     );
 
-    // Build the CORRECT base prompt for the target image index (same mapping as full regeneration)
-    let basePrompt = scene.visualPrompt;
-
-    if (targetImageIndex > 0 && scene.subVisuals && scene.subVisuals.length > 0) {
-      const subVisualIndex = targetImageIndex - 1;
-      if (scene.subVisuals[subVisualIndex]) {
-        basePrompt = scene.subVisuals[subVisualIndex];
-        console.log(
-          `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using subVisuals[${subVisualIndex}] prompt (apply edit)`,
-        );
-      } else {
-        const variations = [
-          "close-up detail shot, different angle, ",
-          "wide establishing shot, alternative perspective, ",
-        ];
-        basePrompt = variations[subVisualIndex] + scene.visualPrompt;
-        console.log(
-          `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - No subVisual[${subVisualIndex}], synthesizing variation (apply edit)`,
-        );
-      }
-    } else {
-      console.log(
-        `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Using primary visualPrompt (apply edit)`,
-      );
+    if (!sourceImageUrl) {
+      throw new Error("Cannot apply edit: no source image URL available");
     }
 
-    const modifiedPrompt = `${basePrompt}
-
-USER MODIFICATION REQUEST: ${imageModification}
+    // Build edit prompt that tells the model what to change
+    // The source image is passed separately via image_input parameter
+    const editPrompt = `Edit this image: ${imageModification}
 
 STYLE: ${styleDescription}
 
-IMPORTANT:
-- Recreate the scene as close as possible to the previous image (composition, camera angle, lighting, characters)
-- Apply ONLY the requested modification
-- Keep everything else consistent`;
+IMPORTANT EDITING INSTRUCTIONS:
+- Keep the existing composition, camera angle, lighting, and overall scene EXACTLY the same
+- ONLY modify the specific element(s) mentioned in the edit request
+- Preserve all characters, objects, and details that are NOT being edited
+- Maintain the same artistic style and color palette
+- This is an EDIT, not a regeneration - preserve as much of the original as possible`;
 
-    // Try Hypereal first (tiered: Pro uses nano-banana-pro-t2i, Standard uses nano-banana-t2i)
-    // Fallback to Replicate with tiered model (Pro uses nano-banana-pro, Standard uses nano-banana)
-    if (useHypereal && hyperealApiKey) {
-      console.log(`[regenerate-image] Apply Edit: Using Hypereal ${hyperealModel} (Pro: ${isProUser})`);
-      const hyperealStartTime = Date.now();
-      imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format, useProModel);
-      const hyperealDurationMs = Date.now() - hyperealStartTime;
+    console.log(`[regenerate-image] Apply Edit: Using Replicate ${replicateModelLabel} with image_input (Pro: ${isProUser})`);
+    console.log(`[regenerate-image] Source image for editing: ${sourceImageUrl.substring(0, 80)}...`);
+    
+    const replicateStartTime = Date.now();
+    imageResult = await editImageWithReplicate(sourceImageUrl, editPrompt, replicateApiKey, format, useProModel);
+    const replicateDurationMs = Date.now() - replicateStartTime;
 
-      await logApiCall({
-        supabase,
-        userId: user.id,
-        generationId,
-        provider: "hypereal",
-        model: hyperealModel,
-        status: imageResult.ok ? "success" : "error",
-        totalDurationMs: hyperealDurationMs,
-        cost: imageResult.ok ? PRICING.imageHypereal : 0,
-        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-      });
-
-      if (!imageResult.ok) {
-        const hyperealError = imageResult.error || "Unknown Hypereal error";
-        console.log(
-          `[regenerate-image] Apply Edit: Hypereal failed (${hyperealError}), falling back to Replicate ${replicateModelLabel}`,
-        );
-
-        // LOG TO SYSTEM_LOGS so it shows in admin panel!
-        await logSystemEvent({
-          supabase,
-          userId: user.id,
-          eventType: "hypereal_fallback",
-          category: "system_warning",
-          message: `Hypereal API failed during image edit, falling back to Replicate ${replicateModelLabel}`,
-          details: {
-            sceneIndex,
-            targetImageIndex,
-            error: hyperealError,
-            fallbackProvider: `replicate_${replicateModelLabel.replace("-", "_")}`,
-            hyperealModel,
-            replicateModel,
-            isProUser,
-            phase: "regenerate-image",
-            action: "apply_edit",
-          },
-          generationId,
-          projectId,
-        });
-
-        const replicateStartTime = Date.now();
-        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
-        const replicateDurationMs = Date.now() - replicateStartTime;
-
-        await logApiCall({
-          supabase,
-          userId: user.id,
-          generationId,
-          provider: "replicate",
-          model: replicateModel,
-          status: imageResult.ok ? "success" : "error",
-          totalDurationMs: replicateDurationMs,
-          cost: imageResult.ok ? replicatePricing : 0,
-          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-        });
-      }
-    } else {
-      console.log(`[regenerate-image] Apply Edit: Using Replicate ${replicateModelLabel} (Pro: ${isProUser})`);
-      const replicateStartTime = Date.now();
-      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
-      const replicateDurationMs = Date.now() - replicateStartTime;
-
-      await logApiCall({
-        supabase,
-        userId: user.id,
-        generationId,
-        provider: "replicate",
-        model: replicateModel,
-        status: imageResult.ok ? "success" : "error",
-        totalDurationMs: replicateDurationMs,
-        cost: imageResult.ok ? replicatePricing : 0,
-        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-      });
-    }
+    await logApiCall({
+      supabase,
+      userId: user.id,
+      generationId,
+      provider: "replicate",
+      model: replicateModel,
+      status: imageResult.ok ? "success" : "error",
+      totalDurationMs: replicateDurationMs,
+      cost: imageResult.ok ? replicatePricing : 0,
+      errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+    });
   }
 
   if (!imageResult.ok) {
