@@ -37,6 +37,47 @@ const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const longYield = () => new Promise<void>((resolve) => setTimeout(resolve, 16)); // One frame (~16ms)
 const gcYield = () => new Promise<void>((resolve) => setTimeout(resolve, 50)); // Allow garbage collection
 
+/**
+ * Draw a consistent brand mark watermark on the canvas
+ * Uses fixed styling: Inter font, 20% black background, 80% white text
+ */
+function drawBrandWatermark(
+  ctx: CanvasRenderingContext2D,
+  brandMark: string,
+  canvasWidth: number,
+  canvasHeight: number
+) {
+  const fontSize = Math.max(14, Math.round(canvasWidth * 0.018)); // Proportional font size (1.8% of width)
+  const paddingX = Math.round(fontSize * 0.8);
+  const paddingY = Math.round(fontSize * 0.4);
+  const borderRadius = Math.round(fontSize * 0.4);
+  const bottomMargin = Math.round(canvasHeight * 0.03); // 3% from bottom
+
+  // Set font and measure text
+  ctx.font = `300 ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  
+  const textMetrics = ctx.measureText(brandMark);
+  const textWidth = textMetrics.width;
+  const textHeight = fontSize;
+  
+  const pillWidth = textWidth + paddingX * 2;
+  const pillHeight = textHeight + paddingY * 2;
+  const pillX = (canvasWidth - pillWidth) / 2;
+  const pillY = canvasHeight - bottomMargin - pillHeight;
+  
+  // Draw pill background (20% opacity black)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+  ctx.fill();
+  
+  // Draw text (80% opacity white)
+  ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+  ctx.fillText(brandMark, canvasWidth / 2, pillY + pillHeight / 2);
+}
+
 // Wait for video encoder queue to drain to prevent memory buildup
 const waitForEncoderDrain = async (encoder: VideoEncoder, maxQueue = 10) => {
   while (encoder.encodeQueueSize > maxQueue) {
@@ -70,11 +111,15 @@ export function useVideoExport() {
   }, []);
 
   const exportVideo = useCallback(
-    async (scenes: Scene[], format: "landscape" | "portrait" | "square") => {
+    async (
+      scenes: Scene[], 
+      format: "landscape" | "portrait" | "square",
+      brandMark?: string
+    ) => {
       abortRef.current = false;
       const runId = ++exportRunIdRef.current;
       
-      log("Run", runId, "Starting Safe Export (Fixed Audio Headers)", { scenes: scenes.length, format });
+      log("Run", runId, "Starting Safe Export (Fixed Audio Headers)", { scenes: scenes.length, format, brandMark: !!brandMark });
 
       const AudioEncoderCtor = (globalThis as any).AudioEncoder;
       const VideoEncoderCtor = (globalThis as any).VideoEncoder;
@@ -435,12 +480,17 @@ export function useVideoExport() {
                } else {
                  ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
                }
-             }
+              }
 
-             // Wait for encoder to catch up if queue is backing up (backpressure)
-             await waitForEncoderDrain(videoEncoder, 10);
-             
-             const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
+              // Draw brand watermark overlay if provided (after all image rendering)
+              if (brandMark && brandMark.trim()) {
+                drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+              }
+
+              // Wait for encoder to catch up if queue is backing up (backpressure)
+              await waitForEncoderDrain(videoEncoder, 10);
+              
+              const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
              const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6/fps) });
              
              const keyFrame = globalFrameCount % (fps * 2) === 0;

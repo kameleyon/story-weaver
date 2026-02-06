@@ -2662,7 +2662,7 @@ Return ONLY valid JSON:
   "scenes": [{
     "number": 1,
     "voiceover": "Optional narration script - but the visual is the star here...",
-    "visualPrompt": "You are an expert marketing and content creator, you know your targeted population and know how to catch their attention. So, Be extremely creative and using your expert marketing skills to create a catchy, detailed, elegant yet captivating editorial infographic illustration using elements, images and typography that suit best the topic presented. LAYOUT: [Magazine/Panel layout]. MAIN TITLE: Bold text '[YOUR TITLE]' at top center. CENTRAL VISUAL: [Describe the anchor image - a character, object, or symbol]. SECTION 1: Title text '[TITLE 1]' with subtitle '[SUBTITLE]' and description paragraph text '[Full 15-25 word explanation]'. Accompanied by [icon description]. SECTION 2: Title text '[TITLE 2]' with description paragraph text '[explanation]'. [Continue for all sections]. FLOATING ICONS: [List thematic icons around edges]. COLOR PALETTE: [Specify colors matching content theme]. ${brandMark ? `FOOTER: Small text "${brandMark}" at bottom-center.` : ""}",
+    "visualPrompt": "You are an expert marketing and content creator, you know your targeted population and know how to catch their attention. So, Be extremely creative and using your expert marketing skills to create a catchy, detailed, elegant yet captivating editorial infographic illustration using elements, images and typography that suit best the topic presented. LAYOUT: [Magazine/Panel layout]. MAIN TITLE: Bold text '[YOUR TITLE]' at top center. CENTRAL VISUAL: [Describe the anchor image - a character, object, or symbol]. SECTION 1: Title text '[TITLE 1]' with subtitle '[SUBTITLE]' and description paragraph text '[Full 15-25 word explanation]'. Accompanied by [icon description]. SECTION 2: Title text '[TITLE 2]' with description paragraph text '[explanation]'. [Continue for all sections]. FLOATING ICONS: [List thematic icons around edges]. COLOR PALETTE: [Specify colors matching content theme].",
     "duration": ${DEFAULT_DURATION}
   }]
 }
@@ -2907,7 +2907,6 @@ All image prompts must adhere to this style:
 - ASPECT RATIO: ${format} (${dimensions.width}x${dimensions.height})
 - QUALITY: Ultra-detailed, 8K resolution, dramatic lighting
 - CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
-${brandMark ? `- BRANDING: Every image prompt must include instructions to overlay the brand mark "${brandMark}" in the bottom-center as a floating digital watermark` : ""}
 
 === TIMING REQUIREMENTS ===
 - Target duration: ${config.targetDuration} seconds
@@ -2974,7 +2973,6 @@ When generating the 'visualPrompt' for each scene, you MUST:
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera). NEVER mention style names like "stick figure", "anime", "realistic", etc. in your descriptions - just describe the subject as "a person", "a man", "a woman", etc.
-${brandMark ? `7. End with: "Small subtle brand watermark reading exactly '${brandMark}' (no additional text or numbers) in bottom-center with nearly transparent dark background pill, Inter Light font, thin weight, white text, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -3282,7 +3280,6 @@ All image prompts must adhere to this style:
 - ASPECT RATIO: ${format} (${dimensions.width}x${dimensions.height})
 - QUALITY: Cinematic, ultra-detailed, 8K resolution, dramatic lighting
 - CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
-${brandName ? `- BRANDING: Every image prompt must include instructions to overlay the brand mark "${brandName}" in the bottom-center as a floating digital watermark` : ""}
 
 === TIMING REQUIREMENTS ===
 - Target duration: ${config.targetDuration} seconds
@@ -3351,7 +3348,6 @@ When generating the 'visualPrompt' for each scene, you MUST:
 4. Include CAMERA ANGLE (close-up, wide shot, low angle, over-shoulder, etc.)
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera). NEVER mention style names like "stick figure", "anime", "realistic", etc. in your descriptions - just describe the subject as "a person", "a man", "a woman", etc.
-${brandName ? `7. End with: "Small subtle brand watermark reading exactly '${brandName}' (no additional text or numbers) in bottom-center with nearly transparent dark background pill, Inter Light font, thin weight, white text, minimal size"` : ""}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
@@ -4017,12 +4013,9 @@ TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as 
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
     }
 
-    // Add brand mark watermark if provided
-    let brandMarkInstructions = "";
-    if (brandMark && brandMark.trim()) {
-      brandMarkInstructions = `
-BRANDING: Overlay ONLY the exact text "${brandMark}" (no additional text, numbers, or percentages) as a SMALL, SUBTLE watermark in the bottom-center of the image. Place it on a nearly transparent dark background pill with rounded corners. Use a light sans-serif font in thin weight, small size. The text must be white for visibility. Keep it understated like a professional media trademark, NOT large or prominent. CRITICAL: The watermark text must be EXACTLY "${brandMark}" with nothing else added.`;
-    }
+    // Brand mark watermark is now added programmatically during video export for consistency
+    // This ensures uniform font, size, and opacity across all styles and generations
+    const brandMarkInstructions = "";
 
     // Add character consistency instructions if we have a character bible
     let characterInstructions = "";

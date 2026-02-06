@@ -44,6 +44,7 @@ interface GenerationResultProps {
   generationId?: string;
   projectId?: string;
   onScenesUpdate?: (scenes: Scene[]) => void;
+  brandMark?: string;
 }
 
 export function GenerationResult({ 
@@ -57,6 +58,7 @@ export function GenerationResult({
   generationId,
   projectId,
   onScenesUpdate,
+  brandMark,
 }: GenerationResultProps) {
   const [scenes, setScenes] = useState(initialScenes);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
@@ -695,7 +697,7 @@ export function GenerationResult({
           ]);
           setExportLogsVersion((v) => v + 1);
           shouldAutoDownloadRef.current = true;
-          void exportVideo(scenes, format).catch(() => {
+          void exportVideo(scenes, format, brandMark).catch(() => {
             setExportLogsVersion((v) => v + 1);
           });
         }}
