@@ -163,18 +163,14 @@ serve(async (req) => {
       const productId = subscription.items.data[0].price.product as string;
       logStep("Active subscription found", { subscriptionId: subscription.id, productId, periodEnd: periodEndRaw });
 
-      // Map product IDs to plans - Updated tier names
+      // Map product IDs to plans - Corrected Stripe product IDs
       const productToPlan: Record<string, string> = {
-        // New tiers
-        "prod_TqznNZmUhevHh4": "starter",
-        "prod_TqznlgT1Jl6Re7": "creator",
-        "prod_TqznqQYYG4UUY8": "professional",
-        // Legacy tiers (map to new names)
-        "prod_TnzLdHWPkqAiqr": "starter",    // old premium -> starter
-        "prod_TnzLCasreSakEb": "creator",     // old pro -> creator
-        "prod_TnzLP4tQINtak9": "professional", // old platinum -> professional
+        // Actual Stripe products
+        "prod_Tnyz2nMLqpHz3R": "starter",      // Premium Plan -> starter
+        "prod_Tnz0KUQX2J5VBH": "creator",      // Pro Plan -> creator
+        "prod_Tnz0BeRmJDdh0V": "professional", // Platinum Plan -> professional
       };
-      plan = productToPlan[productId] || "starter";
+      plan = productToPlan[productId] || "free";
     }
 
     // creditData already fetched above
