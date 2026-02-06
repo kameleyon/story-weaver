@@ -364,11 +364,11 @@ const PRICING = {
   imageHypereal: 0.03, // $0.03 per image (Hypereal nano-banana-pro-t2i estimate)
 };
 
-// ============= LLM CALL HELPER (OpenRouter Only - NO Lovable AI Gateway) =============
+// ============= LLM CALL HELPER (OpenRouter Primary, Lovable AI Fallback) =============
 interface LLMCallResult {
   content: string;
   tokensUsed: number;
-  provider: "openrouter"; // Only OpenRouter - NO Lovable AI Gateway
+  provider: "openrouter" | "lovable_ai";
   durationMs: number;
 }
 
@@ -385,64 +385,107 @@ async function callLLMWithFallback(
   const maxTokens = options.maxTokens ?? 8192;
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-  // OpenRouter is the ONLY provider - NO Lovable AI Gateway fallback
-  if (!OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is required - no fallback available");
-  }
+  // Try OpenRouter first (primary)
+  if (OPENROUTER_API_KEY) {
+    const startTime = Date.now();
+    try {
+      console.log(`[LLM] Calling OpenRouter with ${model}...`);
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://audiomax.lovable.app",
+          "X-Title": "AudioMax",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      });
 
-  const startTime = Date.now();
-  try {
-    console.log(`[LLM] Calling OpenRouter with ${model}...`);
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://audiomax.lovable.app",
-        "X-Title": "AudioMax",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature,
-        max_tokens: maxTokens,
-      }),
-    });
+      const durationMs = Date.now() - startTime;
 
-    const durationMs = Date.now() - startTime;
-
-    if (response.ok) {
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (content) {
-        console.log(`[LLM] OpenRouter success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
-        return {
-          content,
-          tokensUsed: data.usage?.total_tokens || 0,
-          provider: "openrouter",
-          durationMs,
-        };
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (content) {
+          console.log(`[LLM] OpenRouter success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
+          return {
+            content,
+            tokensUsed: data.usage?.total_tokens || 0,
+            provider: "openrouter",
+            durationMs,
+          };
+        }
       }
-    }
 
-    const errText = await response.text().catch(() => "");
-    throw new Error(`OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : "Unknown OpenRouter error";
-    console.error(`[LLM] OpenRouter error:`, errorMsg);
-    throw new Error(`OpenRouter LLM call failed: ${errorMsg}`);
+      const errText = await response.text().catch(() => "");
+      console.warn(`[LLM] OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
+    } catch (err) {
+      console.warn(`[LLM] OpenRouter error:`, err);
+    }
+  } else {
+    console.warn(`[LLM] OPENROUTER_API_KEY not configured, using Lovable AI directly`);
   }
+
+  // Fallback to Lovable AI Gateway
+  if (!LOVABLE_API_KEY) {
+    throw new Error("Neither OPENROUTER_API_KEY nor LOVABLE_API_KEY is configured");
+  }
+
+  console.log(`[LLM] Falling back to Lovable AI Gateway with ${model}...`);
+  const startTime = Date.now();
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  const durationMs = Date.now() - startTime;
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Lovable AI failed (${response.status}): ${errText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error("No content received from Lovable AI");
+  }
+
+  console.log(`[LLM] Lovable AI fallback success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
+  return {
+    content,
+    tokensUsed: data.usage?.total_tokens || 0,
+    provider: "lovable_ai",
+    durationMs,
+  };
 }
 
 // ============= API CALL LOGGING =============
 // OpenRouter is used for script generation with google/gemini-3-pro-preview
-// Hypereal/Replicate for image generation - NO Lovable AI Gateway
+// Lovable AI Gateway is used for image generation (nano-banana)
 interface ApiCallLogParams {
   supabase: any;
   userId: string;
   generationId?: string;
-  provider: "openrouter" | "replicate" | "replicate_fallback" | "hypereal" | "google_tts" | "elevenlabs";
+  provider: "openrouter" | "lovable_ai" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
   model: string;
   status: "success" | "error" | "started";
   queueTimeMs?: number;
@@ -1317,8 +1360,7 @@ function sanitizeForGeminiTTS(text: string): string {
 
 // ============= GEMINI TTS MODELS (Haitian Creole only) =============
 // Primary: 2.5 Pro Preview TTS (best quality for HC)
-// Fallback: 2.5 Flash Preview TTS
-// NOTE: NO Lovable AI Gateway fallback - direct Gemini API only
+// Fallback: 2.5 Flash Preview TTS → Lovable AI Gateway (2.5 Flash → 2.5 Pro)
 const GEMINI_TTS_MODELS = [
   { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
   { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
@@ -1546,21 +1588,121 @@ async function generateSceneAudioGemini(
   return { url: null, error: "All Gemini TTS models failed" };
 }
 
-// ============= LOVABLE AI GATEWAY TTS - DISABLED =============
-// NOTE: Lovable AI Gateway is DISABLED in this project.
-// All TTS for Haitian Creole uses direct Gemini API only.
-// This function stub remains for type compatibility but returns an error.
+// ============= LOVABLE AI GATEWAY TTS (Fallback for Haitian Creole) =============
+// Uses Lovable AI Gateway with Gemini models for TTS fallback when direct Google API fails
 async function generateSceneAudioLovableAI(
-  _scene: Scene,
+  scene: Scene,
   sceneIndex: number,
-  _lovableApiKey: string,
-  _supabase: any,
-  _userId: string,
-  _projectId: string,
-  _isRegeneration: boolean = false,
+  lovableApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
-  console.warn(`[TTS-LovableAI] Scene ${sceneIndex + 1} - Lovable AI Gateway is DISABLED in this project`);
-  return { url: null, error: "Lovable AI Gateway is disabled - use direct Gemini TTS only" };
+  let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
+
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  // Remove promotional/call-to-action phrases that trigger content filters
+  const promotionalPatterns = [
+    /\b(swiv|follow|like|subscribe|kòmante|comment|pataje|share|abòneman)\b[^.]*\./gi,
+    /\b(swiv kont|follow the|like and|share this)\b[^.]*$/gi,
+    /\.\s*(swiv|like|pataje|share|follow)[^.]*$/gi,
+  ];
+  for (const pattern of promotionalPatterns) {
+    voiceoverText = voiceoverText.replace(pattern, ".");
+  }
+  voiceoverText = voiceoverText.replace(/\.+/g, ".").replace(/\s+/g, " ").trim();
+
+  // Lovable AI models to try for TTS
+  const LOVABLE_TTS_MODELS = [
+    { model: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  ];
+
+  for (const { model, label } of LOVABLE_TTS_MODELS) {
+    try {
+      console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} - Trying ${label} via Lovable AI Gateway`);
+      console.log(`[TTS-LovableAI] Text length: ${voiceoverText.length} chars`);
+
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          modalities: ["audio", "text"],
+          audio: {
+            voice: "Enceladus",
+            format: "wav",
+          },
+          messages: [
+            {
+              role: "user",
+              content: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${voiceoverText}`,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        console.error(`[TTS-LovableAI] ${label} API error: ${response.status} - ${errText}`);
+        continue; // Try next model
+      }
+
+      const data = await response.json();
+      console.log(`[TTS-LovableAI] ${label} response received`);
+
+      // Extract audio from response
+      const message = data.choices?.[0]?.message;
+      const audioData = message?.audio?.data;
+
+      if (!audioData) {
+        console.error(`[TTS-LovableAI] ${label} no audio data in response:`, JSON.stringify(data).substring(0, 300));
+        continue; // Try next model
+      }
+
+      const audioBytes = base64Decode(audioData);
+      console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} audio bytes: ${audioBytes.length}`);
+
+      // Estimate duration (WAV format: 16-bit, 24kHz)
+      const durationSeconds = Math.max(1, audioBytes.length / (24000 * 2));
+
+      const audioPath = isRegeneration
+        ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
+        : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
+      const { error: uploadError } = await supabase.storage
+        .from("audio")
+        .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: signedData, error: signError } = await supabase.storage
+        .from("audio")
+        .createSignedUrl(audioPath, 604800);
+
+      if (signError || !signedData?.signedUrl) {
+        throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+      }
+
+      console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} ✅ SUCCESS with ${label}`);
+      return {
+        url: signedData.signedUrl,
+        durationSeconds,
+        provider: `Lovable AI ${label} TTS`,
+      };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Unknown Lovable AI TTS error";
+      console.error(`[TTS-LovableAI] Scene ${sceneIndex + 1} ${label} error:`, errorMsg);
+    }
+  }
+
+  return { url: null, error: "All Lovable AI TTS models failed" };
 }
 
 // ============= OPENROUTER TTS (gpt-audio and gpt-4o-mini-tts) =============
@@ -2002,15 +2144,15 @@ async function generateSceneAudio(
 
   // ========== CASE 1: Haitian Creole + Cloned Voice ==========
   // Generate with Gemini TTS → Transform with ElevenLabs Speech-to-Speech
-  // NO Lovable AI Gateway fallback - direct Gemini only
+  // Fallback: Lovable AI Gateway TTS if direct Gemini fails
   if (isHC && customVoiceId && ELEVENLABS_API_KEY) {
     console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole + Cloned Voice workflow`);
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS (NO Gateway fallback)`);
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS`);
 
     const MAX_GEMINI_RETRIES = 5;
     let geminiAudioUrl: string | null = null;
 
-    // Try direct Google API only (NO Lovable AI Gateway fallback)
+    // Try direct Google API first
     if (googleApiKey) {
       for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
         if (retry > 0) {
@@ -2036,15 +2178,35 @@ async function generateSceneAudio(
         }
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
       }
-    } else {
-      console.error(`[TTS] Scene ${sceneIndex + 1} - No Google API key configured for Haitian Creole TTS`);
+    }
+
+    // Fallback to Lovable AI if direct Gemini failed
+    if (!geminiAudioUrl) {
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Direct Gemini TTS failed, trying Lovable AI Gateway fallback...`);
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (LOVABLE_API_KEY) {
+        const lovableResult = await generateSceneAudioLovableAI(
+          scene,
+          sceneIndex,
+          LOVABLE_API_KEY,
+          supabase,
+          userId,
+          projectId,
+          isRegeneration,
+        );
+
+        if (lovableResult.url) {
+          geminiAudioUrl = lovableResult.url;
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Lovable AI TTS base audio ready (fallback)`);
+        }
+      }
     }
 
     if (!geminiAudioUrl) {
       console.error(
-        `[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation (Gemini TTS failed)`,
+        `[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation (tried Gemini + Lovable AI)`,
       );
-      return { url: null, error: "Gemini TTS failed for Haitian Creole - cannot proceed with voice transformation" };
+      return { url: null, error: "All TTS options failed - cannot proceed with voice transformation" };
     }
 
     // Step 2: Transform the audio with ElevenLabs Speech-to-Speech
@@ -2092,11 +2254,11 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
-  // Use Gemini TTS with extended fallback (2 models × 5 retries = up to 10 attempts)
-  // NO Lovable AI Gateway fallback - direct Gemini API only
+  // Use Gemini TTS with extended fallback (3 models × 5 retries = up to 15 attempts)
+  // Fallback: Lovable AI Gateway as last resort
   if (isHC) {
     console.log(
-      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS (NO Gateway fallback)`,
+      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with extended fallback chain`,
     );
 
     if (googleApiKey) {
@@ -2129,11 +2291,32 @@ async function generateSceneAudio(
       console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API key configured`);
     }
 
-    // All TTS options failed for Haitian Creole (NO Lovable AI Gateway fallback)
+    // Fallback: Try Lovable AI Gateway with Gemini TTS
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed, trying Lovable AI Gateway fallback...`);
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (LOVABLE_API_KEY) {
+      const lovableResult = await generateSceneAudioLovableAI(
+        scene,
+        sceneIndex,
+        LOVABLE_API_KEY,
+        supabase,
+        userId,
+        projectId,
+        isRegeneration,
+      );
+
+      if (lovableResult.url) {
+        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lovable AI Gateway TTS (fallback)`);
+        return lovableResult;
+      }
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Lovable AI fallback also failed: ${lovableResult.error}`);
+    }
+
+    // All TTS options failed for Haitian Creole
     console.error(`[TTS] Scene ${sceneIndex + 1} - All Gemini TTS options failed for Haitian Creole`);
     return {
       url: null,
-      error: "All Gemini TTS models failed for Haitian Creole (tried 2 models × 5 retries)",
+      error: "All Gemini TTS models failed for Haitian Creole (tried 3 models × 5 retries + Lovable AI fallback)",
     };
   }
 
@@ -2258,103 +2441,134 @@ async function generateImageWithReplicate(
   }
 }
 
-// ============= TRUE IMAGE EDITING WITH REPLICATE NANO BANANA =============
-// This function uses Replicate's nano-banana-pro/nano-banana with image_input parameter
-// for true image editing (img2img) rather than text-to-image regeneration.
-async function editImageWithReplicate(
+// ============= TRUE IMAGE EDITING WITH NANO BANANA =============
+async function editImageWithNanoBanana(
   sourceImageUrl: string,
   editPrompt: string,
-  replicateApiKey: string,
-  format: string,
-  useProModel: boolean = false,
+  styleDescription: string,
+  overlayText?: { title?: string; subtitle?: string },
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-  const modelName = useProModel ? "Nano Banana Pro" : "Nano Banana";
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    return { ok: false, error: "LOVABLE_API_KEY not configured" };
+  }
 
   try {
-    console.log(`[IMG-EDIT] Editing image with ${modelName}, format: ${format}, aspect_ratio: ${aspectRatio}`);
-    console.log(`[IMG-EDIT] Source image: ${sourceImageUrl.substring(0, 80)}...`);
-    console.log(`[IMG-EDIT] Edit prompt: ${editPrompt.substring(0, 200)}...`);
+    console.log(`[editImage] Starting image edit with Nano Banana...`);
+    console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
+    console.log(`[editImage] Edit prompt: ${editPrompt}`);
 
-    // Build input with image_input parameter for true image editing
-    const input: Record<string, unknown> = {
-      prompt: editPrompt,
-      aspect_ratio: aspectRatio,
-      output_format: "png",
-      // Pass the source image for editing - this is the key difference from T2I
-      image_input: [sourceImageUrl],
-    };
+    // Build the modification prompt with overlay text consideration
+    let fullPrompt = `Analyze this image and apply the following modification: ${editPrompt}
 
-    // Add resolution for Pro model (1K = 1024px on the long side)
-    if (useProModel) {
-      input.resolution = "1K";
+IMPORTANT REQUIREMENTS:
+- Preserve the overall composition, lighting, and style of the original image
+- Apply ONLY the requested modification while keeping everything else intact
+- Maintain the same artistic style and color palette`;
+
+    // Add overlay text preservation if present
+    if (overlayText?.title || overlayText?.subtitle) {
+      fullPrompt += `
+      
+TEXT OVERLAY TO PRESERVE:
+${overlayText.title ? `- Title: "${overlayText.title}"` : ""}
+${overlayText.subtitle ? `- Subtitle: "${overlayText.subtitle}"` : ""}
+Ensure these text elements remain visible and properly positioned in the modified image.`;
     }
 
-    const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
+    // Add style context
+    if (styleDescription) {
+      fullPrompt += `
+
+STYLE CONTEXT: ${styleDescription}`;
+    }
+
+    // Call Nano Banana via Lovable AI Gateway for image editing
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${replicateApiKey}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
-        Prefer: "wait",
       },
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: fullPrompt,
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: sourceImageUrl,
+                },
+              },
+            ],
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
     });
 
-    if (!createResponse.ok) {
-      const status = createResponse.status;
-      const errText = await createResponse.text().catch(() => "");
-      console.error(`[IMG-EDIT] ${modelName} create failed: ${status} - ${errText}`);
+    if (!response.ok) {
+      const status = response.status;
+      const errText = await response.text().catch(() => "");
+      console.error(`[editImage] Nano Banana API error: ${status} - ${errText}`);
+
+      if (status === 429) {
+        return { ok: false, error: "Rate limit exceeded. Please try again later." };
+      }
+      if (status === 402) {
+        return { ok: false, error: "Payment required. Please add credits to your workspace." };
+      }
+
       return {
         ok: false,
-        error: `Replicate ${modelName} edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `Nano Banana edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
       };
     }
 
-    let prediction = await createResponse.json();
-    console.log(`[IMG-EDIT] ${modelName} prediction started: ${prediction.id}, status: ${prediction.status}`);
+    const data = await response.json();
+    console.log(`[editImage] Nano Banana response received`);
 
-    // Poll for completion if not finished
-    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-      await sleep(2000);
-      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { Authorization: `Bearer ${replicateApiKey}` },
-      });
-      prediction = await pollResponse.json();
+    // Extract the generated image from the response
+    const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+    if (!imageData) {
+      console.error(`[editImage] No image in response:`, JSON.stringify(data).substring(0, 500));
+      return { ok: false, error: "No image returned from Nano Banana" };
     }
 
-    if (prediction.status === "failed") {
-      console.error(`[IMG-EDIT] ${modelName} prediction failed: ${prediction.error}`);
-      return { ok: false, error: prediction.error || "Image editing failed" };
+    // Check if it's a base64 data URL
+    if (imageData.startsWith("data:image/")) {
+      // Extract base64 data after the comma
+      const base64Data = imageData.split(",")[1];
+      if (!base64Data) {
+        return { ok: false, error: "Invalid base64 image data" };
+      }
+
+      const bytes = base64Decode(base64Data);
+      console.log(`[editImage] Success! Decoded ${bytes.length} bytes from base64`);
+      return { ok: true, bytes };
+    } else if (imageData.startsWith("http")) {
+      // It's a URL, download it
+      console.log(`[editImage] Downloading edited image from URL...`);
+      const imgResponse = await fetch(imageData);
+      if (!imgResponse.ok) {
+        return { ok: false, error: "Failed to download edited image" };
+      }
+
+      const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+      console.log(`[editImage] Success! Downloaded ${bytes.length} bytes`);
+      return { ok: true, bytes };
     }
 
-    // Nano Banana returns output as URL string or array of URLs
-    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-    const imageUrl =
-      typeof first === "string"
-        ? first
-        : first && typeof first === "object" && typeof first.url === "string"
-          ? first.url
-          : null;
-
-    if (!imageUrl) {
-      console.error(
-        `[IMG-EDIT] ${modelName} no image URL in response:`,
-        JSON.stringify(prediction.output).substring(0, 200),
-      );
-      return { ok: false, error: `No image URL returned from ${modelName} edit` };
-    }
-
-    console.log(`[IMG-EDIT] ${modelName} success, downloading from: ${imageUrl.substring(0, 80)}...`);
-
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) return { ok: false, error: "Failed to download edited image" };
-
-    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[IMG-EDIT] ${modelName} edited image downloaded: ${bytes.length} bytes`);
-    return { ok: true, bytes };
+    return { ok: false, error: "Unknown image format in response" };
   } catch (err) {
-    console.error(`[IMG-EDIT] ${modelName} error:`, err);
+    console.error(`[editImage] Error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
@@ -3690,10 +3904,10 @@ async function handleAudioPhase(
 }
 
 // Images phase now processes in chunks to avoid request timeouts.
-// Increased chunk size (8) to reduce round trips for large generations (36+ images).
-// Each Edge Function call has overhead, so fewer calls = less timeout risk.
-const MAX_IMAGES_PER_CALL_DEFAULT = 8;
-const MAX_IMAGES_PER_CALL_HYPEREAL = 8;
+// IMPORTANT: Smaller chunk size (4) prevents "failed to fetch" timeouts during image generation.
+// Pro model (nano-banana-pro 1K) is slower, so we keep chunks small and manageable.
+const MAX_IMAGES_PER_CALL_DEFAULT = 4;
+const MAX_IMAGES_PER_CALL_HYPEREAL = 4;
 
 async function handleImagesPhase(
   supabase: any,
@@ -3955,8 +4169,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let totalReplicateFallback = costTracking.replicateFallbackCount || 0;
 
   // Process this chunk in batches.
-  // Increased batch size to reduce total time. Rate limits are handled by stagger delay.
-  const BATCH_SIZE = useProModel ? 4 : 6;
+  // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
+  const BATCH_SIZE = useProModel ? 3 : 5;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
@@ -3992,8 +4206,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
     for (let t = batchStart; t < batchEnd; t++) {
       const task = tasksThisChunk[t];
-      // Reduced stagger delay (500ms) to speed up generation while avoiding rate limits
-      const staggerDelay = (t - batchStart) * 500;
+      // Stagger requests within batch to avoid rate limits (1.5s between each)
+      const staggerDelay = (t - batchStart) * 1500;
       batchPromises.push(
         (async () => {
           // Wait for stagger delay before starting this request
@@ -4846,48 +5060,134 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       });
     }
   } else {
-    // Apply Edit - Use TRUE IMAGE EDITING via Replicate nano-banana with image_input
-    // This passes the source image to the model so it can edit the specific parts requested
-    // rather than regenerating from scratch using only text prompts.
+    // Apply Edit - use TRUE IMAGE EDITING with Nano Banana (Gemini)
+    // This preserves the original image and only modifies the requested section/element
     console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - Apply Edit via Replicate img2img (true editing)`,
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - TRUE IMAGE EDIT with Nano Banana`,
     );
 
     if (!sourceImageUrl) {
-      throw new Error("Cannot apply edit: no source image URL available");
+      throw new Error("No source image available for editing");
     }
 
-    // Build edit prompt that tells the model what to change
-    // The source image is passed separately via image_input parameter
-    const editPrompt = `Edit this image: ${imageModification}
+    // Use the existing editImageWithNanoBanana function for true image editing
+    const editStartTime = Date.now();
+    imageResult = await editImageWithNanoBanana(
+      sourceImageUrl,
+      imageModification,
+      styleDescription,
+      scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined
+    );
+    const editDurationMs = Date.now() - editStartTime;
 
-STYLE: ${styleDescription}
-
-IMPORTANT EDITING INSTRUCTIONS:
-- Keep the existing composition, camera angle, lighting, and overall scene EXACTLY the same
-- ONLY modify the specific element(s) mentioned in the edit request
-- Preserve all characters, objects, and details that are NOT being edited
-- Maintain the same artistic style and color palette
-- This is an EDIT, not a regeneration - preserve as much of the original as possible`;
-
-    console.log(`[regenerate-image] Apply Edit: Using Replicate ${replicateModelLabel} with image_input (Pro: ${isProUser})`);
-    console.log(`[regenerate-image] Source image for editing: ${sourceImageUrl.substring(0, 80)}...`);
-    
-    const replicateStartTime = Date.now();
-    imageResult = await editImageWithReplicate(sourceImageUrl, editPrompt, replicateApiKey, format, useProModel);
-    const replicateDurationMs = Date.now() - replicateStartTime;
-
+    // Log the Nano Banana edit API call
     await logApiCall({
       supabase,
       userId: user.id,
       generationId,
-      provider: "replicate",
-      model: replicateModel,
+      provider: "lovable_ai",
+      model: "gemini-2.5-flash-image",
       status: imageResult.ok ? "success" : "error",
-      totalDurationMs: replicateDurationMs,
-      cost: imageResult.ok ? replicatePricing : 0,
+      totalDurationMs: editDurationMs,
+      cost: imageResult.ok ? PRICING.imageNanoBanana : 0, // Use standard Nano Banana pricing
       errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
     });
+
+    // If Nano Banana edit fails, fall back to Hypereal/Replicate text-to-image as last resort
+    if (!imageResult.ok) {
+      const editError = imageResult.error || "Unknown edit error";
+      console.log(`[regenerate-image] Nano Banana edit failed (${editError}), falling back to text-to-image generation`);
+
+      // LOG TO SYSTEM_LOGS so it shows in admin panel!
+      await logSystemEvent({
+        supabase,
+        userId: user.id,
+        eventType: "nano_banana_edit_fallback",
+        category: "system_warning",
+        message: `Nano Banana image edit failed, falling back to text-to-image generation`,
+        details: {
+          sceneIndex,
+          targetImageIndex,
+          error: editError,
+          fallbackProvider: useHypereal && hyperealApiKey ? "hypereal" : "replicate",
+          phase: "regenerate-image",
+          action: "apply_edit",
+        },
+        generationId,
+        projectId,
+      });
+
+      // Fallback to text-to-image generation with modified prompt
+      const modifiedPrompt = `${scene.visualPrompt}
+
+USER MODIFICATION REQUEST: ${imageModification}
+
+STYLE: ${styleDescription}
+
+Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
+
+      // Try Hypereal first (tiered: Pro uses nano-banana-pro-t2i, Standard uses nano-banana-t2i)
+      // Fallback to Replicate with tiered model (Pro uses nano-banana-pro, Standard uses nano-banana)
+      if (useHypereal && hyperealApiKey) {
+        console.log(`[regenerate-image] Fallback: Using Hypereal ${hyperealModel} (Pro: ${isProUser})`);
+        const hyperealStartTime = Date.now();
+        imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format, useProModel);
+        const hyperealDurationMs = Date.now() - hyperealStartTime;
+
+        // Log Hypereal API call
+        await logApiCall({
+          supabase,
+          userId: user.id,
+          generationId,
+          provider: "hypereal",
+          model: hyperealModel,
+          status: imageResult.ok ? "success" : "error",
+          totalDurationMs: hyperealDurationMs,
+          cost: imageResult.ok ? PRICING.imageHypereal : 0,
+          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+        });
+
+        // Fallback to Replicate with tiered model if Hypereal fails
+        if (!imageResult.ok) {
+          const hyperealError = imageResult.error || "Unknown Hypereal error";
+          console.log(`[regenerate-image] Hypereal fallback also failed (${hyperealError}), trying Replicate ${replicateModelLabel}`);
+
+          const replicateStartTime = Date.now();
+          imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
+          const replicateDurationMs = Date.now() - replicateStartTime;
+
+          await logApiCall({
+            supabase,
+            userId: user.id,
+            generationId,
+            provider: "replicate",
+            model: replicateModel,
+            status: imageResult.ok ? "success" : "error",
+            totalDurationMs: replicateDurationMs,
+            cost: imageResult.ok ? replicatePricing : 0,
+            errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+          });
+        }
+      } else {
+        // No Hypereal key - use Replicate with tiered model directly
+        console.log(`[regenerate-image] Fallback: Using Replicate ${replicateModelLabel} (Pro: ${isProUser})`);
+        const replicateStartTime = Date.now();
+        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
+        const replicateDurationMs = Date.now() - replicateStartTime;
+
+        await logApiCall({
+          supabase,
+          userId: user.id,
+          generationId,
+          provider: "replicate",
+          model: replicateModel,
+          status: imageResult.ok ? "success" : "error",
+          totalDurationMs: replicateDurationMs,
+          cost: imageResult.ok ? replicatePricing : 0,
+          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+        });
+      }
+    }
   }
 
   if (!imageResult.ok) {
