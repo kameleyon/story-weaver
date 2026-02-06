@@ -1181,15 +1181,10 @@ async function callReplicateTTSChunk(
       input: {
         text: text,
         voice: voiceName,
-        // Optimized for natural, human-like speech:
-        // - temperature 0.8: More focused generation (default, less random)
-        // - top_p 0.95: Wider vocabulary for natural phrasing (default)
-        // - top_k 1000: Balanced token selection (default)
-        // - repetition_penalty 1.2: Gentle penalty for natural flow (default)
-        temperature: 0.8,
-        top_p: 0.95,
-        top_k: 1000,
-        repetition_penalty: 1.2,
+        temperature: 0.9,
+        top_p: 1,
+        top_k: 1800,
+        repetition_penalty: 2.5,
       },
     }),
   });
