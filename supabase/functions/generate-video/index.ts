@@ -1184,7 +1184,7 @@ async function callReplicateTTSChunk(
         temperature: 0.9,
         top_p: 1,
         top_k: 1800,
-        repetition_penalty: 2.5,
+        repetition_penalty: 2,
       },
     }),
   });
