@@ -364,11 +364,11 @@ const PRICING = {
   imageHypereal: 0.03, // $0.03 per image (Hypereal nano-banana-pro-t2i estimate)
 };
 
-// ============= LLM CALL HELPER (OpenRouter Primary, Lovable AI Fallback) =============
+// ============= LLM CALL HELPER (OpenRouter Only - NO Lovable AI Gateway) =============
 interface LLMCallResult {
   content: string;
   tokensUsed: number;
-  provider: "openrouter" | "lovable_ai";
+  provider: "openrouter"; // Only OpenRouter - NO Lovable AI Gateway
   durationMs: number;
 }
 
@@ -385,107 +385,64 @@ async function callLLMWithFallback(
   const maxTokens = options.maxTokens ?? 8192;
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-  // Try OpenRouter first (primary)
-  if (OPENROUTER_API_KEY) {
-    const startTime = Date.now();
-    try {
-      console.log(`[LLM] Calling OpenRouter with ${model}...`);
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": "https://audiomax.lovable.app",
-          "X-Title": "AudioMax",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          temperature,
-          max_tokens: maxTokens,
-        }),
-      });
-
-      const durationMs = Date.now() - startTime;
-
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          console.log(`[LLM] OpenRouter success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
-          return {
-            content,
-            tokensUsed: data.usage?.total_tokens || 0,
-            provider: "openrouter",
-            durationMs,
-          };
-        }
-      }
-
-      const errText = await response.text().catch(() => "");
-      console.warn(`[LLM] OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
-    } catch (err) {
-      console.warn(`[LLM] OpenRouter error:`, err);
-    }
-  } else {
-    console.warn(`[LLM] OPENROUTER_API_KEY not configured, using Lovable AI directly`);
+  // OpenRouter is the ONLY provider - NO Lovable AI Gateway fallback
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is required - no fallback available");
   }
 
-  // Fallback to Lovable AI Gateway
-  if (!LOVABLE_API_KEY) {
-    throw new Error("Neither OPENROUTER_API_KEY nor LOVABLE_API_KEY is configured");
-  }
-
-  console.log(`[LLM] Falling back to Lovable AI Gateway with ${model}...`);
   const startTime = Date.now();
+  try {
+    console.log(`[LLM] Calling OpenRouter with ${model}...`);
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://audiomax.lovable.app",
+        "X-Title": "AudioMax",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
+    const durationMs = Date.now() - startTime;
 
-  const durationMs = Date.now() - startTime;
+    if (response.ok) {
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) {
+        console.log(`[LLM] OpenRouter success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
+        return {
+          content,
+          tokensUsed: data.usage?.total_tokens || 0,
+          provider: "openrouter",
+          durationMs,
+        };
+      }
+    }
 
-  if (!response.ok) {
     const errText = await response.text().catch(() => "");
-    throw new Error(`Lovable AI failed (${response.status}): ${errText.substring(0, 200)}`);
+    throw new Error(`OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown OpenRouter error";
+    console.error(`[LLM] OpenRouter error:`, errorMsg);
+    throw new Error(`OpenRouter LLM call failed: ${errorMsg}`);
   }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error("No content received from Lovable AI");
-  }
-
-  console.log(`[LLM] Lovable AI fallback success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
-  return {
-    content,
-    tokensUsed: data.usage?.total_tokens || 0,
-    provider: "lovable_ai",
-    durationMs,
-  };
 }
 
 // ============= API CALL LOGGING =============
 // OpenRouter is used for script generation with google/gemini-3-pro-preview
-// Lovable AI Gateway is used for image generation (nano-banana)
+// Hypereal/Replicate for image generation - NO Lovable AI Gateway
 interface ApiCallLogParams {
   supabase: any;
   userId: string;
   generationId?: string;
-  provider: "openrouter" | "lovable_ai" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  provider: "openrouter" | "replicate" | "replicate_fallback" | "hypereal" | "google_tts" | "elevenlabs";
   model: string;
   status: "success" | "error" | "started";
   queueTimeMs?: number;
@@ -1360,7 +1317,8 @@ function sanitizeForGeminiTTS(text: string): string {
 
 // ============= GEMINI TTS MODELS (Haitian Creole only) =============
 // Primary: 2.5 Pro Preview TTS (best quality for HC)
-// Fallback: 2.5 Flash Preview TTS → Lovable AI Gateway (2.5 Flash → 2.5 Pro)
+// Fallback: 2.5 Flash Preview TTS
+// NOTE: NO Lovable AI Gateway fallback - direct Gemini API only
 const GEMINI_TTS_MODELS = [
   { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
   { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
@@ -1588,121 +1546,21 @@ async function generateSceneAudioGemini(
   return { url: null, error: "All Gemini TTS models failed" };
 }
 
-// ============= LOVABLE AI GATEWAY TTS (Fallback for Haitian Creole) =============
-// Uses Lovable AI Gateway with Gemini models for TTS fallback when direct Google API fails
+// ============= LOVABLE AI GATEWAY TTS - DISABLED =============
+// NOTE: Lovable AI Gateway is DISABLED in this project.
+// All TTS for Haitian Creole uses direct Gemini API only.
+// This function stub remains for type compatibility but returns an error.
 async function generateSceneAudioLovableAI(
-  scene: Scene,
+  _scene: Scene,
   sceneIndex: number,
-  lovableApiKey: string,
-  supabase: any,
-  userId: string,
-  projectId: string,
-  isRegeneration: boolean = false,
+  _lovableApiKey: string,
+  _supabase: any,
+  _userId: string,
+  _projectId: string,
+  _isRegeneration: boolean = false,
 ): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
-  let voiceoverText = sanitizeForGeminiTTS(scene.voiceover);
-
-  if (!voiceoverText || voiceoverText.length < 2) {
-    return { url: null, error: "No voiceover text" };
-  }
-
-  // Remove promotional/call-to-action phrases that trigger content filters
-  const promotionalPatterns = [
-    /\b(swiv|follow|like|subscribe|kòmante|comment|pataje|share|abòneman)\b[^.]*\./gi,
-    /\b(swiv kont|follow the|like and|share this)\b[^.]*$/gi,
-    /\.\s*(swiv|like|pataje|share|follow)[^.]*$/gi,
-  ];
-  for (const pattern of promotionalPatterns) {
-    voiceoverText = voiceoverText.replace(pattern, ".");
-  }
-  voiceoverText = voiceoverText.replace(/\.+/g, ".").replace(/\s+/g, " ").trim();
-
-  // Lovable AI models to try for TTS
-  const LOVABLE_TTS_MODELS = [
-    { model: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  ];
-
-  for (const { model, label } of LOVABLE_TTS_MODELS) {
-    try {
-      console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} - Trying ${label} via Lovable AI Gateway`);
-      console.log(`[TTS-LovableAI] Text length: ${voiceoverText.length} chars`);
-
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          modalities: ["audio", "text"],
-          audio: {
-            voice: "Enceladus",
-            format: "wav",
-          },
-          messages: [
-            {
-              role: "user",
-              content: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${voiceoverText}`,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        console.error(`[TTS-LovableAI] ${label} API error: ${response.status} - ${errText}`);
-        continue; // Try next model
-      }
-
-      const data = await response.json();
-      console.log(`[TTS-LovableAI] ${label} response received`);
-
-      // Extract audio from response
-      const message = data.choices?.[0]?.message;
-      const audioData = message?.audio?.data;
-
-      if (!audioData) {
-        console.error(`[TTS-LovableAI] ${label} no audio data in response:`, JSON.stringify(data).substring(0, 300));
-        continue; // Try next model
-      }
-
-      const audioBytes = base64Decode(audioData);
-      console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} audio bytes: ${audioBytes.length}`);
-
-      // Estimate duration (WAV format: 16-bit, 24kHz)
-      const durationSeconds = Math.max(1, audioBytes.length / (24000 * 2));
-
-      const audioPath = isRegeneration
-        ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.wav`
-        : `${userId}/${projectId}/scene-${sceneIndex + 1}.wav`;
-      const { error: uploadError } = await supabase.storage
-        .from("audio")
-        .upload(audioPath, audioBytes, { contentType: "audio/wav", upsert: true });
-
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-      const { data: signedData, error: signError } = await supabase.storage
-        .from("audio")
-        .createSignedUrl(audioPath, 604800);
-
-      if (signError || !signedData?.signedUrl) {
-        throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
-      }
-
-      console.log(`[TTS-LovableAI] Scene ${sceneIndex + 1} ✅ SUCCESS with ${label}`);
-      return {
-        url: signedData.signedUrl,
-        durationSeconds,
-        provider: `Lovable AI ${label} TTS`,
-      };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Unknown Lovable AI TTS error";
-      console.error(`[TTS-LovableAI] Scene ${sceneIndex + 1} ${label} error:`, errorMsg);
-    }
-  }
-
-  return { url: null, error: "All Lovable AI TTS models failed" };
+  console.warn(`[TTS-LovableAI] Scene ${sceneIndex + 1} - Lovable AI Gateway is DISABLED in this project`);
+  return { url: null, error: "Lovable AI Gateway is disabled - use direct Gemini TTS only" };
 }
 
 // ============= OPENROUTER TTS (gpt-audio and gpt-4o-mini-tts) =============
@@ -2144,15 +2002,15 @@ async function generateSceneAudio(
 
   // ========== CASE 1: Haitian Creole + Cloned Voice ==========
   // Generate with Gemini TTS → Transform with ElevenLabs Speech-to-Speech
-  // Fallback: Lovable AI Gateway TTS if direct Gemini fails
+  // NO Lovable AI Gateway fallback - direct Gemini only
   if (isHC && customVoiceId && ELEVENLABS_API_KEY) {
     console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole + Cloned Voice workflow`);
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS`);
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS (NO Gateway fallback)`);
 
     const MAX_GEMINI_RETRIES = 5;
     let geminiAudioUrl: string | null = null;
 
-    // Try direct Google API first
+    // Try direct Google API only (NO Lovable AI Gateway fallback)
     if (googleApiKey) {
       for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
         if (retry > 0) {
@@ -2178,35 +2036,15 @@ async function generateSceneAudio(
         }
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
       }
-    }
-
-    // Fallback to Lovable AI if direct Gemini failed
-    if (!geminiAudioUrl) {
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Direct Gemini TTS failed, trying Lovable AI Gateway fallback...`);
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (LOVABLE_API_KEY) {
-        const lovableResult = await generateSceneAudioLovableAI(
-          scene,
-          sceneIndex,
-          LOVABLE_API_KEY,
-          supabase,
-          userId,
-          projectId,
-          isRegeneration,
-        );
-
-        if (lovableResult.url) {
-          geminiAudioUrl = lovableResult.url;
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Lovable AI TTS base audio ready (fallback)`);
-        }
-      }
+    } else {
+      console.error(`[TTS] Scene ${sceneIndex + 1} - No Google API key configured for Haitian Creole TTS`);
     }
 
     if (!geminiAudioUrl) {
       console.error(
-        `[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation (tried Gemini + Lovable AI)`,
+        `[TTS] Scene ${sceneIndex + 1} - Failed to generate base audio for voice transformation (Gemini TTS failed)`,
       );
-      return { url: null, error: "All TTS options failed - cannot proceed with voice transformation" };
+      return { url: null, error: "Gemini TTS failed for Haitian Creole - cannot proceed with voice transformation" };
     }
 
     // Step 2: Transform the audio with ElevenLabs Speech-to-Speech
@@ -2254,11 +2092,11 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
-  // Use Gemini TTS with extended fallback (3 models × 5 retries = up to 15 attempts)
-  // Fallback: Lovable AI Gateway as last resort
+  // Use Gemini TTS with extended fallback (2 models × 5 retries = up to 10 attempts)
+  // NO Lovable AI Gateway fallback - direct Gemini API only
   if (isHC) {
     console.log(
-      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with extended fallback chain`,
+      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS (NO Gateway fallback)`,
     );
 
     if (googleApiKey) {
@@ -2291,32 +2129,11 @@ async function generateSceneAudio(
       console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API key configured`);
     }
 
-    // Fallback: Try Lovable AI Gateway with Gemini TTS
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS failed, trying Lovable AI Gateway fallback...`);
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (LOVABLE_API_KEY) {
-      const lovableResult = await generateSceneAudioLovableAI(
-        scene,
-        sceneIndex,
-        LOVABLE_API_KEY,
-        supabase,
-        userId,
-        projectId,
-        isRegeneration,
-      );
-
-      if (lovableResult.url) {
-        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lovable AI Gateway TTS (fallback)`);
-        return lovableResult;
-      }
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Lovable AI fallback also failed: ${lovableResult.error}`);
-    }
-
-    // All TTS options failed for Haitian Creole
+    // All TTS options failed for Haitian Creole (NO Lovable AI Gateway fallback)
     console.error(`[TTS] Scene ${sceneIndex + 1} - All Gemini TTS options failed for Haitian Creole`);
     return {
       url: null,
-      error: "All Gemini TTS models failed for Haitian Creole (tried 3 models × 5 retries + Lovable AI fallback)",
+      error: "All Gemini TTS models failed for Haitian Creole (tried 2 models × 5 retries)",
     };
   }
 

@@ -1,73 +1,41 @@
 
-# Fix Haitian Creole TTS Fallback Chain
+# Lovable AI Gateway REMOVED from Project
 
 ## Summary
-Remove the invalid `gemini-2.0-flash-live-001` model from the TTS fallback chain and ensure the correct model order as you specified.
+ALL usage of Lovable AI Gateway has been removed from this project. The app now exclusively uses direct API calls to external providers for all functionality.
 
-## Changes
+## Provider Architecture (After Removal)
 
-### 1. Update GEMINI_TTS_MODELS array
-**File:** `supabase/functions/generate-video/index.ts` (lines 1364-1368)
+### Script Generation
+- **Provider**: OpenRouter ONLY
+- **Model**: `google/gemini-3-pro-preview`
+- **Fallback**: None - OpenRouter is required
 
-**Before:**
-```typescript
-const GEMINI_TTS_MODELS = [
-  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
-  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
-  { name: "gemini-2.0-flash-live-001", label: "2.0 Flash Live TTS" },  // INVALID
-];
-```
+### Image Generation & Editing
+- **Primary**: Hypereal `nano-banana-pro-t2i` (Pro/Enterprise) or `nano-banana-t2i` (Standard)
+- **Fallback**: Replicate `google/nano-banana-pro` or `google/nano-banana`
+- **"Apply Edit"**: Uses text-to-image regeneration via Hypereal/Replicate (NOT Lovable AI Gateway)
 
-**After:**
-```typescript
-const GEMINI_TTS_MODELS = [
-  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
-  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
-];
-```
+### TTS (Text-to-Speech)
+- **Haitian Creole**: Direct Gemini TTS API (`gemini-2.5-pro-preview-tts` → `gemini-2.5-flash-preview-tts`)
+  - NO Lovable AI Gateway fallback
+  - Up to 5 retries with text variations
+- **Custom/Cloned Voice (non-HC)**: ElevenLabs TTS directly
+- **Custom Voice + HC**: Gemini TTS → ElevenLabs Speech-to-Speech transformation
+- **English/Other Languages**: Replicate Chatterbox with Chunk & Stitch
 
-### 2. Update the Lovable AI fallback chain order
-**File:** `supabase/functions/generate-video/index.ts` (lines 1621-1624)
+## Cost Tracking
+All API calls are now logged with explicit provider names:
+- `openrouter` - Script generation
+- `hypereal` - Primary image generation
+- `replicate` or `replicate_fallback` - Image generation fallback
+- `google_tts` - Haitian Creole TTS
+- `elevenlabs` - Custom voice TTS and Speech-to-Speech
 
-The Lovable AI fallback currently tries Flash first, then Pro. This should match your intended order where the preview TTS models are primary, then fallback to non-TTS models in the same order (Pro quality first for the non-TTS fallbacks).
-
-**After:**
-```typescript
-const LOVABLE_TTS_MODELS = [
-  { model: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },  // Faster fallback
-  { model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },       // Higher quality fallback
-];
-```
-
-This order is already correct (Flash first for speed, Pro as final resort).
-
-### 3. Update the memory documentation comment
-Update the comment at line 1361-1363 to accurately reflect the new chain:
-
-```typescript
-// ============= GEMINI TTS MODELS (Haitian Creole only) =============
-// Primary: 2.5 Pro Preview TTS (best quality for HC)
-// Fallback: 2.5 Flash Preview TTS → Lovable AI Gateway (2.5 Flash → 2.5 Pro)
-```
-
-## Resulting Fallback Chain
-
-```text
-Haitian Creole TTS Fallback Order:
-┌─────────────────────────────────────────────────────────────┐
-│ 1. gemini-2.5-pro-preview-tts    (Direct Google API)        │
-│ 2. gemini-2.5-flash-preview-tts  (Direct Google API)        │
-│ 3. google/gemini-2.5-flash       (Lovable AI Gateway)       │
-│ 4. google/gemini-2.5-pro         (Lovable AI Gateway)       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Technical Details
-
-- Each model gets up to 5 retries with text variations to bypass content filters
-- Total attempts: 2 models × 5 retries = 10 attempts via Direct Google API
-- Then 2 more models × standard retries via Lovable AI Gateway
-- The invalid `gemini-2.0-flash-live-001` was causing wasted 404 errors on every generation
-
-## Deployment
-After approval, the `generate-video` Edge Function will be redeployed to apply the fix.
+## Files Changed
+- `supabase/functions/generate-video/index.ts`:
+  - Removed Lovable AI Gateway from `callLLMWithFallback()` - OpenRouter only now
+  - Removed `generateSceneAudioLovableAI()` - stubbed to return error
+  - Removed Gateway fallback from HC TTS in `generateSceneAudio()`
+  - Updated `ApiCallLogParams` to remove `lovable_ai` provider option
+  - Updated `LLMCallResult` to only include `openrouter` provider
