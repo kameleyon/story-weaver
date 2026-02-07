@@ -8,10 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
-// Glif API endpoints
-const GLIF_TXT2VID_URL = "https://simple-api.glif.app/cmlcrert2000204l8u8z1nysa";
-const GLIF_IMG2VID_URL = "https://simple-api.glif.app/cmlcswdal000404l217ez6vkf";
-const GLIF_STITCH_URL = "https://simple-api.glif.app/cmlctayju000004l5qxf7ydrd";
+// Glif Simple API
+const GLIF_SIMPLE_API_URL = "https://simple-api.glif.app";
+
+// Glif workflow IDs
+const GLIF_TXT2VID_ID = "cmlcrert2000204l8u8z1nysa";
+const GLIF_IMG2VID_ID = "cmlcswdal000404l217ez6vkf";
+const GLIF_STITCH_ID = "cmlctayju000004l5qxf7ydrd";
 
 interface GlifTxt2VidInput {
   prompt: string;
@@ -34,32 +37,53 @@ interface GlifResponse {
   error?: string;
 }
 
-// Helper to call Glif API
-async function callGlif(
-  endpoint: string, 
-  params: Record<string, unknown>,
-  apiKey: string
-): Promise<GlifResponse> {
-  console.log(`[GLIF] Calling ${endpoint} with params:`, JSON.stringify(params));
-  
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(params),
-  });
+type GlifInputs = Record<string, unknown> | unknown[];
 
-  if (!response.ok) {
+// Helper to call Glif Simple API
+async function callGlif(
+  glifId: string,
+  inputs: GlifInputs,
+  apiKey: string,
+  opts?: { retries?: number }
+): Promise<GlifResponse> {
+  const retries = opts?.retries ?? 2;
+  const payload = { id: glifId, inputs };
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    console.log(
+      `[GLIF] Calling ${glifId} (attempt ${attempt + 1}/${retries + 1}) with inputs type: ${Array.isArray(inputs) ? "array" : "object"}`
+    );
+
+    const response = await fetch(GLIF_SIMPLE_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`[GLIF] Response:`, result);
+      return result;
+    }
+
     const errorText = await response.text();
     console.error(`[GLIF] API error (${response.status}):`, errorText);
+
+    // Transient Glif 5xx (e.g., "could not fetch glif ...") – retry a couple times.
+    if (response.status >= 500 && attempt < retries) {
+      const backoffMs = 400 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, backoffMs));
+      continue;
+    }
+
     throw new Error(`Glif API error: ${response.status} - ${errorText}`);
   }
 
-  const result = await response.json();
-  console.log(`[GLIF] Response:`, result);
-  return result;
+  // Unreachable
+  throw new Error("Glif API error: retries exhausted");
 }
 
 // Generate video from text prompt
@@ -82,27 +106,25 @@ export async function generateTextToVideo(
   const durationSec = Math.max(1, Math.round(duration));
   const durationStr = String(durationSec);
 
-  // Glif Simple API expects payload like: { inputs: {...} } OR { inputs: [ ... ] }
+  // Glif Simple API expects payload like: { id, inputs: {...} } OR { id, inputs: [ ... ] }
   // Some workflows don’t expose stable input names, so we try named first, then positional.
   let result = await callGlif(
-    GLIF_TXT2VID_URL,
+    GLIF_TXT2VID_ID,
     {
-      inputs: {
-        prompt: trimmedPrompt,
-        ...(audioUrl ? { audio_url: audioUrl } : {}),
-        duration: durationStr,
-      },
+      prompt: trimmedPrompt,
+      ...(audioUrl ? { audio_url: audioUrl } : {}),
+      duration: durationStr,
     },
-    glifKey
+    glifKey,
+    { retries: 2 }
   );
 
   if (result?.error && /prompt\s+is\s+required/i.test(result.error)) {
     result = await callGlif(
-      GLIF_TXT2VID_URL,
-      {
-        inputs: [trimmedPrompt, audioUrl || "", durationStr],
-      },
-      glifKey
+      GLIF_TXT2VID_ID,
+      [trimmedPrompt, audioUrl || "", durationStr],
+      glifKey,
+      { retries: 2 }
     );
   }
 
@@ -138,24 +160,22 @@ export async function generateImageToVideo(
   const durationStr = String(durationSec);
 
   let result = await callGlif(
-    GLIF_IMG2VID_URL,
+    GLIF_IMG2VID_ID,
     {
-      inputs: {
-        image_url: imageUrl,
-        prompt: trimmedPrompt,
-        duration: durationStr,
-      },
+      image_url: imageUrl,
+      prompt: trimmedPrompt,
+      duration: durationStr,
     },
-    glifKey
+    glifKey,
+    { retries: 2 }
   );
 
   if (result?.error && /prompt\s+is\s+required/i.test(result.error)) {
     result = await callGlif(
-      GLIF_IMG2VID_URL,
-      {
-        inputs: [imageUrl, trimmedPrompt, durationStr],
-      },
-      glifKey
+      GLIF_IMG2VID_ID,
+      [imageUrl, trimmedPrompt, durationStr],
+      glifKey,
+      { retries: 2 }
     );
   }
 
@@ -192,22 +212,20 @@ export async function stitchVideos(
   const urlsJson = JSON.stringify(videoUrls);
 
   let result = await callGlif(
-    GLIF_STITCH_URL,
+    GLIF_STITCH_ID,
     {
-      inputs: {
-        video_urls: urlsJson,
-      },
+      video_urls: urlsJson,
     },
-    glifKey
+    glifKey,
+    { retries: 2 }
   );
 
   if (result?.error && /required|video_urls|video urls/i.test(result.error)) {
     result = await callGlif(
-      GLIF_STITCH_URL,
-      {
-        inputs: [urlsJson],
-      },
-      glifKey
+      GLIF_STITCH_ID,
+      [urlsJson],
+      glifKey,
+      { retries: 2 }
     );
   }
 
