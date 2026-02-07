@@ -47,14 +47,10 @@ async function callGlif(
   opts?: { retries?: number }
 ): Promise<GlifResponse> {
   const retries = opts?.retries ?? 2;
-  const payload = { id: glifId, inputs };
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    console.log(
-      `[GLIF] Calling ${glifId} (attempt ${attempt + 1}/${retries + 1}) with inputs type: ${Array.isArray(inputs) ? "array" : "object"}`
-    );
-
-    const response = await fetch(GLIF_SIMPLE_API_URL, {
+  const callViaBaseUrl = async () => {
+    const payload = { id: glifId, inputs };
+    return fetch(GLIF_SIMPLE_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -62,6 +58,50 @@ async function callGlif(
       },
       body: JSON.stringify(payload),
     });
+  };
+
+  const callViaIdUrl = async () => {
+    // Glif also supports putting the id in the URL, with body { inputs: ... }
+    const payload = { inputs };
+    return fetch(`${GLIF_SIMPLE_API_URL}/${glifId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  };
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    console.log(
+      `[GLIF] Calling ${glifId} (attempt ${attempt + 1}/${retries + 1}) with inputs type: ${Array.isArray(inputs) ? "array" : "object"}`
+    );
+
+    // Try the canonical base URL first
+    let response = await callViaBaseUrl();
+
+    // If Glif can’t fetch the workflow, try the /{id} route (some glifs behave differently)
+    if (!response.ok) {
+      const errorText = await response.text();
+      const couldNotFetch =
+        response.status >= 500 && /could not fetch glif/i.test(errorText);
+
+      if (couldNotFetch) {
+        console.warn(`[GLIF] Base URL returned could-not-fetch; retrying via /{id} route`);
+        response = await callViaIdUrl();
+      } else {
+        console.error(`[GLIF] API error (${response.status}):`, errorText);
+
+        if (response.status >= 500 && attempt < retries) {
+          const backoffMs = 400 * (attempt + 1);
+          await new Promise((r) => setTimeout(r, backoffMs));
+          continue;
+        }
+
+        throw new Error(`Glif API error: ${response.status} - ${errorText}`);
+      }
+    }
 
     if (response.ok) {
       const result = await response.json();
@@ -69,20 +109,24 @@ async function callGlif(
       return result;
     }
 
-    const errorText = await response.text();
-    console.error(`[GLIF] API error (${response.status}):`, errorText);
+    const fallbackErrorText = await response.text();
+    console.error(`[GLIF] API error (${response.status}):`, fallbackErrorText);
 
-    // Transient Glif 5xx (e.g., "could not fetch glif ...") – retry a couple times.
     if (response.status >= 500 && attempt < retries) {
       const backoffMs = 400 * (attempt + 1);
       await new Promise((r) => setTimeout(r, backoffMs));
       continue;
     }
 
-    throw new Error(`Glif API error: ${response.status} - ${errorText}`);
+    if (/could not fetch glif/i.test(fallbackErrorText)) {
+      throw new Error(
+        `Glif API error: ${response.status} - ${fallbackErrorText} (This usually means the workflow id is invalid, deleted, private, or your token can’t access it.)`
+      );
+    }
+
+    throw new Error(`Glif API error: ${response.status} - ${fallbackErrorText}`);
   }
 
-  // Unreachable
   throw new Error("Glif API error: retries exhausted");
 }
 
