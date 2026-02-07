@@ -36,7 +36,7 @@ const INPUT_LIMITS = {
 const ALLOWED_FORMATS = ["landscape", "portrait", "square"];
 const ALLOWED_LENGTHS = ["short", "brief", "presentation"];
 const ALLOWED_PHASES = ["script", "audio", "images", "finalize", "regenerate-audio", "regenerate-image"];
-const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling", "smartflow"];
+const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling", "smartflow", "fullmotion"];
 const ALLOWED_VOICE_TYPES = ["standard", "custom"] as const;
 
 // Validate and sanitize string input
@@ -284,7 +284,11 @@ interface GenerationRequest {
   voiceId?: string;
   voiceName?: string;
   // Storytelling-specific fields
-  projectType?: "doc2video" | "storytelling" | "smartflow";
+  projectType?: "doc2video" | "storytelling" | "smartflow" | "fullmotion";
+  // Full Motion specific fields
+  animationStyle?: string;
+  avatarType?: string;
+  motionIntensity?: string;
   inspirationStyle?: string;
   storyTone?: string;
   storyGenre?: string;
@@ -2385,6 +2389,255 @@ STYLE CONTEXT: ${styleDescription}`;
   } catch (err) {
     console.error(`[editImage] Error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// ============= FULL MOTION VIDEO PHASE (GLIF API) =============
+// Admin-only feature for generating animated talking avatar videos
+async function handleFullMotionScriptPhase(
+  supabase: any,
+  user: any,
+  script: string,
+  format: string,
+  animationStyle?: string,
+  avatarType?: string,
+  motionIntensity?: string,
+  characterDescription?: string,
+  voiceType?: string,
+  voiceId?: string,
+  voiceName?: string,
+): Promise<Response> {
+  const phaseStart = Date.now();
+  console.log(`[generate-video] Starting FULL MOTION pipeline - Glif animated video`);
+
+  // Verify user is admin (Full Motion is admin-only)
+  const { data: roleData } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  if (!roleData) {
+    console.log(`[generate-video] User ${user.id} is not admin, denying Full Motion access`);
+    return new Response(
+      JSON.stringify({ error: "Full Motion is only available to administrators" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const GLIF_API_KEY = Deno.env.get("GLIF_API_KEY");
+  if (!GLIF_API_KEY) {
+    console.error("[generate-video] GLIF_API_KEY not configured");
+    return new Response(
+      JSON.stringify({ error: "Glif API not configured. Please add GLIF_API_KEY secret." }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const dimensions = getImageDimensions(format);
+  const DEFAULT_DURATION = 10;
+
+  try {
+    // Generate title from script
+    const titleMatch = script.match(/^(.{20,80}?)[\.\!\?]/);
+    const title = titleMatch ? titleMatch[1].trim() : "Full Motion Video";
+
+    // Create project in database
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .insert({
+        user_id: user.id,
+        title: title.substring(0, 100),
+        content: script,
+        format,
+        length: "short",
+        style: animationStyle || "talking-avatar",
+        project_type: "fullmotion",
+        character_description: characterDescription,
+        voice_type: voiceType || "standard",
+        voice_id: voiceId,
+        voice_name: voiceName,
+        status: "generating",
+      })
+      .select("id")
+      .single();
+
+    if (projectError || !project) {
+      console.error("[generate-video] Failed to create fullmotion project:", projectError);
+      throw new Error("Failed to create project");
+    }
+
+    const projectId = project.id;
+
+    // Create generation record
+    const { data: generation, error: genError } = await supabase
+      .from("generations")
+      .insert({
+        user_id: user.id,
+        project_id: projectId,
+        status: "processing",
+        progress: 5,
+        script,
+        scenes: [],
+      })
+      .select("id")
+      .single();
+
+    if (genError || !generation) {
+      console.error("[generate-video] Failed to create generation:", genError);
+      throw new Error("Failed to create generation record");
+    }
+
+    const generationId = generation.id;
+
+    // Update progress: calling Glif
+    await supabase
+      .from("generations")
+      .update({
+        progress: 15,
+        scenes: [{ _meta: { statusMessage: "Calling Glif API for animation..." } }],
+      })
+      .eq("id", generationId);
+
+    // Prepare Glif API request
+    // Map animation style to Glif workflow ID (these would need to be configured based on your Glif workflows)
+    const GLIF_WORKFLOWS: Record<string, string> = {
+      "talking-avatar": "cm5a0r9s10004l80ffmb0l9ye", // Example Glif ID - replace with actual
+      "character-animation": "cm5a0r9s10004l80ffmb0l9ye",
+      "motion-graphics": "cm5a0r9s10004l80ffmb0l9ye",
+      "cinematic": "cm5a0r9s10004l80ffmb0l9ye",
+    };
+
+    const glifId = GLIF_WORKFLOWS[animationStyle || "talking-avatar"] || GLIF_WORKFLOWS["talking-avatar"];
+
+    // Build the prompt for Glif
+    const glifPrompt = [
+      script.substring(0, 500), // Main script/dialogue
+      characterDescription || "A professional presenter",
+      `Motion intensity: ${motionIntensity || "moderate"}`,
+      `Avatar style: ${avatarType || "realistic"}`,
+    ].join(". ");
+
+    console.log(`[generate-video] Calling Glif API with ID: ${glifId}`);
+
+    const glifResponse = await fetch("https://simple-api.glif.app", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GLIF_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: glifId,
+        inputs: [glifPrompt],
+      }),
+    });
+
+    const glifDuration = Date.now() - phaseStart;
+
+    if (!glifResponse.ok) {
+      const errorText = await glifResponse.text().catch(() => "");
+      console.error(`[generate-video] Glif API error (${glifResponse.status}): ${errorText.substring(0, 200)}`);
+      
+      // Update generation with error
+      await supabase
+        .from("generations")
+        .update({
+          status: "error",
+          error_message: `Glif API failed: ${glifResponse.status}`,
+          progress: 0,
+        })
+        .eq("id", generationId);
+
+      throw new Error(`Glif API error: ${glifResponse.status}`);
+    }
+
+    const glifResult = await glifResponse.json();
+    console.log(`[generate-video] Glif API response received in ${glifDuration}ms`);
+
+    // Parse Glif response - the structure depends on the specific Glif workflow
+    // Typically returns { output: "url" } or { outputs: [...] }
+    const videoUrl = glifResult.output || glifResult.outputs?.[0] || null;
+
+    if (!videoUrl) {
+      console.error("[generate-video] No video URL in Glif response:", glifResult);
+      throw new Error("Glif API did not return a video URL");
+    }
+
+    // Create scene with the generated video
+    const scenes: Scene[] = [
+      {
+        number: 1,
+        voiceover: script,
+        visualPrompt: glifPrompt,
+        duration: DEFAULT_DURATION,
+        imageUrl: videoUrl, // For Full Motion, this is the video URL
+        _meta: {
+          statusMessage: "Full motion video generated",
+          totalImages: 1,
+          completedImages: 1,
+        },
+      },
+    ];
+
+    // Update generation with completed data
+    await supabase
+      .from("generations")
+      .update({
+        status: "complete",
+        progress: 100,
+        scenes,
+        video_url: videoUrl,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", generationId);
+
+    // Update project status
+    await supabase
+      .from("projects")
+      .update({ status: "complete" })
+      .eq("id", projectId);
+
+    // Deduct credits
+    const { data: creditData } = await supabase
+      .from("user_credits")
+      .select("credits_balance")
+      .eq("user_id", user.id)
+      .single();
+
+    if (creditData && creditData.credits_balance >= 1) {
+      await supabase
+        .from("user_credits")
+        .update({ credits_balance: creditData.credits_balance - 1 })
+        .eq("user_id", user.id);
+    }
+
+    const totalTime = Date.now() - phaseStart;
+    console.log(`[generate-video] Full Motion complete in ${totalTime}ms`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        projectId,
+        generationId,
+        title,
+        sceneCount: 1,
+        totalImages: 1,
+        scenes,
+        videoUrl,
+        phaseTime: totalTime,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("[generate-video] Full Motion error:", error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "Full Motion generation failed",
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 }
 
@@ -5310,6 +5563,23 @@ serve(async (req) => {
           body.voiceId,
           body.voiceName,
           body.characterConsistencyEnabled, // Pro feature: Hypereal character refs
+        );
+      }
+
+      if (body.projectType === "fullmotion") {
+        console.log(`[generate-video] Routing to FULL MOTION pipeline (Glif API)`);
+        return await handleFullMotionScriptPhase(
+          supabase,
+          user,
+          content,
+          format,
+          body.animationStyle,
+          body.avatarType,
+          body.motionIntensity,
+          body.characterDescription,
+          body.voiceType,
+          body.voiceId,
+          body.voiceName,
         );
       }
 

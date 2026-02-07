@@ -5,9 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { AnimationStyleSelector, type AnimationStyle } from "./AnimationStyleSelector";
 import { AvatarSelector, type AvatarType } from "./AvatarSelector";
 import { MotionIntensitySlider, type MotionIntensity } from "./MotionIntensitySlider";
@@ -20,6 +19,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { WorkspaceHandle } from "./Doc2VideoWorkspace";
+import type { GenerationState, Scene } from "@/hooks/useGenerationPipeline";
 
 interface FullMotionWorkspaceProps {
   projectId?: string | null;
@@ -48,49 +48,143 @@ export const FullMotionWorkspace = forwardRef<WorkspaceHandle, FullMotionWorkspa
     const [characterDescription, setCharacterDescription] = useState("");
     const [characterDescOpen, setCharacterDescOpen] = useState(false);
 
-    // Generation state (simplified for now - will integrate with pipeline later)
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generationStep, setGenerationStep] = useState<"idle" | "generating" | "complete" | "error">("idle");
-    const [progress, setProgress] = useState(0);
-    const [scenes, setScenes] = useState<any[]>([]);
-    const [errorMessage, setErrorMessage] = useState("");
-    const [projectTitle, setProjectTitle] = useState("");
+    // Generation state using the same structure as useGenerationPipeline
+    const [generationState, setGenerationState] = useState<GenerationState>({
+      step: "idle",
+      progress: 0,
+      sceneCount: 1,
+      currentScene: 0,
+      totalImages: 1,
+      completedImages: 0,
+      isGenerating: false,
+      projectType: "fullmotion" as any,
+    });
 
-    const canGenerate = script.trim().length > 0 && !isGenerating;
+    const canGenerate = script.trim().length > 0 && !generationState.isGenerating;
+
+    // Helper to get fresh session token
+    const getFreshSession = async (): Promise<string> => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.session) {
+          throw new Error("Session expired. Please refresh the page and try again.");
+        }
+        return refreshData.session.access_token;
+      }
+      return session.access_token;
+    };
 
     const handleGenerate = async () => {
       if (!canGenerate) return;
 
-      setIsGenerating(true);
-      setGenerationStep("generating");
-      setProgress(0);
-      setErrorMessage("");
+      setGenerationState({
+        step: "analysis",
+        progress: 5,
+        sceneCount: 1,
+        currentScene: 0,
+        totalImages: 1,
+        completedImages: 0,
+        isGenerating: true,
+        statusMessage: "Starting Full Motion generation...",
+        projectType: "fullmotion" as any,
+      });
 
-      // Simulate progress for now - actual Glif integration will come later
-      toast.info("Full Motion generation is coming soon! This is a preview of the workspace.");
-      
-      // Simulate a brief loading then show placeholder result
-      const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            return 100;
-          }
-          return prev + 10;
+      try {
+        const accessToken = await getFreshSession();
+
+        setGenerationState(prev => ({
+          ...prev,
+          step: "scripting",
+          progress: 15,
+          statusMessage: "Calling Glif API for animated video...",
+        }));
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            phase: "script",
+            content: script,
+            format,
+            length: "short",
+            style: animationStyle,
+            projectType: "fullmotion",
+            animationStyle,
+            avatarType: avatar,
+            motionIntensity,
+            characterDescription: characterDescription || undefined,
+            voiceType: voice.type,
+            voiceId: voice.type === "custom" ? voice.voiceId : undefined,
+            voiceName: voice.type === "custom" ? voice.voiceName : undefined,
+          }),
         });
-      }, 300);
 
-      setTimeout(() => {
-        clearInterval(interval);
-        setProgress(100);
-        setGenerationStep("complete");
-        setIsGenerating(false);
-        setProjectTitle("Full Motion Preview");
-        setScenes([
-          { number: 1, voiceover: script.slice(0, 100), duration: 5 },
-          { number: 2, voiceover: "Scene 2 content...", duration: 5 },
-        ]);
-      }, 3500);
+        if (!response.ok) {
+          let errorMessage = "Generation failed";
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData?.error || errorMessage;
+          } catch {
+            // ignore
+          }
+          throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || "Generation failed");
+        }
+
+        // Update state with results
+        const scenes: Scene[] = result.scenes || [{
+          number: 1,
+          voiceover: script,
+          visualPrompt: "",
+          duration: 10,
+          imageUrl: result.videoUrl,
+        }];
+
+        setGenerationState({
+          step: "complete",
+          progress: 100,
+          sceneCount: 1,
+          currentScene: 1,
+          totalImages: 1,
+          completedImages: 1,
+          isGenerating: false,
+          projectId: result.projectId,
+          generationId: result.generationId,
+          title: result.title || "Full Motion Video",
+          scenes,
+          format: format as "landscape" | "portrait" | "square",
+          statusMessage: "Generation complete!",
+          projectType: "fullmotion" as any,
+        });
+
+        toast.success("Full Motion video generated!", {
+          description: `"${result.title}" is ready.`,
+        });
+      } catch (error) {
+        console.error("Full Motion generation error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Generation failed";
+
+        setGenerationState(prev => ({
+          ...prev,
+          step: "error",
+          isGenerating: false,
+          error: errorMessage,
+          statusMessage: errorMessage,
+        }));
+
+        toast.error("Generation Failed", {
+          description: errorMessage,
+        });
+      }
     };
 
     const handleNewProject = () => {
@@ -102,17 +196,74 @@ export const FullMotionWorkspace = forwardRef<WorkspaceHandle, FullMotionWorkspa
       setVoice({ type: "standard", gender: "female" });
       setCharacterDescription("");
       setCharacterDescOpen(false);
-      setIsGenerating(false);
-      setGenerationStep("idle");
-      setProgress(0);
-      setScenes([]);
-      setErrorMessage("");
-      setProjectTitle("");
+      setGenerationState({
+        step: "idle",
+        progress: 0,
+        sceneCount: 1,
+        currentScene: 0,
+        totalImages: 1,
+        completedImages: 0,
+        isGenerating: false,
+        projectType: "fullmotion" as any,
+      });
     };
 
     const handleOpenProject = async (projectId: string) => {
-      // Placeholder - will implement project loading later
-      toast.info("Project loading coming soon!");
+      // Load existing project
+      try {
+        const { data: project, error } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", projectId)
+          .single();
+
+        if (error || !project) {
+          toast.error("Failed to load project");
+          return;
+        }
+
+        setScript(project.content);
+        setFormat(project.format as VideoFormat);
+        setCharacterDescription(project.character_description || "");
+
+        // Load latest generation
+        const { data: generation } = await supabase
+          .from("generations")
+          .select("*")
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (generation && generation.status === "complete") {
+          const scenes = (generation.scenes as any[])?.map((s, i) => ({
+            number: s.number || i + 1,
+            voiceover: s.voiceover || "",
+            visualPrompt: s.visualPrompt || "",
+            duration: s.duration || 10,
+            imageUrl: s.imageUrl,
+          })) || [];
+
+          setGenerationState({
+            step: "complete",
+            progress: 100,
+            sceneCount: scenes.length,
+            currentScene: scenes.length,
+            totalImages: 1,
+            completedImages: 1,
+            isGenerating: false,
+            projectId,
+            generationId: generation.id,
+            title: project.title,
+            scenes,
+            format: project.format as "landscape" | "portrait" | "square",
+            projectType: "fullmotion" as any,
+          });
+        }
+      } catch (err) {
+        console.error("Error loading project:", err);
+        toast.error("Failed to load project");
+      }
     };
 
     useImperativeHandle(ref, () => ({
@@ -170,7 +321,7 @@ export const FullMotionWorkspace = forwardRef<WorkspaceHandle, FullMotionWorkspa
               Admin Preview
             </div>
 
-            {isGenerating && (
+            {generationState.isGenerating && (
               <motion.div
                 className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
                 initial={{ opacity: 0, x: 10 }}
@@ -187,7 +338,7 @@ export const FullMotionWorkspace = forwardRef<WorkspaceHandle, FullMotionWorkspa
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="mx-auto max-w-4xl px-3 sm:px-6 py-4 sm:py-12">
             <AnimatePresence mode="wait">
-              {generationStep === "idle" ? (
+              {generationState.step === "idle" ? (
                 <motion.div
                   key="input"
                   initial={{ opacity: 0 }}
@@ -283,38 +434,7 @@ export const FullMotionWorkspace = forwardRef<WorkspaceHandle, FullMotionWorkspa
                     </p>
                   </div>
                 </motion.div>
-              ) : generationStep === "generating" ? (
-                <motion.div
-                  key="progress"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col items-center justify-center min-h-[60vh] gap-6"
-                >
-                  <div className="text-center">
-                    <Film className="h-12 w-12 text-primary animate-pulse mx-auto mb-4" />
-                    <h2 className="text-xl font-semibold text-foreground mb-2">Creating Your Video</h2>
-                    <p className="text-sm text-muted-foreground">Generating animated scenes with voice sync...</p>
-                  </div>
-                  <div className="w-full max-w-md">
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-full bg-gradient-to-r from-primary to-amber-500"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progress}%` }}
-                        transition={{ duration: 0.3 }}
-                      />
-                    </div>
-                    <p className="text-xs text-center text-muted-foreground mt-2">{progress}% complete</p>
-                  </div>
-                </motion.div>
-              ) : generationStep === "complete" ? (
-                <FullMotionResult
-                  scenes={scenes}
-                  projectTitle={projectTitle}
-                  onNewProject={handleNewProject}
-                />
-              ) : (
+              ) : generationState.step === "error" ? (
                 <motion.div
                   key="error"
                   initial={{ opacity: 0 }}
@@ -323,11 +443,28 @@ export const FullMotionWorkspace = forwardRef<WorkspaceHandle, FullMotionWorkspa
                 >
                   <AlertCircle className="h-12 w-12 text-destructive" />
                   <h2 className="text-xl font-semibold text-foreground">Generation Failed</h2>
-                  <p className="text-sm text-muted-foreground text-center max-w-md">{errorMessage || "An error occurred"}</p>
+                  <p className="text-sm text-muted-foreground text-center max-w-md">{generationState.error || "An error occurred"}</p>
                   <Button onClick={handleNewProject} variant="outline" className="gap-2">
                     <RotateCcw className="h-4 w-4" />
                     Try Again
                   </Button>
+                </motion.div>
+              ) : generationState.step === "complete" ? (
+                <FullMotionResult
+                  scenes={generationState.scenes || []}
+                  projectTitle={generationState.title || "Full Motion Video"}
+                  onNewProject={handleNewProject}
+                />
+              ) : (
+                /* Show real GenerationProgress component */
+                <motion.div
+                  key="progress"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center justify-center min-h-[60vh]"
+                >
+                  <GenerationProgress state={generationState} />
                 </motion.div>
               )}
             </AnimatePresence>
