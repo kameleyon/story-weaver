@@ -2441,25 +2441,25 @@ async function generateImageWithReplicate(
   }
 }
 
-// ============= TRUE IMAGE EDITING WITH NANO BANANA =============
-async function editImageWithNanoBanana(
+// ============= TRUE IMAGE EDITING WITH REPLICATE NANO BANANA PRO =============
+async function editImageWithReplicatePro(
   sourceImageUrl: string,
   editPrompt: string,
+  replicateApiKey: string,
+  format: string,
   styleDescription: string,
   overlayText?: { title?: string; subtitle?: string },
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    return { ok: false, error: "LOVABLE_API_KEY not configured" };
-  }
-
   try {
-    console.log(`[editImage] Starting image edit with Nano Banana...`);
+    console.log(`[editImage] Starting image edit with Replicate Nano Banana Pro...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
     console.log(`[editImage] Edit prompt: ${editPrompt}`);
 
-    // Build the modification prompt with overlay text consideration
-    let fullPrompt = `Analyze this image and apply the following modification: ${editPrompt}
+    // Map format to nano-banana supported aspect ratios
+    const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
+    // Build the modification prompt with style and overlay text consideration
+    let fullPrompt = `Edit this image with the following modification: ${editPrompt}
 
 IMPORTANT REQUIREMENTS:
 - Preserve the overall composition, lighting, and style of the original image
@@ -2469,7 +2469,7 @@ IMPORTANT REQUIREMENTS:
     // Add overlay text preservation if present
     if (overlayText?.title || overlayText?.subtitle) {
       fullPrompt += `
-      
+
 TEXT OVERLAY TO PRESERVE:
 ${overlayText.title ? `- Title: "${overlayText.title}"` : ""}
 ${overlayText.subtitle ? `- Subtitle: "${overlayText.subtitle}"` : ""}
@@ -2483,90 +2483,79 @@ Ensure these text elements remain visible and properly positioned in the modifie
 STYLE CONTEXT: ${styleDescription}`;
     }
 
-    // Call Nano Banana via Lovable AI Gateway for image editing
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Build input with image_input array for editing
+    const input: Record<string, unknown> = {
+      prompt: fullPrompt,
+      image_input: [sourceImageUrl], // Pass source image URL for editing
+      aspect_ratio: aspectRatio,
+      output_format: "png",
+      resolution: "1K", // Pro model supports 1K resolution
+    };
+
+    console.log(`[editImage] Calling Replicate nano-banana-pro with image_input...`);
+
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/google/nano-banana-pro/predictions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${replicateApiKey}`,
         "Content-Type": "application/json",
+        Prefer: "wait",
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image-preview",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: fullPrompt,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: sourceImageUrl,
-                },
-              },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
+      body: JSON.stringify({ input }),
     });
 
-    if (!response.ok) {
-      const status = response.status;
-      const errText = await response.text().catch(() => "");
-      console.error(`[editImage] Nano Banana API error: ${status} - ${errText}`);
-
-      if (status === 429) {
-        return { ok: false, error: "Rate limit exceeded. Please try again later." };
-      }
-      if (status === 402) {
-        return { ok: false, error: "Payment required. Please add credits to your workspace." };
-      }
-
+    if (!createResponse.ok) {
+      const status = createResponse.status;
+      const errText = await createResponse.text().catch(() => "");
+      console.error(`[editImage] Replicate nano-banana-pro create failed: ${status} - ${errText}`);
       return {
         ok: false,
-        error: `Nano Banana edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `Replicate nano-banana-pro edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
       };
     }
 
-    const data = await response.json();
-    console.log(`[editImage] Nano Banana response received`);
+    let prediction = await createResponse.json();
+    console.log(`[editImage] Nano Banana Pro prediction started: ${prediction.id}, status: ${prediction.status}`);
 
-    // Extract the generated image from the response
-    const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!imageData) {
-      console.error(`[editImage] No image in response:`, JSON.stringify(data).substring(0, 500));
-      return { ok: false, error: "No image returned from Nano Banana" };
+    // Poll for completion if not finished
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await sleep(2000);
+      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${replicateApiKey}` },
+      });
+      prediction = await pollResponse.json();
     }
 
-    // Check if it's a base64 data URL
-    if (imageData.startsWith("data:image/")) {
-      // Extract base64 data after the comma
-      const base64Data = imageData.split(",")[1];
-      if (!base64Data) {
-        return { ok: false, error: "Invalid base64 image data" };
-      }
-
-      const bytes = base64Decode(base64Data);
-      console.log(`[editImage] Success! Decoded ${bytes.length} bytes from base64`);
-      return { ok: true, bytes };
-    } else if (imageData.startsWith("http")) {
-      // It's a URL, download it
-      console.log(`[editImage] Downloading edited image from URL...`);
-      const imgResponse = await fetch(imageData);
-      if (!imgResponse.ok) {
-        return { ok: false, error: "Failed to download edited image" };
-      }
-
-      const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-      console.log(`[editImage] Success! Downloaded ${bytes.length} bytes`);
-      return { ok: true, bytes };
+    if (prediction.status === "failed") {
+      console.error(`[editImage] Nano Banana Pro prediction failed: ${prediction.error}`);
+      return { ok: false, error: prediction.error || "Image edit failed" };
     }
 
-    return { ok: false, error: "Unknown image format in response" };
+    // Nano Banana returns output as URL string or array of URLs
+    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    const imageUrl =
+      typeof first === "string"
+        ? first
+        : first && typeof first === "object" && typeof first.url === "string"
+          ? first.url
+          : null;
+
+    if (!imageUrl) {
+      console.error(
+        `[editImage] Nano Banana Pro no image URL in response:`,
+        JSON.stringify(prediction.output).substring(0, 200),
+      );
+      return { ok: false, error: "No image URL returned from Nano Banana Pro edit" };
+    }
+
+    console.log(`[editImage] Nano Banana Pro edit success, downloading from: ${imageUrl.substring(0, 80)}...`);
+
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) return { ok: false, error: "Failed to download edited image" };
+
+    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+    console.log(`[editImage] Nano Banana Pro edit completed: ${bytes.length} bytes`);
+    return { ok: true, bytes };
   } catch (err) {
     console.error(`[editImage] Error:`, err);
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -5060,56 +5049,58 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       });
     }
   } else {
-    // Apply Edit - use TRUE IMAGE EDITING with Nano Banana (Gemini)
+    // Apply Edit - use TRUE IMAGE EDITING with Replicate Nano Banana Pro
     // This preserves the original image and only modifies the requested section/element
     console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - TRUE IMAGE EDIT with Nano Banana`,
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - TRUE IMAGE EDIT with Replicate Nano Banana Pro`,
     );
 
     if (!sourceImageUrl) {
       throw new Error("No source image available for editing");
     }
 
-    // Use the existing editImageWithNanoBanana function for true image editing
+    // Use Replicate nano-banana-pro for true image editing (accepts image_input)
     const editStartTime = Date.now();
-    imageResult = await editImageWithNanoBanana(
+    imageResult = await editImageWithReplicatePro(
       sourceImageUrl,
       imageModification,
+      replicateApiKey,
+      format,
       styleDescription,
       scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined
     );
     const editDurationMs = Date.now() - editStartTime;
 
-    // Log the Nano Banana edit API call
+    // Log the Replicate Nano Banana Pro edit API call
     await logApiCall({
       supabase,
       userId: user.id,
       generationId,
-      provider: "lovable_ai",
-      model: "gemini-2.5-flash-image",
+      provider: "replicate",
+      model: "google/nano-banana-pro",
       status: imageResult.ok ? "success" : "error",
       totalDurationMs: editDurationMs,
-      cost: imageResult.ok ? PRICING.imageNanoBanana : 0, // Use standard Nano Banana pricing
+      cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0, // Pro model pricing
       errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
     });
 
-    // If Nano Banana edit fails, fall back to Hypereal/Replicate text-to-image as last resort
+    // If Replicate nano-banana-pro edit fails, fall back to text-to-image as last resort
     if (!imageResult.ok) {
       const editError = imageResult.error || "Unknown edit error";
-      console.log(`[regenerate-image] Nano Banana edit failed (${editError}), falling back to text-to-image generation`);
+      console.log(`[regenerate-image] Replicate Nano Banana Pro edit failed (${editError}), falling back to text-to-image generation`);
 
       // LOG TO SYSTEM_LOGS so it shows in admin panel!
       await logSystemEvent({
         supabase,
         userId: user.id,
-        eventType: "nano_banana_edit_fallback",
+        eventType: "replicate_pro_edit_fallback",
         category: "system_warning",
-        message: `Nano Banana image edit failed, falling back to text-to-image generation`,
+        message: `Replicate Nano Banana Pro image edit failed, falling back to text-to-image generation`,
         details: {
           sceneIndex,
           targetImageIndex,
           error: editError,
-          fallbackProvider: useHypereal && hyperealApiKey ? "hypereal" : "replicate",
+          fallbackProvider: "replicate",
           phase: "regenerate-image",
           action: "apply_edit",
         },
@@ -5126,67 +5117,23 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
 
-      // Try Hypereal first (tiered: Pro uses nano-banana-pro-t2i, Standard uses nano-banana-t2i)
-      // Fallback to Replicate with tiered model (Pro uses nano-banana-pro, Standard uses nano-banana)
-      if (useHypereal && hyperealApiKey) {
-        console.log(`[regenerate-image] Fallback: Using Hypereal ${hyperealModel} (Pro: ${isProUser})`);
-        const hyperealStartTime = Date.now();
-        imageResult = await generateImageWithHypereal(modifiedPrompt, hyperealApiKey, format, useProModel);
-        const hyperealDurationMs = Date.now() - hyperealStartTime;
+      // Use Replicate nano-banana-pro for fallback text-to-image
+      console.log(`[regenerate-image] Fallback: Using Replicate nano-banana-pro for T2I`);
+      const replicateStartTime = Date.now();
+      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true); // Always use Pro for edits
+      const replicateDurationMs = Date.now() - replicateStartTime;
 
-        // Log Hypereal API call
-        await logApiCall({
-          supabase,
-          userId: user.id,
-          generationId,
-          provider: "hypereal",
-          model: hyperealModel,
-          status: imageResult.ok ? "success" : "error",
-          totalDurationMs: hyperealDurationMs,
-          cost: imageResult.ok ? PRICING.imageHypereal : 0,
-          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-        });
-
-        // Fallback to Replicate with tiered model if Hypereal fails
-        if (!imageResult.ok) {
-          const hyperealError = imageResult.error || "Unknown Hypereal error";
-          console.log(`[regenerate-image] Hypereal fallback also failed (${hyperealError}), trying Replicate ${replicateModelLabel}`);
-
-          const replicateStartTime = Date.now();
-          imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
-          const replicateDurationMs = Date.now() - replicateStartTime;
-
-          await logApiCall({
-            supabase,
-            userId: user.id,
-            generationId,
-            provider: "replicate",
-            model: replicateModel,
-            status: imageResult.ok ? "success" : "error",
-            totalDurationMs: replicateDurationMs,
-            cost: imageResult.ok ? replicatePricing : 0,
-            errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-          });
-        }
-      } else {
-        // No Hypereal key - use Replicate with tiered model directly
-        console.log(`[regenerate-image] Fallback: Using Replicate ${replicateModelLabel} (Pro: ${isProUser})`);
-        const replicateStartTime = Date.now();
-        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
-        const replicateDurationMs = Date.now() - replicateStartTime;
-
-        await logApiCall({
-          supabase,
-          userId: user.id,
-          generationId,
-          provider: "replicate",
-          model: replicateModel,
-          status: imageResult.ok ? "success" : "error",
-          totalDurationMs: replicateDurationMs,
-          cost: imageResult.ok ? replicatePricing : 0,
-          errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
-        });
-      }
+      await logApiCall({
+        supabase,
+        userId: user.id,
+        generationId,
+        provider: "replicate",
+        model: "google/nano-banana-pro",
+        status: imageResult.ok ? "success" : "error",
+        totalDurationMs: replicateDurationMs,
+        cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+      });
     }
   }
 
