@@ -693,10 +693,28 @@ serve(async (req) => {
 
         for (let i = 0; i < scenes.length; i++) {
           const scene = scenes[i];
-          const prompt = scene.visualPrompt || scene.visual_prompt || "";
+          // Robust fallback: try all possible property names for the visual prompt
+          const prompt = (
+            scene.visualPrompt || 
+            scene.visual_prompt || 
+            scene.visual_description ||
+            scene.voiceover ||
+            scene.narration ||
+            scene.text ||
+            scene.description ||
+            ""
+          ).trim();
+          
+          if (!prompt) {
+            console.error(`[CINEMATIC] Scene ${i + 1}: No prompt found. Scene data:`, JSON.stringify(scene, null, 2));
+            throw new Error(`Scene ${i + 1} has no visual prompt or text content`);
+          }
+          
           const imageUrl = scene.imageUrl || scene.image_url;
           const audioUrl = scene.audioUrl || scene.audio_url;
           const duration = Math.min(20, Math.max(5, scene.duration || 10));
+
+          console.log(`[CINEMATIC] Scene ${i + 1}/${scenes.length}: prompt="${prompt.substring(0, 50)}...", hasImage=${!!imageUrl}`);
 
           try {
             let videoUrl: string;
