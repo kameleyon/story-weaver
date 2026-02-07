@@ -291,11 +291,23 @@ export async function generateTextToVideo(
       ? buildInputsArrayFromNames(inputNames, { prompt: trimmedPrompt, duration: durationStr, audioUrl })
       : null;
 
+  // Exact field names from the Glif "motionmax" workflow UI
+  const motionMaxPayload = {
+    "Prompt": trimmedPrompt,
+    "Duration (seconds)": durationStr,
+    "Aspect Ratio": "16:9",
+    "Resolution": "720p",
+  };
+
   const attempts: GlifInputs[] = [
+    // 1. Exact motionmax UI field names first
+    motionMaxPayload,
+
+    // 2. Schema-based inputs (if metadata was detected)
     ...(schemaNamedInputs && Object.keys(schemaNamedInputs).length > 0 ? [schemaNamedInputs] : []),
     ...(schemaPositionalInputs ? [schemaPositionalInputs] : []),
 
-    // Named (common aliases)
+    // 3. Named (common aliases lowercase/capitalized)
     {
       prompt: trimmedPrompt,
       Prompt: trimmedPrompt,
@@ -311,15 +323,16 @@ export async function generateTextToVideo(
         : {}),
       duration: durationStr,
       Duration: durationStr,
+      "Duration (seconds)": durationStr,
+      "Aspect Ratio": "16:9",
+      "Resolution": "720p",
     },
 
-    // Positional variants (different workflows expect different ordering)
+    // 4. Positional variants (different workflows expect different ordering)
+    [trimmedPrompt, durationStr, "16:9", "720p"],
     [trimmedPrompt, audioUrl || "", durationStr],
     [trimmedPrompt, durationStr, audioUrl || ""],
-    [audioUrl || "", trimmedPrompt, durationStr],
-    [durationStr, trimmedPrompt, audioUrl || ""],
     [trimmedPrompt, durationStr],
-    [durationStr, trimmedPrompt],
   ];
 
   let result: GlifResponse | null = null;
