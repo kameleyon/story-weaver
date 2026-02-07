@@ -33,7 +33,7 @@ async function generateVideoWithReplicate(
     negativePrompt?: string;
   } = {}
 ): Promise<string> {
-  const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
+  const replicateToken = Deno.env.get("REPLICATE_API_TOKEN") || Deno.env.get("REPLICATE_TTS_API_KEY");
   if (!replicateToken) {
     throw new Error("REPLICATE_API_TOKEN is not configured");
   }
@@ -234,7 +234,7 @@ serve(async (req) => {
       );
     }
 
-    const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
+    const replicateToken = Deno.env.get("REPLICATE_API_TOKEN") || Deno.env.get("REPLICATE_TTS_API_KEY");
     if (!replicateToken) {
       return new Response(
         JSON.stringify({ success: false, error: "REPLICATE_API_TOKEN not configured" }),
