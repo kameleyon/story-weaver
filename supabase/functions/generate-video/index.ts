@@ -2501,25 +2501,31 @@ async function handleFullMotionScriptPhase(
       .eq("id", generationId);
 
     // Prepare Glif API request
-    // Map animation style to Glif workflow ID (these would need to be configured based on your Glif workflows)
-    const GLIF_WORKFLOWS: Record<string, string> = {
-      "talking-avatar": "cm5a0r9s10004l80ffmb0l9ye", // Example Glif ID - replace with actual
-      "character-animation": "cm5a0r9s10004l80ffmb0l9ye",
-      "motion-graphics": "cm5a0r9s10004l80ffmb0l9ye",
-      "cinematic": "cm5a0r9s10004l80ffmb0l9ye",
-    };
+    // Using Hailuo 2.3 Text to Video workflow for all animation styles
+    const HAILUO_TEXT_TO_VIDEO_ID = "cmhcby8al0000l504chjt59yf";
 
-    const glifId = GLIF_WORKFLOWS[animationStyle || "talking-avatar"] || GLIF_WORKFLOWS["talking-avatar"];
+    // Build a rich prompt for the video
+    const promptParts = [script.substring(0, 800)];
+    if (characterDescription) {
+      promptParts.push(`Character: ${characterDescription}`);
+    }
+    if (avatarType && avatarType !== "realistic-female") {
+      promptParts.push(`Style: ${avatarType.replace(/-/g, " ")}`);
+    }
+    if (motionIntensity === "expressive") {
+      promptParts.push("Dynamic and expressive movements");
+    } else if (motionIntensity === "subtle") {
+      promptParts.push("Subtle and calm movements");
+    }
+    
+    const glifPrompt = promptParts.join(". ");
+    
+    // Determine resolution based on format
+    const resolution = format === "portrait" ? "768p" : "1080p";
 
-    // Build the prompt for Glif
-    const glifPrompt = [
-      script.substring(0, 500), // Main script/dialogue
-      characterDescription || "A professional presenter",
-      `Motion intensity: ${motionIntensity || "moderate"}`,
-      `Avatar style: ${avatarType || "realistic"}`,
-    ].join(". ");
-
-    console.log(`[generate-video] Calling Glif API with ID: ${glifId}`);
+    console.log(`[generate-video] Calling Glif Hailuo 2.3 Text to Video (${HAILUO_TEXT_TO_VIDEO_ID})`);
+    console.log(`[generate-video] Prompt: ${glifPrompt.substring(0, 100)}...`);
+    console.log(`[generate-video] Resolution: ${resolution}`);
 
     const glifResponse = await fetch("https://simple-api.glif.app", {
       method: "POST",
@@ -2528,8 +2534,8 @@ async function handleFullMotionScriptPhase(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        id: glifId,
-        inputs: [glifPrompt],
+        id: HAILUO_TEXT_TO_VIDEO_ID,
+        inputs: [glifPrompt, resolution],
       }),
     });
 
