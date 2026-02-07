@@ -505,19 +505,44 @@ export async function stitchVideos(
     );
   }
 
+  // Exact field names from the Glif "motionmaxedit" workflow UI (Edit/Stitch Video)
+  // For stitching, we pass video URLs as a JSON array string, with a prompt describing the edit
+  const motionMaxEditPayload = {
+    "Prompt": "Concatenate these video clips seamlessly",
+    "Video URL": urlsJson,  // JSON array of video URLs
+    "Resolution": "auto",
+  };
+
+  // Try exact motionmaxedit payload first
   let result = await callGlif(
     GLIF_STITCH_ID,
-    {
-      video_urls: urlsJson,
-    },
+    motionMaxEditPayload,
     glifKey,
     { retries: 2 }
   );
 
+  // Fallback: try common aliases
+  if (result?.error && /required|video|prompt/i.test(result.error)) {
+    result = await callGlif(
+      GLIF_STITCH_ID,
+      {
+        "Prompt": "Stitch these videos together",
+        "Video URL": urlsJson,
+        "Resolution": "auto",
+        video_urls: urlsJson,
+        video_url: urlsJson,
+        prompt: "Concatenate clips",
+      },
+      glifKey,
+      { retries: 2 }
+    );
+  }
+
+  // Fallback: positional array
   if (result?.error && /required|video_urls|video urls/i.test(result.error)) {
     result = await callGlif(
       GLIF_STITCH_ID,
-      [urlsJson],
+      ["Stitch these videos", urlsJson, "auto"],
       glifKey,
       { retries: 2 }
     );
