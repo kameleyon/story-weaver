@@ -409,27 +409,43 @@ export async function generateImageToVideo(
         })
       : null;
 
+  // Exact field names from the Glif "motionmaxpics" workflow UI (Image to Video)
+  const motionMaxPicsPayload = {
+    "Prompt": trimmedPrompt,
+    "Image URL": imageUrl,
+    "Duration (seconds)": durationStr,
+    "Resolution": "720p",
+    "Aspect Ratio": "16:9",
+  };
+
   const attempts: GlifInputs[] = [
+    // 1. Exact motionmaxpics UI field names first
+    motionMaxPicsPayload,
+
+    // 2. Schema-based inputs (if metadata was detected)
     ...(schemaNamedInputs && Object.keys(schemaNamedInputs).length > 0 ? [schemaNamedInputs] : []),
     ...(schemaPositionalInputs ? [schemaPositionalInputs] : []),
 
+    // 3. Named (common aliases)
     {
+      "Prompt": trimmedPrompt,
+      "Image URL": imageUrl,
+      "Duration (seconds)": durationStr,
+      "Resolution": "720p",
+      "Aspect Ratio": "16:9",
       image_url: imageUrl,
       imageUrl,
       Image: imageUrl,
       prompt: trimmedPrompt,
-      Prompt: trimmedPrompt,
       text: trimmedPrompt,
-      Text: trimmedPrompt,
       duration: durationStr,
       Duration: durationStr,
     },
 
-    // Positional variants
-    [imageUrl, trimmedPrompt, durationStr],
-    [imageUrl, durationStr, trimmedPrompt],
+    // 4. Positional variants (matching UI order: Prompt, Image URL, Duration, Resolution, Aspect Ratio)
+    [trimmedPrompt, imageUrl, durationStr, "720p", "16:9"],
+    [imageUrl, trimmedPrompt, durationStr, "720p", "16:9"],
     [trimmedPrompt, imageUrl, durationStr],
-    [durationStr, imageUrl, trimmedPrompt],
   ];
 
   let result: GlifResponse | null = null;
