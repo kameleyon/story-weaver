@@ -313,6 +313,7 @@ interface Scene {
   audioUrl?: string;
   title?: string;
   subtitle?: string;
+  coverTitle?: string; // Catchy social media-style title for the first image (cover)
   _meta?: {
     statusMessage?: string;
     totalImages?: number;
@@ -2480,6 +2481,13 @@ CRITICAL: BASE YOUR OUTPUT ENTIRELY ON THE USER'S "EXTRACTION GOAL" ABOVE.
    - **SPECIFY ICONS**: Describe thematic icons around each section (handshake, crown, coins, lightbulb, etc.)
    - **DO NOT describe the art style** - the style will be appended automatically. NEVER mention style names like "stick figure", "anime", etc. in your descriptions.
 
+=== COVER IMAGE TITLE (CRITICAL) ===
+You MUST include a "coverTitle" field with a short, catchy, social media-style title (3-6 words max).
+- This is the THUMBNAIL/COVER title that will be rendered prominently on the infographic
+- Make it punchy, intriguing, and scroll-stopping (like a viral TikTok or YouTube thumbnail)
+- It should match the visual style and create curiosity/interest
+- Examples: "The $10B Secret", "Top 3 Revealed", "The Hidden Formula", "Game Changing Insights"
+
 === OUTPUT FORMAT (STRICT JSON) ===
 Return ONLY valid JSON:
 {
@@ -2488,6 +2496,7 @@ Return ONLY valid JSON:
     "number": 1,
     "voiceover": "Optional narration script - but the visual is the star here...",
     "visualPrompt": "You are an expert marketing and content creator, you know your targeted population and know how to catch their attention. So, Be extremely creative and using your expert marketing skills to create a catchy, detailed, elegant yet captivating editorial infographic illustration using elements, images and typography that suit best the topic presented. LAYOUT: [Magazine/Panel layout]. MAIN TITLE: Bold text '[YOUR TITLE]' at top center. CENTRAL VISUAL: [Describe the anchor image - a character, object, or symbol]. SECTION 1: Title text '[TITLE 1]' with subtitle '[SUBTITLE]' and description paragraph text '[Full 15-25 word explanation]'. Accompanied by [icon description]. SECTION 2: Title text '[TITLE 2]' with description paragraph text '[explanation]'. [Continue for all sections]. FLOATING ICONS: [List thematic icons around edges]. COLOR PALETTE: [Specify colors matching content theme].",
+    "coverTitle": "Catchy Cover Title",
     "duration": ${DEFAULT_DURATION}
   }]
 }
@@ -2806,6 +2815,13 @@ When generating the 'visualPrompt' for each scene, you MUST:
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera). NEVER mention style names like "stick figure", "anime", "realistic", etc. in your descriptions - just describe the subject as "a person", "a man", "a woman", etc.
 
+=== COVER IMAGE TITLE (CRITICAL FOR SCENE 1) ===
+For Scene 1 ONLY, you MUST include a "coverTitle" field with a short, catchy, social media-style title (3-6 words max).
+- This is the THUMBNAIL/COVER title that will be rendered prominently on the first image
+- Make it punchy, intriguing, and scroll-stopping (like a viral TikTok or YouTube thumbnail)
+- It should match the visual style and create curiosity/interest
+- Examples: "The $10B Secret", "Why They ALL Failed", "Nobody Expected This", "The Hidden Truth"
+
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
@@ -2821,6 +2837,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "voiceover": "Script text here...",
       "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
       "subVisuals": ["Second visual moment for variety...", "Third visual moment for dynamic pacing..."],
+      "coverTitle": "Catchy Cover Title",
       "duration": 15${
         includeTextOverlay
           ? `,
@@ -3188,6 +3205,13 @@ When generating the 'visualPrompt' for each scene, you MUST:
 5. NO TEXT in images unless specifically requested
 6. **DO NOT** describe the art style, visual style, or aesthetic in your visualPrompt - the system will automatically append the exact user-selected style. Only focus on CONTENT (who, what, where, action, camera). NEVER mention style names like "stick figure", "anime", "realistic", etc. in your descriptions - just describe the subject as "a person", "a man", "a woman", etc.
 
+=== COVER IMAGE TITLE (CRITICAL FOR SCENE 1) ===
+For Scene 1 ONLY, you MUST include a "coverTitle" field with a short, catchy, social media-style title (3-6 words max).
+- This is the THUMBNAIL/COVER title that will be rendered prominently on the first image
+- Make it punchy, intriguing, and scroll-stopping (like a viral TikTok or YouTube thumbnail)
+- It should match the visual style and create curiosity/interest
+- Examples: "The Untold Story", "When Everything Changed", "The Final Chapter", "A Legend Rises"
+
 === OUTPUT FORMAT ===
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
@@ -3204,6 +3228,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "voiceover": "Flowing narrative text...",
       "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
       "subVisuals": ["Second visual moment for variety...", "Third visual moment for dynamic pacing..."],
+      "coverTitle": "Catchy Cover Title",
       "duration": 20${
         includeTextOverlay
           ? `,
@@ -3832,9 +3857,20 @@ async function handleImagesPhase(
         ? "SQUARE 1:1 aspect ratio (equal width and height)"
         : "HORIZONTAL 16:9 landscape orientation (wide, like a TV screen)";
 
-  const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number): string => {
+  const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number, sceneIndex: number): string => {
     let textInstructions = "";
-    if (includeTextOverlay && scene.title && subIndex === 0) {
+    
+    // COVER IMAGE TITLE: For the very first image (scene 0, subIndex 0), add a catchy cover title
+    if (sceneIndex === 0 && subIndex === 0 && scene.coverTitle) {
+      textInstructions = `
+COVER IMAGE TITLE (MANDATORY):
+- Render "${scene.coverTitle}" as a BOLD, PROMINENT headline title on this cover image
+- The title should be large enough to be instantly readable and eye-catching (like a social media thumbnail)
+- Text style must match the visual style of the illustration
+- Position the title prominently (top, center, or overlaid on focal area)
+- Use contrasting colors or effects (shadow, outline, glow) to ensure maximum legibility
+- This is the COVER IMAGE - it must grab attention immediately`;
+    } else if (includeTextOverlay && scene.title && subIndex === 0) {
       textInstructions = `
 TEXT OVERLAY: Render "${scene.title}" as headline, "${scene.subtitle || ""}" as subtitle.
 Text must be LEGIBLE, correctly spelled, and integrated into the composition.`;
@@ -3915,7 +3951,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
     allImageTasks.push({
       sceneIndex: i,
       subIndex: 0,
-      prompt: buildImagePrompt(scene.visualPrompt, scene, 0),
+      prompt: buildImagePrompt(scene.visualPrompt, scene, 0, i),
       taskIndex: taskIndex++,
     });
 
@@ -3941,7 +3977,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         allImageTasks.push({
           sceneIndex: i,
           subIndex: j + 1,
-          prompt: buildImagePrompt(subPrompt, scene, j + 1),
+          prompt: buildImagePrompt(subPrompt, scene, j + 1, i),
           taskIndex: taskIndex++,
         });
       }
