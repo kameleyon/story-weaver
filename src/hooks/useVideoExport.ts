@@ -119,7 +119,7 @@ export function useVideoExport() {
       abortRef.current = false;
       const runId = ++exportRunIdRef.current;
       
-      log("Run", runId, "Starting Safe Export (Fixed Audio Headers)", { scenes: scenes.length, format, brandMark: !!brandMark });
+      log("Run", runId, "Starting Safe Export (Fixed Audio Headers)", { scenes: scenes.length, format, brandMark: brandMark || "(none)" });
 
       const AudioEncoderCtor = (globalThis as any).AudioEncoder;
       const VideoEncoderCtor = (globalThis as any).VideoEncoder;
