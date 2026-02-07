@@ -428,11 +428,13 @@ export function useGenerationPipeline() {
 
           const rawScenes = Array.isArray(currentGen?.scenes) ? currentGen.scenes as Record<string, unknown>[] : [];
           
+          // DEBUG: Log the raw scenes to see what we're working with
+          console.log("Cinematic Flow - Raw Scenes from DB:", JSON.stringify(rawScenes, null, 2));
+          
           // Ensure each scene has a visualPrompt with robust fallbacks
-          const scenes = rawScenes.map((s: any, idx: number) => ({
-            ...s,
-            // Ensure visualPrompt is set with fallbacks to various property names
-            visualPrompt: (
+          const scenes = rawScenes.map((s: any, idx: number) => {
+            // ROBUST MAPPING: Try every possible field name for the prompt
+            const visualPrompt = (
               s.visualPrompt || 
               s.visual_prompt || 
               s.visual_description ||
@@ -440,9 +442,24 @@ export function useGenerationPipeline() {
               s.narration ||
               s.text ||
               s.description ||
-              `Cinematic scene ${idx + 1}`
-            ),
-          }));
+              `Cinematic scene ${idx + 1}: A visually stunning cinematic shot`
+            );
+            
+            console.log(`Cinematic Flow - Scene ${idx + 1} prompt: "${String(visualPrompt).substring(0, 50)}..."`);
+            
+            return {
+              ...s,
+              visualPrompt,
+              // Also set visual_prompt for backend compatibility
+              visual_prompt: visualPrompt,
+            };
+          });
+
+          console.log("Cinematic Flow - Mapped Scenes:", JSON.stringify(scenes.map((s: any, i: number) => ({
+            index: i,
+            hasVisualPrompt: !!s.visualPrompt,
+            promptPreview: String(s.visualPrompt || "").substring(0, 50),
+          })), null, 2));
 
           // Call the cinematic video generation
           const cinematicResult = await generateCinematicVideos({
