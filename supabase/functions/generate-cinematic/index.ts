@@ -74,21 +74,35 @@ export async function generateTextToVideo(
     throw new Error("GLIF_API_KEY is not configured");
   }
 
-  const inputs: GlifTxt2VidInput = {
-    prompt,
-    duration,
-  };
-  
-  if (audioUrl) {
-    inputs.audio_url = audioUrl;
+  const trimmedPrompt = (prompt || "").trim();
+  if (!trimmedPrompt) {
+    throw new Error("Text-to-video failed: prompt is empty before calling Glif");
   }
 
-  const result = await callGlif(GLIF_TXT2VID_URL, inputs, glifKey);
-  
+  const durationSec = Math.max(1, Math.round(duration));
+
+  // Glif Simple API expects params under `inputs`. Names must match the workflow,
+  // so we also include a positional `inputs` array fallback.
+  const payload: Record<string, unknown> = {
+    inputs: {
+      prompt: trimmedPrompt,
+      duration: String(durationSec),
+      ...(audioUrl ? { audio_url: audioUrl } : {}),
+    },
+    // Fallbacks for workflows that read top-level fields
+    prompt: trimmedPrompt,
+    duration: String(durationSec),
+    ...(audioUrl ? { audio_url: audioUrl } : {}),
+    // Positional fallback (most robust when input names differ)
+    inputs_array: [trimmedPrompt, audioUrl || "", String(durationSec)],
+  };
+
+  const result = await callGlif(GLIF_TXT2VID_URL, payload, glifKey);
+
   if (result.error) {
     throw new Error(`Text-to-video failed: ${result.error}`);
   }
-  
+
   if (!result.output) {
     throw new Error("No video URL returned from text-to-video");
   }
@@ -108,18 +122,31 @@ export async function generateImageToVideo(
     throw new Error("GLIF_API_KEY is not configured");
   }
 
-  const inputs: GlifImg2VidInput = {
+  const trimmedPrompt = (prompt || "").trim();
+  if (!trimmedPrompt) {
+    throw new Error("Image-to-video failed: prompt is empty before calling Glif");
+  }
+
+  const durationSec = Math.max(1, Math.round(duration));
+
+  const payload: Record<string, unknown> = {
+    inputs: {
+      image_url: imageUrl,
+      prompt: trimmedPrompt,
+      duration: String(durationSec),
+    },
     image_url: imageUrl,
-    prompt,
-    duration,
+    prompt: trimmedPrompt,
+    duration: String(durationSec),
+    inputs_array: [imageUrl, trimmedPrompt, String(durationSec)],
   };
 
-  const result = await callGlif(GLIF_IMG2VID_URL, inputs, glifKey);
-  
+  const result = await callGlif(GLIF_IMG2VID_URL, payload, glifKey);
+
   if (result.error) {
     throw new Error(`Image-to-video failed: ${result.error}`);
   }
-  
+
   if (!result.output) {
     throw new Error("No video URL returned from image-to-video");
   }
@@ -146,16 +173,20 @@ export async function stitchVideos(
     return videoUrls[0];
   }
 
-  const inputs: GlifStitchInput = {
+  const payload: Record<string, unknown> = {
+    inputs: {
+      video_urls: videoUrls,
+    },
     video_urls: videoUrls,
+    inputs_array: [JSON.stringify(videoUrls)],
   };
 
-  const result = await callGlif(GLIF_STITCH_URL, inputs, glifKey);
-  
+  const result = await callGlif(GLIF_STITCH_URL, payload, glifKey);
+
   if (result.error) {
     throw new Error(`Video stitching failed: ${result.error}`);
   }
-  
+
   if (!result.output) {
     throw new Error("No video URL returned from stitching");
   }
