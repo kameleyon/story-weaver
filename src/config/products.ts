@@ -1,13 +1,12 @@
-import { Video, Headphones, Film, LucideIcon } from "lucide-react";
+import { Video, Headphones, LucideIcon } from "lucide-react";
 
 export interface Product {
-  id: "doc2video" | "storytelling" | "fullmotion";
+  id: "doc2video" | "storytelling";
   label: string;
   description: string;
   icon: LucideIcon;
   route: string;
   enabled: boolean;
-  adminOnly?: boolean;
 }
 
 export const PRODUCTS: Product[] = [
@@ -26,15 +25,6 @@ export const PRODUCTS: Product[] = [
     icon: Headphones,
     route: "/app/create?mode=storytelling",
     enabled: true,
-  },
-  {
-    id: "fullmotion",
-    label: "Full Motion",
-    description: "Animated videos with voice & gestures",
-    icon: Film,
-    route: "/app/create?mode=fullmotion",
-    enabled: true,
-    adminOnly: true,
   },
 ];
 
