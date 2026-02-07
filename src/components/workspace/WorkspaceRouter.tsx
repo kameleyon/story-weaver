@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Doc2VideoWorkspace, WorkspaceHandle } from "./Doc2VideoWorkspace";
 import { StorytellingWorkspace } from "./StorytellingWorkspace";
 import { SmartFlowWorkspace } from "./SmartFlowWorkspace";
+import { FullMotionWorkspace } from "./FullMotionWorkspace";
 
 export const WorkspaceRouter = forwardRef<WorkspaceHandle>(function WorkspaceRouter(_, ref) {
   const [searchParams] = useSearchParams();
@@ -12,6 +13,7 @@ export const WorkspaceRouter = forwardRef<WorkspaceHandle>(function WorkspaceRou
   const doc2videoRef = useRef<WorkspaceHandle>(null);
   const storytellingRef = useRef<WorkspaceHandle>(null);
   const smartflowRef = useRef<WorkspaceHandle>(null);
+  const fullmotionRef = useRef<WorkspaceHandle>(null);
 
   useImperativeHandle(ref, () => ({
     resetWorkspace: () => {
@@ -19,6 +21,8 @@ export const WorkspaceRouter = forwardRef<WorkspaceHandle>(function WorkspaceRou
         storytellingRef.current?.resetWorkspace();
       } else if (mode === "smartflow") {
         smartflowRef.current?.resetWorkspace();
+      } else if (mode === "fullmotion") {
+        fullmotionRef.current?.resetWorkspace();
       } else {
         doc2videoRef.current?.resetWorkspace();
       }
@@ -28,6 +32,8 @@ export const WorkspaceRouter = forwardRef<WorkspaceHandle>(function WorkspaceRou
         await storytellingRef.current?.openProject(id);
       } else if (mode === "smartflow") {
         await smartflowRef.current?.openProject(id);
+      } else if (mode === "fullmotion") {
+        await fullmotionRef.current?.openProject(id);
       } else {
         await doc2videoRef.current?.openProject(id);
       }
@@ -40,6 +46,10 @@ export const WorkspaceRouter = forwardRef<WorkspaceHandle>(function WorkspaceRou
 
   if (mode === "smartflow") {
     return <SmartFlowWorkspace ref={smartflowRef} projectId={projectId} />;
+  }
+
+  if (mode === "fullmotion") {
+    return <FullMotionWorkspace ref={fullmotionRef} projectId={projectId} />;
   }
 
   return <Doc2VideoWorkspace ref={doc2videoRef} projectId={projectId} />;

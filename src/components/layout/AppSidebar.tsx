@@ -380,6 +380,33 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
+              {/* Full Motion - Admin Only */}
+              {isAdmin && (
+                <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton
+                        onClick={() => navigate("/app/create?mode=fullmotion")}
+                        className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
+                          isCreateRoute && currentMode === "fullmotion" 
+                            ? "bg-primary/10 text-primary" 
+                            : "hover:bg-sidebar-accent/50"
+                        } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                      >
+                        <Clapperboard className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && (
+                          <span className="text-sm flex items-center gap-2">
+                            Full Motion
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">Beta</span>
+                          </span>
+                        )}
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    {isCollapsed && <TooltipContent side="right">Full Motion (Admin)</TooltipContent>}
+                  </Tooltip>
+                </SidebarMenuItem>
+              )}
+
               {/* Presenter (Coming Soon) - Commented out for now */}
               {/* <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                 <Tooltip>
