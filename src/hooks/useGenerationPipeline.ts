@@ -426,7 +426,23 @@ export function useGenerationPipeline() {
             .eq("id", generationId)
             .single();
 
-          const scenes = Array.isArray(currentGen?.scenes) ? currentGen.scenes as Record<string, unknown>[] : [];
+          const rawScenes = Array.isArray(currentGen?.scenes) ? currentGen.scenes as Record<string, unknown>[] : [];
+          
+          // Ensure each scene has a visualPrompt with robust fallbacks
+          const scenes = rawScenes.map((s: any, idx: number) => ({
+            ...s,
+            // Ensure visualPrompt is set with fallbacks to various property names
+            visualPrompt: (
+              s.visualPrompt || 
+              s.visual_prompt || 
+              s.visual_description ||
+              s.voiceover ||
+              s.narration ||
+              s.text ||
+              s.description ||
+              `Cinematic scene ${idx + 1}`
+            ),
+          }));
 
           // Call the cinematic video generation
           const cinematicResult = await generateCinematicVideos({
