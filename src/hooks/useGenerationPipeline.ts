@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { generateCinematicVideos } from "@/lib/cinematicClient";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -41,6 +42,9 @@ export interface PhaseTimings {
   finalize?: number;
 }
 
+const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling", "smartflow", "cinematic"] as const;
+type ProjectType = (typeof ALLOWED_PROJECT_TYPES)[number];
+
 export interface GenerationState {
   step: GenerationStep;
   progress: number;
@@ -59,7 +63,7 @@ export interface GenerationState {
   costTracking?: CostTracking;
   phaseTimings?: PhaseTimings;
   totalTimeMs?: number;
-  projectType?: "doc2video" | "storytelling" | "smartflow";
+  projectType?: ProjectType;
 }
 
 interface GenerationParams {
@@ -79,7 +83,7 @@ interface GenerationParams {
   voiceId?: string;
   voiceName?: string;
   // New storytelling fields
-  projectType?: "doc2video" | "storytelling" | "smartflow";
+  projectType?: ProjectType;
   inspirationStyle?: string;
   storyTone?: string;
   storyGenre?: string;
@@ -400,54 +404,108 @@ export function useGenerationPipeline() {
           } while (audioResult.hasMore);
         }
 
-        // ============= PHASE 3: IMAGES (chunked) =============
-        setState((prev) => ({ 
-          ...prev, 
-          progress: 45,
-          statusMessage: "Generating images..." 
-        }));
-
-        let imageStartIndex = 0;
-        let imagesResult: any;
+        // ============= PHASE 3: VISUALS =============
+        // For cinematic mode, use Glif video generation instead of image generation
+        const isCinematic = params.projectType === "cinematic";
         
-        // Loop until all images are generated
-        do {
-          // Images phase can take 3-5 minutes per chunk with Replicate Pro models
-          imagesResult = await callPhase(
-            {
-              phase: "images",
-              generationId,
-              projectId,
-              imageStartIndex,
-            },
-            480000 // 8 minutes timeout for images (Replicate Pro can be slow)
-          );
+        let imagesResult: any = { imagesGenerated: 0, totalImages: sceneCount };
 
-          if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+        if (isCinematic) {
+          // CINEMATIC MODE: Generate video clips using Glif
+          setState((prev) => ({ 
+            ...prev, 
+            step: "rendering",
+            progress: 45,
+            statusMessage: "Generating cinematic video scenes..." 
+          }));
+
+          // First fetch the current scenes from the generation (they have audio URLs)
+          const { data: currentGen } = await supabase
+            .from("generations")
+            .select("scenes")
+            .eq("id", generationId)
+            .single();
+
+          const scenes = Array.isArray(currentGen?.scenes) ? currentGen.scenes as Record<string, unknown>[] : [];
+
+          // Call the cinematic video generation
+          const cinematicResult = await generateCinematicVideos({
+            generationId,
+            projectId,
+            scenes,
+            characterConsistencyEnabled: params.characterConsistencyEnabled,
+            onProgress: (progress, message) => {
+              setState((prev) => ({
+                ...prev,
+                progress,
+                statusMessage: message,
+              }));
+            },
+          });
+
+          if (!cinematicResult.success) {
+            throw new Error(cinematicResult.error || "Cinematic generation failed");
+          }
+
+          imagesResult = {
+            imagesGenerated: scenes.length,
+            totalImages: scenes.length,
+          };
 
           setState((prev) => ({
             ...prev,
-            progress: imagesResult.progress,
-            completedImages: imagesResult.imagesGenerated,
-            totalImages: imagesResult.totalImages,
-            statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
-            costTracking: imagesResult.costTracking,
-            phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
+            progress: 90,
+            statusMessage: "Cinematic video complete. Finalizing...",
+          }));
+        } else {
+          // STANDARD MODE: Generate images
+          setState((prev) => ({ 
+            ...prev, 
+            progress: 45,
+            statusMessage: "Generating images..." 
           }));
 
-          if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
-            imageStartIndex = imagesResult.nextStartIndex;
-          }
-        } while (imagesResult.hasMore);
+          let imageStartIndex = 0;
+          
+          // Loop until all images are generated
+          do {
+            // Images phase can take 3-5 minutes per chunk with Replicate Pro models
+            imagesResult = await callPhase(
+              {
+                phase: "images",
+                generationId,
+                projectId,
+                imageStartIndex,
+              },
+              480000 // 8 minutes timeout for images (Replicate Pro can be slow)
+            );
 
-        setState((prev) => ({
-          ...prev,
-          progress: 90,
-          completedImages: imagesResult.imagesGenerated,
-          totalImages: imagesResult.totalImages,
-          statusMessage: `Images complete (${imagesResult.imagesGenerated}/${imagesResult.totalImages}). Finalizing...`,
-          costTracking: imagesResult.costTracking,
-        }));
+            if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+
+            setState((prev) => ({
+              ...prev,
+              progress: imagesResult.progress,
+              completedImages: imagesResult.imagesGenerated,
+              totalImages: imagesResult.totalImages,
+              statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
+              costTracking: imagesResult.costTracking,
+              phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
+            }));
+
+            if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
+              imageStartIndex = imagesResult.nextStartIndex;
+            }
+          } while (imagesResult.hasMore);
+
+          setState((prev) => ({
+            ...prev,
+            progress: 90,
+            completedImages: imagesResult.imagesGenerated,
+            totalImages: imagesResult.totalImages,
+            statusMessage: `Images complete (${imagesResult.imagesGenerated}/${imagesResult.totalImages}). Finalizing...`,
+            costTracking: imagesResult.costTracking,
+          }));
+        }
 
         // ============= PHASE 4: FINALIZE =============
         const finalResult = await callPhase({
