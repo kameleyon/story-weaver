@@ -2416,6 +2416,17 @@ async function handleSmartFlowScriptPhase(
 ${CONTENT_COMPLIANCE_INSTRUCTION}
 Your goal is to create a modern, detailed SINGLE, MAGAZINE-QUALITY INFOGRAPHIC with rich, self-explanatory text that works as a standalone meaning WITHOUT audio narration.
 
+=== LANGUAGE REQUIREMENT ===
+ALWAYS generate ALL content in ENGLISH, regardless of the input language.
+The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
+
+=== HAITIAN CREOLE ILLUSTRATION TEXT RULES ===
+When generating content in Haitian Creole:
+- Write ALL illustration text, captions, and visual descriptions in Haitian Creole
+- PRESERVE proper nouns, brand names, and specific terminology in their ORIGINAL form (do NOT translate names, slogans, or technical terms)
+- Example: "Lionel Messi" stays "Lionel Messi", "Nike - Just Do It" stays "Nike - Just Do It"
+- Translate descriptive and narrative text to Haitian Creole, but keep recognizable names and branded terms unchanged
+
 === DATA SOURCE ===
 ${content}
 
@@ -2697,6 +2708,13 @@ ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardle
 The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
 If the input content is in another language (French, Spanish, Portuguese, etc.), TRANSLATE it to English for the output.
 We do NOT support other languages at this time.
+
+=== HAITIAN CREOLE ILLUSTRATION TEXT RULES ===
+When generating content in Haitian Creole:
+- Write ALL illustration text, captions, and visual descriptions in Haitian Creole
+- PRESERVE proper nouns, brand names, and specific terminology in their ORIGINAL form (do NOT translate names, slogans, or technical terms)
+- Example: "Lionel Messi" stays "Lionel Messi", "Nike - Just Do It" stays "Nike - Just Do It"
+- Translate descriptive and narrative text to Haitian Creole, but keep recognizable names and branded terms unchanged
 
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the script, carefully analyze the content to identify:
@@ -3073,6 +3091,13 @@ ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardle
 The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
 If the input content is in another language (French, Spanish, Portuguese, etc.), TRANSLATE it to English for the output.
 We do NOT support other languages at this time.
+
+=== HAITIAN CREOLE ILLUSTRATION TEXT RULES ===
+When generating content in Haitian Creole:
+- Write ALL illustration text, captions, and visual descriptions in Haitian Creole
+- PRESERVE proper nouns, brand names, and specific terminology in their ORIGINAL form (do NOT translate names, slogans, or technical terms)
+- Example: "Lionel Messi" stays "Lionel Messi", "Nike - Just Do It" stays "Nike - Just Do It"
+- Translate descriptive and narrative text to Haitian Creole, but keep recognizable names and branded terms unchanged
 
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the story, carefully analyze the story idea to identify:
@@ -3747,27 +3772,22 @@ async function handleImagesPhase(
   // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
   const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
   
-  // Check if user is Pro/Enterprise tier - they get nano-banana-pro at 1K resolution
+  // Check if user is Pro/Enterprise tier (for logging purposes only - all tiers now use nano-banana)
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
-  // Pro/Enterprise users OR premium-required styles get nano-banana-pro
-  const useProModel = isProUser || isPremiumRequiredStyle;
+  // All tiers now use standard nano-banana for image generation
+  // Only premium-required styles (like Papercut 3D) get nano-banana-pro
+  const useProModel = isPremiumRequiredStyle;
 
   const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT;
 
-  if (isPremiumRequiredStyle && !isProUser) {
-    console.log(
-      `[IMAGES] Style "${projectStyle}" requires premium model - using Replicate nano-banana-pro for non-Pro user (project type: ${generation.projects.project_type})`,
-    );
-  }
-  
   if (useProModel) {
     console.log(
-      `[IMAGES] Using Replicate nano-banana-pro (1K) for ${isPremiumRequiredStyle ? `premium style "${projectStyle}"` : "Pro/Enterprise user"} (project type: ${generation.projects.project_type})`,
+      `[IMAGES] Premium style "${projectStyle}" detected - using Replicate nano-banana-pro (project type: ${generation.projects.project_type})`,
     );
   } else {
     console.log(
-      `[IMAGES] Using Replicate nano-banana for non-Pro user (project type: ${generation.projects.project_type})`,
+      `[IMAGES] Using Replicate nano-banana for all tiers (project type: ${generation.projects.project_type})`,
     );
   }
 
@@ -4617,18 +4637,17 @@ async function handleRegenerateImage(
   // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
   const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
 
-  // Check if user is Pro/Enterprise tier - they get nano-banana-pro
+  // Check if user is Pro/Enterprise tier (for logging purposes only)
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
-  const useProModel = isProUser || isPremiumRequiredStyle;
-
-  if (isPremiumRequiredStyle && !isProUser) {
-    console.log(
-      `[regenerate-image] Style "${projectStyle}" requires premium model - using Replicate nano-banana-pro for non-Pro user`,
-    );
-  }
+  
+  // For regeneration without modification (full T2I), use standard nano-banana for all tiers
+  // Only premium-required styles get nano-banana-pro for T2I regeneration
+  const useProModel = isPremiumRequiredStyle;
 
   if (useProModel) {
-    console.log(`[regenerate-image] ${isPremiumRequiredStyle ? `Premium style "${projectStyle}"` : "Pro/Enterprise user"} - will use Replicate nano-banana-pro (1K)`);
+    console.log(`[regenerate-image] Premium style "${projectStyle}" - will use Replicate nano-banana-pro (1K) for T2I`);
+  } else {
+    console.log(`[regenerate-image] Using Replicate nano-banana for T2I regeneration (Apply Edit always uses nano-banana-pro)`);
   }
 
   // Get existing imageUrls or create from single imageUrl
