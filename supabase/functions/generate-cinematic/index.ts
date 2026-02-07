@@ -186,7 +186,14 @@ async function getGlifInputNames(glifId: string, apiKey: string): Promise<string
   const nodes = data?.[0]?.data?.nodes;
   const inputNames: string[] = Array.isArray(nodes)
     ? nodes
-        .filter((n: any) => typeof n?.type === "string" && /InputBlock$/.test(n.type) && typeof n?.name === "string")
+        // Glif node types vary; match broadly on anything that looks like an input node.
+        .filter(
+          (n: any) =>
+            typeof n?.type === "string" &&
+            /input/i.test(n.type) &&
+            typeof n?.name === "string" &&
+            n.name.trim().length > 0
+        )
         .map((n: any) => n.name)
     : [];
 
@@ -268,9 +275,10 @@ export async function generateTextToVideo(
   }
 
   if (inputNames.length === 0) {
-    throw new Error(
-      `Glif workflow ${GLIF_TXT2VID_ID} does not expose any Input blocks, so the Simple API can’t receive your prompt. ` +
-        `Open that workflow in Glif, add a TextInputBlock (e.g. name: prompt) and connect it to the video generator block’s prompt parameter, then republish and update the workflow ID in the backend.`
+    // Don’t hard-fail here: metadata may be unavailable/partial for private workflows.
+    // We still try common named/positional payload shapes below.
+    console.warn(
+      `[GLIF] No input nodes detected for ${GLIF_TXT2VID_ID}. Proceeding with heuristic payloads; if this fails, add a TextInput block (name: prompt) in Glif and republish.`
     );
   }
 
@@ -366,9 +374,8 @@ export async function generateImageToVideo(
   }
 
   if (inputNames.length === 0) {
-    throw new Error(
-      `Glif workflow ${GLIF_IMG2VID_ID} does not expose any Input blocks, so the Simple API can’t receive image/prompt inputs. ` +
-        `Open that workflow in Glif, add the needed Input blocks (ImageInputBlock + TextInputBlock) and connect them to the video generator block parameters, then republish and update the workflow ID in the backend.`
+    console.warn(
+      `[GLIF] No input nodes detected for ${GLIF_IMG2VID_ID}. Proceeding with heuristic payloads; if this fails, add Image/Text input blocks in Glif and republish.`
     );
   }
 
@@ -464,9 +471,8 @@ export async function stitchVideos(
   }
 
   if (inputNames.length === 0) {
-    throw new Error(
-      `Glif workflow ${GLIF_STITCH_ID} does not expose any Input blocks, so the Simple API can’t receive the video list to stitch. ` +
-        `Open that workflow in Glif, add a TextInputBlock (e.g. name: video_urls) and connect it to the stitcher block, then republish and update the workflow ID in the backend.`
+    console.warn(
+      `[GLIF] No input nodes detected for ${GLIF_STITCH_ID}. Proceeding with heuristic payloads; if this fails, add a TextInput block for video_urls in Glif and republish.`
     );
   }
 
