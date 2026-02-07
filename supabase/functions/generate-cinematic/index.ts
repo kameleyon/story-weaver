@@ -93,11 +93,43 @@ async function callGlif(
       } else {
         console.error(`[GLIF] API error (${response.status}):`, errorText);
 
-        if (response.status >= 500 && attempt < retries) {
-          const backoffMs = 400 * (attempt + 1);
-          await new Promise((r) => setTimeout(r, backoffMs));
-          continue;
+        // Handle rate limiting explicitly
+        if (response.status === 429) {
+          const retryAfterSec = Number(response.headers.get("retry-after") || "");
+          const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+            ? Math.round(retryAfterSec * 1000)
+            : 1500 * (attempt + 1);
+
+          if (attempt < retries) {
+            console.warn(`[GLIF] Rate limited (429). Waiting ${waitMs}ms then retrying...`);
+            await new Promise((r) => setTimeout(r, waitMs));
+            continue;
+          }
+
+          throw new Error("Glif rate limit exceeded. Please wait 30–60 seconds and try again.");
         }
+
+    // Handle rate limiting explicitly
+    if (response.status === 429) {
+      const retryAfterSec = Number(response.headers.get("retry-after") || "");
+      const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+        ? Math.round(retryAfterSec * 1000)
+        : 1500 * (attempt + 1);
+
+      if (attempt < retries) {
+        console.warn(`[GLIF] Rate limited (429). Waiting ${waitMs}ms then retrying...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      throw new Error("Glif rate limit exceeded. Please wait 30–60 seconds and try again.");
+    }
+
+    if (response.status >= 500 && attempt < retries) {
+      const backoffMs = 400 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, backoffMs));
+      continue;
+    }
 
         throw new Error(`Glif API error: ${response.status} - ${errorText}`);
       }
@@ -130,6 +162,81 @@ async function callGlif(
   throw new Error("Glif API error: retries exhausted");
 }
 
+// Glif workflow metadata (used to discover the real input block names + order)
+const GLIF_META_API_URL = "https://glif.app/api/glifs";
+const glifInputNameCache = new Map<string, string[]>();
+
+async function getGlifInputNames(glifId: string, apiKey: string): Promise<string[]> {
+  const cached = glifInputNameCache.get(glifId);
+  if (cached) return cached;
+
+  const resp = await fetch(`${GLIF_META_API_URL}?id=${encodeURIComponent(glifId)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`Failed to fetch Glif metadata (${resp.status}): ${t.substring(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  const nodes = data?.[0]?.data?.nodes;
+  const inputNames: string[] = Array.isArray(nodes)
+    ? nodes
+        .filter((n: any) => typeof n?.type === "string" && /InputBlock$/.test(n.type) && typeof n?.name === "string")
+        .map((n: any) => n.name)
+    : [];
+
+  glifInputNameCache.set(glifId, inputNames);
+  console.log(`[GLIF] Input names for ${glifId}:`, inputNames);
+  return inputNames;
+}
+
+type GlifKnownValues = {
+  prompt?: string;
+  duration?: string;
+  audioUrl?: string;
+  imageUrl?: string;
+};
+
+function pickValueForInputName(name: string, values: GlifKnownValues): string | undefined {
+  const n = name.toLowerCase();
+
+  if (values.prompt && (n.includes("prompt") || n === "text" || n.includes("caption") || n.includes("instruction"))) {
+    return values.prompt;
+  }
+
+  if (values.imageUrl && n.includes("image")) {
+    return values.imageUrl;
+  }
+
+  if (values.audioUrl && n.includes("audio")) {
+    return values.audioUrl;
+  }
+
+  if (values.duration && (n.includes("duration") || n.includes("seconds") || n.includes("secs") || n === "sec")) {
+    return values.duration;
+  }
+
+  return undefined;
+}
+
+function buildInputsObjectFromNames(names: string[], values: GlifKnownValues): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of names) {
+    const v = pickValueForInputName(name, values);
+    if (typeof v === "string") out[name] = v;
+  }
+  return out;
+}
+
+function buildInputsArrayFromNames(names: string[], values: GlifKnownValues): string[] {
+  return names.map((name) => pickValueForInputName(name, values) ?? "");
+}
+
 // Generate video from text prompt
 export async function generateTextToVideo(
   prompt: string,
@@ -151,25 +258,73 @@ export async function generateTextToVideo(
   const durationStr = String(durationSec);
 
   // Glif Simple API expects payload like: { id, inputs: {...} } OR { id, inputs: [ ... ] }
-  // Some workflows don’t expose stable input names, so we try named first, then positional.
-  let result = await callGlif(
-    GLIF_TXT2VID_ID,
+  // Some workflows have unstable/unknown input names and (more importantly) different INPUT ORDER.
+  // "Prompt is required" often means the prompt wasn’t provided in the expected slot.
+  let inputNames: string[] = [];
+  try {
+    inputNames = await getGlifInputNames(GLIF_TXT2VID_ID, glifKey);
+  } catch (e) {
+    console.warn("[GLIF] Could not load workflow metadata; falling back to heuristics:", e);
+  }
+
+  if (inputNames.length === 0) {
+    throw new Error(
+      `Glif workflow ${GLIF_TXT2VID_ID} does not expose any Input blocks, so the Simple API can’t receive your prompt. ` +
+        `Open that workflow in Glif, add a TextInputBlock (e.g. name: prompt) and connect it to the video generator block’s prompt parameter, then republish and update the workflow ID in the backend.`
+    );
+  }
+
+  const schemaNamedInputs =
+    inputNames.length > 0
+      ? buildInputsObjectFromNames(inputNames, { prompt: trimmedPrompt, duration: durationStr, audioUrl })
+      : null;
+  const schemaPositionalInputs =
+    inputNames.length > 0
+      ? buildInputsArrayFromNames(inputNames, { prompt: trimmedPrompt, duration: durationStr, audioUrl })
+      : null;
+
+  const attempts: GlifInputs[] = [
+    ...(schemaNamedInputs && Object.keys(schemaNamedInputs).length > 0 ? [schemaNamedInputs] : []),
+    ...(schemaPositionalInputs ? [schemaPositionalInputs] : []),
+
+    // Named (common aliases)
     {
       prompt: trimmedPrompt,
-      ...(audioUrl ? { audio_url: audioUrl } : {}),
+      Prompt: trimmedPrompt,
+      text: trimmedPrompt,
+      Text: trimmedPrompt,
+      ...(audioUrl
+        ? {
+            audio_url: audioUrl,
+            audioUrl,
+            audio: audioUrl,
+            Audio: audioUrl,
+          }
+        : {}),
       duration: durationStr,
+      Duration: durationStr,
     },
-    glifKey,
-    { retries: 2 }
-  );
 
-  if (result?.error && /prompt\s+is\s+required/i.test(result.error)) {
-    result = await callGlif(
-      GLIF_TXT2VID_ID,
-      [trimmedPrompt, audioUrl || "", durationStr],
-      glifKey,
-      { retries: 2 }
-    );
+    // Positional variants (different workflows expect different ordering)
+    [trimmedPrompt, audioUrl || "", durationStr],
+    [trimmedPrompt, durationStr, audioUrl || ""],
+    [audioUrl || "", trimmedPrompt, durationStr],
+    [durationStr, trimmedPrompt, audioUrl || ""],
+    [trimmedPrompt, durationStr],
+    [durationStr, trimmedPrompt],
+  ];
+
+  let result: GlifResponse | null = null;
+
+  for (let i = 0; i < attempts.length; i++) {
+    result = await callGlif(GLIF_TXT2VID_ID, attempts[i], glifKey, { retries: 2 });
+
+    // If prompt is still "missing", try the next payload shape.
+    if (result?.error && /prompt\s+is\s+required/i.test(result.error)) {
+      continue;
+    }
+
+    break;
   }
 
   if (result.error) {
@@ -203,24 +358,70 @@ export async function generateImageToVideo(
   const durationSec = Math.max(1, Math.round(duration));
   const durationStr = String(durationSec);
 
-  let result = await callGlif(
-    GLIF_IMG2VID_ID,
+  let inputNames: string[] = [];
+  try {
+    inputNames = await getGlifInputNames(GLIF_IMG2VID_ID, glifKey);
+  } catch (e) {
+    console.warn("[GLIF] Could not load workflow metadata; falling back to heuristics:", e);
+  }
+
+  if (inputNames.length === 0) {
+    throw new Error(
+      `Glif workflow ${GLIF_IMG2VID_ID} does not expose any Input blocks, so the Simple API can’t receive image/prompt inputs. ` +
+        `Open that workflow in Glif, add the needed Input blocks (ImageInputBlock + TextInputBlock) and connect them to the video generator block parameters, then republish and update the workflow ID in the backend.`
+    );
+  }
+
+  const schemaNamedInputs =
+    inputNames.length > 0
+      ? buildInputsObjectFromNames(inputNames, {
+          prompt: trimmedPrompt,
+          duration: durationStr,
+          imageUrl,
+        })
+      : null;
+  const schemaPositionalInputs =
+    inputNames.length > 0
+      ? buildInputsArrayFromNames(inputNames, {
+          prompt: trimmedPrompt,
+          duration: durationStr,
+          imageUrl,
+        })
+      : null;
+
+  const attempts: GlifInputs[] = [
+    ...(schemaNamedInputs && Object.keys(schemaNamedInputs).length > 0 ? [schemaNamedInputs] : []),
+    ...(schemaPositionalInputs ? [schemaPositionalInputs] : []),
+
     {
       image_url: imageUrl,
+      imageUrl,
+      Image: imageUrl,
       prompt: trimmedPrompt,
+      Prompt: trimmedPrompt,
+      text: trimmedPrompt,
+      Text: trimmedPrompt,
       duration: durationStr,
+      Duration: durationStr,
     },
-    glifKey,
-    { retries: 2 }
-  );
 
-  if (result?.error && /prompt\s+is\s+required/i.test(result.error)) {
-    result = await callGlif(
-      GLIF_IMG2VID_ID,
-      [imageUrl, trimmedPrompt, durationStr],
-      glifKey,
-      { retries: 2 }
-    );
+    // Positional variants
+    [imageUrl, trimmedPrompt, durationStr],
+    [imageUrl, durationStr, trimmedPrompt],
+    [trimmedPrompt, imageUrl, durationStr],
+    [durationStr, imageUrl, trimmedPrompt],
+  ];
+
+  let result: GlifResponse | null = null;
+
+  for (let i = 0; i < attempts.length; i++) {
+    result = await callGlif(GLIF_IMG2VID_ID, attempts[i], glifKey, { retries: 2 });
+
+    if (result?.error && /prompt\s+is\s+required/i.test(result.error)) {
+      continue;
+    }
+
+    break;
   }
 
   if (result.error) {
@@ -254,6 +455,20 @@ export async function stitchVideos(
   }
 
   const urlsJson = JSON.stringify(videoUrls);
+
+  let inputNames: string[] = [];
+  try {
+    inputNames = await getGlifInputNames(GLIF_STITCH_ID, glifKey);
+  } catch (e) {
+    console.warn("[GLIF] Could not load stitch workflow metadata:", e);
+  }
+
+  if (inputNames.length === 0) {
+    throw new Error(
+      `Glif workflow ${GLIF_STITCH_ID} does not expose any Input blocks, so the Simple API can’t receive the video list to stitch. ` +
+        `Open that workflow in Glif, add a TextInputBlock (e.g. name: video_urls) and connect it to the stitcher block, then republish and update the workflow ID in the backend.`
+    );
+  }
 
   let result = await callGlif(
     GLIF_STITCH_ID,
