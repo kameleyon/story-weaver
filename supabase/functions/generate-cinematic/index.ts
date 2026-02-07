@@ -37,10 +37,10 @@ interface GlifResponse {
 // Helper to call Glif API
 async function callGlif(
   endpoint: string, 
-  inputs: Record<string, unknown>,
+  params: Record<string, unknown>,
   apiKey: string
 ): Promise<GlifResponse> {
-  console.log(`[GLIF] Calling ${endpoint} with inputs:`, Object.keys(inputs));
+  console.log(`[GLIF] Calling ${endpoint} with params:`, JSON.stringify(params));
   
   const response = await fetch(endpoint, {
     method: "POST",
@@ -48,7 +48,7 @@ async function callGlif(
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ inputs }),
+    body: JSON.stringify(params),
   });
 
   if (!response.ok) {
