@@ -412,7 +412,7 @@ export function useGenerationPipeline() {
         
         // Loop until all images are generated
         do {
-          // Images phase can take 2-3 minutes per chunk (8 images), especially with Hypereal
+          // Images phase can take 3-5 minutes per chunk with Replicate Pro models
           imagesResult = await callPhase(
             {
               phase: "images",
@@ -420,7 +420,7 @@ export function useGenerationPipeline() {
               projectId,
               imageStartIndex,
             },
-            300000 // 5 minutes timeout for images (matches audio phase)
+            480000 // 8 minutes timeout for images (Replicate Pro can be slow)
           );
 
           if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
