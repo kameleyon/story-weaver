@@ -36,7 +36,7 @@ const INPUT_LIMITS = {
 const ALLOWED_FORMATS = ["landscape", "portrait", "square"];
 const ALLOWED_LENGTHS = ["short", "brief", "presentation"];
 const ALLOWED_PHASES = ["script", "audio", "images", "finalize", "regenerate-audio", "regenerate-image"];
-const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling", "smartflow"];
+const ALLOWED_PROJECT_TYPES = ["doc2video", "storytelling", "smartflow", "cinematic"];
 const ALLOWED_VOICE_TYPES = ["standard", "custom"] as const;
 
 // Validate and sanitize string input
