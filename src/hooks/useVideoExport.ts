@@ -39,7 +39,7 @@ const gcYield = () => new Promise<void>((resolve) => setTimeout(resolve, 50)); /
 
 /**
  * Draw a consistent brand mark watermark on the canvas
- * Uses fixed styling: Inter font, 20% black background, 80% white text
+ * Uses fixed styling: Montserrat Medium font, 35% black background, 95% white text
  */
 function drawBrandWatermark(
   ctx: CanvasRenderingContext2D,
@@ -47,14 +47,14 @@ function drawBrandWatermark(
   canvasWidth: number,
   canvasHeight: number
 ) {
-  const fontSize = Math.max(14, Math.round(canvasWidth * 0.018)); // Proportional font size (1.8% of width)
-  const paddingX = Math.round(fontSize * 0.8);
-  const paddingY = Math.round(fontSize * 0.4);
-  const borderRadius = Math.round(fontSize * 0.4);
-  const bottomMargin = Math.round(canvasHeight * 0.03); // 3% from bottom
+  const fontSize = Math.max(18, Math.round(canvasWidth * 0.028)); // Bigger: 2.8% of width (was 1.8%)
+  const paddingX = Math.round(fontSize * 1.0);
+  const paddingY = Math.round(fontSize * 0.5);
+  const borderRadius = Math.round(fontSize * 0.5);
+  const bottomMargin = Math.round(canvasHeight * 0.035); // 3.5% from bottom
 
-  // Set font and measure text
-  ctx.font = `300 ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  // Set font to Montserrat Medium and measure text
+  ctx.font = `500 ${fontSize}px Montserrat, -apple-system, BlinkMacSystemFont, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   
@@ -67,14 +67,14 @@ function drawBrandWatermark(
   const pillX = (canvasWidth - pillWidth) / 2;
   const pillY = canvasHeight - bottomMargin - pillHeight;
   
-  // Draw pill background (20% opacity black)
-  ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+  // Draw pill background (35% opacity black for better visibility)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
   ctx.beginPath();
   ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
   ctx.fill();
   
-  // Draw text (80% opacity white)
-  ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+  // Draw text (95% opacity white for crisp visibility)
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
   ctx.fillText(brandMark, canvasWidth / 2, pillY + pillHeight / 2);
 }
 
