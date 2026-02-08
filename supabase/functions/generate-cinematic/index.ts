@@ -36,9 +36,8 @@ interface Scene {
   videoUrl?: string;
 }
 
-const GLIF_API_URL = "https://simple-api.glif.app";
-const GLIF_IMG2VID_ID = "cmlcswdal000404l217ez6vkf"; // Image-to-Video
-const GLIF_STITCH_ID = "cmlctayju000004l5qxf7ydrd"; // Video Stitching
+const REPLICATE_API_URL = "https://api.replicate.com/v1/predictions";
+const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
 // ============================================
 // STEP 1: Script Generation with Gemini 3 Preview
@@ -307,71 +306,71 @@ async function generateSceneImage(
 }
 
 // ============================================
-// STEP 4: Video Generation with Glif (Image to Video)
+// STEP 4: Video Generation with Replicate Grok
 // ============================================
 async function generateVideoFromImage(
   scene: Scene,
   imageUrl: string,
-  glifToken: string
+  format: string,
+  replicateToken: string
 ): Promise<string> {
-  console.log(`Step 4: Generating video for scene ${scene.number} from image...`);
+  console.log(`Step 4: Generating video for scene ${scene.number} with Grok...`);
 
-  const response = await fetch(GLIF_API_URL, {
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
+  // Create prediction
+  const predictionResponse = await fetch(REPLICATE_API_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${glifToken}`,
+      "Authorization": `Token ${replicateToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      id: GLIF_IMG2VID_ID,
-      inputs: [imageUrl, scene.visualPrompt],
+      version: "luma/ray",
+      model: GROK_VIDEO_MODEL,
+      input: {
+        prompt: scene.visualPrompt,
+        image: imageUrl,
+        duration: Math.min(scene.duration, 15),
+        resolution: "720p",
+        aspect_ratio: aspectRatio,
+      },
     }),
   });
 
-  const result = await response.json();
-  console.log("Glif img2vid response:", JSON.stringify(result).substring(0, 500));
-
-  if (result.error) {
-    console.error("Glif error:", result.error);
-    throw new Error(`Glif video generation failed: ${result.error}`);
+  if (!predictionResponse.ok) {
+    const error = await predictionResponse.text();
+    console.error("Grok prediction error:", error);
+    throw new Error("Failed to start Grok video prediction");
   }
 
-  if (!result.output) {
-    throw new Error("No video output from Glif");
+  const prediction = await predictionResponse.json();
+  console.log(`Grok prediction started: ${prediction.id}`);
+
+  // Poll for completion
+  let result = prediction;
+  let attempts = 0;
+  const maxAttempts = 120; // 4 minutes max for video
+
+  while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
+    const statusResponse = await fetch(`${REPLICATE_API_URL}/${prediction.id}`, {
+      headers: { "Authorization": `Token ${replicateToken}` },
+    });
+    
+    result = await statusResponse.json();
+    attempts++;
+    console.log(`Grok status: ${result.status} (attempt ${attempts})`);
+  }
+
+  if (result.status !== "succeeded" || !result.output) {
+    console.error("Grok failed:", result.error || "No output");
+    throw new Error("Grok video generation failed");
   }
 
   console.log(`Video generated: ${result.output}`);
   return result.output;
-}
-
-// ============================================
-// STEP 5: Stitch Videos Together
-// ============================================
-async function stitchVideos(videoUrls: string[], glifToken: string): Promise<string> {
-  console.log(`Step 5: Stitching ${videoUrls.length} videos...`);
-
-  const response = await fetch(GLIF_API_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${glifToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      id: GLIF_STITCH_ID,
-      inputs: videoUrls,
-    }),
-  });
-
-  const result = await response.json();
-  console.log("Glif stitch response:", JSON.stringify(result).substring(0, 500));
-
-  if (result.error) {
-    console.error("Stitch error:", result.error);
-    // Return first video as fallback
-    return videoUrls[0] || "";
-  }
-
-  return result.output || videoUrls[0] || "";
 }
 
 // ============================================
@@ -395,12 +394,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
     const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
-    const glifToken = Deno.env.get("GLIF_API_TOKEN");
 
     if (!supabaseUrl || !supabaseKey) throw new Error("Supabase configuration missing");
     if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
     if (!replicateToken) throw new Error("REPLICATE_API_TOKEN not configured");
-    if (!glifToken) throw new Error("GLIF_API_TOKEN not configured");
 
     const params: CinematicRequest = await req.json();
     console.log("=== CINEMATIC GENERATION START ===");
@@ -513,7 +510,7 @@ serve(async (req) => {
       const scene = scenesWithImages[i];
       if (scene.imageUrl) {
         try {
-          const videoUrl = await generateVideoFromImage(scene, scene.imageUrl, glifToken);
+          const videoUrl = await generateVideoFromImage(scene, scene.imageUrl, params.format, replicateToken);
           scenesWithVideo.push({ ...scene, videoUrl });
         } catch (videoError) {
           console.error(`Video failed for scene ${i + 1}:`, videoError);
@@ -525,19 +522,9 @@ serve(async (req) => {
       await updateProgress(55 + Math.floor((i + 1) / scenesWithImages.length * 30));
     }
 
-    // STEP 5: Stitch Videos
-    console.log("=== STEP 5: VIDEO STITCHING ===");
+    // Final video is the first generated video (stitching removed - use client-side or separate service)
     const videoUrls = scenesWithVideo.filter(s => s.videoUrl).map(s => s.videoUrl!);
-    let finalVideoUrl = "";
-    
-    if (videoUrls.length > 0) {
-      try {
-        finalVideoUrl = await stitchVideos(videoUrls, glifToken);
-      } catch (stitchError) {
-        console.error("Stitching failed:", stitchError);
-        finalVideoUrl = videoUrls[0] || "";
-      }
-    }
+    const finalVideoUrl = videoUrls[0] || "";
 
     // Update generation with final result
     await supabase
