@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Save, RefreshCw, Loader2, Wand2, Volume2, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Save, RefreshCw, Loader2, Wand2, Volume2, Image as ImageIcon, ChevronLeft, ChevronRight, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -15,8 +15,9 @@ interface SceneEditModalProps {
   onClose: () => void;
   onRegenerateAudio: (sceneIndex: number, newVoiceover: string) => Promise<void>;
   onRegenerateImage: (sceneIndex: number, imageModification: string, imageIndex?: number) => Promise<void>;
+  onRegenerateVideo?: (sceneIndex: number) => Promise<void>;
   isRegenerating: boolean;
-  regeneratingType: "audio" | "image" | null;
+  regeneratingType: "audio" | "image" | "video" | null;
 }
 
 export function SceneEditModal({
@@ -26,6 +27,7 @@ export function SceneEditModal({
   onClose,
   onRegenerateAudio,
   onRegenerateImage,
+  onRegenerateVideo,
   isRegenerating,
   regeneratingType,
 }: SceneEditModalProps) {
@@ -59,6 +61,12 @@ export function SceneEditModal({
 
   const handleRegenerateNewImage = async () => {
     await onRegenerateImage(sceneIndex, "", selectedImageIndex);
+  };
+
+  const handleRegenerateVideo = async () => {
+    if (onRegenerateVideo) {
+      await onRegenerateVideo(sceneIndex);
+    }
   };
 
   const goToPrevImage = () => {
@@ -315,6 +323,37 @@ export function SceneEditModal({
                       )}
                     </Button>
                   </div>
+
+                  {/* Regenerate Video Section (for Cinematic) */}
+                  {onRegenerateVideo && (
+                    <div className="space-y-3 pt-2 border-t border-border">
+                      <div className="flex items-center gap-2">
+                        <Video className="h-5 w-5 text-muted-foreground" />
+                        <Label className="text-base font-medium">Video Clip</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Regenerate the video clip from the current image. Use this after editing or regenerating the image.
+                      </p>
+                      <Button
+                        onClick={handleRegenerateVideo}
+                        disabled={isRegenerating}
+                        variant="outline"
+                        className="w-full gap-2 border-primary/50 hover:bg-primary/10"
+                      >
+                        {isRegenerating && regeneratingType === "video" ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Regenerating Video...
+                          </>
+                        ) : (
+                          <>
+                            <Video className="h-4 w-4" />
+                            Regenerate Video
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Visual Prompt hidden - uncomment if needed for debugging
                   <div className="space-y-2">
