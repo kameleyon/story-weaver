@@ -67,6 +67,38 @@ async function callGlifApi(glifId: string, inputs: string[], apiToken: string): 
   return result;
 }
 
+// Extract JSON from potentially markdown-wrapped response
+function extractJsonFromResponse(response: string): unknown {
+  // Step 1: Remove markdown code blocks
+  let cleaned = response
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  // Step 2: Find JSON boundaries
+  const jsonStart = cleaned.indexOf("{");
+  const jsonEnd = cleaned.lastIndexOf("}");
+
+  if (jsonStart === -1 || jsonEnd === -1) {
+    throw new Error("No JSON object found in response");
+  }
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  // Step 3: Attempt parse with error handling
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // Step 4: Try to fix common issues like trailing commas
+    cleaned = cleaned
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x1F\x7F]/g, ""); // Remove control characters
+
+    return JSON.parse(cleaned);
+  }
+}
+
 async function generateScriptWithAI(
   content: string,
   params: CinematicRequest,
@@ -85,7 +117,7 @@ ${params.inspirationStyle ? `Writing inspiration: ${params.inspirationStyle}` : 
 ${params.characterDescription ? `Main character appearance: ${params.characterDescription}` : ""}
 ${params.brandName ? `Brand/Character name to include: ${params.brandName}` : ""}
 
-Respond with JSON only:
+Respond with valid JSON only (no markdown, no code blocks):
 {
   "title": "Video Title",
   "scenes": [
@@ -110,7 +142,6 @@ Respond with JSON only:
         { role: "system", content: systemPrompt },
         { role: "user", content: `Create a cinematic video script based on this idea:\n\n${content}` },
       ],
-      response_format: { type: "json_object" },
     }),
   });
 
@@ -123,11 +154,21 @@ Respond with JSON only:
   const data = await response.json();
   const scriptText = data.choices?.[0]?.message?.content || "";
   
+  console.log("Raw AI response:", scriptText.substring(0, 500) + "...");
+  
   try {
-    return JSON.parse(scriptText);
+    const parsed = extractJsonFromResponse(scriptText) as { title: string; scenes: Scene[] };
+    
+    // Validate structure
+    if (!parsed.title || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
+      throw new Error("Invalid script structure: missing title or scenes");
+    }
+    
+    return parsed;
   } catch (e) {
     console.error("Failed to parse script:", scriptText);
-    throw new Error("Invalid script format from AI");
+    console.error("Parse error:", e);
+    throw new Error("Invalid script format from AI: " + (e instanceof Error ? e.message : String(e)));
   }
 }
 
