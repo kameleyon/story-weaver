@@ -1203,7 +1203,7 @@ serve(async (req) => {
     }));
 
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
-    const req = body as CinematicRequest;
+    const requestBody = body as CinematicRequest;
 
     // =============== PHASE 2: AUDIO ===============
     if (phase === "audio") {
@@ -1349,7 +1349,7 @@ serve(async (req) => {
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
-      const modification = req.imageModification || "";
+      const modification = requestBody.imageModification || "";
       if (!modification.trim()) throw new Error("Image modification is required for image-edit phase");
 
       // Get project for style/format
