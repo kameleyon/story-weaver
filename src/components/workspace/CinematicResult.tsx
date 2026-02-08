@@ -744,67 +744,46 @@ export function CinematicResult({
         </div>
 
         {/* Scene Details */}
-        <div className="p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-medium text-foreground">Scene {currentScene?.number}</h3>
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-foreground">
+              Scene {currentScene?.number}
+            </h3>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">{currentScene?.duration}s</span>
-              {currentScene?.audioUrl ? (
-                <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  <Volume2 className="h-3 w-3" /> Audio
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground">No audio</span>
-              )}
+              <Button
+                type="button"
+                size="sm"
+                onClick={openEdit}
+                disabled={!canEdit || isSavingEdit}
+                className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
             </div>
           </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <Volume2 className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {currentScene?.voiceover}
+              </p>
+            </div>
 
-          <p className="text-sm text-muted-foreground line-clamp-2">{currentScene?.voiceover}</p>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={openEdit}
-              disabled={!canEdit || isSavingEdit}
-              className="gap-1.5"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => regenerateScene(currentSceneIndex, "audio")}
-              disabled={!projectId || !generationId || !!isRegenerating}
-              className="gap-1.5"
-            >
-              {regenBusy && isRegenerating?.type === "audio" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RotateCcw className="h-3.5 w-3.5" />
-              )}
-              Regenerate audio
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => regenerateScene(currentSceneIndex, "video")}
-              disabled={!projectId || !generationId || !!isRegenerating}
-              className="gap-1.5"
-            >
-              {regenBusy && isRegenerating?.type === "video" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RotateCcw className="h-3.5 w-3.5" />
-              )}
-              Regenerate clip
-            </Button>
+            {currentScene?.audioUrl ? (
+              <audio
+                key={currentScene.audioUrl}
+                controls
+                preload="none"
+                src={currentScene.audioUrl}
+                onPlay={() => {
+                  if (isPlayingAll) stop();
+                }}
+                className="w-full"
+              />
+            ) : null}
           </div>
         </div>
       </Card>
@@ -957,11 +936,11 @@ export function CinematicResult({
                   {exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error" ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
-                    <Film className="h-5 w-5" />
+                    <Download className="h-5 w-5" />
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Export Video (All Scenes)</TooltipContent>
+              <TooltipContent>Export Video</TooltipContent>
             </Tooltip>
 
             {/* Download Clips ZIP */}
@@ -981,7 +960,7 @@ export function CinematicResult({
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Download Individual Clips (ZIP)</TooltipContent>
+              <TooltipContent>Download Clips (ZIP)</TooltipContent>
             </Tooltip>
 
             {/* Share */}
@@ -998,6 +977,31 @@ export function CinematicResult({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Share</TooltipContent>
+            </Tooltip>
+
+            {/* Regenerate All */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    // Regenerate video for current scene as a starting point
+                    if (projectId && generationId) {
+                      regenerateScene(currentSceneIndex, "video");
+                    }
+                  }}
+                  disabled={!projectId || !generationId || !!isRegenerating}
+                  className="h-10 w-10"
+                >
+                  {isRegenerating ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Regenerate Clip</TooltipContent>
             </Tooltip>
 
             {/* New Project */}
