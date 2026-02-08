@@ -5,7 +5,7 @@ import type { Scene } from "@/hooks/useGenerationPipeline";
 
 interface RegenerationState {
   isRegenerating: boolean;
-  regeneratingType: "audio" | "image" | "video" | null;
+  regeneratingType: "audio" | "image" | null;
   sceneIndex: number | null;
 }
 

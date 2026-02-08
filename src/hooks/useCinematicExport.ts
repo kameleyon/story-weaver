@@ -39,12 +39,6 @@ function generateAACAudioSpecificConfig(sampleRate: number, channels: number): U
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const longYield = () => new Promise<void>((resolve) => setTimeout(resolve, 16));
 
-function isSmallDevice() {
-  // A pragmatic heuristic to avoid 1080p exports on phones/tablets (performance + memory).
-  const minScreen = Math.min(window.screen?.width ?? 9999, window.screen?.height ?? 9999);
-  return minScreen < 900;
-}
-
 export function useCinematicExport() {
   const [state, setState] = useState<ExportState>({ status: "idle", progress: 0 });
   const abortRef = useRef(false);
@@ -60,44 +54,31 @@ export function useCinematicExport() {
       format: "landscape" | "portrait" | "square"
     ) => {
       abortRef.current = false;
+      
+      const VideoDecoderCtor = (globalThis as any).VideoDecoder;
+      const VideoEncoderCtor = (globalThis as any).VideoEncoder;
+      const AudioEncoderCtor = (globalThis as any).AudioEncoder;
 
-      // Show the modal immediately so mobile/tablet users see what’s happening.
+      if (!VideoDecoderCtor || !VideoEncoderCtor) {
+        throw new Error("Your browser does not support video export. Please use Chrome, Edge, or Safari 16.4+");
+      }
+
+      const scenesWithVideo = scenes.filter(s => !!s.videoUrl);
+      if (scenesWithVideo.length === 0) {
+        throw new Error("No video clips to export");
+      }
+
       setState({ status: "loading", progress: 0 });
 
       try {
-        const VideoDecoderCtor = (globalThis as any).VideoDecoder;
-        const VideoEncoderCtor = (globalThis as any).VideoEncoder;
-        const AudioEncoderCtor = (globalThis as any).AudioEncoder;
-
-        if (!VideoDecoderCtor || !VideoEncoderCtor) {
-          throw new Error(
-            "Video export isn’t supported on this device/browser. Try Chrome/Edge (Android) or Safari 16.4+ (iOS)."
-          );
-        }
-
-        const scenesWithVideo = scenes.filter((s) => !!s.videoUrl);
-        if (scenesWithVideo.length === 0) {
-          throw new Error("No video clips to export");
-        }
-
         // Determine dimensions
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        const smallDevice = isSmallDevice();
-
-        const dimensions = (isIOS || smallDevice)
-          ? {
-              landscape: { w: 1280, h: 720 },
-              portrait: { w: 720, h: 1280 },
-              square: { w: 960, h: 960 },
-            }
-          : {
-              landscape: { w: 1920, h: 1080 },
-              portrait: { w: 1080, h: 1920 },
-              square: { w: 1080, h: 1080 },
-            };
-
+        const dimensions = isIOS 
+          ? { landscape: { w: 1280, h: 720 }, portrait: { w: 720, h: 1280 }, square: { w: 960, h: 960 } }
+          : { landscape: { w: 1920, h: 1080 }, portrait: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 } };
+        
         const dim = dimensions[format];
-        const fps = isIOS || smallDevice ? 24 : 30;
+        const fps = isIOS ? 24 : 30;
 
         // Check audio support
         const wantsAudio = scenesWithVideo.some(s => !!s.audioUrl);
@@ -195,16 +176,9 @@ export function useCinematicExport() {
         // Process each scene
         for (let i = 0; i < scenesWithVideo.length; i++) {
           if (abortRef.current) break;
-
+          
           const scene = scenesWithVideo[i];
-
-          // Keep UI responsive + show some progress immediately on the first clip.
-          setState({
-            status: "rendering",
-            progress: Math.max(1, Math.floor((i / scenesWithVideo.length) * 80)),
-          });
-
-          let lastProgress = -1;
+          setState({ status: "rendering", progress: Math.floor((i / scenesWithVideo.length) * 80) });
 
           // Load and decode video clip
           const videoResp = await fetch(scene.videoUrl!);
@@ -217,17 +191,10 @@ export function useCinematicExport() {
           tempVideo.preload = "auto";
           tempVideo.src = URL.createObjectURL(videoBlob);
           
-           await new Promise<void>((resolve, reject) => {
-             const to = window.setTimeout(() => reject(new Error("Timed out loading video metadata")), 15000);
-             tempVideo.onloadedmetadata = () => {
-               window.clearTimeout(to);
-               resolve();
-             };
-             tempVideo.onerror = () => {
-               window.clearTimeout(to);
-               reject(new Error("Failed to load video clip"));
-             };
-           });
+          await new Promise<void>((resolve, reject) => {
+            tempVideo.onloadedmetadata = () => resolve();
+            tempVideo.onerror = () => reject(new Error("Failed to load video clip"));
+          });
 
           const clipDuration = tempVideo.duration;
           const clipFrames = Math.ceil(clipDuration * fps);
@@ -291,54 +258,21 @@ export function useCinematicExport() {
             }
           }
 
-          // Helper to seek with retries (iOS is notoriously flaky with video seeking)
-          const seekWithRetry = async (video: HTMLVideoElement, time: number, maxRetries = 3): Promise<void> => {
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-              try {
-                video.currentTime = time;
-                await new Promise<void>((resolve, reject) => {
-                  const timeoutMs = attempt === 0 ? 8000 : 12000; // Longer timeout on retries
-                  const to = window.setTimeout(() => reject(new Error("seek_timeout")), timeoutMs);
-                  
-                  const onSeeked = () => {
-                    window.clearTimeout(to);
-                    video.removeEventListener("seeked", onSeeked);
-                    video.removeEventListener("error", onError);
-                    resolve();
-                  };
-                  
-                  const onError = () => {
-                    window.clearTimeout(to);
-                    video.removeEventListener("seeked", onSeeked);
-                    video.removeEventListener("error", onError);
-                    reject(new Error("seek_error"));
-                  };
-                  
-                  video.addEventListener("seeked", onSeeked, { once: true });
-                  video.addEventListener("error", onError, { once: true });
-                });
-                return; // Success
-              } catch (e) {
-                if (attempt < maxRetries - 1) {
-                  // Wait before retry
-                  await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
-                  continue;
-                }
-                throw new Error("Timed out seeking video - try a smaller video or use a desktop browser");
-              }
-            }
-          };
-
           // Extract and encode video frames
           tempVideo.currentTime = 0;
-          await seekWithRetry(tempVideo, 0);
+          await new Promise<void>((resolve) => {
+            tempVideo.onseeked = () => resolve();
+          });
 
           for (let f = 0; f < clipFrames; f++) {
             if (abortRef.current) break;
 
             const targetTime = f / fps;
             if (Math.abs(tempVideo.currentTime - targetTime) > 0.01) {
-              await seekWithRetry(tempVideo, targetTime);
+              tempVideo.currentTime = targetTime;
+              await new Promise<void>((resolve) => {
+                tempVideo.onseeked = () => resolve();
+              });
             }
 
             // Draw video frame to canvas (scaled to fit)
@@ -372,18 +306,8 @@ export function useCinematicExport() {
             
             globalFrameCount++;
 
-             if (globalFrameCount % 5 === 0) await yieldToUI();
-             if (globalFrameCount % 30 === 0) await longYield();
-
-             // Update progress occasionally (mobile can spend a long time on clip #1)
-             if (globalFrameCount % 12 === 0) {
-               const overall = (i + (f + 1) / clipFrames) / scenesWithVideo.length;
-               const p = Math.min(90, 10 + Math.floor(overall * 80));
-               if (p !== lastProgress) {
-                 lastProgress = p;
-                 setState({ status: "rendering", progress: p });
-               }
-             }
+            if (globalFrameCount % 5 === 0) await yieldToUI();
+            if (globalFrameCount % 30 === 0) await longYield();
           }
 
           // Cleanup
@@ -393,7 +317,7 @@ export function useCinematicExport() {
 
         // Finalize
         setState({ status: "encoding", progress: 95 });
-
+        
         await videoEncoder.flush();
         if (audioEncoder) await audioEncoder.flush();
         

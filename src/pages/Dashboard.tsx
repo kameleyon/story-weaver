@@ -10,8 +10,7 @@ import {
   Wallpaper,
   Menu,
   Video,
-  Users,
-  Film
+  Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -250,8 +249,6 @@ export default function Dashboard() {
         return Clapperboard;
       case "smartflow":
         return Wallpaper;
-      case "cinematic":
-        return Film;
       default:
         return Video;
     }
