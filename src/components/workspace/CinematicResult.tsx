@@ -88,7 +88,8 @@ export function CinematicResult({
   const [isDeleting, setIsDeleting] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Use a single ref for the visible preview video (not hidden)
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const currentScene = scenes[currentSceneIndex];
@@ -108,52 +109,75 @@ export function CinematicResult({
     }
   };
 
-  // Play All functionality - plays video (ALWAYS muted) + Chatterbox audio synced
+  // Play All functionality - plays visible video (muted) + separate audio synced
   const startPlayAll = async (startIndex: number) => {
-    setIsPlayingAll(true);
+    const scene = scenes[startIndex];
+    if (!scene?.videoUrl) {
+      console.warn("No video URL for scene", startIndex);
+      return;
+    }
+
     setCurrentSceneIndex(startIndex);
     setSceneProgress(0);
+    setIsPlayingAll(true);
 
-    const scene = scenes[startIndex];
-    const video = videoRef.current;
+    // Wait for React to re-render and get the new video element
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const video = previewVideoRef.current;
     const audio = audioRef.current;
 
-    if (video && scene?.videoUrl) {
-      video.src = scene.videoUrl;
-      // Video is ALWAYS muted - we only want to hear the Chatterbox voiceover
-      video.muted = true;
-      video.load();
-      
-      // Play Chatterbox audio separately
-      if (audio && scene.audioUrl) {
-        audio.src = scene.audioUrl;
-        audio.muted = isMuted;
-        audio.load();
-      }
+    if (!video) {
+      console.error("Preview video ref not found");
+      setIsPlayingAll(false);
+      return;
+    }
 
-      try {
-        await video.play();
-        if (audio && scene.audioUrl) {
-          await audio.play();
-        }
-      } catch (e) {
-        console.error("Playback failed:", e);
-        setIsPlayingAll(false);
+    // Video is ALWAYS muted - we play audio separately for voiceover
+    video.muted = true;
+    video.currentTime = 0;
+    
+    // Set up audio for voiceover
+    if (audio && scene.audioUrl) {
+      audio.src = scene.audioUrl;
+      audio.muted = isMuted;
+      audio.currentTime = 0;
+      audio.load();
+    }
+
+    try {
+      await video.play();
+      if (audio && scene.audioUrl) {
+        await audio.play();
       }
+    } catch (e) {
+      console.error("Playback failed:", e);
+      setIsPlayingAll(false);
     }
   };
 
   const pausePlayAll = () => {
-    videoRef.current?.pause();
+    previewVideoRef.current?.pause();
     audioRef.current?.pause();
     setIsPlayingAll(false);
   };
 
   const resumePlayAll = async () => {
+    const video = previewVideoRef.current;
+    const audio = audioRef.current;
+    
+    // If video doesn't have a source yet, start from beginning
+    if (!video || video.readyState === 0) {
+      await startPlayAll(currentSceneIndex);
+      return;
+    }
+
     try {
-      await videoRef.current?.play();
-      await audioRef.current?.play();
       setIsPlayingAll(true);
+      await video.play();
+      if (audio && audio.src) {
+        await audio.play();
+      }
     } catch {
       // Restart from current scene
       await startPlayAll(currentSceneIndex);
@@ -161,7 +185,7 @@ export function CinematicResult({
   };
 
   const stopPlayAll = () => {
-    const video = videoRef.current;
+    const video = previewVideoRef.current;
     const audio = audioRef.current;
     
     if (video) {
@@ -186,10 +210,17 @@ export function CinematicResult({
     await startPlayAll(nextIndex);
   };
 
+  const handleVideoTimeUpdate = () => {
+    const video = previewVideoRef.current;
+    if (!video || !isPlayingAll) return;
+    const dur = video.duration || currentScene?.duration || 1;
+    setSceneProgress(Math.min(1, video.currentTime / dur));
+  };
+
   const toggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
-    // Only toggle the Chatterbox audio - video is always muted
+    // Only toggle the audio element - video is always muted
     if (audioRef.current) {
       audioRef.current.muted = newMuted;
     }
@@ -326,20 +357,8 @@ export function CinematicResult({
 
   return (
     <div className="space-y-6">
-      {/* Hidden media elements for playback */}
-      <video
-        ref={videoRef}
-        onEnded={handleVideoEnded}
-        onTimeUpdate={() => {
-          const video = videoRef.current;
-          if (!video) return;
-          const dur = video.duration || currentScene?.duration || 1;
-          setSceneProgress(Math.min(1, video.currentTime / dur));
-        }}
-        className="hidden"
-        playsInline
-      />
-      <audio ref={audioRef} className="hidden" />
+      {/* Hidden audio element for voiceover playback */}
+      <audio ref={audioRef} className="hidden" preload="auto" />
 
       {/* Header */}
       <div className="text-center">
@@ -353,7 +372,7 @@ export function CinematicResult({
         <div className="mt-4 flex items-center justify-center gap-2">
           {!isPlayingAll ? (
             <Button
-              onClick={() => resumePlayAll()}
+              onClick={() => startPlayAll(currentSceneIndex)}
               className="gap-2 bg-amber-500 hover:bg-amber-600"
               disabled={scenesWithVideo.length === 0}
             >
@@ -392,6 +411,7 @@ export function CinematicResult({
         <AnimatePresence mode="wait" initial={false}>
             {currentScene?.videoUrl ? (
               <motion.video
+                ref={previewVideoRef}
                 key={`preview-${currentScene.number}-${currentScene.videoUrl}`}
                 src={currentScene.videoUrl}
                 className="w-full h-full object-cover"
@@ -404,6 +424,9 @@ export function CinematicResult({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
                 controls={!isPlayingAll}
+                onEnded={handleVideoEnded}
+                onTimeUpdate={handleVideoTimeUpdate}
+                preload="auto"
               />
             ) : (
               <div className="text-center text-muted-foreground">
