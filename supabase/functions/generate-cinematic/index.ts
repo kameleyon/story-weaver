@@ -36,7 +36,7 @@ interface Scene {
   videoUrl?: string;
 }
 
-const REPLICATE_API_URL = "https://api.replicate.com/v1/predictions";
+const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
 const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
 // ============================================
@@ -318,16 +318,15 @@ async function generateVideoFromImage(
 
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
-  // Create prediction
-  const predictionResponse = await fetch(REPLICATE_API_URL, {
+  // Create prediction using the models endpoint (no version needed)
+  const predictionResponse = await fetch(`${REPLICATE_MODELS_URL}/${GROK_VIDEO_MODEL}/predictions`, {
     method: "POST",
     headers: {
-      "Authorization": `Token ${replicateToken}`,
+      "Authorization": `Bearer ${replicateToken}`,
       "Content-Type": "application/json",
+      "Prefer": "wait",
     },
     body: JSON.stringify({
-      version: "luma/ray",
-      model: GROK_VIDEO_MODEL,
       input: {
         prompt: scene.visualPrompt,
         image: imageUrl,
@@ -355,8 +354,8 @@ async function generateVideoFromImage(
   while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     
-    const statusResponse = await fetch(`${REPLICATE_API_URL}/${prediction.id}`, {
-      headers: { "Authorization": `Token ${replicateToken}` },
+    const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+      headers: { "Authorization": `Bearer ${replicateToken}` },
     });
     
     result = await statusResponse.json();
