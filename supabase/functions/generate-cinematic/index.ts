@@ -20,12 +20,9 @@ interface CinematicRequest {
   style?: string;
   customStyle?: string;
   brandMark?: string;
+  presenterFocus?: string;
   characterDescription?: string;
-  inspirationStyle?: string;
-  storyTone?: string;
-  storyGenre?: string;
   disableExpressions?: boolean;
-  brandName?: string;
   characterConsistencyEnabled?: boolean;
   voiceType?: "standard" | "custom";
   voiceId?: string;
@@ -241,6 +238,23 @@ async function getReplicatePrediction(predictionId: string, replicateToken: stri
 // ============================================
 // STEP 1: Script Generation with Gemini 3 Preview
 // ============================================
+// Content compliance instruction (from generate-video)
+const CONTENT_COMPLIANCE_INSTRUCTION = `
+CONTENT POLICY (MANDATORY):
+- Generate only family-friendly, appropriate content
+- No explicit violence, gore, or disturbing imagery
+- No sexual or adult content
+- No hate speech, discrimination, or offensive stereotypes
+- No content promoting illegal activities
+- Keep all content suitable for general audiences
+`;
+
+// Get style prompt from STYLE_PROMPTS dictionary
+function getStylePrompt(style: string, customStyle?: string): string {
+  const key = style.toLowerCase();
+  return STYLE_PROMPTS[key] || customStyle || style;
+}
+
 async function generateScriptWithGemini(
   content: string,
   params: Required<Pick<CinematicRequest, "format" | "length" | "style">> &
@@ -248,36 +262,148 @@ async function generateScriptWithGemini(
       CinematicRequest,
       | "customStyle"
       | "brandMark"
+      | "presenterFocus"
       | "characterDescription"
-      | "inspirationStyle"
-      | "storyTone"
-      | "storyGenre"
       | "disableExpressions"
-      | "brandName"
       | "characterConsistencyEnabled"
       | "voiceType"
       | "voiceId"
       | "voiceName"
     >>,
   lovableApiKey: string,
-): Promise<{ title: string; scenes: Scene[] }> {
+): Promise<{ title: string; scenes: Scene[]; characters?: Record<string, string> }> {
   console.log("Step 1: Generating script with Gemini 3 Preview...");
 
-  const systemPrompt = `You are a cinematic video script writer. Create a compelling script for a short video.
-Generate exactly 7 scenes. Each scene should have:
-1. A voiceover narration (what will be spoken)
-2. A detailed visual prompt for AI image generation (describe the scene visually, characters, setting, lighting, mood)
-3. A visual style descriptor (e.g., "cinematic wide shot", "close-up portrait", "aerial view")
-4. Duration in seconds (5-10)
+  // Get dimensions based on format
+  const dimensions = params.format === "portrait" 
+    ? { width: 1080, height: 1920 }
+    : params.format === "square" 
+      ? { width: 1080, height: 1080 }
+      : { width: 1920, height: 1080 };
 
-The style is: ${params.style}
-The tone is: ${params.storyTone || "casual"}
-The genre is: ${params.storyGenre || "documentary"}
-${params.inspirationStyle ? `Writing inspiration: ${params.inspirationStyle}` : ""}
-${params.characterDescription ? `Main character appearance: ${params.characterDescription}` : ""}
-${params.brandName ? `Brand/Character name to include: ${params.brandName}` : ""}
+  // Length configuration (same as generate-video)
+  const lengthConfig: Record<string, { count: number; targetDuration: number; avgSceneDuration: number }> = {
+    short: { count: 6, targetDuration: 90, avgSceneDuration: 15 },
+    brief: { count: 7, targetDuration: 120, avgSceneDuration: 17 },
+    presentation: { count: 12, targetDuration: 240, avgSceneDuration: 20 },
+  };
+  const config = lengthConfig[params.length] || lengthConfig.brief;
+  const sceneCount = config.count;
+  const targetWords = Math.floor(config.avgSceneDuration * 2.5);
 
-You MUST respond with a JSON object containing a "title" string and a "scenes" array. Each scene must have: number, voiceover, visualPrompt, visualStyle, duration.`;
+  const styleDescription = getStylePrompt(params.style, params.customStyle);
+
+  // Build optional guidance sections
+  const presenterGuidance = params.presenterFocus
+    ? `
+=== PRESENTER GUIDANCE ===
+${params.presenterFocus}
+`
+    : "";
+
+  const characterGuidance = params.characterDescription
+    ? `
+=== CHARACTER APPEARANCE ===
+All human characters in visual prompts MUST match this description:
+${params.characterDescription}
+Include these character details in EVERY visualPrompt that features people.
+`
+    : "";
+
+  const systemPrompt = `You are a DYNAMIC cinematic video script writer creating engaging, narrative-driven content for AI-to-VIDEO generation.
+${CONTENT_COMPLIANCE_INSTRUCTION}
+=== LANGUAGE REQUIREMENT (CRITICAL) ===
+ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
+The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
+If the input content is in another language (French, Spanish, Portuguese, etc.), TRANSLATE it to English for the output.
+
+=== HAITIAN CREOLE ILLUSTRATION TEXT RULES ===
+When generating content in Haitian Creole:
+- Write ALL illustration text, captions, and visual descriptions in Haitian Creole
+- PRESERVE proper nouns, brand names, and specific terminology in their ORIGINAL form
+- Example: "Lionel Messi" stays "Lionel Messi", "Nike - Just Do It" stays "Nike - Just Do It"
+
+=== CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
+Before writing the script, carefully analyze the content to identify:
+1. KEY CHARACTERS: Who are the people/entities mentioned?
+2. GENDER: Determine gender from context (names, pronouns, roles, topics)
+3. ROLES & RELATIONSHIPS: Who does what?
+4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
+5. TEMPORAL CONTEXT: Childhood → show AS A CHILD, Adult → show AS ADULT, etc.
+6. HISTORICAL/CULTURAL CONTEXT: Match clothing, hairstyles, technology to time period
+
+Content: ${content}
+${presenterGuidance}${characterGuidance}
+
+=== VISUAL STYLE & ART DIRECTION ===
+All image prompts must adhere to this style:
+- ART STYLE: ${styleDescription}
+- ASPECT RATIO: ${params.format} (${dimensions.width}x${dimensions.height})
+- QUALITY: Ultra-detailed, 8K resolution, dramatic cinematic lighting
+- CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
+
+=== TIMING REQUIREMENTS ===
+- Target duration: ${config.targetDuration} seconds
+- Create exactly ${sceneCount} scenes
+- MAXIMUM 20 seconds per scene - MINIMUM 5 seconds per scene
+- Each voiceover: ~${targetWords} words
+
+=== NARRATIVE ARC ===
+1. HOOK (Scene 1-2): Create intrigue (High energy, dramatic opening)
+2. CONFLICT (Early-middle): Show tension or challenge
+3. CHOICE (Middle): Fork in the road, decision point
+4. SOLUTION (Later): Show method/progress/resolution
+5. FORMULA (Final): Powerful conclusion, memorable ending
+
+=== VOICEOVER STYLE ===
+- ENERGETIC, conversational, cinematic tone
+- Start each scene with a hook
+- NO labels, NO stage directions, NO markdown
+- Just raw spoken text
+${
+  params.disableExpressions
+    ? `- Do NOT include any paralinguistic tags like [chuckle], [sigh], etc.`
+    : `- Include paralinguistic tags where appropriate: [sigh], [chuckle], [gasp], [laugh]`
+}
+
+=== CHARACTER BIBLE (REQUIRED) ===
+You MUST create a "characters" object defining EVERY person/entity in the video.
+This ensures visual CONSISTENCY - the same person looks identical across all scenes.
+
+For each character specify:
+- GENDER (male/female) - MUST match the content context
+- AGE: The SPECIFIC age for this version of the character
+- Ethnicity/skin tone if mentioned or implied
+- Hair (color, style, length)
+- Body type
+- Clothing (period-appropriate, age-appropriate)
+- Distinguishing features
+
+=== PROMPT ENGINEERING RULES (FOR IMAGE PROMPTS) ===
+When generating the 'visualPrompt' for each scene, you MUST:
+1. COPY-PASTE the full physical description from the CHARACTER BIBLE into the prompt
+2. Describe the ACTION clearly (e.g., "running", "celebrating")
+3. Define the SETTING (background, lighting, weather, environment)
+4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
+5. **DO NOT** describe the art style in your visualPrompt - the system will append it automatically
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
+{
+  "title": "Video Title",
+  "characters": {
+    "Protagonist": "A 35-year-old man with dark hair, brown eyes, athletic build..."
+  },
+  "scenes": [
+    {
+      "number": 1,
+      "voiceover": "Script text here...",
+      "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
+      "visualStyle": "cinematic wide shot",
+      "duration": 8
+    }
+  ]
+}`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -296,11 +422,16 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
           type: "function",
           function: {
             name: "create_script",
-            description: "Create a cinematic video script with title and scenes",
+            description: "Create a cinematic video script with title, characters, and scenes",
             parameters: {
               type: "object",
               properties: {
                 title: { type: "string", description: "The video title" },
+                characters: {
+                  type: "object",
+                  description: "Character bible with visual descriptions for consistency",
+                  additionalProperties: { type: "string" },
+                },
                 scenes: {
                   type: "array",
                   items: {
@@ -310,7 +441,7 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
                       voiceover: { type: "string", description: "The narration text" },
                       visualPrompt: { type: "string", description: "Detailed visual description for image generation" },
                       visualStyle: { type: "string", description: "Camera/shot style descriptor" },
-                      duration: { type: "number", description: "Duration in seconds (5-10)" },
+                      duration: { type: "number", description: "Duration in seconds (5-20)" },
                     },
                     required: ["number", "voiceover", "visualPrompt", "visualStyle", "duration"],
                   },
@@ -339,14 +470,17 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
       throw new Error("Invalid script structure from Gemini");
     }
 
+    const styleDescription = getStylePrompt(params.style, params.customStyle);
+
     return {
       title: parsed.title,
+      characters: parsed.characters || {},
       scenes: parsed.scenes.map((s: any, idx: number) => ({
         number: s?.number ?? idx + 1,
         voiceover: s?.voiceover ?? "",
-        visualPrompt: s?.visualPrompt ?? "",
+        visualPrompt: `${s?.visualPrompt ?? ""}\n\nSTYLE: ${styleDescription}`,
         visualStyle: s?.visualStyle ?? "cinematic",
-        duration: typeof s?.duration === "number" ? s.duration : 6,
+        duration: typeof s?.duration === "number" ? s.duration : 8,
       })),
     };
   }
@@ -999,12 +1133,9 @@ serve(async (req) => {
           style,
           customStyle: body.customStyle,
           brandMark: body.brandMark,
+          presenterFocus: body.presenterFocus,
           characterDescription: body.characterDescription,
-          inspirationStyle: body.inspirationStyle,
-          storyTone: body.storyTone,
-          storyGenre: body.storyGenre,
           disableExpressions: body.disableExpressions,
-          brandName: body.brandName,
           characterConsistencyEnabled: body.characterConsistencyEnabled,
           voiceType: body.voiceType,
           voiceId: body.voiceId,
