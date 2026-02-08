@@ -42,29 +42,24 @@ const GLIF_IMG2VID_ID = "cmlcswdal000404l217ez6vkf"; // Image-to-Video
 const GLIF_STITCH_ID = "cmlctayju000004l5qxf7ydrd"; // Video Stitching
 
 // Try multiple input formats to discover what Glif workflow expects
+// Based on workflow schema: node "motionmax" expects { prompt, duration, engineId, resolution, aspectRatio }
 async function callGlifApiWithRetry(
   glifId: string,
   promptValue: string,
   audioUrl: string | undefined,
   apiToken: string
 ): Promise<any> {
-  // Input format variants to try (Glif workflows may use different node names)
-  const inputVariants: (Record<string, string> | string[])[] = [
-    // Array format (as per Glif docs example)
+  // Input format variants to try - the workflow node is named "motionmax"
+  const inputVariants: (Record<string, any> | string[])[] = [
+    // Try node name as key (most likely based on schema)
+    { motionmax: promptValue },
+    // Array format (as per Glif docs example) 
     audioUrl ? [promptValue, audioUrl] : [promptValue],
     // Object with common key names
-    audioUrl 
-      ? { prompt: promptValue, audio_url: audioUrl }
-      : { prompt: promptValue },
-    audioUrl 
-      ? { Prompt: promptValue, audio_url: audioUrl }
-      : { Prompt: promptValue },
-    audioUrl 
-      ? { text: promptValue, audio_url: audioUrl }
-      : { text: promptValue },
-    audioUrl 
-      ? { input: promptValue, audio_url: audioUrl }
-      : { input: promptValue },
+    { prompt: promptValue },
+    { Prompt: promptValue },
+    { text: promptValue },
+    { input: promptValue },
   ];
 
   let lastError: Error | null = null;
