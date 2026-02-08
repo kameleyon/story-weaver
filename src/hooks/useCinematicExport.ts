@@ -39,7 +39,6 @@ function generateAACAudioSpecificConfig(sampleRate: number, channels: number): U
 }
 
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-const longYield = () => new Promise<void>((resolve) => setTimeout(resolve, 16));
 
 // Timeout wrapper for promises
 function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> {
@@ -49,60 +48,49 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   ]);
 }
 
-// Load video with proper error handling, timeout, and retry
-async function loadVideoElement(url: string, timeoutMs = 60000, retries = 2): Promise<HTMLVideoElement> {
+// Load video with proper error handling
+async function loadVideoElement(url: string, timeoutMs = 60000): Promise<HTMLVideoElement> {
   console.log("[CinematicExport] Loading video:", url.substring(0, 100));
   
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      // First fetch the video blob with CORS
-      const response = await withTimeout(
-        fetch(url, { mode: "cors" }),
-        timeoutMs,
-        "Video fetch timed out"
-      );
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
-      }
-      
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      
-      const video = document.createElement("video");
-      video.muted = true;
-      video.playsInline = true;
-      video.preload = "auto";
-      video.crossOrigin = "anonymous";
-      video.src = blobUrl;
-      
-      // Wait for metadata to load with extended timeout
-      await withTimeout(
-        new Promise<void>((resolve, reject) => {
-          video.onloadedmetadata = () => {
-            console.log("[CinematicExport] Video loaded:", {
-              duration: video.duration,
-              width: video.videoWidth,
-              height: video.videoHeight
-            });
-            resolve();
-          };
-          video.onerror = () => reject(new Error("Failed to decode video"));
-        }),
-        timeoutMs,
-        "Video decode timed out"
-      );
-      
-      return video;
-    } catch (e) {
-      console.warn(`[CinematicExport] Video load attempt ${attempt + 1} failed:`, e);
-      if (attempt === retries) throw e;
-      // Wait before retry
-      await new Promise(r => setTimeout(r, 1000));
-    }
+  // Fetch the video blob with CORS
+  const response = await withTimeout(
+    fetch(url, { mode: "cors" }),
+    timeoutMs,
+    "Video fetch timed out"
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
   }
   
-  throw new Error("Video load failed after retries");
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  video.crossOrigin = "anonymous";
+  video.src = blobUrl;
+  
+  // Wait for metadata to load
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => {
+        console.log("[CinematicExport] Video loaded:", {
+          duration: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight
+        });
+        resolve();
+      };
+      video.onerror = () => reject(new Error("Failed to decode video"));
+    }),
+    timeoutMs,
+    "Video decode timed out"
+  );
+  
+  return video;
 }
 
 // Load audio with proper error handling
@@ -138,6 +126,128 @@ async function loadAudioBuffer(
     console.warn("[CinematicExport] Audio load failed:", e);
     return null;
   }
+}
+
+// 🚀 FAST: Capture frames during real-time playback using requestVideoFrameCallback
+async function captureVideoFrames(
+  videoElement: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  fps: number,
+  onFrame: (timestamp: number, keyFrame: boolean) => void,
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  const targetFrameInterval = 1 / fps;
+  const totalDuration = videoElement.duration;
+  const totalFrames = Math.ceil(totalDuration * fps);
+  
+  let frameCount = 0;
+  let lastCaptureTime = -1;
+  
+  const drawFrame = () => {
+    const currentTime = videoElement.currentTime;
+    
+    // Only capture if enough time has passed (throttle to target FPS)
+    if (currentTime - lastCaptureTime >= targetFrameInterval * 0.9) {
+      // Draw video frame to canvas (scaled to fit)
+      const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+      const canvasAspect = canvas.width / canvas.height;
+      
+      let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
+      if (videoAspect > canvasAspect) {
+        drawWidth = canvas.width;
+        drawHeight = canvas.width / videoAspect;
+        drawX = 0;
+        drawY = (canvas.height - drawHeight) / 2;
+      } else {
+        drawHeight = canvas.height;
+        drawWidth = canvas.height * videoAspect;
+        drawX = (canvas.width - drawWidth) / 2;
+        drawY = 0;
+      }
+      
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(videoElement, drawX, drawY, drawWidth, drawHeight);
+      
+      // Calculate timestamp in microseconds
+      const timestamp = Math.round(frameCount * (1_000_000 / fps));
+      const keyFrame = frameCount % (fps * 2) === 0; // Keyframe every 2 seconds
+      
+      onFrame(timestamp, keyFrame);
+      
+      frameCount++;
+      lastCaptureTime = currentTime;
+      
+      if (onProgress) {
+        onProgress(Math.min(frameCount / totalFrames, 1));
+      }
+    }
+  };
+
+  // Check if requestVideoFrameCallback is available
+  const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  
+  return new Promise<void>((resolve, reject) => {
+    const onEnded = () => {
+      console.log(`[CinematicExport] Video ended, captured ${frameCount} frames`);
+      cleanup();
+      resolve();
+    };
+    
+    const onError = () => {
+      cleanup();
+      reject(new Error("Video playback error"));
+    };
+    
+    const cleanup = () => {
+      videoElement.removeEventListener('ended', onEnded);
+      videoElement.removeEventListener('error', onError);
+    };
+    
+    videoElement.addEventListener('ended', onEnded);
+    videoElement.addEventListener('error', onError);
+    
+    if (hasRVFC) {
+      // Use requestVideoFrameCallback (Chrome/Edge) - most precise
+      const captureLoop = () => {
+        if (videoElement.ended || videoElement.paused) {
+          console.log(`[CinematicExport] Captured ${frameCount} frames via RVFC`);
+          cleanup();
+          resolve();
+          return;
+        }
+        
+        drawFrame();
+        (videoElement as any).requestVideoFrameCallback(captureLoop);
+      };
+      
+      (videoElement as any).requestVideoFrameCallback(captureLoop);
+      videoElement.play().catch((e) => {
+        cleanup();
+        reject(e);
+      });
+    } else {
+      // Fallback: use requestAnimationFrame (less precise but still fast)
+      const captureLoop = () => {
+        if (videoElement.ended || videoElement.paused) {
+          console.log(`[CinematicExport] Captured ${frameCount} frames via RAF`);
+          cleanup();
+          resolve();
+          return;
+        }
+        
+        drawFrame();
+        requestAnimationFrame(captureLoop);
+      };
+      
+      requestAnimationFrame(captureLoop);
+      videoElement.play().catch((e) => {
+        cleanup();
+        reject(e);
+      });
+    }
+  });
 }
 
 export function useCinematicExport() {
@@ -290,6 +400,9 @@ export function useCinematicExport() {
           1, 1, audioTrackConfig ? audioTrackConfig.sampleRate : 48000
         );
 
+        // Track cumulative timestamp offset for concatenating scenes
+        let cumulativeTimestampOffset = 0;
+
         // Process each scene
         for (let i = 0; i < scenesWithVideo.length; i++) {
           if (abortRef.current) break;
@@ -300,7 +413,7 @@ export function useCinematicExport() {
           setState({ status: "rendering", progress: baseProgress });
           console.log(`[CinematicExport] Processing scene ${i + 1}/${scenesWithVideo.length}`);
 
-          // Load video with timeout
+          // Load video
           let tempVideo: HTMLVideoElement;
           try {
             tempVideo = await loadVideoElement(scene.videoUrl!);
@@ -313,9 +426,6 @@ export function useCinematicExport() {
             });
             throw e;
           }
-
-          const clipDuration = tempVideo.duration;
-          const clipFrames = Math.ceil(clipDuration * fps);
 
           // Process audio for this scene
           if (audioEncoder && audioTrackConfig && scene.audioUrl) {
@@ -370,95 +480,46 @@ export function useCinematicExport() {
             }
           }
 
-          // Extract and encode video frames using requestVideoFrameCallback or fallback
-          // Use a simpler approach: play the video and capture frames
-          tempVideo.currentTime = 0;
+          // 🚀 FAST: Capture frames during real-time playback (NOT frame-by-frame seeking!)
+          const sceneStartFrame = globalFrameCount;
           
-          // Wait for seek to complete
-          await withTimeout(
-            new Promise<void>((resolve) => {
-              const onSeeked = () => {
-                tempVideo.removeEventListener("seeked", onSeeked);
-                resolve();
-              };
-              tempVideo.addEventListener("seeked", onSeeked);
-              // Trigger seek if already at position
-              if (tempVideo.currentTime === 0 && tempVideo.readyState >= 2) {
-                resolve();
-              }
-            }),
-            5000,
-            "Video seek timed out"
-          );
-
-          for (let f = 0; f < clipFrames; f++) {
-            if (abortRef.current) break;
-
-            const targetTime = f / fps;
-            
-            // Seek to frame
-            if (Math.abs(tempVideo.currentTime - targetTime) > 0.01) {
-              tempVideo.currentTime = targetTime;
-              await withTimeout(
-                new Promise<void>((resolve) => {
-                  const onSeeked = () => {
-                    tempVideo.removeEventListener("seeked", onSeeked);
-                    resolve();
-                  };
-                  tempVideo.addEventListener("seeked", onSeeked);
-                }),
-                2000,
-                `Frame seek timed out at ${targetTime}s`
-              ).catch(() => {
-                // Skip frame on timeout, continue
-                console.warn(`[CinematicExport] Skipped frame at ${targetTime}s`);
+          await captureVideoFrames(
+            tempVideo,
+            canvas,
+            ctx,
+            fps,
+            (timestamp, keyFrame) => {
+              // Offset timestamp by cumulative duration of previous scenes
+              const adjustedTimestamp = cumulativeTimestampOffset + timestamp;
+              
+              const frame = new VideoFrame(canvas, { 
+                timestamp: adjustedTimestamp, 
+                duration: Math.round(1e6 / fps) 
               });
+              
+              // Force keyframe every 2 seconds globally
+              const forceKeyFrame = globalFrameCount % (fps * 2) === 0;
+              videoEncoder.encode(frame, { keyFrame: keyFrame || forceKeyFrame });
+              frame.close();
+              
+              globalFrameCount++;
+            },
+            (sceneProgress) => {
+              const overallProgress = baseProgress + sceneProgress * (70 / scenesWithVideo.length);
+              setState({ status: "rendering", progress: Math.floor(overallProgress) });
             }
-
-            // Draw video frame to canvas (scaled to fit)
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0, 0, dim.w, dim.h);
-            
-            const videoAspect = tempVideo.videoWidth / tempVideo.videoHeight;
-            const canvasAspect = dim.w / dim.h;
-            
-            let drawWidth, drawHeight, drawX, drawY;
-            if (videoAspect > canvasAspect) {
-              drawWidth = dim.w;
-              drawHeight = dim.w / videoAspect;
-              drawX = 0;
-              drawY = (dim.h - drawHeight) / 2;
-            } else {
-              drawHeight = dim.h;
-              drawWidth = dim.h * videoAspect;
-              drawX = (dim.w - drawWidth) / 2;
-              drawY = 0;
-            }
-            
-            ctx.drawImage(tempVideo, drawX, drawY, drawWidth, drawHeight);
-
-            const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
-            const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6/fps) });
-            
-            const keyFrame = globalFrameCount % (fps * 2) === 0;
-            videoEncoder.encode(frame, { keyFrame });
-            frame.close();
-            
-            globalFrameCount++;
-
-            // Update progress within scene
-            if (f % 10 === 0) {
-              const sceneProgress = (f / clipFrames) * (70 / scenesWithVideo.length);
-              setState({ status: "rendering", progress: Math.floor(baseProgress + sceneProgress) });
-            }
-
-            if (globalFrameCount % 5 === 0) await yieldToUI();
-            if (globalFrameCount % 30 === 0) await longYield();
-          }
+          );
+          
+          // Update cumulative offset for next scene
+          cumulativeTimestampOffset += Math.round(tempVideo.duration * 1_000_000);
+          
+          console.log(`[CinematicExport] Scene ${i + 1} complete: ${globalFrameCount - sceneStartFrame} frames`);
 
           // Cleanup
           URL.revokeObjectURL(tempVideo.src);
           tempVideo.remove();
+          
+          await yieldToUI();
         }
 
         // Finalize
@@ -476,7 +537,7 @@ export function useCinematicExport() {
         const { buffer } = muxer.target as ArrayBufferTarget;
         const blob = new Blob([buffer], { type: "video/mp4" });
         
-        console.log("[CinematicExport] Video created:", { size: blob.size });
+        console.log("[CinematicExport] Video created:", { size: blob.size, frames: globalFrameCount });
         
         let publicUrl: string | undefined;
         
@@ -496,7 +557,6 @@ export function useCinematicExport() {
 
           if (uploadError) {
             console.error("[CinematicExport] Upload error:", uploadError);
-            // Continue without upload - user can still download locally
             toast({ 
               title: "Upload Warning", 
               description: "Video created but cloud save failed. Download will start.", 
