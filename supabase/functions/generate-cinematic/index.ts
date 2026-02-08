@@ -434,7 +434,12 @@ async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "
   return prediction.id as string;
 }
 
-async function resolveGrok(predictionId: string, replicateToken: string): Promise<string | null> {
+async function resolveGrok(
+  predictionId: string,
+  replicateToken: string,
+  supabase: ReturnType<typeof createClient>,
+  sceneNumber: number,
+): Promise<string | null> {
   const result = await getReplicatePrediction(predictionId, replicateToken);
 
   if (result.status !== "succeeded") {
@@ -447,7 +452,37 @@ async function resolveGrok(predictionId: string, replicateToken: string): Promis
 
   const outputUrl = result.output;
   if (typeof outputUrl !== "string" || !outputUrl) return null;
-  return outputUrl;
+
+  // Download the video from Replicate and upload to Supabase storage for persistence
+  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate...`);
+  const videoResponse = await fetch(outputUrl);
+  if (!videoResponse.ok) {
+    throw new Error("Failed to download generated video from Replicate");
+  }
+  const videoBuffer = await videoResponse.arrayBuffer();
+
+  const fileName = `cinematic-video-${Date.now()}-${sceneNumber}.mp4`;
+  const upload = await supabase.storage
+    .from("scene-videos")
+    .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
+
+  if (upload.error) {
+    // Try create bucket if missing
+    try {
+      await supabase.storage.createBucket("scene-videos", { public: true });
+      const retry = await supabase.storage
+        .from("scene-videos")
+        .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
+      if (retry.error) throw retry.error;
+    } catch (e) {
+      console.error("Video upload error:", upload.error);
+      throw new Error("Failed to upload video to storage");
+    }
+  }
+
+  const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
+  console.log(`[Grok] Video uploaded: ${urlData.publicUrl}`);
+  return urlData.publicUrl;
 }
 
 async function readGenerationOwned(
@@ -703,7 +738,7 @@ serve(async (req) => {
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken);
+      const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
       if (!videoUrl) {
         return jsonResponse({ success: true, status: "processing", scene });
       }
