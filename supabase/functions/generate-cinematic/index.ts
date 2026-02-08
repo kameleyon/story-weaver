@@ -306,8 +306,17 @@ Your goal is to turn a user's request into a compelling, production-ready video 
 
 ${CONTENT_COMPLIANCE_INSTRUCTION}
 
-### PHASE 1: ASSESS & STRATEGIZE (Do this FIRST)
-Before writing, analyze the User's Request to determine the best approach:
+=== CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
+Before writing the script, carefully analyze the content to identify:
+1. **KEY CHARACTERS:** Who are the people/entities mentioned?
+2. **GENDER:** Determine gender from context (names, pronouns, roles, topics)
+3. **ROLES & RELATIONSHIPS:** Who does what?
+4. **VISUAL CONSISTENCY:** The SAME character must look IDENTICAL across ALL scenes
+5. **TEMPORAL CONTEXT:** Childhood → show AS A CHILD, Adult → show AS ADULT
+6. **HISTORICAL/CULTURAL CONTEXT:** Match clothing, hairstyles, technology to time period
+
+### PHASE 1: ASSESS & STRATEGIZE
+After content analysis, determine the best approach:
 
 1. **Core Message:** What is the single most important idea to convey?
 2. **Audience:** Who is watching? (investors, social media, students, general public)
@@ -358,16 +367,26 @@ Your visualPrompt must be optimized for AI VIDEO generation, NOT static images. 
 5. **ATMOSPHERE & MOOD:** Set the emotional tone visually
    - "Tense, claustrophobic framing", "Expansive, hopeful wide shot"
 
-### CHARACTER BIBLE (REQUIRED)
-Create a "characters" object defining EVERY person/entity for VISUAL CONSISTENCY across all scenes.
+=== CHARACTER BIBLE (REQUIRED) ===
+You MUST create a "characters" object defining EVERY person/entity in the video for VISUAL CONSISTENCY across all scenes.
 
 For each character specify:
-- GENDER, AGE, Ethnicity/skin tone
-- Hair (color, style, length)
-- Body type, Clothing (period/age-appropriate)
-- Distinguishing features that remain CONSTANT
+- **GENDER** (male/female/other)
+- **AGE** (specific age or age range)
+- **Ethnicity/skin tone** (be specific)
+- **Hair** (color, style, length)
+- **Body type** (build, height)
+- **Clothing** (period/age-appropriate, consistent across scenes)
+- **Distinguishing features** that remain CONSTANT
 
 When writing visualPrompt, COPY the full character description from your bible—don't just reference the name.
+Example: Instead of "John enters the room", write "A 45-year-old Caucasian man with salt-and-pepper hair, square jaw, wearing a charcoal business suit (from character bible) enters the room..."
+
+### SCENE 1 TITLE REQUIREMENT (MANDATORY)
+The FIRST scene (Scene 1) MUST include a bold, prominent title overlay in the visualPrompt.
+- Create a 3-6 word catchy title that captures the video's essence
+- The title should be rendered as social-media-style headline text
+- Example: "visualPrompt: 'UNLOCK YOUR POTENTIAL' in bold, modern sans-serif typography centered on screen..."
 
 ### VOICEOVER STYLE
 - ENERGETIC, conversational, cinematic tone
@@ -380,13 +399,14 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
   "title": "A Creative, Compelling Title",
   "characters": {
-    "Protagonist": "A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer..."
+    "Protagonist": "A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer and white blouse. Distinguishing features: bright smile, small gold hoop earrings.",
+    "Mentor": "A 55-year-old East Asian man with graying temples, kind eyes, slim build, wearing a gray cardigan over a button-down shirt. Distinguishing features: reading glasses, gentle demeanor."
   },
   "scenes": [
     {
       "number": 1,
       "voiceover": "Engaging narration that hooks the viewer immediately...",
-      "visualPrompt": "Slow dolly push through morning mist. A 32-year-old woman with shoulder-length black hair (from character bible) steps into frame from the right, silhouetted against golden hour sunlight. Camera tracks her movement as she walks purposefully toward camera. Shallow depth of field, lens flare kissing the edge of frame.",
+      "visualPrompt": "'THE JOURNEY BEGINS' in bold, modern typography fading in over: Slow dolly push through morning mist. A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer (from character bible) steps into frame from the right, silhouetted against golden hour sunlight. Camera tracks her movement as she walks purposefully toward camera. Shallow depth of field, lens flare kissing the edge of frame.",
       "visualStyle": "Cinematic establishing shot with atmospheric depth",
       "duration": 8
     }
