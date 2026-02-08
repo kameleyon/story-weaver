@@ -389,14 +389,16 @@ export function CinematicResult({
             />
           </div>
 
-          <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="wait" initial={false}>
             {currentScene?.videoUrl ? (
               <motion.video
-                key={currentScene.videoUrl}
+                key={`preview-${currentScene.number}-${currentScene.videoUrl}`}
                 src={currentScene.videoUrl}
                 className="w-full h-full object-cover"
-                muted // Video is ALWAYS muted - Chatterbox audio plays separately
+                muted={true}
                 playsInline
+                autoPlay={false}
+                loop={false}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -481,7 +483,13 @@ export function CinematicResult({
             }`}
           >
             {scene.videoUrl ? (
-              <video src={scene.videoUrl} className="w-full h-full object-cover" muted playsInline />
+              <video 
+                src={scene.videoUrl} 
+                className="w-full h-full object-cover" 
+                muted={true}
+                playsInline 
+                preload="metadata"
+              />
             ) : (
               <div className="w-full h-full bg-muted flex items-center justify-center">
                 <Film className="h-4 w-4 text-muted-foreground" />
