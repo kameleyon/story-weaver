@@ -700,7 +700,7 @@ export function CinematicResult({
               key={currentScene.videoUrl}
               ref={previewVideoRef}
               src={currentScene.videoUrl}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain bg-black"
               muted
               playsInline
               autoPlay={false}
