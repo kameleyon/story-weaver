@@ -52,7 +52,8 @@ interface Scene {
 const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
-const CHATTERBOX_MODEL = "resemble-ai/chatterbox";
+// Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
+const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
 const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -257,25 +258,46 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
 }
 
 // ============================================
-// STEP 2: Audio Generation with Replicate Chatterbox (phased)
+// STEP 2: Audio Generation with Replicate Chatterbox-Turbo (phased)
+// Uses Marisol (female) and Ethan (male) voices like the main pipeline
 // ============================================
-async function startChatterbox(scene: Scene, replicateToken: string): Promise<string> {
-  // Fetch latest version dynamically
-  const version = await getLatestModelVersion(CHATTERBOX_MODEL, replicateToken);
-
-  // Replicate's Chatterbox schema currently requires `input.prompt`
+async function startChatterboxTurbo(
+  scene: Scene,
+  replicateToken: string,
+  voiceGender: string = "female",
+): Promise<string> {
+  // Map gender to voice name: male = Ethan, female = Marisol
+  const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
   const prompt = (scene.voiceover || "").trim() || `Scene ${scene.number} narration.`;
 
-  const prediction = await createReplicatePrediction(
-    version,
-    {
-      prompt,
-      exaggeration: 0.5,
-      cfg: 0.5,
+  console.log(`[Chatterbox-Turbo] Scene ${scene.number}: Using voice ${voiceName}`);
+
+  const response = await fetch(CHATTERBOX_TURBO_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${replicateToken}`,
+      "Content-Type": "application/json",
     },
-    replicateToken,
-  );
-  console.log(`Chatterbox prediction started: ${prediction.id}`);
+    body: JSON.stringify({
+      input: {
+        text: prompt,
+        voice: voiceName,
+        temperature: 0.9,
+        top_p: 1,
+        top_k: 1800,
+        repetition_penalty: 2,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Chatterbox-Turbo create error:", errorText);
+    throw new Error(`Chatterbox-Turbo failed (${response.status}): ${errorText}`);
+  }
+
+  const prediction = await response.json();
+  console.log(`Chatterbox-Turbo prediction started: ${prediction.id}`);
   return prediction.id;
 }
 
@@ -595,8 +617,18 @@ serve(async (req) => {
         return jsonResponse({ success: true, status: "complete", scene });
       }
 
+      // Get voice gender from project (default to female = Marisol)
+      const { data: project } = await supabase
+        .from("projects")
+        .select("voice_name")
+        .eq("id", generation.project_id)
+        .maybeSingle();
+      
+      // Map voice_name to gender: "male" or "female" (default female for Marisol)
+      const voiceGender = project?.voice_name === "male" ? "male" : "female";
+
       if (!scene.audioPredictionId) {
-        const predictionId = await startChatterbox(scene, replicateToken);
+        const predictionId = await startChatterboxTurbo(scene, replicateToken, voiceGender);
         scenes[idx] = { ...scene, audioPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });

@@ -108,7 +108,7 @@ export function CinematicResult({
     }
   };
 
-  // Play All functionality - plays video + audio synced
+  // Play All functionality - plays video (ALWAYS muted) + Chatterbox audio synced
   const startPlayAll = async (startIndex: number) => {
     setIsPlayingAll(true);
     setCurrentSceneIndex(startIndex);
@@ -120,9 +120,11 @@ export function CinematicResult({
 
     if (video && scene?.videoUrl) {
       video.src = scene.videoUrl;
-      video.muted = isMuted || !scene.audioUrl; // Mute video if we have separate audio
+      // Video is ALWAYS muted - we only want to hear the Chatterbox voiceover
+      video.muted = true;
       video.load();
       
+      // Play Chatterbox audio separately
       if (audio && scene.audioUrl) {
         audio.src = scene.audioUrl;
         audio.muted = isMuted;
@@ -187,13 +189,9 @@ export function CinematicResult({
   const toggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
+    // Only toggle the Chatterbox audio - video is always muted
     if (audioRef.current) {
       audioRef.current.muted = newMuted;
-    }
-    if (videoRef.current) {
-      // Only unmute video if there's no separate audio track
-      const scene = scenes[currentSceneIndex];
-      videoRef.current.muted = newMuted || !!scene?.audioUrl;
     }
   };
 
@@ -397,7 +395,7 @@ export function CinematicResult({
                 key={currentScene.videoUrl}
                 src={currentScene.videoUrl}
                 className="w-full h-full object-cover"
-                muted={isMuted || !!currentScene.audioUrl}
+                muted // Video is ALWAYS muted - Chatterbox audio plays separately
                 playsInline
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
