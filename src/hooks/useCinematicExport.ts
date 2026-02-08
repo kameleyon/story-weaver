@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 export type ExportStatus = "idle" | "loading" | "rendering" | "encoding" | "uploading" | "complete" | "error";
 
@@ -40,6 +41,94 @@ function generateAACAudioSpecificConfig(sampleRate: number, channels: number): U
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const longYield = () => new Promise<void>((resolve) => setTimeout(resolve, 16));
 
+// Timeout wrapper for promises
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+  ]);
+}
+
+// Load video with proper error handling and timeout
+async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
+  console.log("[CinematicExport] Loading video:", url.substring(0, 100));
+  
+  // First fetch the video blob with CORS
+  const response = await withTimeout(
+    fetch(url, { mode: "cors" }),
+    timeoutMs,
+    "Video fetch timed out"
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+  }
+  
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  video.crossOrigin = "anonymous";
+  video.src = blobUrl;
+  
+  // Wait for metadata to load
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => {
+        console.log("[CinematicExport] Video loaded:", {
+          duration: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight
+        });
+        resolve();
+      };
+      video.onerror = () => reject(new Error("Failed to decode video"));
+    }),
+    timeoutMs,
+    "Video decode timed out"
+  );
+  
+  return video;
+}
+
+// Load audio with proper error handling
+async function loadAudioBuffer(
+  url: string, 
+  decodeCtx: OfflineAudioContext,
+  timeoutMs = 15000
+): Promise<AudioBuffer | null> {
+  try {
+    console.log("[CinematicExport] Loading audio:", url.substring(0, 100));
+    
+    const response = await withTimeout(
+      fetch(url, { mode: "cors" }),
+      timeoutMs,
+      "Audio fetch timed out"
+    );
+    
+    if (!response.ok) {
+      console.warn("[CinematicExport] Audio fetch failed:", response.status);
+      return null;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+    
+    console.log("[CinematicExport] Audio decoded:", {
+      duration: audioBuffer.duration,
+      channels: audioBuffer.numberOfChannels
+    });
+    
+    return audioBuffer;
+  } catch (e) {
+    console.warn("[CinematicExport] Audio load failed:", e);
+    return null;
+  }
+}
+
 export function useCinematicExport() {
   const [state, setState] = useState<ExportState>({ status: "idle", progress: 0 });
   const abortRef = useRef(false);
@@ -57,20 +146,31 @@ export function useCinematicExport() {
     ) => {
       abortRef.current = false;
       
-      const VideoDecoderCtor = (globalThis as any).VideoDecoder;
+      console.log("[CinematicExport] Starting export", { 
+        scenes: scenes.length, 
+        format, 
+        generationId 
+      });
+      
       const VideoEncoderCtor = (globalThis as any).VideoEncoder;
       const AudioEncoderCtor = (globalThis as any).AudioEncoder;
 
-      if (!VideoDecoderCtor || !VideoEncoderCtor) {
-        throw new Error("Your browser does not support video export. Please use Chrome, Edge, or Safari 16.4+");
+      if (!VideoEncoderCtor) {
+        const error = "Your browser does not support video export. Please use Chrome, Edge, or Safari 16.4+";
+        setState({ status: "error", progress: 0, error });
+        toast({ title: "Export Failed", description: error, variant: "destructive" });
+        throw new Error(error);
       }
 
       const scenesWithVideo = scenes.filter(s => !!s.videoUrl);
       if (scenesWithVideo.length === 0) {
-        throw new Error("No video clips to export");
+        const error = "No video clips to export";
+        setState({ status: "error", progress: 0, error });
+        toast({ title: "Export Failed", description: error, variant: "destructive" });
+        throw new Error(error);
       }
 
-      setState({ status: "loading", progress: 0 });
+      setState({ status: "loading", progress: 5 });
 
       try {
         // Determine dimensions
@@ -81,6 +181,8 @@ export function useCinematicExport() {
         
         const dim = dimensions[format];
         const fps = isIOS ? 24 : 30;
+
+        console.log("[CinematicExport] Config:", { isIOS, dim, fps });
 
         // Check audio support
         const wantsAudio = scenesWithVideo.some(s => !!s.audioUrl);
@@ -101,6 +203,8 @@ export function useCinematicExport() {
             } catch { /* ignore */ }
           }
         }
+
+        setState({ status: "loading", progress: 10 });
 
         // Initialize Muxer
         const muxer = new Muxer({
@@ -148,10 +252,10 @@ export function useCinematicExport() {
               try {
                 muxer.addAudioChunk(chunk, meta);
               } catch (e) {
-                console.warn("muxer.addAudioChunk failed", e);
+                console.warn("[CinematicExport] muxer.addAudioChunk failed", e);
               }
             },
-            error: (e: any) => console.warn("Audio encoding error", e)
+            error: (e: any) => console.warn("[CinematicExport] Audio encoding error", e)
           });
           audioEncoder.configure(audioTrackConfig);
         }
@@ -180,100 +284,123 @@ export function useCinematicExport() {
           if (abortRef.current) break;
           
           const scene = scenesWithVideo[i];
-          setState({ status: "rendering", progress: Math.floor((i / scenesWithVideo.length) * 80) });
+          const baseProgress = 15 + Math.floor((i / scenesWithVideo.length) * 70);
+          
+          setState({ status: "rendering", progress: baseProgress });
+          console.log(`[CinematicExport] Processing scene ${i + 1}/${scenesWithVideo.length}`);
 
-          // Load and decode video clip
-          const videoResp = await fetch(scene.videoUrl!);
-          const videoBlob = await videoResp.blob();
-          
-          // Create a temporary video element to decode frames
-          const tempVideo = document.createElement("video");
-          tempVideo.muted = true;
-          tempVideo.playsInline = true;
-          tempVideo.preload = "auto";
-          tempVideo.src = URL.createObjectURL(videoBlob);
-          
-          await new Promise<void>((resolve, reject) => {
-            tempVideo.onloadedmetadata = () => resolve();
-            tempVideo.onerror = () => reject(new Error("Failed to load video clip"));
-          });
+          // Load video with timeout
+          let tempVideo: HTMLVideoElement;
+          try {
+            tempVideo = await loadVideoElement(scene.videoUrl!);
+          } catch (e) {
+            console.error(`[CinematicExport] Failed to load video for scene ${i + 1}:`, e);
+            toast({ 
+              title: "Video Load Error", 
+              description: `Scene ${i + 1}: ${(e as Error).message}`, 
+              variant: "destructive" 
+            });
+            throw e;
+          }
 
           const clipDuration = tempVideo.duration;
           const clipFrames = Math.ceil(clipDuration * fps);
 
           // Process audio for this scene
           if (audioEncoder && audioTrackConfig && scene.audioUrl) {
-            try {
-              const audioResp = await fetch(scene.audioUrl);
-              if (audioResp.ok) {
-                const arrayBuf = await audioResp.arrayBuffer();
-                const sceneAudioBuffer = await decodeCtx.decodeAudioData(arrayBuf);
-                
-                const sampleRate = audioTrackConfig.sampleRate;
-                const renderLen = Math.ceil(sceneAudioBuffer.duration * sampleRate);
-                
-                const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(
-                  2, renderLen, sampleRate
-                );
-                
-                const source = offlineCtx.createBufferSource();
-                source.buffer = sceneAudioBuffer;
-                source.connect(offlineCtx.destination);
-                source.start(0);
-                
-                const renderedBuf = await offlineCtx.startRendering();
-                
-                const rawData = new Float32Array(renderedBuf.length * 2);
-                const left = renderedBuf.getChannelData(0);
-                const right = renderedBuf.numberOfChannels > 1 ? renderedBuf.getChannelData(1) : left;
-                
-                for (let s = 0; s < renderedBuf.length; s++) {
-                  rawData[s*2] = left[s];
-                  rawData[s*2+1] = right[s];
-                }
-
-                const chunkFrames = 4096;
-                for (let offset = 0; offset < renderedBuf.length; offset += chunkFrames) {
-                  const size = Math.min(chunkFrames, renderedBuf.length - offset);
-                  const chunkData = rawData.subarray(offset * 2, (offset + size) * 2);
-                  
-                  const timestampUs = Math.floor((globalAudioSampleCount / sampleRate) * 1_000_000);
-                  
-                  const audioData = new AudioData({
-                    format: "f32",
-                    sampleRate: sampleRate,
-                    numberOfFrames: size,
-                    numberOfChannels: 2,
-                    timestamp: timestampUs,
-                    data: chunkData
-                  });
-                  
-                  audioEncoder.encode(audioData);
-                  audioData.close();
-                  globalAudioSampleCount += size;
-                  
-                  if (offset % (chunkFrames * 20) === 0) await yieldToUI();
-                }
+            const sceneAudioBuffer = await loadAudioBuffer(scene.audioUrl, decodeCtx);
+            
+            if (sceneAudioBuffer) {
+              const sampleRate = audioTrackConfig.sampleRate;
+              const renderLen = Math.ceil(sceneAudioBuffer.duration * sampleRate);
+              
+              const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(
+                2, renderLen, sampleRate
+              );
+              
+              const source = offlineCtx.createBufferSource();
+              source.buffer = sceneAudioBuffer;
+              source.connect(offlineCtx.destination);
+              source.start(0);
+              
+              const renderedBuf = await offlineCtx.startRendering();
+              
+              const rawData = new Float32Array(renderedBuf.length * 2);
+              const left = renderedBuf.getChannelData(0);
+              const right = renderedBuf.numberOfChannels > 1 ? renderedBuf.getChannelData(1) : left;
+              
+              for (let s = 0; s < renderedBuf.length; s++) {
+                rawData[s*2] = left[s];
+                rawData[s*2+1] = right[s];
               }
-            } catch (e) {
-              console.warn(`Audio load failed for scene ${i+1}`, e);
+
+              const chunkFrames = 4096;
+              for (let offset = 0; offset < renderedBuf.length; offset += chunkFrames) {
+                const size = Math.min(chunkFrames, renderedBuf.length - offset);
+                const chunkData = rawData.subarray(offset * 2, (offset + size) * 2);
+                
+                const timestampUs = Math.floor((globalAudioSampleCount / sampleRate) * 1_000_000);
+                
+                const audioData = new AudioData({
+                  format: "f32",
+                  sampleRate: sampleRate,
+                  numberOfFrames: size,
+                  numberOfChannels: 2,
+                  timestamp: timestampUs,
+                  data: chunkData
+                });
+                
+                audioEncoder.encode(audioData);
+                audioData.close();
+                globalAudioSampleCount += size;
+                
+                if (offset % (chunkFrames * 20) === 0) await yieldToUI();
+              }
             }
           }
 
-          // Extract and encode video frames
+          // Extract and encode video frames using requestVideoFrameCallback or fallback
+          // Use a simpler approach: play the video and capture frames
           tempVideo.currentTime = 0;
-          await new Promise<void>((resolve) => {
-            tempVideo.onseeked = () => resolve();
-          });
+          
+          // Wait for seek to complete
+          await withTimeout(
+            new Promise<void>((resolve) => {
+              const onSeeked = () => {
+                tempVideo.removeEventListener("seeked", onSeeked);
+                resolve();
+              };
+              tempVideo.addEventListener("seeked", onSeeked);
+              // Trigger seek if already at position
+              if (tempVideo.currentTime === 0 && tempVideo.readyState >= 2) {
+                resolve();
+              }
+            }),
+            5000,
+            "Video seek timed out"
+          );
 
           for (let f = 0; f < clipFrames; f++) {
             if (abortRef.current) break;
 
             const targetTime = f / fps;
+            
+            // Seek to frame
             if (Math.abs(tempVideo.currentTime - targetTime) > 0.01) {
               tempVideo.currentTime = targetTime;
-              await new Promise<void>((resolve) => {
-                tempVideo.onseeked = () => resolve();
+              await withTimeout(
+                new Promise<void>((resolve) => {
+                  const onSeeked = () => {
+                    tempVideo.removeEventListener("seeked", onSeeked);
+                    resolve();
+                  };
+                  tempVideo.addEventListener("seeked", onSeeked);
+                }),
+                2000,
+                `Frame seek timed out at ${targetTime}s`
+              ).catch(() => {
+                // Skip frame on timeout, continue
+                console.warn(`[CinematicExport] Skipped frame at ${targetTime}s`);
               });
             }
 
@@ -308,6 +435,12 @@ export function useCinematicExport() {
             
             globalFrameCount++;
 
+            // Update progress within scene
+            if (f % 10 === 0) {
+              const sceneProgress = (f / clipFrames) * (70 / scenesWithVideo.length);
+              setState({ status: "rendering", progress: Math.floor(baseProgress + sceneProgress) });
+            }
+
             if (globalFrameCount % 5 === 0) await yieldToUI();
             if (globalFrameCount % 30 === 0) await longYield();
           }
@@ -318,7 +451,8 @@ export function useCinematicExport() {
         }
 
         // Finalize
-        setState({ status: "encoding", progress: 90 });
+        setState({ status: "encoding", progress: 88 });
+        console.log("[CinematicExport] Finalizing video...");
         
         await videoEncoder.flush();
         if (audioEncoder) await audioEncoder.flush();
@@ -331,11 +465,14 @@ export function useCinematicExport() {
         const { buffer } = muxer.target as ArrayBufferTarget;
         const blob = new Blob([buffer], { type: "video/mp4" });
         
+        console.log("[CinematicExport] Video created:", { size: blob.size });
+        
         let publicUrl: string | undefined;
         
         // Upload to Supabase Storage if generationId provided
         if (generationId) {
-          setState({ status: "uploading", progress: 95 });
+          setState({ status: "uploading", progress: 92 });
+          console.log("[CinematicExport] Uploading to storage...");
           
           const fileName = `${generationId}/${crypto.randomUUID()}.mp4`;
           
@@ -347,28 +484,35 @@ export function useCinematicExport() {
             });
 
           if (uploadError) {
-            console.error("Upload error:", uploadError);
-            throw new Error(`Failed to upload video: ${uploadError.message}`);
-          }
+            console.error("[CinematicExport] Upload error:", uploadError);
+            // Continue without upload - user can still download locally
+            toast({ 
+              title: "Upload Warning", 
+              description: "Video created but cloud save failed. Download will start.", 
+              variant: "default" 
+            });
+          } else {
+            setState({ status: "uploading", progress: 96 });
 
-          // Get signed URL (7 days)
-          const { data: signedData } = await supabase.storage
-            .from("scene-videos")
-            .createSignedUrl(fileName, 604800);
+            // Get signed URL (7 days)
+            const { data: signedData } = await supabase.storage
+              .from("scene-videos")
+              .createSignedUrl(fileName, 604800);
 
-          if (signedData?.signedUrl) {
-            publicUrl = signedData.signedUrl;
+            if (signedData?.signedUrl) {
+              publicUrl = signedData.signedUrl;
 
-            // Update generations table with video_url
-            const { error: dbError } = await supabase
-              .from("generations")
-              .update({ video_url: publicUrl })
-              .eq("id", generationId);
+              // Update generations table with video_url
+              const { error: dbError } = await supabase
+                .from("generations")
+                .update({ video_url: publicUrl })
+                .eq("id", generationId);
 
-            if (dbError) {
-              console.warn("Failed to update generation record:", dbError);
-            } else {
-              console.log("Video uploaded and saved:", publicUrl);
+              if (dbError) {
+                console.warn("[CinematicExport] Failed to update generation record:", dbError);
+              } else {
+                console.log("[CinematicExport] Video uploaded and saved:", publicUrl);
+              }
             }
           }
         }
@@ -377,13 +521,24 @@ export function useCinematicExport() {
         
         setState({ status: "complete", progress: 100, videoUrl: publicUrl || localUrl });
         
-        return { localUrl, publicUrl };
+        toast({ 
+          title: "Export Complete", 
+          description: "Your video is ready to download!", 
+        });
+        
+        return { localUrl, publicUrl, blob };
       } catch (error) {
-        console.error("Cinematic export failed:", error);
+        console.error("[CinematicExport] Export failed:", error);
+        const errorMsg = error instanceof Error ? error.message : "Export failed";
         setState({ 
           status: "error", 
           progress: 0, 
-          error: error instanceof Error ? error.message : "Export failed" 
+          error: errorMsg
+        });
+        toast({ 
+          title: "Export Failed", 
+          description: errorMsg, 
+          variant: "destructive" 
         });
         throw error;
       }
@@ -413,7 +568,7 @@ export function useCinematicExport() {
         });
       }
     } catch (error) {
-      console.error("Share failed:", error);
+      console.error("[CinematicExport] Share failed:", error);
     }
   }, []);
 
