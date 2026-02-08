@@ -8,7 +8,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-type Phase = "script" | "audio" | "images" | "video" | "finalize";
+type Phase = "script" | "audio" | "images" | "video" | "finalize" | "image-edit" | "image-regen";
 
 interface CinematicRequest {
   phase?: Phase;
@@ -32,6 +32,7 @@ interface CinematicRequest {
   projectId?: string;
   generationId?: string;
   sceneIndex?: number;
+  imageModification?: string;
 }
 
 interface Scene {
@@ -1202,6 +1203,7 @@ serve(async (req) => {
     }));
 
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
+    const req = body as CinematicRequest;
 
     // =============== PHASE 2: AUDIO ===============
     if (phase === "audio") {
@@ -1336,6 +1338,161 @@ serve(async (req) => {
       }
 
       scenes[idx] = { ...scene, videoUrl };
+      await updateScenes(supabase, generationId, scenes);
+
+      return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+    }
+
+    // =============== IMAGE-EDIT PHASE (Apply modification then regenerate video) ===============
+    if (phase === "image-edit") {
+      const idx = requireNumber(sceneIndex, "sceneIndex");
+      const scene = scenes[idx];
+      if (!scene) throw new Error("Scene not found");
+
+      const modification = req.imageModification || "";
+      if (!modification.trim()) throw new Error("Image modification is required for image-edit phase");
+
+      // Get project for style/format
+      const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("id, style, format")
+        .eq("id", generation.project_id)
+        .maybeSingle();
+      if (projectError || !project) throw new Error("Project not found");
+
+      const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
+      const style = project.style || "realistic";
+
+      // Use Lovable AI for image editing
+      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
+
+      const fullStylePrompt = getStylePrompt(style);
+      const editPrompt = `Edit this image: ${modification}
+
+IMPORTANT: Preserve the overall composition, lighting, and style of the original image.
+Apply the following style: ${fullStylePrompt}
+
+Make only the requested changes while keeping everything else consistent.`;
+
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via Lovable AI`);
+
+      const editResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-image",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: editPrompt },
+                { type: "image_url", image_url: { url: scene.imageUrl } },
+              ],
+            },
+          ],
+          modalities: ["image", "text"],
+        }),
+      });
+
+      if (!editResponse.ok) {
+        const errText = await editResponse.text();
+        console.error(`[IMG-EDIT] Lovable AI failed: ${errText}`);
+        throw new Error("Image editing failed");
+      }
+
+      const editData = await editResponse.json();
+      const editedImageBase64 = editData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      
+      if (!editedImageBase64) {
+        throw new Error("No edited image returned from Lovable AI");
+      }
+
+      // Upload base64 image to storage
+      const base64Data = editedImageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      
+      const fileName = `cinematic-scene-edited-${Date.now()}-${scene.number}.png`;
+      const upload = await supabase.storage
+        .from("scene-images")
+        .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+
+      if (upload.error) {
+        try {
+          await supabase.storage.createBucket("scene-images", { public: true });
+          await supabase.storage.from("scene-images").upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+        } catch (e) {
+          throw new Error("Failed to upload edited image");
+        }
+      }
+
+      const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+      const newImageUrl = urlData.publicUrl;
+      console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
+
+      // Now regenerate video with the new image
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
+      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      
+      // Poll for video completion
+      let videoUrl: string | null = null;
+      for (let i = 0; i < 60; i++) {
+        await sleep(3000);
+        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+        if (videoUrl) break;
+      }
+
+      if (!videoUrl) {
+        throw new Error("Video generation timed out");
+      }
+
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
+      await updateScenes(supabase, generationId, scenes);
+
+      return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+    }
+
+    // =============== IMAGE-REGEN PHASE (Full regenerate image then video) ===============
+    if (phase === "image-regen") {
+      const idx = requireNumber(sceneIndex, "sceneIndex");
+      const scene = scenes[idx];
+      if (!scene) throw new Error("Scene not found");
+
+      // Get project for style/format
+      const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("id, style, format")
+        .eq("id", generation.project_id)
+        .maybeSingle();
+      if (projectError || !project) throw new Error("Project not found");
+
+      const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
+      const style = project.style || "realistic";
+
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Regenerating image`);
+
+      // Generate new image
+      const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
+
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
+      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      
+      // Poll for video completion
+      let videoUrl: string | null = null;
+      for (let i = 0; i < 60; i++) {
+        await sleep(3000);
+        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+        if (videoUrl) break;
+      }
+
+      if (!videoUrl) {
+        throw new Error("Video generation timed out");
+      }
+
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
       await updateScenes(supabase, generationId, scenes);
 
       return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
