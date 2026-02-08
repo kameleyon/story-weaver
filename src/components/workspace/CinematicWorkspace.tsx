@@ -106,6 +106,20 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
       }
     }, [plan, format, disabledFormats, limits.allowedFormats]);
 
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+    const invokeCinematic = async <T,>(body: Record<string, unknown>): Promise<T> => {
+      const { data, error } = await supabase.functions.invoke("generate-cinematic", {
+        body,
+      });
+
+      if (error) {
+        throw new Error(error.message || "Cinematic generation failed");
+      }
+
+      return data as T;
+    };
+
     const handleGenerate = async () => {
       if (!canGenerate) return;
 
@@ -133,7 +147,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
         format,
         brandMarkEnabled && brandMarkText.trim().length > 0,
         style === "custom",
-        subscriptionStatus || undefined
+        subscriptionStatus || undefined,
       );
 
       if (!validation.canGenerate) {
@@ -158,65 +172,225 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("You must be logged in to generate videos");
 
-        // Call the cinematic edge function
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cinematic`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            content: storyIdea,
-            format,
-            length: mappedLength,
-            style,
-            customStyle: style === "custom" ? customStyle : undefined,
-            brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
-            characterDescription: characterDescription.trim() || undefined,
-            inspirationStyle: inspiration !== "none" ? inspiration : undefined,
-            storyTone: tone,
-            storyGenre: genre,
-            disableExpressions: disableVoiceExpressions,
-            brandName: brandName.trim() || undefined,
-            characterConsistencyEnabled,
-            voiceType: voice.type,
-            voiceId: voice.voiceId,
-            voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
-          }),
+        // ============= PHASE 1: SCRIPT =============
+        const scriptResult = await invokeCinematic<{
+          success: boolean;
+          projectId: string;
+          generationId: string;
+          title: string;
+          scenes: CinematicScene[];
+          sceneCount: number;
+          error?: string;
+        }>({
+          phase: "script",
+          content: storyIdea,
+          format,
+          length: mappedLength,
+          style,
+          customStyle: style === "custom" ? customStyle : undefined,
+          brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
+          characterDescription: characterDescription.trim() || undefined,
+          inspirationStyle: inspiration !== "none" ? inspiration : undefined,
+          storyTone: tone,
+          storyGenre: genre,
+          disableExpressions: disableVoiceExpressions,
+          brandName: brandName.trim() || undefined,
+          characterConsistencyEnabled,
+          voiceType: voice.type,
+          voiceId: voice.voiceId,
+          voiceName: voice.type === "custom" ? voice.voiceName : voice.gender,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Cinematic generation failed");
+        if (!scriptResult.success) throw new Error(scriptResult.error || "Script generation failed");
+
+        const { projectId, generationId, title, scenes, sceneCount } = scriptResult;
+
+        setCinematicState((prev) => ({
+          ...prev,
+          step: "audio",
+          progress: 10,
+          projectId,
+          generationId,
+          title,
+          scenes,
+          statusMessage: "Script complete. Generating audio...",
+        }));
+
+        // ============= PHASE 2: AUDIO (scene-by-scene, async) =============
+        for (let i = 0; i < sceneCount; i++) {
+          setCinematicState((prev) => ({
+            ...prev,
+            step: "audio",
+            statusMessage: `Generating audio (${i + 1}/${sceneCount})...`,
+            progress: 10 + Math.floor(((i + 0.25) / sceneCount) * 25),
+          }));
+
+          // Keep calling until this scene is complete
+          while (true) {
+            const audioRes = await invokeCinematic<{
+              success: boolean;
+              status: "processing" | "complete";
+              scene: CinematicScene;
+              error?: string;
+            }>({
+              phase: "audio",
+              projectId,
+              generationId,
+              sceneIndex: i,
+            });
+
+            if (!audioRes.success) throw new Error(audioRes.error || "Audio generation failed");
+
+            setCinematicState((prev) => {
+              const nextScenes = Array.isArray(prev.scenes) ? [...prev.scenes] : [];
+              nextScenes[i] = { ...nextScenes[i], ...audioRes.scene };
+              return { ...prev, scenes: nextScenes };
+            });
+
+            if (audioRes.status === "complete") break;
+            await sleep(1200);
+          }
+
+          setCinematicState((prev) => ({
+            ...prev,
+            progress: 10 + Math.floor(((i + 1) / sceneCount) * 25),
+          }));
         }
 
-        const result = await response.json();
+        // ============= PHASE 3: IMAGES (scene-by-scene) =============
+        setCinematicState((prev) => ({
+          ...prev,
+          step: "visuals",
+          progress: 35,
+          statusMessage: "Audio complete. Creating scene images...",
+        }));
 
-        if (result.success) {
-          setCinematicState({
-            step: "complete",
-            progress: 100,
-            isGenerating: false,
-            projectId: result.projectId,
-            generationId: result.generationId,
-            title: result.title,
-            scenes: result.scenes,
-            finalVideoUrl: result.finalVideoUrl,
-            statusMessage: "Cinematic video generated!",
+        for (let i = 0; i < sceneCount; i++) {
+          setCinematicState((prev) => ({
+            ...prev,
+            step: "visuals",
+            statusMessage: `Creating images (${i + 1}/${sceneCount})...`,
+            progress: 35 + Math.floor(((i + 0.25) / sceneCount) * 25),
+          }));
+
+          const imgRes = await invokeCinematic<{
+            success: boolean;
+            status: "processing" | "complete";
+            scene: CinematicScene;
+            error?: string;
+          }>({
+            phase: "images",
+            projectId,
+            generationId,
+            sceneIndex: i,
           });
 
-          toast({
-            title: "Cinematic Video Generated!",
-            description: `"${result.title}" is ready.`,
+          if (!imgRes.success) throw new Error(imgRes.error || "Image generation failed");
+
+          setCinematicState((prev) => {
+            const nextScenes = Array.isArray(prev.scenes) ? [...prev.scenes] : [];
+            nextScenes[i] = { ...nextScenes[i], ...imgRes.scene };
+            return { ...prev, scenes: nextScenes };
           });
-        } else {
-          throw new Error(result.error || "Generation failed");
+
+          setCinematicState((prev) => ({
+            ...prev,
+            progress: 35 + Math.floor(((i + 1) / sceneCount) * 25),
+          }));
         }
+
+        // ============= PHASE 4: VIDEO (scene-by-scene, async) =============
+        setCinematicState((prev) => ({
+          ...prev,
+          step: "visuals",
+          progress: 60,
+          statusMessage: "Images complete. Generating video clips with Grok...",
+        }));
+
+        for (let i = 0; i < sceneCount; i++) {
+          setCinematicState((prev) => ({
+            ...prev,
+            step: "visuals",
+            statusMessage: `Generating clips (${i + 1}/${sceneCount})...`,
+            progress: 60 + Math.floor(((i + 0.25) / sceneCount) * 35),
+          }));
+
+          while (true) {
+            const vidRes = await invokeCinematic<{
+              success: boolean;
+              status: "processing" | "complete";
+              scene: CinematicScene;
+              error?: string;
+            }>({
+              phase: "video",
+              projectId,
+              generationId,
+              sceneIndex: i,
+            });
+
+            if (!vidRes.success) throw new Error(vidRes.error || "Video generation failed");
+
+            setCinematicState((prev) => {
+              const nextScenes = Array.isArray(prev.scenes) ? [...prev.scenes] : [];
+              nextScenes[i] = { ...nextScenes[i], ...vidRes.scene };
+              return { ...prev, scenes: nextScenes };
+            });
+
+            if (vidRes.status === "complete") break;
+            await sleep(2000);
+          }
+
+          setCinematicState((prev) => ({
+            ...prev,
+            progress: 60 + Math.floor(((i + 1) / sceneCount) * 35),
+          }));
+        }
+
+        // ============= PHASE 5: FINALIZE =============
+        setCinematicState((prev) => ({
+          ...prev,
+          step: "stitching",
+          progress: 96,
+          statusMessage: "Finalizing cinematic...",
+        }));
+
+        const finalRes = await invokeCinematic<{
+          success: boolean;
+          projectId: string;
+          generationId: string;
+          title: string;
+          scenes: CinematicScene[];
+          finalVideoUrl: string;
+          error?: string;
+        }>({
+          phase: "finalize",
+          projectId,
+          generationId,
+        });
+
+        if (!finalRes.success) throw new Error(finalRes.error || "Finalization failed");
+
+        setCinematicState({
+          step: "complete",
+          progress: 100,
+          isGenerating: false,
+          projectId: finalRes.projectId,
+          generationId: finalRes.generationId,
+          title: finalRes.title,
+          scenes: finalRes.scenes,
+          finalVideoUrl: finalRes.finalVideoUrl,
+          statusMessage: "Cinematic video generated!",
+        });
+
+        toast({
+          title: "Cinematic Video Generated!",
+          description: `"${finalRes.title}" is ready.`,
+        });
       } catch (error) {
         console.error("Cinematic generation error:", error);
         const errorMessage = error instanceof Error ? error.message : "Generation failed";
-        
-        setCinematicState(prev => ({
+
+        setCinematicState((prev) => ({
           ...prev,
           step: "error",
           isGenerating: false,
@@ -327,7 +501,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                       Create Cinematic Video
                     </h1>
                     <p className="mt-1.5 sm:mt-2 text-sm text-muted-foreground/70">
-                      Transform your ideas into cinematic AI-generated videos using Glif workflows
+                      Transform your ideas into cinematic AI-generated videos using Replicate + Grok
                     </p>
                   </div>
 
