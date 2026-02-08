@@ -1,57 +1,155 @@
 
-# Removed Lovable AI Fallbacks
 
-## Summary
-All Lovable AI Gateway fallbacks have been removed from the codebase. The system now uses:
-- **LLM**: OpenRouter only (google/gemini-3-pro-preview)
-- **TTS (Haitian Creole)**: Direct Gemini API only (2.5 Pro Preview TTS → 2.5 Flash Preview TTS)
-- **TTS (Other languages)**: Replicate Chatterbox
-- **Images**: Replicate nano-banana
+# Fix Plan: Glif API "Prompt is required" Error
 
-## Changes Made
+## Problem Analysis
 
-### 1. LLM Call Helper (lines 364-430)
-- Removed Lovable AI Gateway fallback
-- OpenRouter is now the only LLM provider
-- Function throws error if OPENROUTER_API_KEY is not configured
-
-### 2. API Call Logging (line 485)
-- Removed `lovable_ai` from provider types
-- Now only: `openrouter | replicate | google_tts | elevenlabs`
-
-### 3. Removed Lovable AI TTS Function
-- Deleted `generateSceneAudioLovableAI()` function entirely (was ~115 lines)
-
-### 4. Haitian Creole TTS Routing
-- Removed Lovable AI Gateway fallback for standard HC voice
-- Now uses only: Gemini 2.5 Pro Preview TTS → Gemini 2.5 Flash Preview TTS
-- Updated retry count comment: "2 models × 5 retries = up to 10 attempts"
-
-### 5. HC + Cloned Voice Routing
-- Removed Lovable AI Gateway fallback for voice transformation base audio
-- Now uses only Direct Gemini TTS before ElevenLabs STS
-
-## Current TTS Fallback Chain
-
-```text
-Haitian Creole (Standard Voice):
-┌─────────────────────────────────────────────────────────────┐
-│ 1. gemini-2.5-pro-preview-tts    (Direct Google API)        │
-│ 2. gemini-2.5-flash-preview-tts  (Direct Google API)        │
-└─────────────────────────────────────────────────────────────┘
-Each model gets up to 5 retries with text variations.
-Total: 2 models × 5 retries = 10 attempts max.
-
-Other Languages:
-┌─────────────────────────────────────────────────────────────┐
-│ Replicate Chatterbox (Chunk & Stitch for long scripts)     │
-└─────────────────────────────────────────────────────────────┘
-
-Custom/Cloned Voices:
-┌─────────────────────────────────────────────────────────────┐
-│ ElevenLabs TTS (direct) or STS (for HC base audio)          │
-└─────────────────────────────────────────────────────────────┘
+The generation **completed** but all 8 Glif video API calls **failed** with the error:
+```
+Glif API error: Prompt is required
 ```
 
-## Deployment
-Edge function `generate-video` deployed with Lovable AI references removed.
+**Root Cause**: The Glif Simple API expects inputs in a specific format. Looking at the documentation, there are two possible input formats:
+
+1. **Array format** (simple): `inputs: ["value1", "value2"]` - for workflows with ordered inputs
+2. **Object format** (keyed): `inputs: { "input_name": "value" }` - when workflows have named inputs
+
+The workflow `cmlcrert2000204l8u8z1nysa` likely expects a **named input** called `prompt` (or similar), not a positional array.
+
+---
+
+## Solution
+
+### Option A: Use Object-Based Inputs (Recommended)
+
+Modify `callGlifApi` to send inputs as a keyed object instead of an array:
+
+```typescript
+async function callGlifApi(
+  glifId: string, 
+  inputs: Record<string, string>, // Changed from string[]
+  apiToken: string
+): Promise<any> {
+  const response = await fetch(GLIF_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: glifId,
+      inputs,  // { "prompt": "...", "audio_url": "..." }
+    }),
+  });
+  // ...
+}
+```
+
+Then update the scene generation call:
+
+```typescript
+// For text-to-video workflow
+const glifInputs = {
+  prompt: `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`,
+};
+
+if (scene.audioUrl) {
+  glifInputs.audio_url = scene.audioUrl;
+}
+
+const glifResult = await callGlifApi(GLIF_TXT2VID_ID, glifInputs, glifToken);
+```
+
+---
+
+## Technical Changes
+
+| File | Change |
+|------|--------|
+| `supabase/functions/generate-cinematic/index.ts` | Update `callGlifApi` signature to use `Record<string, string>` instead of `string[]` |
+| Same file | Update txt2vid call to use `{ prompt: "..." }` format |
+| Same file | Update stitching call to use appropriate input names |
+| Same file | Add better error logging to capture the full Glif response for debugging |
+
+---
+
+## Code Changes
+
+### 1. Update `callGlifApi` Function
+
+```typescript
+async function callGlifApi(
+  glifId: string, 
+  inputs: Record<string, string> | string[],  // Support both formats
+  apiToken: string
+): Promise<any> {
+  console.log(`Calling Glif API with id: ${glifId}, inputs:`, JSON.stringify(inputs));
+  
+  const response = await fetch(GLIF_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: glifId,
+      inputs,
+    }),
+  });
+
+  const result = await response.json();
+  
+  // Log full response for debugging
+  console.log("Full Glif response:", JSON.stringify(result));
+  
+  if (result.error) {
+    console.error("Glif API error:", result.error);
+    throw new Error(`Glif API error: ${result.error}`);
+  }
+
+  return result;
+}
+```
+
+### 2. Update Video Generation Call (Line ~386-394)
+
+```typescript
+// Use object-based inputs for Glif txt2vid workflow
+const glifInputs: Record<string, string> = {
+  prompt: `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`,
+};
+
+if (scene.audioUrl) {
+  glifInputs.audio_url = scene.audioUrl;
+}
+
+const glifResult = await callGlifApi(GLIF_TXT2VID_ID, glifInputs, glifToken);
+```
+
+### 3. Update Stitching Call (Line ~425)
+
+```typescript
+// Glif stitch - may need different input format
+const stitchResult = await callGlifApi(GLIF_STITCH_ID, { 
+  videos: videoUrls.join(",")  // or whatever the workflow expects
+}, glifToken);
+```
+
+---
+
+## Verification
+
+After deployment:
+1. Trigger a new Cinematic generation
+2. Check edge function logs for the full Glif response
+3. If still failing, the logs will show the exact input format expected
+
+---
+
+## Alternative Investigation
+
+If the object format doesn't work, we may need to:
+1. Visit the Glif workflow page for `cmlcrert2000204l8u8z1nysa` to see the exact input node names
+2. Test the API directly using curl to determine the correct format
+3. Contact Glif support for clarification on the specific workflow inputs
+
