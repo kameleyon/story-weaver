@@ -158,8 +158,22 @@ export default function VoiceLab() {
   };
 
   const handleFileUpload = (file: File) => {
-    if (file && (file.type === "audio/mpeg" || file.type === "audio/wav" || file.type === "audio/mp3" || file.type === "audio/m4a" || file.type === "audio/x-m4a" || file.name.endsWith('.m4a'))) {
+    const validAudioTypes = [
+      "audio/mpeg", "audio/wav", "audio/mp3", "audio/m4a", "audio/x-m4a",
+      "video/mp4", "audio/mp4" // MP4 can contain audio
+    ];
+    const validExtensions = ['.mp3', '.wav', '.m4a', '.mp4'];
+    const hasValidType = validAudioTypes.includes(file.type);
+    const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+    
+    if (file && (hasValidType || hasValidExtension)) {
       setUploadedFile(file);
+    } else {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload an MP3, WAV, M4A, or MP4 file.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -309,7 +323,7 @@ export default function VoiceLab() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/m4a,audio/x-m4a"
+                    accept=".mp3,.wav,.m4a,.mp4,audio/mpeg,audio/wav,audio/m4a,audio/x-m4a,video/mp4,audio/mp4"
                     className="hidden"
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                   />
@@ -320,7 +334,7 @@ export default function VoiceLab() {
                     </div>
                     <div className="space-y-1">
                       <p className="font-medium">Click to upload, or drag and drop</p>
-                      <p className="text-sm text-muted-foreground">MP3, WAV, or M4A files up to 10MB</p>
+                      <p className="text-sm text-muted-foreground">MP3, WAV, M4A, or MP4 files up to 10MB</p>
                     </div>
                     
                     <div className="flex items-center justify-center">
