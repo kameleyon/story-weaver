@@ -471,10 +471,10 @@ async function resolveGrok(
   }
 
   // Download the video from Replicate and upload to Supabase storage for persistence
-  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate...`);
-  const videoResponse = await fetch(outputUrl);
+  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate: ${videoUrl}`);
+  const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
-    throw new Error("Failed to download generated video from Replicate");
+    throw new Error(`Failed to download generated video from Replicate: ${videoResponse.status}`);
   }
   const videoBuffer = await videoResponse.arrayBuffer();
 
