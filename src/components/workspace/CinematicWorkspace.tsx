@@ -699,6 +699,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     generationId={cinematicState.generationId}
                     finalVideoUrl={cinematicState.finalVideoUrl}
                     onNewProject={handleNewProject}
+                    format={format}
                   />
                 </motion.div>
               ) : (
