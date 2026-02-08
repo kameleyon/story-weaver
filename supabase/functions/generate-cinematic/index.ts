@@ -41,8 +41,12 @@ const GLIF_TXT2VID_ID = "cmlcrert2000204l8u8z1nysa"; // Text-to-Video
 const GLIF_IMG2VID_ID = "cmlcswdal000404l217ez6vkf"; // Image-to-Video
 const GLIF_STITCH_ID = "cmlctayju000004l5qxf7ydrd"; // Video Stitching
 
-async function callGlifApi(glifId: string, inputs: string[], apiToken: string): Promise<any> {
-  console.log(`Calling Glif API with id: ${glifId}, inputs:`, inputs);
+async function callGlifApi(
+  glifId: string, 
+  inputs: Record<string, string> | string[], 
+  apiToken: string
+): Promise<any> {
+  console.log(`Calling Glif API with id: ${glifId}, inputs:`, JSON.stringify(inputs));
   
   const response = await fetch(GLIF_API_URL, {
     method: "POST",
@@ -58,12 +62,14 @@ async function callGlifApi(glifId: string, inputs: string[], apiToken: string): 
 
   const result = await response.json();
   
+  // Log full response for debugging
+  console.log("Full Glif response:", JSON.stringify(result));
+  
   if (result.error) {
     console.error("Glif API error:", result.error);
     throw new Error(`Glif API error: ${result.error}`);
   }
 
-  console.log("Glif API response:", result);
   return result;
 }
 
@@ -381,14 +387,13 @@ serve(async (req) => {
       console.log(`Generating video for scene ${i + 1}/${scenesWithAudio.length}`);
 
       try {
-        // Use text-to-video for now
-        // Glif txt2vid expects: [prompt, audio_url]
-        const glifInputs = [
-          `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`,
-        ];
+        // Use object-based inputs for Glif txt2vid workflow
+        const glifInputs: Record<string, string> = {
+          prompt: `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`,
+        };
         
         if (scene.audioUrl) {
-          glifInputs.push(scene.audioUrl);
+          glifInputs.audio_url = scene.audioUrl;
         }
 
         const glifResult = await callGlifApi(GLIF_TXT2VID_ID, glifInputs, glifToken);
@@ -421,8 +426,10 @@ serve(async (req) => {
 
     if (videoUrls.length > 0) {
       try {
-        // Glif stitch expects array of video URLs
-        const stitchResult = await callGlifApi(GLIF_STITCH_ID, videoUrls, glifToken);
+        // Glif stitch expects object with videos input
+        const stitchResult = await callGlifApi(GLIF_STITCH_ID, { 
+          videos: videoUrls.join(",") 
+        }, glifToken);
         if (stitchResult.output) {
           finalVideoUrl = stitchResult.output;
         } else {
