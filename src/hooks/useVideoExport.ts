@@ -414,11 +414,38 @@ export function useVideoExport() {
              }
           }
 
-          // D. Render Video with Fade Transitions
+          // D. Render Video with Fade Transitions (OPTIMIZED: cache static frames as bitmaps)
           const imagesPerScene = Math.max(1, loadedImages.length);
           const framesPerImage = Math.ceil(sceneFrames / imagesPerScene);
           const fadeFrames = Math.min(Math.floor(fps * 0.5), Math.floor(framesPerImage * 0.2)); // 0.5s or 20% of image duration
           const sceneCrossfadeFrames = Math.floor(fps * 0.3); // 0.3s crossfade between scenes
+
+          // Pre-render static frames for each image as bitmaps (huge performance boost)
+          const cachedBitmaps: Map<number, ImageBitmap> = new Map();
+          
+          // Pre-cache static frame bitmaps for each image in this scene
+          for (let imgIdx = 0; imgIdx < loadedImages.length; imgIdx++) {
+            const img = loadedImages[imgIdx];
+            if (!img) continue;
+            
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, dim.w, dim.h);
+            
+            const scale = Math.min(dim.w / img.width, dim.h / img.height);
+            const dw = img.width * scale;
+            const dh = img.height * scale;
+            ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
+            
+            // Draw brand watermark if provided
+            if (brandMark && brandMark.trim()) {
+              drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+            }
+            
+            const bitmap = await createImageBitmap(canvas);
+            cachedBitmaps.set(imgIdx, bitmap);
+          }
+          
+          log("Run", runId, `Scene ${i + 1}: Pre-cached ${cachedBitmaps.size} static bitmaps`);
 
           for (let f = 0; f < sceneFrames; f++) {
              const imgIndex = Math.min(Math.floor(f / framesPerImage), imagesPerScene - 1);
@@ -427,20 +454,27 @@ export function useVideoExport() {
              
              const img = loadedImages[imgIndex];
              const nextImg = loadedImages[nextImgIndex];
+             const cachedBitmap = cachedBitmaps.get(imgIndex);
 
-             ctx.fillStyle = "#000";
-             ctx.fillRect(0, 0, dim.w, dim.h);
-
-             // Calculate intra-scene fade (between images within scene)
+             // Calculate transition states
              const framesUntilSwitch = framesPerImage - frameInImage;
-             const shouldFadeIntraScene = imagesPerScene > 1 && imgIndex < imagesPerScene - 1 && framesUntilSwitch <= fadeFrames;
-             
-             // Calculate inter-scene crossfade (between scenes)
              const framesUntilSceneEnd = sceneFrames - f;
              const isOnLastImage = imgIndex === imagesPerScene - 1;
+             
+             const shouldFadeIntraScene = imagesPerScene > 1 && imgIndex < imagesPerScene - 1 && framesUntilSwitch <= fadeFrames;
              const shouldFadeInterScene = nextSceneFirstImage && isOnLastImage && framesUntilSceneEnd <= sceneCrossfadeFrames;
              
-             if (img) {
+             // Check if we're in a transition (need to render dynamically) or static (use cached bitmap)
+             const isTransitionFrame = shouldFadeIntraScene || shouldFadeInterScene;
+             
+             if (!isTransitionFrame && cachedBitmap) {
+               // 🚀 FAST PATH: Use pre-rendered cached bitmap (no redraw needed)
+               ctx.drawImage(cachedBitmap, 0, 0);
+             } else if (img) {
+               // SLOW PATH: Dynamic rendering for transition frames
+               ctx.fillStyle = "#000";
+               ctx.fillRect(0, 0, dim.w, dim.h);
+               
                const scale = Math.min(dim.w / img.width, dim.h / img.height);
                const dw = img.width * scale;
                const dh = img.height * scale;
@@ -449,42 +483,38 @@ export function useVideoExport() {
                  // Inter-scene crossfade: blend current scene's last image with next scene's first image
                  const fadeProgress = 1 - (framesUntilSceneEnd / sceneCrossfadeFrames); // 0 to 1
                  
-                 // Draw current scene's image with decreasing opacity
                  ctx.globalAlpha = 1 - fadeProgress;
                  ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
                  
-                 // Draw next scene's first image with increasing opacity
                  const nextScale = Math.min(dim.w / nextSceneFirstImage.width, dim.h / nextSceneFirstImage.height);
                  const nextDw = nextSceneFirstImage.width * nextScale;
                  const nextDh = nextSceneFirstImage.height * nextScale;
                  ctx.globalAlpha = fadeProgress;
                  ctx.drawImage(nextSceneFirstImage, (dim.w - nextDw) / 2, (dim.h - nextDh) / 2, nextDw, nextDh);
                  
-                 ctx.globalAlpha = 1; // Reset
+                 ctx.globalAlpha = 1;
                } else if (shouldFadeIntraScene && nextImg) {
                  // Intra-scene fade: blend current and next image within scene
                  const fadeProgress = 1 - (framesUntilSwitch / fadeFrames); // 0 to 1
                  
-                 // Draw current image with decreasing opacity
                  ctx.globalAlpha = 1 - fadeProgress;
                  ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
                  
-                 // Draw next image with increasing opacity
                  const nextScale = Math.min(dim.w / nextImg.width, dim.h / nextImg.height);
                  const nextDw = nextImg.width * nextScale;
                  const nextDh = nextImg.height * nextScale;
                  ctx.globalAlpha = fadeProgress;
                  ctx.drawImage(nextImg, (dim.w - nextDw) / 2, (dim.h - nextDh) / 2, nextDw, nextDh);
                  
-                 ctx.globalAlpha = 1; // Reset
+                 ctx.globalAlpha = 1;
                } else {
                  ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
                }
-              }
-
-              // Draw brand watermark overlay if provided (after all image rendering)
-              if (brandMark && brandMark.trim()) {
-                drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+               
+               // Draw brand watermark overlay for transition frames
+               if (brandMark && brandMark.trim()) {
+                 drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+               }
               }
 
               // Wait for encoder to catch up if queue is backing up (backpressure)
@@ -493,16 +523,23 @@ export function useVideoExport() {
               const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
              const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6/fps) });
              
+             // Keyframe every 2 seconds for smooth seeking/playback
              const keyFrame = globalFrameCount % (fps * 2) === 0;
              videoEncoder.encode(frame, { keyFrame });
              frame.close();
              
              globalFrameCount++;
 
-             // More aggressive yielding for long videos to prevent browser lockup
-             if (globalFrameCount % 5 === 0) await yieldToUI();
-             if (globalFrameCount % 30 === 0) await longYield();
+             // Yield less aggressively since we're using cached bitmaps now
+             if (globalFrameCount % 10 === 0) await yieldToUI();
+             if (globalFrameCount % 60 === 0) await longYield();
           }
+          
+          // Clean up cached bitmaps after scene is done
+          for (const bitmap of cachedBitmaps.values()) {
+            bitmap.close();
+          }
+          cachedBitmaps.clear();
           
           // Scene-level cleanup: flush audio encoder and clear references
           if (audioEncoder) {
