@@ -495,7 +495,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       ? "storytelling" 
                       : project.project_type === "smartflow" || project.project_type === "smart-flow"
                         ? "smartflow"
-                        : "doc2video";
+                        : project.project_type === "cinematic"
+                          ? "cinematic"
+                          : "doc2video";
                     const currentProjectId = new URLSearchParams(location.search).get("project");
                     const isActiveProject = currentProjectId === project.id;
                     
@@ -504,7 +506,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       ? Clapperboard 
                       : project.project_type === "smartflow" || project.project_type === "smart-flow"
                         ? Wallpaper
-                        : Video;
+                        : project.project_type === "cinematic"
+                          ? Film
+                          : Video;
                     
                     return (
                       <SidebarMenuItem key={project.id} className="group relative">

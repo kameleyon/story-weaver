@@ -52,6 +52,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { useCinematicExport } from "@/hooks/useCinematicExport";
+import { cn } from "@/lib/utils";
 import JSZip from "jszip";
 
 interface CinematicScene {
@@ -808,26 +809,42 @@ export function CinematicResult({
         </div>
       </Card>
 
-      {/* Scene Thumbnails */}
-      <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 max-w-3xl mx-auto">
-        {localScenes.map((scene, idx) => (
-          <button
-            key={scene.number}
-            onClick={() => setCurrentSceneIndex(idx)}
-            className={`relative ${aspectClass} rounded-lg overflow-hidden border-2 transition-all ${
-              idx === currentSceneIndex
-                ? "border-primary ring-2 ring-primary/30"
-                : "border-transparent hover:border-border"
-            }`}
-          >
-            <div className="w-full h-full bg-muted flex items-center justify-center">
-              <Film className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="absolute bottom-0 inset-x-0 bg-background/70 text-foreground text-xs py-0.5 text-center">
-              {scene.number}
-            </div>
-          </button>
-        ))}
+      {/* All Scenes Grid */}
+      <div className="space-y-4 max-w-3xl mx-auto">
+        <h3 className="text-lg font-medium text-foreground">All Scenes</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {localScenes.map((scene, idx) => (
+            <button
+              type="button"
+              key={scene.number}
+              onClick={() => setCurrentSceneIndex(idx)}
+              className={cn(
+                "relative rounded-lg overflow-hidden border transition-all",
+                aspectClass,
+                idx === currentSceneIndex
+                  ? "border-primary ring-2 ring-primary/20"
+                  : "border-border/50 hover:border-border"
+              )}
+            >
+              {scene.videoUrl ? (
+                <video
+                  src={scene.videoUrl}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <div className="w-full h-full bg-muted/50 flex items-center justify-center">
+                  <Film className="h-8 w-8 text-muted-foreground/50" />
+                </div>
+              )}
+              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-xs text-white">
+                {scene.duration}s
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Export Progress Modal */}
