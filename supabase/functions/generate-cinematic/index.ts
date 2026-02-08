@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -29,174 +29,33 @@ interface Scene {
   number: number;
   voiceover: string;
   visualPrompt: string;
+  visualStyle: string;
   duration: number;
   audioUrl?: string;
+  imageUrl?: string;
   videoUrl?: string;
 }
 
 const GLIF_API_URL = "https://simple-api.glif.app";
-
-// Glif workflow IDs
-const GLIF_TXT2VID_ID = "cmlcrert2000204l8u8z1nysa"; // Text-to-Video
 const GLIF_IMG2VID_ID = "cmlcswdal000404l217ez6vkf"; // Image-to-Video
 const GLIF_STITCH_ID = "cmlctayju000004l5qxf7ydrd"; // Video Stitching
 
-// Try multiple input formats to discover what Glif workflow expects
-// Based on workflow schema: node "motionmax" expects { prompt, duration, engineId, resolution, aspectRatio }
-async function callGlifApiWithRetry(
-  glifId: string,
-  promptValue: string,
-  audioUrl: string | undefined,
-  apiToken: string
-): Promise<any> {
-  // Input format variants to try - the workflow node is named "motionmax"
-  const inputVariants: (Record<string, any> | string[])[] = [
-    // Try node name as key (most likely based on schema)
-    { motionmax: promptValue },
-    // Array format (as per Glif docs example) 
-    audioUrl ? [promptValue, audioUrl] : [promptValue],
-    // Object with common key names
-    { prompt: promptValue },
-    { Prompt: promptValue },
-    { text: promptValue },
-    { input: promptValue },
-  ];
-
-  let lastError: Error | null = null;
-
-  for (const inputs of inputVariants) {
-    console.log(`Trying Glif API with id: ${glifId}, inputs:`, JSON.stringify(inputs));
-    
-    try {
-      const response = await fetch(GLIF_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: glifId,
-          inputs,
-        }),
-      });
-
-      const result = await response.json();
-      console.log("Full Glif response:", JSON.stringify(result));
-      
-      if (result.error) {
-        console.warn(`Glif returned error with format ${JSON.stringify(inputs)}:`, result.error);
-        lastError = new Error(`Glif API error: ${result.error}`);
-        continue; // Try next format
-      }
-
-      // Success! Log which format worked
-      console.log(`SUCCESS: Glif accepted input format:`, JSON.stringify(inputs));
-      return result;
-    } catch (e) {
-      console.error(`Network error with format ${JSON.stringify(inputs)}:`, e);
-      lastError = e instanceof Error ? e : new Error(String(e));
-    }
-  }
-
-  // All formats failed
-  throw lastError || new Error("All Glif input formats failed");
-}
-
-// Simple call for stitching (different workflow, may need different format)
-async function callGlifStitch(
-  glifId: string,
-  videoUrls: string[],
-  apiToken: string
-): Promise<any> {
-  // Try different formats for stitching
-  const inputVariants: (Record<string, string> | string[])[] = [
-    videoUrls, // Array of URLs directly
-    { videos: videoUrls.join(",") },
-    { video_urls: videoUrls.join(",") },
-    { clips: videoUrls.join(",") },
-    { input: videoUrls.join(",") },
-  ];
-
-  let lastError: Error | null = null;
-
-  for (const inputs of inputVariants) {
-    console.log(`Trying Glif stitch with id: ${glifId}, inputs:`, JSON.stringify(inputs));
-    
-    try {
-      const response = await fetch(GLIF_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: glifId,
-          inputs,
-        }),
-      });
-
-      const result = await response.json();
-      console.log("Full Glif stitch response:", JSON.stringify(result));
-      
-      if (result.error) {
-        console.warn(`Glif stitch error with format:`, result.error);
-        lastError = new Error(`Glif API error: ${result.error}`);
-        continue;
-      }
-
-      console.log(`SUCCESS: Glif stitch accepted format:`, JSON.stringify(inputs));
-      return result;
-    } catch (e) {
-      console.error(`Network error during stitch:`, e);
-      lastError = e instanceof Error ? e : new Error(String(e));
-    }
-  }
-
-  throw lastError || new Error("All Glif stitch formats failed");
-}
-
-// Extract JSON from potentially markdown-wrapped response
-function extractJsonFromResponse(response: string): unknown {
-  // Step 1: Remove markdown code blocks
-  let cleaned = response
-    .replace(/```json\s*/gi, "")
-    .replace(/```\s*/g, "")
-    .trim();
-
-  // Step 2: Find JSON boundaries
-  const jsonStart = cleaned.indexOf("{");
-  const jsonEnd = cleaned.lastIndexOf("}");
-
-  if (jsonStart === -1 || jsonEnd === -1) {
-    throw new Error("No JSON object found in response");
-  }
-
-  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
-
-  // Step 3: Attempt parse with error handling
-  try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    // Step 4: Try to fix common issues like trailing commas
-    cleaned = cleaned
-      .replace(/,\s*}/g, "}")
-      .replace(/,\s*]/g, "]")
-      .replace(/[\x00-\x1F\x7F]/g, ""); // Remove control characters
-
-    return JSON.parse(cleaned);
-  }
-}
-
-async function generateScriptWithAI(
+// ============================================
+// STEP 1: Script Generation with Gemini 3 Preview
+// ============================================
+async function generateScriptWithGemini(
   content: string,
   params: CinematicRequest,
-  openRouterKey: string
+  lovableApiKey: string
 ): Promise<{ title: string; scenes: Scene[] }> {
+  console.log("Step 1: Generating script with Gemini 3 Preview...");
+
   const systemPrompt = `You are a cinematic video script writer. Create a compelling script for a short video.
-Generate scenes that are 5-10 seconds each. Each scene should have:
+Generate exactly 7 scenes. Each scene should have:
 1. A voiceover narration (what will be spoken)
-2. A detailed visual prompt for AI video generation (describe the scene visually, including camera angles, lighting, mood)
-3. Duration in seconds (5-10)
+2. A detailed visual prompt for AI image generation (describe the scene visually, characters, setting, lighting, mood)
+3. A visual style descriptor (e.g., "cinematic wide shot", "close-up portrait", "aerial view")
+4. Duration in seconds (5-10)
 
 The style is: ${params.style}
 The tone is: ${params.storyTone || "casual"}
@@ -205,139 +64,325 @@ ${params.inspirationStyle ? `Writing inspiration: ${params.inspirationStyle}` : 
 ${params.characterDescription ? `Main character appearance: ${params.characterDescription}` : ""}
 ${params.brandName ? `Brand/Character name to include: ${params.brandName}` : ""}
 
-Respond with valid JSON only (no markdown, no code blocks):
-{
-  "title": "Video Title",
-  "scenes": [
-    {
-      "number": 1,
-      "voiceover": "The narration text...",
-      "visualPrompt": "Detailed visual description for AI video generation...",
-      "duration": 8
-    }
-  ]
-}`;
+You MUST respond with a JSON object containing a "title" string and a "scenes" array. Each scene must have: number, voiceover, visualPrompt, visualStyle, duration.`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${openRouterKey}`,
+      "Authorization": `Bearer ${lovableApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4",
+      model: "google/gemini-3-pro-preview",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Create a cinematic video script based on this idea:\n\n${content}` },
       ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "create_script",
+            description: "Create a cinematic video script with title and scenes",
+            parameters: {
+              type: "object",
+              properties: {
+                title: { type: "string", description: "The video title" },
+                scenes: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      number: { type: "number" },
+                      voiceover: { type: "string", description: "The narration text" },
+                      visualPrompt: { type: "string", description: "Detailed visual description for image generation" },
+                      visualStyle: { type: "string", description: "Camera/shot style descriptor" },
+                      duration: { type: "number", description: "Duration in seconds (5-10)" },
+                    },
+                    required: ["number", "voiceover", "visualPrompt", "visualStyle", "duration"],
+                  },
+                },
+              },
+              required: ["title", "scenes"],
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "create_script" } },
     }),
   });
 
   if (!response.ok) {
     const error = await response.text();
-    console.error("OpenRouter error:", error);
-    throw new Error("Failed to generate script");
+    console.error("Gemini 3 error:", error);
+    throw new Error("Failed to generate script with Gemini 3 Preview");
   }
 
   const data = await response.json();
-  const scriptText = data.choices?.[0]?.message?.content || "";
-  
-  console.log("Raw AI response:", scriptText.substring(0, 500) + "...");
-  
-  try {
-    const parsed = extractJsonFromResponse(scriptText) as { title: string; scenes: Scene[] };
-    
-    // Validate structure
+  console.log("Gemini 3 response:", JSON.stringify(data).substring(0, 500));
+
+  // Extract from tool call
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) {
+    const parsed = JSON.parse(toolCall.function.arguments);
     if (!parsed.title || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
-      throw new Error("Invalid script structure: missing title or scenes");
+      throw new Error("Invalid script structure from Gemini");
     }
-    
+    console.log(`Script generated: "${parsed.title}" with ${parsed.scenes.length} scenes`);
     return parsed;
-  } catch (e) {
-    console.error("Failed to parse script:", scriptText);
-    console.error("Parse error:", e);
-    throw new Error("Invalid script format from AI: " + (e instanceof Error ? e.message : String(e)));
   }
+
+  throw new Error("No tool call response from Gemini 3");
 }
 
-async function generateAudioForScene(
+// ============================================
+// STEP 2: Audio Generation with Replicate Chatterbox
+// ============================================
+async function generateAudioWithChatterbox(
   scene: Scene,
-  voiceParams: { voiceType?: string; voiceId?: string; voiceName?: string },
+  replicateToken: string,
   supabaseUrl: string,
   supabaseKey: string
 ): Promise<string> {
-  // Call the existing audio generation from generate-video
-  // For now, we'll use Google TTS via the existing infrastructure
-  const googleTtsKey = Deno.env.get("GOOGLE_TTS_API_KEY");
-  if (!googleTtsKey) {
-    throw new Error("GOOGLE_TTS_API_KEY not configured");
+  console.log(`Step 2: Generating audio for scene ${scene.number} with Chatterbox...`);
+
+  // Create prediction
+  const predictionResponse = await fetch("https://api.replicate.com/v1/predictions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Token ${replicateToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      version: "8ed55d249e421f2133dfb868a8a4d58fff23cfd0427cf75a01c47b91ae3ae73a",
+      input: {
+        text: scene.voiceover,
+        exaggeration: 0.5,
+        cfg_weight: 0.5,
+      },
+    }),
+  });
+
+  if (!predictionResponse.ok) {
+    const error = await predictionResponse.text();
+    console.error("Chatterbox prediction error:", error);
+    throw new Error("Failed to start Chatterbox prediction");
   }
 
-  const voiceName = voiceParams.voiceType === "custom" && voiceParams.voiceId
-    ? voiceParams.voiceId
-    : (voiceParams.voiceName === "male" ? "en-US-Neural2-D" : "en-US-Neural2-C");
+  const prediction = await predictionResponse.json();
+  console.log(`Chatterbox prediction started: ${prediction.id}`);
 
-  const ttsResponse = await fetch(
-    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleTtsKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        input: { text: scene.voiceover },
-        voice: {
-          languageCode: "en-US",
-          name: voiceName,
-        },
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: 1.0,
-          pitch: 0,
-        },
-      }),
-    }
-  );
+  // Poll for completion
+  let result = prediction;
+  let attempts = 0;
+  const maxAttempts = 60;
 
-  if (!ttsResponse.ok) {
-    const error = await ttsResponse.text();
-    console.error("TTS error:", error);
-    throw new Error("Failed to generate audio");
+  while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
+    const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+      headers: { "Authorization": `Token ${replicateToken}` },
+    });
+    
+    result = await statusResponse.json();
+    attempts++;
+    console.log(`Chatterbox status: ${result.status} (attempt ${attempts})`);
   }
 
-  const ttsData = await ttsResponse.json();
-  const audioContent = ttsData.audioContent;
+  if (result.status !== "succeeded" || !result.output) {
+    console.error("Chatterbox failed:", result.error || "No output");
+    throw new Error("Chatterbox audio generation failed");
+  }
 
-  // Upload to Supabase storage
+  // Download and upload to Supabase
+  const audioUrl = result.output;
+  console.log(`Chatterbox audio URL: ${audioUrl}`);
+
+  const audioResponse = await fetch(audioUrl);
+  const audioBuffer = await audioResponse.arrayBuffer();
+
   const supabase = createClient(supabaseUrl, supabaseKey);
-  const fileName = `cinematic-audio-${Date.now()}-${scene.number}.mp3`;
-  const audioBuffer = Uint8Array.from(atob(audioContent), c => c.charCodeAt(0));
+  const fileName = `cinematic-audio-${Date.now()}-${scene.number}.wav`;
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { error: uploadError } = await supabase.storage
     .from("audio-files")
-    .upload(fileName, audioBuffer, {
-      contentType: "audio/mpeg",
+    .upload(fileName, new Uint8Array(audioBuffer), {
+      contentType: "audio/wav",
       upsert: true,
     });
 
   if (uploadError) {
-    console.error("Upload error:", uploadError);
+    console.error("Audio upload error:", uploadError);
     throw new Error("Failed to upload audio");
   }
 
-  const { data: urlData } = supabase.storage
-    .from("audio-files")
-    .getPublicUrl(fileName);
-
+  const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
+  console.log(`Audio uploaded: ${urlData.publicUrl}`);
+  
   return urlData.publicUrl;
 }
 
+// ============================================
+// STEP 3: Image Generation with Gemini Image
+// ============================================
+async function generateSceneImage(
+  scene: Scene,
+  style: string,
+  format: string,
+  lovableApiKey: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<string> {
+  console.log(`Step 3: Generating image for scene ${scene.number}...`);
+
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  const imagePrompt = `${scene.visualPrompt}. Style: ${style}, ${scene.visualStyle}. Cinematic quality, ${aspectRatio} aspect ratio. Ultra high resolution.`;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${lovableApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [
+        { role: "user", content: imagePrompt },
+      ],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("Image generation error:", error);
+    throw new Error("Failed to generate image");
+  }
+
+  const data = await response.json();
+  const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+  if (!imageData) {
+    console.error("No image in response:", JSON.stringify(data).substring(0, 500));
+    throw new Error("No image generated");
+  }
+
+  // Upload base64 image to Supabase
+  const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+  const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("scene-images")
+    .upload(fileName, imageBuffer, {
+      contentType: "image/png",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    // Try creating the bucket if it doesn't exist
+    console.log("Creating scene-images bucket...");
+    await supabase.storage.createBucket("scene-images", { public: true });
+    
+    const { error: retryError } = await supabase.storage
+      .from("scene-images")
+      .upload(fileName, imageBuffer, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    
+    if (retryError) {
+      console.error("Image upload error:", retryError);
+      throw new Error("Failed to upload scene image");
+    }
+  }
+
+  const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+  console.log(`Scene image uploaded: ${urlData.publicUrl}`);
+  
+  return urlData.publicUrl;
+}
+
+// ============================================
+// STEP 4: Video Generation with Glif (Image to Video)
+// ============================================
+async function generateVideoFromImage(
+  scene: Scene,
+  imageUrl: string,
+  glifToken: string
+): Promise<string> {
+  console.log(`Step 4: Generating video for scene ${scene.number} from image...`);
+
+  const response = await fetch(GLIF_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${glifToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: GLIF_IMG2VID_ID,
+      inputs: [imageUrl, scene.visualPrompt],
+    }),
+  });
+
+  const result = await response.json();
+  console.log("Glif img2vid response:", JSON.stringify(result).substring(0, 500));
+
+  if (result.error) {
+    console.error("Glif error:", result.error);
+    throw new Error(`Glif video generation failed: ${result.error}`);
+  }
+
+  if (!result.output) {
+    throw new Error("No video output from Glif");
+  }
+
+  console.log(`Video generated: ${result.output}`);
+  return result.output;
+}
+
+// ============================================
+// STEP 5: Stitch Videos Together
+// ============================================
+async function stitchVideos(videoUrls: string[], glifToken: string): Promise<string> {
+  console.log(`Step 5: Stitching ${videoUrls.length} videos...`);
+
+  const response = await fetch(GLIF_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${glifToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: GLIF_STITCH_ID,
+      inputs: videoUrls,
+    }),
+  });
+
+  const result = await response.json();
+  console.log("Glif stitch response:", JSON.stringify(result).substring(0, 500));
+
+  if (result.error) {
+    console.error("Stitch error:", result.error);
+    // Return first video as fallback
+    return videoUrls[0] || "";
+  }
+
+  return result.output || videoUrls[0] || "";
+}
+
+// ============================================
+// MAIN HANDLER
+// ============================================
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Get auth token
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(
@@ -348,24 +393,18 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
     const glifToken = Deno.env.get("GLIF_API_TOKEN");
-    const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase configuration missing");
-    }
+    if (!supabaseUrl || !supabaseKey) throw new Error("Supabase configuration missing");
+    if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
+    if (!replicateToken) throw new Error("REPLICATE_API_TOKEN not configured");
+    if (!glifToken) throw new Error("GLIF_API_TOKEN not configured");
 
-    if (!glifToken) {
-      throw new Error("GLIF_API_TOKEN not configured");
-    }
-
-    if (!openRouterKey) {
-      throw new Error("OPENROUTER_API_KEY not configured");
-    }
-
-    // Parse request
     const params: CinematicRequest = await req.json();
-    console.log("Cinematic generation request:", params);
+    console.log("=== CINEMATIC GENERATION START ===");
+    console.log("Request:", JSON.stringify(params).substring(0, 300));
 
     // Verify user auth
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -388,10 +427,8 @@ serve(async (req) => {
       );
     }
 
-    // Step 1: Generate script
-    console.log("Step 1: Generating script...");
-    const script = await generateScriptWithAI(params.content, params, openRouterKey);
-    console.log("Script generated:", script.title, `${script.scenes.length} scenes`);
+    // STEP 1: Generate Script with Gemini 3 Preview
+    const script = await generateScriptWithGemini(params.content, params, lovableApiKey);
 
     // Create project
     const { data: project, error: projectError } = await supabase
@@ -409,10 +446,7 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (projectError) {
-      console.error("Project creation error:", projectError);
-      throw new Error("Failed to create project");
-    }
+    if (projectError) throw new Error("Failed to create project");
 
     // Create generation record
     const { data: generation, error: genError } = await supabase
@@ -421,103 +455,86 @@ serve(async (req) => {
         user_id: user.id,
         project_id: project.id,
         status: "generating",
-        progress: 10,
+        progress: 5,
       })
       .select()
       .single();
 
-    if (genError) {
-      console.error("Generation creation error:", genError);
-      throw new Error("Failed to create generation record");
-    }
+    if (genError) throw new Error("Failed to create generation record");
 
-    // Step 2: Generate audio for each scene
-    console.log("Step 2: Generating audio...");
+    const updateProgress = async (progress: number) => {
+      await supabase.from("generations").update({ progress }).eq("id", generation.id);
+    };
+
+    // STEP 2: Generate Audio for each scene
+    console.log("=== STEP 2: AUDIO GENERATION ===");
     const scenesWithAudio: Scene[] = [];
     
     for (let i = 0; i < script.scenes.length; i++) {
       const scene = script.scenes[i];
-      console.log(`Generating audio for scene ${i + 1}/${script.scenes.length}`);
-      
       try {
-        const audioUrl = await generateAudioForScene(
+        const audioUrl = await generateAudioWithChatterbox(scene, replicateToken, supabaseUrl, supabaseKey);
+        scenesWithAudio.push({ ...scene, audioUrl });
+      } catch (audioError) {
+        console.error(`Audio failed for scene ${i + 1}:`, audioError);
+        scenesWithAudio.push(scene);
+      }
+      await updateProgress(5 + Math.floor((i + 1) / script.scenes.length * 25));
+    }
+
+    // STEP 3: Generate Images for each scene
+    console.log("=== STEP 3: IMAGE GENERATION ===");
+    const scenesWithImages: Scene[] = [];
+    
+    for (let i = 0; i < scenesWithAudio.length; i++) {
+      const scene = scenesWithAudio[i];
+      try {
+        const imageUrl = await generateSceneImage(
           scene,
-          { voiceType: params.voiceType, voiceId: params.voiceId, voiceName: params.voiceName },
+          params.style,
+          params.format,
+          lovableApiKey,
           supabaseUrl,
           supabaseKey
         );
-        scenesWithAudio.push({ ...scene, audioUrl });
-      } catch (audioError) {
-        console.error(`Audio generation failed for scene ${i + 1}:`, audioError);
-        // Continue without audio for this scene
-        scenesWithAudio.push(scene);
+        scenesWithImages.push({ ...scene, imageUrl });
+      } catch (imageError) {
+        console.error(`Image failed for scene ${i + 1}:`, imageError);
+        scenesWithImages.push(scene);
       }
-
-      // Update progress
-      await supabase
-        .from("generations")
-        .update({ progress: 10 + Math.floor((i + 1) / script.scenes.length * 30) })
-        .eq("id", generation.id);
+      await updateProgress(30 + Math.floor((i + 1) / scenesWithAudio.length * 25));
     }
 
-    // Step 3: Generate video clips using Glif
-    console.log("Step 3: Generating video clips via Glif...");
+    // STEP 4: Generate Videos from Images
+    console.log("=== STEP 4: VIDEO GENERATION ===");
     const scenesWithVideo: Scene[] = [];
-
-    for (let i = 0; i < scenesWithAudio.length; i++) {
-      const scene = scenesWithAudio[i];
-      console.log(`Generating video for scene ${i + 1}/${scenesWithAudio.length}`);
-
-      try {
-        // Build prompt with style info
-        const promptValue = `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`;
-
-        const glifResult = await callGlifApiWithRetry(
-          GLIF_TXT2VID_ID, 
-          promptValue, 
-          scene.audioUrl, 
-          glifToken
-        );
-        
-        if (glifResult.output) {
-          scenesWithVideo.push({ ...scene, videoUrl: glifResult.output });
-        } else {
-          console.warn(`No video output for scene ${i + 1}`);
+    
+    for (let i = 0; i < scenesWithImages.length; i++) {
+      const scene = scenesWithImages[i];
+      if (scene.imageUrl) {
+        try {
+          const videoUrl = await generateVideoFromImage(scene, scene.imageUrl, glifToken);
+          scenesWithVideo.push({ ...scene, videoUrl });
+        } catch (videoError) {
+          console.error(`Video failed for scene ${i + 1}:`, videoError);
           scenesWithVideo.push(scene);
         }
-      } catch (glifError) {
-        console.error(`Glif video generation failed for scene ${i + 1}:`, glifError);
+      } else {
         scenesWithVideo.push(scene);
       }
-
-      // Update progress
-      await supabase
-        .from("generations")
-        .update({ progress: 40 + Math.floor((i + 1) / scenesWithAudio.length * 40) })
-        .eq("id", generation.id);
+      await updateProgress(55 + Math.floor((i + 1) / scenesWithImages.length * 30));
     }
 
-    // Step 4: Stitch videos together using Glif
-    console.log("Step 4: Stitching videos...");
+    // STEP 5: Stitch Videos
+    console.log("=== STEP 5: VIDEO STITCHING ===");
+    const videoUrls = scenesWithVideo.filter(s => s.videoUrl).map(s => s.videoUrl!);
     let finalVideoUrl = "";
     
-    const videoUrls = scenesWithVideo
-      .filter(s => s.videoUrl)
-      .map(s => s.videoUrl!);
-
     if (videoUrls.length > 0) {
       try {
-        // Use stitch function with retry logic
-        const stitchResult = await callGlifStitch(GLIF_STITCH_ID, videoUrls, glifToken);
-        if (stitchResult.output) {
-          finalVideoUrl = stitchResult.output;
-        } else {
-          // Use first video as fallback
-          finalVideoUrl = videoUrls[0] || "";
-        }
+        finalVideoUrl = await stitchVideos(videoUrls, glifToken);
       } catch (stitchError) {
-        console.error("Video stitching failed:", stitchError);
-        // Use first video as fallback
+        console.error("Stitching failed:", stitchError);
         finalVideoUrl = videoUrls[0] || "";
       }
     }
@@ -534,13 +551,10 @@ serve(async (req) => {
       })
       .eq("id", generation.id);
 
-    // Update project status
-    await supabase
-      .from("projects")
-      .update({ status: "complete" })
-      .eq("id", project.id);
+    await supabase.from("projects").update({ status: "complete" }).eq("id", project.id);
 
-    console.log("Cinematic generation complete:", finalVideoUrl);
+    console.log("=== CINEMATIC GENERATION COMPLETE ===");
+    console.log("Final video:", finalVideoUrl);
 
     return new Response(
       JSON.stringify({
