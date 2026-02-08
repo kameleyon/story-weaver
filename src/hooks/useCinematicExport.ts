@@ -49,49 +49,60 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   ]);
 }
 
-// Load video with proper error handling and timeout
-async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
+// Load video with proper error handling, timeout, and retry
+async function loadVideoElement(url: string, timeoutMs = 60000, retries = 2): Promise<HTMLVideoElement> {
   console.log("[CinematicExport] Loading video:", url.substring(0, 100));
   
-  // First fetch the video blob with CORS
-  const response = await withTimeout(
-    fetch(url, { mode: "cors" }),
-    timeoutMs,
-    "Video fetch timed out"
-  );
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // First fetch the video blob with CORS
+      const response = await withTimeout(
+        fetch(url, { mode: "cors" }),
+        timeoutMs,
+        "Video fetch timed out"
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      video.crossOrigin = "anonymous";
+      video.src = blobUrl;
+      
+      // Wait for metadata to load with extended timeout
+      await withTimeout(
+        new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            console.log("[CinematicExport] Video loaded:", {
+              duration: video.duration,
+              width: video.videoWidth,
+              height: video.videoHeight
+            });
+            resolve();
+          };
+          video.onerror = () => reject(new Error("Failed to decode video"));
+        }),
+        timeoutMs,
+        "Video decode timed out"
+      );
+      
+      return video;
+    } catch (e) {
+      console.warn(`[CinematicExport] Video load attempt ${attempt + 1} failed:`, e);
+      if (attempt === retries) throw e;
+      // Wait before retry
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
   
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  
-  const video = document.createElement("video");
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "auto";
-  video.crossOrigin = "anonymous";
-  video.src = blobUrl;
-  
-  // Wait for metadata to load
-  await withTimeout(
-    new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => {
-        console.log("[CinematicExport] Video loaded:", {
-          duration: video.duration,
-          width: video.videoWidth,
-          height: video.videoHeight
-        });
-        resolve();
-      };
-      video.onerror = () => reject(new Error("Failed to decode video"));
-    }),
-    timeoutMs,
-    "Video decode timed out"
-  );
-  
-  return video;
+  throw new Error("Video load failed after retries");
 }
 
 // Load audio with proper error handling
