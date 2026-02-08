@@ -119,9 +119,10 @@ async function createReplicatePrediction(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error("Replicate create prediction error:", error);
-    throw new Error("Failed to start Replicate prediction");
+    const errorText = await response.text();
+    console.error("Replicate create prediction error:", errorText);
+    // Include status + body so the client/logs show the real validation issue (e.g. missing required fields)
+    throw new Error(`Replicate prediction start failed (${response.status}): ${errorText}`);
   }
 
   return response.json();
@@ -261,11 +262,14 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
 async function startChatterbox(scene: Scene, replicateToken: string): Promise<string> {
   // Fetch latest version dynamically
   const version = await getLatestModelVersion(CHATTERBOX_MODEL, replicateToken);
-  
+
+  // Replicate's Chatterbox schema currently requires `input.prompt`
+  const prompt = (scene.voiceover || "").trim() || `Scene ${scene.number} narration.`;
+
   const prediction = await createReplicatePrediction(
     version,
     {
-      text: scene.voiceover,
+      prompt,
       exaggeration: 0.5,
       cfg: 0.5,
     },
