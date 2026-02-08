@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
+import { supabase } from "@/integrations/supabase/client";
 
-export type ExportStatus = "idle" | "loading" | "rendering" | "encoding" | "complete" | "error";
+export type ExportStatus = "idle" | "loading" | "rendering" | "encoding" | "uploading" | "complete" | "error";
 
 interface ExportState {
   status: ExportStatus;
@@ -51,7 +52,8 @@ export function useCinematicExport() {
   const exportVideo = useCallback(
     async (
       scenes: CinematicScene[],
-      format: "landscape" | "portrait" | "square"
+      format: "landscape" | "portrait" | "square",
+      generationId?: string
     ) => {
       abortRef.current = false;
       
@@ -316,7 +318,7 @@ export function useCinematicExport() {
         }
 
         // Finalize
-        setState({ status: "encoding", progress: 95 });
+        setState({ status: "encoding", progress: 90 });
         
         await videoEncoder.flush();
         if (audioEncoder) await audioEncoder.flush();
@@ -328,11 +330,54 @@ export function useCinematicExport() {
         
         const { buffer } = muxer.target as ArrayBufferTarget;
         const blob = new Blob([buffer], { type: "video/mp4" });
-        const url = URL.createObjectURL(blob);
         
-        setState({ status: "complete", progress: 100, videoUrl: url });
+        let publicUrl: string | undefined;
         
-        return url;
+        // Upload to Supabase Storage if generationId provided
+        if (generationId) {
+          setState({ status: "uploading", progress: 95 });
+          
+          const fileName = `${generationId}/${crypto.randomUUID()}.mp4`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from("scene-videos")
+            .upload(fileName, blob, {
+              contentType: "video/mp4",
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.error("Upload error:", uploadError);
+            throw new Error(`Failed to upload video: ${uploadError.message}`);
+          }
+
+          // Get signed URL (7 days)
+          const { data: signedData } = await supabase.storage
+            .from("scene-videos")
+            .createSignedUrl(fileName, 604800);
+
+          if (signedData?.signedUrl) {
+            publicUrl = signedData.signedUrl;
+
+            // Update generations table with video_url
+            const { error: dbError } = await supabase
+              .from("generations")
+              .update({ video_url: publicUrl })
+              .eq("id", generationId);
+
+            if (dbError) {
+              console.warn("Failed to update generation record:", dbError);
+            } else {
+              console.log("Video uploaded and saved:", publicUrl);
+            }
+          }
+        }
+        
+        const localUrl = URL.createObjectURL(blob);
+        
+        setState({ status: "complete", progress: 100, videoUrl: publicUrl || localUrl });
+        
+        return { localUrl, publicUrl };
       } catch (error) {
         console.error("Cinematic export failed:", error);
         setState({ 
