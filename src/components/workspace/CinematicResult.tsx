@@ -1041,13 +1041,14 @@ export function CinematicResult({
                 <Button
                   size="icon"
                   onClick={() => {
-                    void exportVideo(localScenes, format);
+                    void exportVideo(localScenes, format, generationId);
                   }}
                   disabled={
                     scenesWithVideo.length === 0 || 
                     exportState.status === "loading" || 
                     exportState.status === "rendering" || 
-                    exportState.status === "encoding"
+                    exportState.status === "encoding" ||
+                    exportState.status === "uploading"
                   }
                   className="h-10 w-10"
                 >
@@ -1056,6 +1057,7 @@ export function CinematicResult({
                   ) : (
                     <Download className="h-5 w-5" />
                   )}
+                  {exportState.status === "uploading" && <span className="sr-only">Uploading...</span>}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Export Video</TooltipContent>
