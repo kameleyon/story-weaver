@@ -3,7 +3,15 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { Loader2, Play, Pause, Volume2, VolumeX, Maximize, CircleUserRound } from "lucide-react";
+import {
+  Loader2,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize,
+  CircleUserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ThemedLogo } from "@/components/ThemedLogo";
@@ -24,16 +32,10 @@ interface Scene {
 // Header CTA component - Get Started button (icon on mobile/tablet)
 function HeaderCTA() {
   const isMobile = useIsMobile();
-  
+
   return (
     <Button asChild size={isMobile ? "icon" : "sm"} variant="default">
-      <Link to="/">
-        {isMobile ? (
-          <CircleUserRound className="h-5 w-5" />
-        ) : (
-          "Get Started"
-        )}
-      </Link>
+      <Link to="/">{isMobile ? <CircleUserRound className="h-5 w-5" /> : "Get Started"}</Link>
     </Button>
   );
 }
@@ -46,17 +48,17 @@ export default function PublicShare() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch share data using edge function for fresh signed URLs
+  // Fetch share data using backend function for fresh signed URLs
   const { data: shareData, isLoading, error } = useQuery({
     queryKey: ["public-share", token],
     queryFn: async () => {
       if (!token) throw new Error("Invalid share link");
 
-      // Call edge function to get share data with refreshed URLs
       const { data, error } = await supabase.functions.invoke("get-shared-project", {
         body: { token },
       });
@@ -66,8 +68,10 @@ export default function PublicShare() {
 
       return {
         project: data.project,
-        scenes: data.scenes || [],
+        scenes: (data.scenes || []) as Scene[],
         share: data.share,
+        // NEW: if available, play the final project video (not just per-scene visuals)
+        videoUrl: (data.videoUrl ?? data.video_url) as string | undefined,
       };
     },
     enabled: !!token,
@@ -75,33 +79,95 @@ export default function PublicShare() {
   });
 
   const scenes = shareData?.scenes || [];
-  const project = shareData?.project;
+  const project = shareData?.project as any;
+  const sharedVideoUrl = shareData?.videoUrl;
+  const isSingleVideo = !!sharedVideoUrl;
+
   const currentScene = scenes[currentSceneIndex];
 
   // Get all images for current scene
   const getCurrentSceneImages = (scene: Scene | undefined): string[] => {
     if (!scene) return [];
-    if (scene.imageUrls && scene.imageUrls.length > 0) {
-      return scene.imageUrls;
-    }
-    if (scene.imageUrl) {
-      return [scene.imageUrl];
-    }
+    if (scene.imageUrls && scene.imageUrls.length > 0) return scene.imageUrls;
+    if (scene.imageUrl) return [scene.imageUrl];
     return [];
   };
 
   const currentSceneImages = getCurrentSceneImages(currentScene);
+  const currentImageUrl = currentSceneImages[currentImageIndex] || currentSceneImages[0] || "";
 
-  // Calculate total duration
+  // Total duration
   useEffect(() => {
+    if (isSingleVideo) return;
     if (scenes.length > 0) {
       const total = scenes.reduce((acc, scene) => acc + (scene.duration || 3), 0);
       setTotalDuration(total);
     }
-  }, [scenes]);
+  }, [isSingleVideo, scenes]);
 
-  // Playback logic (prefers video when available; falls back to image rotation)
+  // ===== Single-video playback (preferred when backend provides videoUrl) =====
   useEffect(() => {
+    if (!isSingleVideo) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onLoaded = () => {
+      const dur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      setTotalDuration(dur);
+    };
+
+    const onTimeUpdate = () => {
+      const dur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : Math.max(totalDuration, 1);
+      setProgress(Math.min(100, ((video.currentTime || 0) / dur) * 100));
+    };
+
+    const onEnded = () => {
+      setIsPlaying(false);
+      setProgress(0);
+      try {
+        video.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    };
+
+    video.addEventListener("loadedmetadata", onLoaded);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("ended", onEnded);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", onLoaded);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("ended", onEnded);
+    };
+  }, [isSingleVideo, totalDuration]);
+
+  useEffect(() => {
+    if (!isSingleVideo) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    // When we have a single MP4, audio is embedded in the video.
+    video.muted = isMuted;
+
+    if (!isPlaying) {
+      video.pause();
+      return;
+    }
+
+    video.play().catch(() => {
+      // Autoplay restrictions
+      setIsPlaying(false);
+    });
+  }, [isSingleVideo, isMuted, isPlaying]);
+
+  // ===== Per-scene playback (fallback when no project-level videoUrl exists) =====
+
+  // Playback logic (prefers per-scene video when available; falls back to image rotation)
+  useEffect(() => {
+    if (isSingleVideo) return;
     if (!isPlaying || !currentScene) return;
     if (!currentScene.videoUrl) return;
 
@@ -159,7 +225,6 @@ export default function PublicShare() {
           await audio.play();
         }
       } catch {
-        // User gesture/autoplay restrictions — keep UI in paused state.
         setIsPlaying(false);
       }
     })();
@@ -171,6 +236,7 @@ export default function PublicShare() {
       if (audio) audio.pause();
     };
   }, [
+    isSingleVideo,
     isPlaying,
     currentSceneIndex,
     currentScene,
@@ -181,6 +247,7 @@ export default function PublicShare() {
 
   // Playback logic with image rotation (only when the scene has no video)
   useEffect(() => {
+    if (isSingleVideo) return;
     if (!isPlaying || !currentScene) return;
     if (currentScene.videoUrl) return;
 
@@ -200,21 +267,19 @@ export default function PublicShare() {
     intervalRef.current = setInterval(() => {
       const elapsed = (Date.now() - startTime) / 1000;
 
-      // Calculate which image to show within this scene
       const imageIdx = Math.min(Math.floor(elapsed / timePerImage), imageCount - 1);
       setCurrentImageIndex(imageIdx);
 
-      // Calculate overall progress
       const previousDuration = scenes
         .slice(0, currentSceneIndex)
         .reduce((acc, s) => acc + (s.duration || 3), 0);
-      const currentProgress = ((previousDuration + elapsed) / totalDuration) * 100;
+      const currentProgress = ((previousDuration + elapsed) / Math.max(totalDuration, 1)) * 100;
       setProgress(Math.min(currentProgress, 100));
 
       if (elapsed >= sceneDuration) {
         if (currentSceneIndex < scenes.length - 1) {
           setCurrentSceneIndex(currentSceneIndex + 1);
-          setCurrentImageIndex(0); // Reset image index for new scene
+          setCurrentImageIndex(0);
         } else {
           setIsPlaying(false);
           setCurrentSceneIndex(0);
@@ -228,14 +293,18 @@ export default function PublicShare() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (audioRef.current) audioRef.current.pause();
     };
-  }, [isPlaying, currentSceneIndex, currentScene, scenes, isMuted, totalDuration]);
+  }, [isSingleVideo, isPlaying, currentSceneIndex, currentScene, scenes, isMuted, totalDuration]);
 
-  // Reset image index when scene changes
   useEffect(() => {
     setCurrentImageIndex(0);
   }, [currentSceneIndex]);
 
   const togglePlay = () => {
+    if (isSingleVideo) {
+      setIsPlaying((p) => !p);
+      return;
+    }
+
     if (!isPlaying && currentSceneIndex === scenes.length - 1) {
       setCurrentSceneIndex(0);
       setCurrentImageIndex(0);
@@ -245,24 +314,30 @@ export default function PublicShare() {
   };
 
   const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
+    const next = !isMuted;
+    setIsMuted(next);
+
+    if (isSingleVideo) {
+      if (videoRef.current) videoRef.current.muted = next;
+      return;
     }
+
+    if (audioRef.current) audioRef.current.muted = next;
   };
 
   const handleFullscreen = () => {
     const container = document.getElementById("share-player");
-    if (container?.requestFullscreen) {
-      container.requestFullscreen();
-    }
+    if (container?.requestFullscreen) container.requestFullscreen();
   };
 
   const getAspectRatio = (format?: string) => {
     switch (format) {
-      case "portrait": return "aspect-[9/16] max-h-[80vh]";
-      case "square": return "aspect-square max-h-[80vh]";
-      default: return "aspect-video max-w-4xl";
+      case "portrait":
+        return "aspect-[9/16] max-h-[80vh]";
+      case "square":
+        return "aspect-square max-h-[80vh]";
+      default:
+        return "aspect-video max-w-4xl";
     }
   };
 
@@ -291,13 +366,10 @@ export default function PublicShare() {
     );
   }
 
-  // Use current image index to show the right image in rotation
-  const currentImageUrl = currentSceneImages[currentImageIndex] || currentSceneImages[0] || "";
-
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
       <div className="min-h-screen bg-background">
-        {/* Hidden audio element */}
+        {/* Hidden audio element (used only in per-scene fallback mode) */}
         <audio ref={audioRef} />
 
         {/* Header */}
@@ -328,12 +400,18 @@ export default function PublicShare() {
             {/* Player */}
             <div
               id="share-player"
-              className={cn(
-                "relative mx-auto overflow-hidden rounded-xl bg-black",
-                getAspectRatio(project?.format)
-              )}
+              className={cn("relative mx-auto overflow-hidden rounded-xl bg-black", getAspectRatio(project?.format))}
             >
-              {currentScene?.videoUrl ? (
+              {isSingleVideo ? (
+                <video
+                  ref={videoRef}
+                  src={sharedVideoUrl}
+                  className="absolute inset-0 w-full h-full object-contain"
+                  muted={isMuted}
+                  playsInline
+                  preload="metadata"
+                />
+              ) : currentScene?.videoUrl ? (
                 <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full object-contain"
@@ -355,7 +433,7 @@ export default function PublicShare() {
               )}
 
               {/* Play button overlay when paused */}
-              {!isPlaying && scenes.length > 0 && (
+              {!isPlaying && ((isSingleVideo && !!sharedVideoUrl) || scenes.length > 0) && (
                 <button
                   onClick={togglePlay}
                   className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
@@ -366,8 +444,8 @@ export default function PublicShare() {
                 </button>
               )}
 
-              {/* Narration subtitle */}
-              {isPlaying && (currentScene?.narration || currentScene?.voiceover) && (
+              {/* Narration subtitle (only for per-scene mode) */}
+              {!isSingleVideo && isPlaying && (currentScene?.narration || currentScene?.voiceover) && (
                 <div className="absolute bottom-16 left-4 right-4">
                   <p className="text-center text-white text-sm sm:text-base bg-black/60 px-4 py-2 rounded-lg backdrop-blur-sm">
                     {currentScene.narration || currentScene.voiceover}
@@ -377,57 +455,25 @@ export default function PublicShare() {
             </div>
 
             {/* Controls */}
-            {scenes.length > 0 && (
+            {(isSingleVideo || scenes.length > 0) && (
               <div className="space-y-3">
-                {/* Progress bar */}
                 <div className="px-2">
-                  <Slider
-                    value={[progress]}
-                    max={100}
-                    step={0.1}
-                    className="cursor-pointer"
-                    disabled
-                  />
+                  <Slider value={[progress]} max={100} step={0.1} className="cursor-pointer" disabled />
                 </div>
 
-                {/* Control buttons */}
                 <div className="flex items-center justify-center gap-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={togglePlay}
-                    className="h-12 w-12"
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-6 w-6" />
-                    ) : (
-                      <Play className="h-6 w-6" />
-                    )}
+                  <Button variant="ghost" size="icon" onClick={togglePlay} className="h-12 w-12">
+                    {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
                   </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleMute}
-                    className="h-10 w-10"
-                  >
-                    {isMuted ? (
-                      <VolumeX className="h-5 w-5" />
-                    ) : (
-                      <Volume2 className="h-5 w-5" />
-                    )}
+                  <Button variant="ghost" size="icon" onClick={toggleMute} className="h-10 w-10">
+                    {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                   </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleFullscreen}
-                    className="h-10 w-10"
-                  >
+                  <Button variant="ghost" size="icon" onClick={handleFullscreen} className="h-10 w-10">
                     <Maximize className="h-5 w-5" />
                   </Button>
                 </div>
-
               </div>
             )}
 

@@ -48,9 +48,9 @@ const CATEGORY_CONFIG: Record<
   { label: string; icon: React.ComponentType<{ className?: string }>; color: string; prefix: string }
 > = {
   admin_action: { label: "ADMIN", icon: Shield, color: "text-primary", prefix: "[ADMIN]" },
-  user_activity: { label: "USER", icon: Activity, color: "text-[hsl(170,55%,65%)]", prefix: "[USER]" },
+  user_activity: { label: "USER", icon: Activity, color: "text-primary", prefix: "[USER]" },
   system_error: { label: "ERROR", icon: AlertCircle, color: "text-destructive", prefix: "[ERROR]" },
-  system_warning: { label: "WARN", icon: AlertTriangle, color: "text-yellow-500", prefix: "[WARN]" },
+  system_warning: { label: "WARN", icon: AlertTriangle, color: "text-primary", prefix: "[WARN]" },
   system_info: { label: "INFO", icon: Info, color: "text-muted-foreground", prefix: "[INFO]" },
 };
 

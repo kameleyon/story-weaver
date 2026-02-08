@@ -124,7 +124,7 @@ export function ProjectsGridView({
                       className={cn(
                         "h-4 w-4",
                         project.is_favorite
-                          ? "fill-yellow-400 text-yellow-400"
+                          ? "fill-primary text-primary"
                           : "text-white"
                       )}
                     />
