@@ -1,24 +1,20 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2 } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2, Lightbulb, MessageSquareOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { StoryIdeaInput } from "./StoryIdeaInput";
+import { ContentInput } from "./ContentInput";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
+import { LengthSelector, type VideoLength } from "./LengthSelector";
 import { StyleSelector, type VisualStyle } from "./StyleSelector";
 import { VoiceSelector, type VoiceSelection } from "./VoiceSelector";
+import { PresenterFocusInput } from "./PresenterFocusInput";
 import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
-import { InspirationSelector, type InspirationStyle } from "./InspirationSelector";
-import { ToneSelector, type StoryTone } from "./ToneSelector";
-import { GenreSelector, type StoryGenre } from "./GenreSelector";
-import { InclinationSelector } from "./InclinationSelector";
-import { StorytellingLengthSelector, type StoryLength } from "./StorytellingLengthSelector";
-import { GenerationProgress } from "./GenerationProgress";
 import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
+import { GenerationProgress } from "./GenerationProgress";
 import { CinematicResult } from "./CinematicResult";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
@@ -56,26 +52,22 @@ interface CinematicState {
 
 export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspaceProps>(
   function CinematicWorkspace({ projectId: initialProjectId }, ref) {
-    // Story-specific inputs
-    const [storyIdea, setStoryIdea] = useState("");
-    const [inspiration, setInspiration] = useState<InspirationStyle>("none");
-    const [tone, setTone] = useState<StoryTone>("casual");
-    const [genre, setGenre] = useState<StoryGenre>("documentary");
-    const [disableVoiceExpressions, setDisableVoiceExpressions] = useState(false);
-    const [brandName, setBrandName] = useState("");
-    const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
-    
-    // Shared inputs
+    // Content input (like Doc2Video)
+    const [content, setContent] = useState("");
     const [format, setFormat] = useState<VideoFormat>("portrait");
-    const [length, setLength] = useState<StoryLength>("short");
+    const [length, setLength] = useState<VideoLength>("brief");
     const [style, setStyle] = useState<VisualStyle>("realistic");
     const [customStyle, setCustomStyle] = useState("");
     const [customStyleImage, setCustomStyleImage] = useState<string | null>(null);
     const [voice, setVoice] = useState<VoiceSelection>({ type: "standard", gender: "female" });
+    const [presenterFocus, setPresenterFocus] = useState("");
     const [characterDescription, setCharacterDescription] = useState("");
+    const [presenterFocusOpen, setPresenterFocusOpen] = useState(false);
     const [characterDescOpen, setCharacterDescOpen] = useState(false);
     const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
     const [brandMarkText, setBrandMarkText] = useState("");
+    const [disableExpressions, setDisableExpressions] = useState(false);
+    const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
 
     // Cinematic generation state
     const [cinematicState, setCinematicState] = useState<CinematicState>({
@@ -92,20 +84,17 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     const [showSuspendedModal, setShowSuspendedModal] = useState(false);
     const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
-    const canGenerate = storyIdea.trim().length > 0 && !cinematicState.isGenerating;
+    const canGenerate = content.trim().length > 0 && !cinematicState.isGenerating;
 
-    // Get disabled formats based on plan (free users can only use landscape)
-    const limits = PLAN_LIMITS[plan];
-    const disabledFormats: VideoFormat[] = (["landscape", "portrait", "square"] as VideoFormat[]).filter(
-      f => !limits.allowedFormats.includes(f)
-    );
+    // When "short" is selected, force portrait format and disable landscape/square
+    const disabledFormats: VideoFormat[] = length === "short" ? ["landscape", "square"] : [];
     
-    // Auto-switch to allowed format if current format becomes disabled
+    // Auto-switch to portrait when short is selected and current format is disabled
     useEffect(() => {
-      if (disabledFormats.includes(format) && limits.allowedFormats.length > 0) {
-        setFormat(limits.allowedFormats[0] as VideoFormat);
+      if (length === "short" && (format === "landscape" || format === "square")) {
+        setFormat("portrait");
       }
-    }, [plan, format, disabledFormats, limits.allowedFormats]);
+    }, [length, format]);
 
     const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -131,20 +120,14 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
         return;
       }
 
-      // Map story length to standard length for backend
-      const lengthMap: Record<StoryLength, string> = {
-        short: "short",
-        brief: "brief",
-        extended: "presentation",
-      };
-      const mappedLength = lengthMap[length];
+      // Use length directly (VideoLength is compatible with backend)
 
       // Validate plan access
       const validation = validateGenerationAccess(
         plan,
         creditsBalance,
         "cinematic",
-        mappedLength,
+        length,
         format,
         brandMarkEnabled && brandMarkText.trim().length > 0,
         style === "custom",
@@ -184,18 +167,15 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
           error?: string;
         }>({
           phase: "script",
-          content: storyIdea,
+          content,
           format,
-          length: mappedLength,
+          length,
           style,
           customStyle: style === "custom" ? customStyle : undefined,
           brandMark: brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined,
           characterDescription: characterDescription.trim() || undefined,
-          inspirationStyle: inspiration !== "none" ? inspiration : undefined,
-          storyTone: tone,
-          storyGenre: genre,
-          disableExpressions: disableVoiceExpressions,
-          brandName: brandName.trim() || undefined,
+          presenterFocus: presenterFocus.trim() || undefined,
+          disableExpressions,
           characterConsistencyEnabled,
           voiceType: voice.type,
           voiceId: voice.voiceId,
@@ -415,23 +395,21 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
         progress: 0,
         isGenerating: false,
       });
-      setStoryIdea("");
-      setInspiration("none");
-      setTone("casual");
-      setGenre("documentary");
-      setDisableVoiceExpressions(false);
-      setBrandName("");
-      setCharacterConsistencyEnabled(false);
+      setContent("");
       setFormat("portrait");
-      setLength("short");
+      setLength("brief");
       setStyle("realistic");
       setCustomStyle("");
       setCustomStyleImage(null);
       setVoice({ type: "standard", gender: "female" });
+      setPresenterFocus("");
       setCharacterDescription("");
+      setPresenterFocusOpen(false);
       setCharacterDescOpen(false);
       setBrandMarkEnabled(false);
       setBrandMarkText("");
+      setDisableExpressions(false);
+      setCharacterConsistencyEnabled(false);
     };
 
     const handleOpenProject = async (projectId: string) => {
@@ -481,7 +459,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
             }))
           : [];
 
-        setStoryIdea(project.content ?? "");
+        setContent(project.content ?? "");
 
         setCinematicState({
           step: "complete",
@@ -585,77 +563,82 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     </p>
                   </div>
 
-                  {/* Story Idea Input */}
-                  <StoryIdeaInput value={storyIdea} onChange={setStoryIdea} />
+                  {/* Content Input */}
+                  <ContentInput content={content} onContentChange={setContent} />
 
-                  {/* Story Settings */}
-                  <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm">
-                    <InspirationSelector selected={inspiration} onSelect={setInspiration} />
-                    <div className="h-px bg-border/30" />
-                    <ToneSelector selected={tone} onSelect={setTone} />
-                    <div className="h-px bg-border/30" />
-                    <GenreSelector selected={genre} onSelect={setGenre} />
-                  </div>
+                  {/* Collapsible Advanced Options */}
+                  <div className="space-y-2 sm:space-y-3">
+                    {/* Character Description - Collapsible */}
+                    <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
+                      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
+                        <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                          <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          Character Appearance
+                        </span>
+                        <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
+                          <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
 
-                  {/* Voice Settings */}
-                  <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm">
-                    <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-                      <div className="flex-1">
-                        <VoiceSelector selected={voice} onSelect={setVoice} />
-                      </div>
-                      <div className="flex-1">
-                        <InclinationSelector 
-                          disabled={disableVoiceExpressions}
-                          onDisabledChange={setDisableVoiceExpressions}
-                        />
-                      </div>
+                    {/* Presenter Focus - Collapsible */}
+                    <Collapsible open={presenterFocusOpen} onOpenChange={setPresenterFocusOpen}>
+                      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
+                        <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                          <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          Presenter Focus
+                        </span>
+                        <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
+                          <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+
+                    {/* Disable Expressions Toggle */}
+                    <div className="flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm">
+                      <Checkbox
+                        id="disable-expressions"
+                        checked={disableExpressions}
+                        onCheckedChange={(checked) => setDisableExpressions(checked === true)}
+                      />
+                      <label
+                        htmlFor="disable-expressions"
+                        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium cursor-pointer flex-wrap"
+                      >
+                        <MessageSquareOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                        <span>Disable voice expressions</span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
+                      </label>
                     </div>
-                  </div>
 
-                  {/* Character Consistency - Pro Feature */}
-                  <CharacterConsistencyToggle 
-                    enabled={characterConsistencyEnabled}
-                    onToggle={setCharacterConsistencyEnabled}
-                  />
-
-                  {/* Brand Name (Optional) */}
-                  <div className="rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm">
-                    <Label htmlFor="brand-name" className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-                      Brand / Character Name (Optional)
-                    </Label>
-                    <Input
-                      id="brand-name"
-                      value={brandName}
-                      onChange={(e) => setBrandName(e.target.value)}
-                      placeholder="e.g., TechCorp, Alex the Explorer"
-                      className="mt-3"
+                    {/* Character Consistency Toggle - Pro Feature */}
+                    <CharacterConsistencyToggle
+                      enabled={characterConsistencyEnabled}
+                      onToggle={setCharacterConsistencyEnabled}
                     />
-                    <p className="text-xs text-muted-foreground/60 mt-2">
-                      Include a specific brand or character name to weave into the story
-                    </p>
                   </div>
 
-                  {/* Character Description - Collapsible */}
-                  <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
-                      <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        Character Appearance
-                      </span>
-                      <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
-                        <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  {/* Technical Configuration */}
+                  {/* Configuration */}
                   <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-6 backdrop-blur-sm shadow-sm overflow-hidden">
                     <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
                     <div className="h-px bg-border/30" />
-                    <StorytellingLengthSelector selected={length} onSelect={setLength} />
+                    
+                    {/* Length and Voice side by side on desktop, stacked on mobile */}
+                    <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+                      <div className="flex-1">
+                        <LengthSelector selected={length} onSelect={setLength} />
+                      </div>
+                      <div className="sm:flex-shrink-0">
+                        <VoiceSelector selected={voice} onSelect={setVoice} />
+                      </div>
+                    </div>
+                    
                     <div className="h-px bg-border/30" />
                     <StyleSelector
                       selected={style}
