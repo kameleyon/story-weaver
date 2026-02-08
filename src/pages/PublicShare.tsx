@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Scene {
+  videoUrl?: string;
   imageUrl?: string;
   imageUrls?: string[];
   audioUrl?: string;
   duration?: number;
   narration?: string;
+  voiceover?: string;
 }
 
 // Header CTA component - Get Started button (icon on mobile/tablet)
@@ -44,6 +46,7 @@ export default function PublicShare() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -97,9 +100,89 @@ export default function PublicShare() {
     }
   }, [scenes]);
 
-  // Playback logic with image rotation
+  // Playback logic (prefers video when available; falls back to image rotation)
   useEffect(() => {
     if (!isPlaying || !currentScene) return;
+    if (!currentScene.videoUrl) return;
+
+    const video = videoRef.current;
+    const audio = audioRef.current;
+    if (!video) return;
+
+    const previousDuration = scenes
+      .slice(0, currentSceneIndex)
+      .reduce((acc, s) => acc + (s.duration || 3), 0);
+
+    // Always mute the video track — we only want to hear the generated narration audio.
+    video.muted = true;
+    video.src = currentScene.videoUrl;
+    video.currentTime = 0;
+    video.playsInline = true;
+    video.load();
+
+    if (audio && currentScene.audioUrl) {
+      audio.src = currentScene.audioUrl;
+      audio.muted = isMuted;
+      audio.currentTime = 0;
+      audio.load();
+    } else if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+
+    const handleTimeUpdate = () => {
+      const elapsed = video.currentTime || 0;
+      const pct = ((previousDuration + elapsed) / Math.max(totalDuration, 1)) * 100;
+      setProgress(Math.min(pct, 100));
+    };
+
+    const handleEnded = () => {
+      if (currentSceneIndex < scenes.length - 1) {
+        setCurrentSceneIndex(currentSceneIndex + 1);
+        setCurrentImageIndex(0);
+      } else {
+        setIsPlaying(false);
+        setCurrentSceneIndex(0);
+        setCurrentImageIndex(0);
+        setProgress(0);
+      }
+    };
+
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("ended", handleEnded);
+
+    (async () => {
+      try {
+        await video.play();
+        if (audio && currentScene.audioUrl) {
+          await audio.play();
+        }
+      } catch {
+        // User gesture/autoplay restrictions — keep UI in paused state.
+        setIsPlaying(false);
+      }
+    })();
+
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("ended", handleEnded);
+      video.pause();
+      if (audio) audio.pause();
+    };
+  }, [
+    isPlaying,
+    currentSceneIndex,
+    currentScene,
+    scenes,
+    isMuted,
+    totalDuration,
+  ]);
+
+  // Playback logic with image rotation (only when the scene has no video)
+  useEffect(() => {
+    if (!isPlaying || !currentScene) return;
+    if (currentScene.videoUrl) return;
 
     const sceneDuration = currentScene.duration || 3;
     const images = getCurrentSceneImages(currentScene);
@@ -116,12 +199,9 @@ export default function PublicShare() {
 
     intervalRef.current = setInterval(() => {
       const elapsed = (Date.now() - startTime) / 1000;
-      
+
       // Calculate which image to show within this scene
-      const imageIdx = Math.min(
-        Math.floor(elapsed / timePerImage),
-        imageCount - 1
-      );
+      const imageIdx = Math.min(Math.floor(elapsed / timePerImage), imageCount - 1);
       setCurrentImageIndex(imageIdx);
 
       // Calculate overall progress
@@ -253,7 +333,16 @@ export default function PublicShare() {
                 getAspectRatio(project?.format)
               )}
             >
-              {currentImageUrl ? (
+              {currentScene?.videoUrl ? (
+                <video
+                  ref={videoRef}
+                  className="absolute inset-0 w-full h-full object-contain"
+                  muted
+                  playsInline
+                  preload="metadata"
+                  poster={currentImageUrl || undefined}
+                />
+              ) : currentImageUrl ? (
                 <img
                   src={currentImageUrl}
                   alt={`Scene ${currentSceneIndex + 1}`}
@@ -278,10 +367,10 @@ export default function PublicShare() {
               )}
 
               {/* Narration subtitle */}
-              {isPlaying && currentScene?.narration && (
+              {isPlaying && (currentScene?.narration || currentScene?.voiceover) && (
                 <div className="absolute bottom-16 left-4 right-4">
                   <p className="text-center text-white text-sm sm:text-base bg-black/60 px-4 py-2 rounded-lg backdrop-blur-sm">
-                    {currentScene.narration}
+                    {currentScene.narration || currentScene.voiceover}
                   </p>
                 </div>
               )}
