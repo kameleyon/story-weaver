@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decode as base64Decode, encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,7 +57,74 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
 const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
+// Nano Banana models for image generation (Replicate)
+const NANO_BANANA_MODEL = "google/nano-banana";
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// ============= HAITIAN CREOLE DETECTION =============
+function isHaitianCreole(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  const creoleIndicators = [
+    "mwen", "ou", "li", "nou", "yo", "sa", "ki", "nan", "pou", "ak",
+    "pa", "se", "te", "ap", "gen", "fè", "di", "ale", "vin", "bay",
+    "konnen", "wè", "pran", "mete", "vle", "kapab", "dwe", "bezwen",
+    "tankou", "paske", "men", "lè", "si", "kote", "kouman", "poukisa",
+    "anpil", "tout", "chak", "yon", "de", "twa", "kat", "senk",
+    "ayiti", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
+    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "apre",
+    "t ap", "pral", "ta",
+  ];
+
+  let matchCount = 0;
+  for (const indicator of creoleIndicators) {
+    const regex = new RegExp(`\\b${indicator}\\b`, "gi");
+    if (regex.test(lowerText)) matchCount++;
+  }
+
+  return matchCount >= 3;
+}
+
+// ============= PCM TO WAV CONVERSION =============
+function pcmToWav(
+  pcmData: Uint8Array,
+  sampleRate: number = 24000,
+  numChannels: number = 1,
+  bitsPerSample: number = 16,
+): Uint8Array {
+  const audioFormat = bitsPerSample === 32 ? 3 : 1;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+
+  const buffer = new ArrayBuffer(totalSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+  view.setUint32(4, totalSize - 8, true);
+  view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
+
+  // fmt subchunk
+  view.setUint8(12, 0x66); view.setUint8(13, 0x6d); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, audioFormat, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data subchunk
+  view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+  view.setUint32(40, dataSize, true);
+
+  const result = new Uint8Array(buffer);
+  result.set(pcmData, headerSize);
+  return result;
+}
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
@@ -258,19 +326,281 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
 }
 
 // ============================================
-// STEP 2: Audio Generation with Replicate Chatterbox-Turbo (phased)
-// Uses Marisol (female) and Ethan (male) voices like the main pipeline
+// STEP 2: Audio Generation with Multiple TTS Providers
+// - Haitian Creole: Gemini TTS (Google)
+// - Custom Voice: ElevenLabs TTS
+// - Standard: Replicate Chatterbox-Turbo
 // ============================================
-async function startChatterboxTurbo(
+
+// GEMINI TTS MODELS for Haitian Creole
+const GEMINI_TTS_MODELS = [
+  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
+  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
+];
+
+// Generate audio with Gemini TTS (for Haitian Creole)
+async function generateAudioWithGeminiTTS(
+  text: string,
+  sceneNumber: number,
+  googleApiKey: string,
+  supabase: ReturnType<typeof createClient>,
+): Promise<string | null> {
+  let sanitizedText = text.trim();
+  if (!sanitizedText || sanitizedText.length < 2) return null;
+
+  // Remove promotional content that might trigger filters
+  sanitizedText = sanitizedText.replace(/\b(swiv|follow|like|subscribe|kòmante|comment|pataje|share|abòneman)\b[^.]*\./gi, ".");
+  sanitizedText = sanitizedText.replace(/\.+/g, ".").replace(/\s+/g, " ").trim();
+
+  for (const model of GEMINI_TTS_MODELS) {
+    for (let retry = 0; retry < 3; retry++) {
+      try {
+        console.log(`[TTS-Gemini] Scene ${sceneNumber}: Trying ${model.label} (attempt ${retry + 1})`);
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model.name}:generateContent?key=${googleApiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${sanitizedText}`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: "Enceladus",
+                    },
+                  },
+                },
+              },
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(`[TTS-Gemini] ${model.label} API error: ${response.status} - ${errText}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+
+        if (candidate?.finishReason === "OTHER") {
+          console.warn(`[TTS-Gemini] ${model.label} content filter triggered`);
+          continue;
+        }
+
+        const inlineData = candidate?.content?.parts?.[0]?.inlineData;
+        if (!inlineData?.data) {
+          console.warn(`[TTS-Gemini] ${model.label} no audio data in response`);
+          continue;
+        }
+
+        // Decode base64 PCM and convert to WAV
+        const pcmBytes = base64Decode(inlineData.data);
+        const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
+
+        const fileName = `cinematic-audio-${Date.now()}-${sceneNumber}.wav`;
+        const upload = await supabase.storage
+          .from("audio-files")
+          .upload(fileName, wavBytes, { contentType: "audio/wav", upsert: true });
+
+        if (upload.error) {
+          try {
+            await supabase.storage.createBucket("audio-files", { public: true });
+            await supabase.storage.from("audio-files").upload(fileName, wavBytes, { contentType: "audio/wav", upsert: true });
+          } catch {
+            throw new Error("Failed to upload audio");
+          }
+        }
+
+        const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
+        console.log(`[TTS-Gemini] Scene ${sceneNumber} SUCCESS with ${model.label}`);
+        return urlData.publicUrl;
+      } catch (err) {
+        console.error(`[TTS-Gemini] Scene ${sceneNumber} ${model.label} attempt ${retry + 1} failed:`, err);
+        if (retry < 2) await sleep(2000 * (retry + 1));
+      }
+    }
+  }
+
+  return null;
+}
+
+// Generate audio with ElevenLabs TTS (for custom/cloned voices)
+async function generateAudioWithElevenLabs(
+  text: string,
+  sceneNumber: number,
+  voiceId: string,
+  elevenLabsApiKey: string,
+  supabase: ReturnType<typeof createClient>,
+): Promise<string | null> {
+  const sanitizedText = text.trim();
+  if (!sanitizedText || sanitizedText.length < 2) return null;
+
+  try {
+    console.log(`[TTS-ElevenLabs] Scene ${sceneNumber}: Using voice ${voiceId}`);
+
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": elevenLabsApiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: sanitizedText,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.5,
+            use_speaker_boost: true,
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[TTS-ElevenLabs] API error: ${response.status} - ${errText}`);
+      return null;
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const audioBytes = new Uint8Array(audioBuffer);
+
+    const fileName = `cinematic-audio-${Date.now()}-${sceneNumber}.mp3`;
+    const upload = await supabase.storage
+      .from("audio-files")
+      .upload(fileName, audioBytes, { contentType: "audio/mpeg", upsert: true });
+
+    if (upload.error) {
+      try {
+        await supabase.storage.createBucket("audio-files", { public: true });
+        await supabase.storage.from("audio-files").upload(fileName, audioBytes, { contentType: "audio/mpeg", upsert: true });
+      } catch {
+        throw new Error("Failed to upload audio");
+      }
+    }
+
+    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
+    console.log(`[TTS-ElevenLabs] Scene ${sceneNumber} SUCCESS`);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error(`[TTS-ElevenLabs] Scene ${sceneNumber} error:`, err);
+    return null;
+  }
+}
+
+// Unified audio generation function
+async function generateSceneAudio(
   scene: Scene,
   replicateToken: string,
+  googleApiKey: string | undefined,
+  elevenLabsApiKey: string | undefined,
+  supabase: ReturnType<typeof createClient>,
   voiceGender: string = "female",
-): Promise<string> {
-  // Map gender to voice name: male = Ethan, female = Marisol
-  const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
-  const prompt = (scene.voiceover || "").trim() || `Scene ${scene.number} narration.`;
+  customVoiceId?: string,
+): Promise<{ predictionId?: string; audioUrl?: string }> {
+  const voiceoverText = (scene.voiceover || "").trim();
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return {};
+  }
 
-  console.log(`[Chatterbox-Turbo] Scene ${scene.number}: Using voice ${voiceName}`);
+  const isHC = isHaitianCreole(voiceoverText);
+
+  // CASE 1: Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs Speech-to-Speech
+  if (isHC && customVoiceId && elevenLabsApiKey && googleApiKey) {
+    console.log(`[TTS] Scene ${scene.number}: Haitian Creole + Custom Voice workflow`);
+    
+    // Step 1: Generate base audio with Gemini
+    const geminiAudioUrl = await generateAudioWithGeminiTTS(voiceoverText, scene.number, googleApiKey, supabase);
+    if (!geminiAudioUrl) {
+      console.error(`[TTS] Scene ${scene.number}: Gemini TTS failed for HC`);
+      return {};
+    }
+
+    // Step 2: Transform with ElevenLabs Speech-to-Speech
+    console.log(`[TTS] Scene ${scene.number}: Transforming with ElevenLabs STS`);
+    const sourceResponse = await fetch(geminiAudioUrl);
+    if (!sourceResponse.ok) return {};
+    
+    const sourceAudioBytes = new Uint8Array(await sourceResponse.arrayBuffer());
+    const boundary = `----ElevenLabsSTS${Date.now()}`;
+    const encoder = new TextEncoder();
+    
+    const parts: Uint8Array[] = [];
+    parts.push(encoder.encode(`--${boundary}\r\n`));
+    parts.push(encoder.encode(`Content-Disposition: form-data; name="audio"; filename="source.wav"\r\n`));
+    parts.push(encoder.encode(`Content-Type: audio/wav\r\n\r\n`));
+    parts.push(sourceAudioBytes);
+    parts.push(encoder.encode(`\r\n--${boundary}\r\n`));
+    parts.push(encoder.encode(`Content-Disposition: form-data; name="model_id"\r\n\r\n`));
+    parts.push(encoder.encode(`eleven_multilingual_sts_v2\r\n`));
+    parts.push(encoder.encode(`--${boundary}--\r\n`));
+
+    const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+    const body = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) { body.set(part, offset); offset += part.length; }
+
+    const stsResponse = await fetch(
+      `https://api.elevenlabs.io/v1/speech-to-speech/${customVoiceId}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": elevenLabsApiKey,
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body: body,
+      },
+    );
+
+    if (!stsResponse.ok) {
+      console.error(`[TTS] Scene ${scene.number}: ElevenLabs STS failed`);
+      return {};
+    }
+
+    const stsAudioBytes = new Uint8Array(await stsResponse.arrayBuffer());
+    const fileName = `cinematic-audio-sts-${Date.now()}-${scene.number}.mp3`;
+    await supabase.storage.from("audio-files").upload(fileName, stsAudioBytes, { contentType: "audio/mpeg", upsert: true });
+    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
+    
+    console.log(`[TTS] Scene ${scene.number} SUCCESS: Gemini → ElevenLabs STS`);
+    return { audioUrl: urlData.publicUrl };
+  }
+
+  // CASE 2: Custom Voice (non-HC) → ElevenLabs TTS directly
+  if (customVoiceId && elevenLabsApiKey && !isHC) {
+    console.log(`[TTS] Scene ${scene.number}: Custom voice via ElevenLabs TTS`);
+    const audioUrl = await generateAudioWithElevenLabs(voiceoverText, scene.number, customVoiceId, elevenLabsApiKey, supabase);
+    if (audioUrl) return { audioUrl };
+  }
+
+  // CASE 3: Haitian Creole (standard voice) → Gemini TTS
+  if (isHC && googleApiKey) {
+    console.log(`[TTS] Scene ${scene.number}: Haitian Creole via Gemini TTS`);
+    const audioUrl = await generateAudioWithGeminiTTS(voiceoverText, scene.number, googleApiKey, supabase);
+    if (audioUrl) return { audioUrl };
+    console.error(`[TTS] Scene ${scene.number}: Gemini TTS failed for HC`);
+    return {};
+  }
+
+  // CASE 4: Standard voice → Replicate Chatterbox
+  console.log(`[TTS] Scene ${scene.number}: Standard voice via Replicate Chatterbox`);
+  const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
 
   const response = await fetch(CHATTERBOX_TURBO_URL, {
     method: "POST",
@@ -280,7 +610,7 @@ async function startChatterboxTurbo(
     },
     body: JSON.stringify({
       input: {
-        text: prompt,
+        text: voiceoverText,
         voice: voiceName,
         temperature: 0.9,
         top_p: 1,
@@ -292,13 +622,13 @@ async function startChatterboxTurbo(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Chatterbox-Turbo create error:", errorText);
-    throw new Error(`Chatterbox-Turbo failed (${response.status}): ${errorText}`);
+    console.error(`[TTS] Chatterbox-Turbo create error: ${errorText}`);
+    throw new Error(`Chatterbox-Turbo failed (${response.status})`);
   }
 
   const prediction = await response.json();
-  console.log(`Chatterbox-Turbo prediction started: ${prediction.id}`);
-  return prediction.id;
+  console.log(`[TTS] Chatterbox-Turbo prediction started: ${prediction.id}`);
+  return { predictionId: prediction.id };
 }
 
 async function resolveChatterbox(
@@ -351,64 +681,118 @@ async function resolveChatterbox(
 }
 
 // ============================================
-// STEP 3: Image Generation with Gemini Image (phased)
+// STEP 3: Image Generation with Replicate Nano Banana
 // ============================================
 async function generateSceneImage(
   scene: Scene,
   style: string,
   format: "landscape" | "portrait" | "square",
-  lovableApiKey: string,
+  replicateToken: string,
   supabase: ReturnType<typeof createClient>,
 ): Promise<string> {
+  // Map format to aspect ratio
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const imagePrompt = `${scene.visualPrompt}. Style: ${style}, ${scene.visualStyle}. Cinematic quality, ${aspectRatio} aspect ratio. Ultra high resolution.`;
+  
+  // Build comprehensive image prompt
+  const imagePrompt = `CREATE A HIGHLY DETAILED, CINEMATIC ILLUSTRATION:
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content: imagePrompt }],
-      modalities: ["image", "text"],
-    }),
-  });
+SCENE DESCRIPTION: ${scene.visualPrompt}
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error("Image generation error:", error);
-    throw new Error("Failed to generate image");
-  }
+VISUAL STYLE: ${scene.visualStyle}. Style: ${style}. 
 
-  const data = await response.json();
-  const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!imageData) throw new Error("No image generated");
+FORMAT REQUIREMENT: ${format === "portrait" ? "VERTICAL 9:16 portrait orientation (tall, like a phone screen)" : format === "square" ? "SQUARE 1:1 aspect ratio (equal width and height)" : "HORIZONTAL 16:9 landscape orientation (wide, like a TV screen)"}. The image MUST be composed for this exact aspect ratio.
 
-  const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
-  const imageBuffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+GENERATION REQUIREMENTS:
+- Create a modern, ULTRA DETAILED image with rich textures, accurate lighting, and proper shadows
+- Ensure ANATOMICAL ACCURACY for any humans, animals, or creatures depicted
+- Cinematic quality with dramatic lighting
+- Ultra high resolution
+- Professional illustration with dynamic composition and clear visual hierarchy`;
 
-  const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
-  const upload = await supabase.storage
-    .from("scene-images")
-    .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+  console.log(`[IMG] Generating scene ${scene.number} with Replicate nano-banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
 
-  if (upload.error) {
-    try {
-      await supabase.storage.createBucket("scene-images", { public: true });
-      const retry = await supabase.storage
-        .from("scene-images")
-        .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
-      if (retry.error) throw retry.error;
-    } catch (e) {
-      console.error("Image upload error:", upload.error);
-      throw new Error("Failed to upload scene image");
+  try {
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/${NANO_BANANA_MODEL}/predictions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateToken}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          prompt: imagePrompt,
+          aspect_ratio: aspectRatio,
+          output_format: "png",
+        },
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errText = await createResponse.text();
+      console.error(`[IMG] Replicate nano-banana create failed: ${createResponse.status} - ${errText}`);
+      throw new Error(`Replicate nano-banana failed: ${createResponse.status}`);
     }
-  }
 
-  const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
-  return urlData.publicUrl;
+    let prediction = await createResponse.json();
+    console.log(`[IMG] Nano-banana prediction started: ${prediction.id}, status: ${prediction.status}`);
+
+    // Poll for completion if not finished
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await sleep(2000);
+      const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${replicateToken}` },
+      });
+      prediction = await pollResponse.json();
+    }
+
+    if (prediction.status === "failed") {
+      console.error(`[IMG] Nano-banana prediction failed: ${prediction.error}`);
+      throw new Error(prediction.error || "Image generation failed");
+    }
+
+    // Get image URL from output
+    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    const imageUrl = typeof first === "string" ? first : first?.url || null;
+
+    if (!imageUrl) {
+      throw new Error("No image URL returned from Replicate");
+    }
+
+    console.log(`[IMG] Nano-banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
+
+    // Download and upload to Supabase storage
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) throw new Error("Failed to download image");
+
+    const imageBuffer = new Uint8Array(await imgResponse.arrayBuffer());
+    console.log(`[IMG] Scene ${scene.number} image downloaded: ${imageBuffer.length} bytes`);
+
+    const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
+    const upload = await supabase.storage
+      .from("scene-images")
+      .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+
+    if (upload.error) {
+      try {
+        await supabase.storage.createBucket("scene-images", { public: true });
+        const retry = await supabase.storage
+          .from("scene-images")
+          .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+        if (retry.error) throw retry.error;
+      } catch (e) {
+        console.error("Image upload error:", upload.error);
+        throw new Error("Failed to upload scene image");
+      }
+    }
+
+    const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+    console.log(`[IMG] Scene ${scene.number} image uploaded: ${urlData.publicUrl}`);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error(`[IMG] Scene ${scene.number} error:`, err);
+    throw err;
+  }
 }
 
 // ============================================
@@ -669,33 +1053,64 @@ serve(async (req) => {
         return jsonResponse({ success: true, status: "complete", scene });
       }
 
-      // Get voice gender from project (default to female = Marisol)
+      // Get voice settings from project
       const { data: project } = await supabase
         .from("projects")
-        .select("voice_name")
+        .select("voice_name, voice_type, voice_id")
         .eq("id", generation.project_id)
         .maybeSingle();
       
       // Map voice_name to gender: "male" or "female" (default female for Marisol)
       const voiceGender = project?.voice_name === "male" ? "male" : "female";
+      const customVoiceId = project?.voice_type === "custom" ? project?.voice_id : undefined;
+      
+      // Get API keys for TTS
+      const googleApiKey = Deno.env.get("GOOGLE_TTS_API_KEY");
+      const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
-      if (!scene.audioPredictionId) {
-        const predictionId = await startChatterboxTurbo(scene, replicateToken, voiceGender);
-        scenes[idx] = { ...scene, audioPredictionId: predictionId };
+      // If we don't have a prediction ID yet, start the audio generation
+      if (!scene.audioPredictionId && !scene.audioUrl) {
+        const result = await generateSceneAudio(
+          scene,
+          replicateToken,
+          googleApiKey,
+          elevenLabsApiKey,
+          supabase,
+          voiceGender,
+          customVoiceId,
+        );
+
+        // If we got a direct audioUrl (Gemini/ElevenLabs), we're done
+        if (result.audioUrl) {
+          scenes[idx] = { ...scene, audioUrl: result.audioUrl };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+        }
+
+        // If we got a predictionId (Chatterbox), save it and return processing
+        if (result.predictionId) {
+          scenes[idx] = { ...scene, audioPredictionId: result.predictionId };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        }
+
+        // Neither worked - error
+        throw new Error("Failed to start audio generation");
+      }
+
+      // If we have a prediction ID, try to resolve it (Chatterbox async polling)
+      if (scene.audioPredictionId) {
+        const audioUrl = await resolveChatterbox(scene.audioPredictionId, replicateToken, supabase, scene.number);
+        if (!audioUrl) {
+          return jsonResponse({ success: true, status: "processing", scene });
+        }
+
+        scenes[idx] = { ...scene, audioUrl };
         await updateScenes(supabase, generationId, scenes);
-        return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
       }
 
-      // Try resolve (single check; client will call again if still processing)
-      const audioUrl = await resolveChatterbox(scene.audioPredictionId, replicateToken, supabase, scene.number);
-      if (!audioUrl) {
-        return jsonResponse({ success: true, status: "processing", scene });
-      }
-
-      scenes[idx] = { ...scene, audioUrl };
-      await updateScenes(supabase, generationId, scenes);
-
-      return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+      return jsonResponse({ success: true, status: "processing", scene });
     }
 
     // =============== PHASE 3: IMAGES ===============
@@ -719,7 +1134,7 @@ serve(async (req) => {
         scene,
         project.style || "realistic",
         (project.format || "portrait") as "landscape" | "portrait" | "square",
-        lovableApiKey,
+        replicateToken,
         supabase,
       );
 
