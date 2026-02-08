@@ -124,13 +124,21 @@ export function CinematicResult({
 }: CinematicResultProps) {
   const navigate = useNavigate();
 
-  // Compute aspect ratio class from format (and keep preview usable on small screens)
-  const aspectClass =
+  // Aspect ratio helpers
+  const thumbAspectClass =
     format === "portrait"
-      ? "aspect-[9/16] max-h-[75vh]"
+      ? "aspect-[9/16]"
       : format === "square"
-        ? "aspect-square max-h-[75vh]"
+        ? "aspect-square"
         : "aspect-video";
+
+  // Preview frame: for portrait/square, drive size from height so the *frame* is truly 9:16 / 1:1.
+  const previewFrameClass =
+    format === "portrait"
+      ? "inline-block aspect-[9/16] h-[75vh] max-w-full"
+      : format === "square"
+        ? "inline-block aspect-square h-[75vh] max-w-full"
+        : "w-full aspect-video";
 
   const [localScenes, setLocalScenes] = useState<CinematicScene[]>(scenes);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
@@ -686,7 +694,7 @@ export function CinematicResult({
 
       {/* Current Scene Preview */}
       <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm max-w-3xl mx-auto">
-        <div className={`relative ${aspectClass} w-full bg-muted/50 flex items-center justify-center`}>
+        <div className={`relative bg-muted/50 flex items-center justify-center ${previewFrameClass} ${format === "landscape" ? "" : "mx-auto"}`}>
           {/* Progress bar */}
           <div className="absolute inset-x-0 top-0 z-10 h-1 bg-background/30">
             <div
@@ -700,7 +708,7 @@ export function CinematicResult({
               key={currentScene.videoUrl}
               ref={previewVideoRef}
               src={currentScene.videoUrl}
-              className="w-full h-full object-contain bg-black"
+              className="w-full h-full object-contain"
               muted
               playsInline
               autoPlay={false}
@@ -835,7 +843,7 @@ export function CinematicResult({
           <button
             key={scene.number}
             onClick={() => setCurrentSceneIndex(idx)}
-            className={`relative ${aspectClass} rounded-lg overflow-hidden border-2 transition-all ${
+            className={`relative ${thumbAspectClass} rounded-lg overflow-hidden border-2 transition-all ${
               idx === currentSceneIndex
                 ? "border-primary ring-2 ring-primary/30"
                 : "border-transparent hover:border-border"
