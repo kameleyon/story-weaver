@@ -50,9 +50,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Textarea } from "@/components/ui/textarea";
 import { useCinematicExport } from "@/hooks/useCinematicExport";
 import { cn } from "@/lib/utils";
+import { CinematicEditModal } from "./CinematicEditModal";
 import JSZip from "jszip";
 
 interface CinematicScene {
@@ -74,7 +74,7 @@ interface CinematicResultProps {
   format?: "landscape" | "portrait" | "square";
 }
 
-type RegenType = "audio" | "video";
+type RegenType = "audio" | "video" | "image";
 
 function safeFileBase(name: string) {
   return name.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "cinematic";
@@ -628,6 +628,124 @@ export function CinematicResult({
     [generationId, projectId, stop]
   );
 
+  // Handler for audio regeneration from the edit modal
+  const handleRegenerateAudio = useCallback(
+    async (idx: number, newVoiceover: string) => {
+      if (!projectId || !generationId) {
+        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
+        return;
+      }
+
+      // First save the new voiceover text
+      const nextScenes = localScenes.map((s, i) =>
+        i === idx ? { ...s, voiceover: newVoiceover } : s
+      );
+      setLocalScenes(nextScenes);
+      await persistScenes(nextScenes);
+
+      // Then regenerate audio
+      await regenerateScene(idx, "audio");
+    },
+    [generationId, projectId, localScenes, persistScenes, regenerateScene]
+  );
+
+  // Handler for video-only regeneration (no image change)
+  const handleRegenerateVideoOnly = useCallback(
+    async (idx: number) => {
+      await regenerateScene(idx, "video");
+    },
+    [regenerateScene]
+  );
+
+  // Handler for applying image edit (edit image then regenerate video)
+  const handleApplyImageEdit = useCallback(
+    async (idx: number, imageModification: string) => {
+      if (!projectId || !generationId) {
+        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
+        return;
+      }
+
+      stop();
+      setIsRegenerating({ sceneIndex: idx, type: "image" });
+
+      try {
+        // Call the backend with the image modification
+        const { data, error } = await supabase.functions.invoke("generate-cinematic", {
+          body: {
+            phase: "image-edit",
+            projectId,
+            generationId,
+            sceneIndex: idx,
+            imageModification,
+          },
+        });
+
+        if (error) throw new Error(error.message);
+        if (!data?.success) throw new Error(data?.error || "Image edit failed");
+
+        // Update the scene with new video
+        const nextScene = data.scene as Partial<CinematicScene>;
+        setLocalScenes((prev) => {
+          const copy = [...prev];
+          copy[idx] = { ...copy[idx], ...nextScene };
+          return copy;
+        });
+
+        toast({ title: "Updated", description: `Scene ${idx + 1} image edited and video regenerated.` });
+      } catch (e) {
+        console.error("Image edit failed", e);
+        toast({ variant: "destructive", title: "Image edit failed", description: String(e) });
+      } finally {
+        setIsRegenerating(null);
+      }
+    },
+    [generationId, projectId, stop]
+  );
+
+  // Handler for regenerating a new image (full regeneration then video)
+  const handleRegenerateImage = useCallback(
+    async (idx: number) => {
+      if (!projectId || !generationId) {
+        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
+        return;
+      }
+
+      stop();
+      setIsRegenerating({ sceneIndex: idx, type: "image" });
+
+      try {
+        // Call the backend to regenerate image then video
+        const { data, error } = await supabase.functions.invoke("generate-cinematic", {
+          body: {
+            phase: "image-regen",
+            projectId,
+            generationId,
+            sceneIndex: idx,
+          },
+        });
+
+        if (error) throw new Error(error.message);
+        if (!data?.success) throw new Error(data?.error || "Image regeneration failed");
+
+        // Update the scene with new video
+        const nextScene = data.scene as Partial<CinematicScene>;
+        setLocalScenes((prev) => {
+          const copy = [...prev];
+          copy[idx] = { ...copy[idx], ...nextScene };
+          return copy;
+        });
+
+        toast({ title: "Updated", description: `Scene ${idx + 1} image and video regenerated.` });
+      } catch (e) {
+        console.error("Image regeneration failed", e);
+        toast({ variant: "destructive", title: "Image regeneration failed", description: String(e) });
+      } finally {
+        setIsRegenerating(null);
+      }
+    },
+    [generationId, projectId, stop]
+  );
+
   const canEdit = !!generationId;
   const regenBusy = isRegenerating?.sceneIndex === currentSceneIndex;
 
@@ -1033,37 +1151,21 @@ export function CinematicResult({
         </div>
       </TooltipProvider>
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Scene {currentScene?.number}</DialogTitle>
-            <DialogDescription>
-              Update narration and prompt, then regenerate audio/clip to apply.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-foreground">Narration</div>
-              <Textarea value={editVoiceover} onChange={(e) => setEditVoiceover(e.target.value)} rows={4} />
-            </div>
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-foreground">Visual prompt</div>
-              <Textarea value={editVisualPrompt} onChange={(e) => setEditVisualPrompt(e.target.value)} rows={4} />
-            </div>
-          </div>
-
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsEditOpen(false)} disabled={isSavingEdit}>
-              Cancel
-            </Button>
-            <Button onClick={saveEdit} disabled={isSavingEdit}>
-              {isSavingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Modal */}
+      {isEditOpen && currentScene && (
+        <CinematicEditModal
+          scene={currentScene}
+          sceneIndex={currentSceneIndex}
+          format={format}
+          onClose={() => setIsEditOpen(false)}
+          onRegenerateAudio={handleRegenerateAudio}
+          onRegenerateVideo={handleRegenerateVideoOnly}
+          onApplyImageEdit={handleApplyImageEdit}
+          onRegenerateImage={handleRegenerateImage}
+          isRegenerating={!!isRegenerating && isRegenerating.sceneIndex === currentSceneIndex}
+          regeneratingType={isRegenerating?.sceneIndex === currentSceneIndex ? isRegenerating.type : null}
+        />
+      )}
 
       {/* Share Dialog */}
       <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
