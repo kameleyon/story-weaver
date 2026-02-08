@@ -230,6 +230,19 @@ export default function Dashboard() {
 
   const displayName = profile?.display_name || user?.email?.split('@')[0] || 'User';
 
+  const getCreateMode = (projectType?: string | null) => {
+    switch (projectType) {
+      case "storytelling":
+        return "storytelling";
+      case "smartflow":
+        return "smartflow";
+      case "cinematic":
+        return "cinematic";
+      default:
+        return "doc2video";
+    }
+  };
+
   const getProjectIcon = (projectType: string) => {
     switch (projectType) {
       case "storytelling":
@@ -376,7 +389,10 @@ export default function Dashboard() {
                       return (
                         <div
                           key={project.id}
-                          onClick={() => navigate(`/app/create?project=${project.id}`)}
+                          onClick={() => {
+                            const mode = getCreateMode(project.project_type);
+                            navigate(`/app/create?mode=${mode}&project=${project.id}`);
+                          }}
                           className="shrink-0 w-[200px] rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-primary transition-colors shadow-sm group"
                         >
                           {/* Thumbnail area */}
