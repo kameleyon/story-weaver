@@ -82,18 +82,40 @@ function sanitizeBearer(authHeader: string) {
   return authHeader.replace(/^Bearer\s+/i, "").trim();
 }
 
+async function getLatestModelVersion(model: string, replicateToken: string): Promise<string> {
+  const response = await fetch(`${REPLICATE_MODELS_URL}/${model}`, {
+    headers: { Authorization: `Bearer ${replicateToken}` },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("Failed to fetch model info:", error);
+    throw new Error(`Failed to fetch model info for ${model}`);
+  }
+
+  const modelInfo = await response.json();
+  const latestVersion = modelInfo.latest_version?.id;
+  if (!latestVersion) {
+    throw new Error(`No latest version found for model ${model}`);
+  }
+
+  console.log(`Model ${model} latest version: ${latestVersion}`);
+  return latestVersion;
+}
+
 async function createReplicatePrediction(
-  model: string,
+  version: string,
   input: Record<string, unknown>,
   replicateToken: string,
 ) {
-  const response = await fetch(`${REPLICATE_MODELS_URL}/${model}/predictions`, {
+  // Use the standard predictions endpoint with a version ID
+  const response = await fetch(REPLICATE_PREDICTIONS_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${replicateToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({ version, input }),
   });
 
   if (!response.ok) {
@@ -237,8 +259,11 @@ You MUST respond with a JSON object containing a "title" string and a "scenes" a
 // STEP 2: Audio Generation with Replicate Chatterbox (phased)
 // ============================================
 async function startChatterbox(scene: Scene, replicateToken: string): Promise<string> {
+  // Fetch latest version dynamically
+  const version = await getLatestModelVersion(CHATTERBOX_MODEL, replicateToken);
+  
   const prediction = await createReplicatePrediction(
-    CHATTERBOX_MODEL,
+    version,
     {
       text: scene.voiceover,
       exaggeration: 0.5,
@@ -246,6 +271,7 @@ async function startChatterbox(scene: Scene, replicateToken: string): Promise<st
     },
     replicateToken,
   );
+  console.log(`Chatterbox prediction started: ${prediction.id}`);
   return prediction.id;
 }
 
@@ -363,9 +389,12 @@ async function generateSceneImage(
 // STEP 4: Video Generation with Replicate Grok (phased)
 // ============================================
 async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
+  // Fetch latest version dynamically
+  const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
+  
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
   const prediction = await createReplicatePrediction(
-    GROK_VIDEO_MODEL,
+    version,
     {
       prompt: scene.visualPrompt,
       image: imageUrl,
@@ -375,6 +404,7 @@ async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "
     },
     replicateToken,
   );
+  console.log(`Grok prediction started: ${prediction.id}`);
   return prediction.id as string;
 }
 
