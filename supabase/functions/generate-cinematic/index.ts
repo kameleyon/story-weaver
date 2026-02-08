@@ -981,8 +981,18 @@ async function resolveGrok(
 
   if (result.status !== "succeeded") {
     if (result.status === "failed") {
-      console.error("Grok failed:", result.error);
-      throw new Error("Grok video generation failed");
+      const errorMsg = result.error || "Video generation failed";
+      console.error("Grok failed:", errorMsg);
+      
+      // Surface user-friendly error messages for common issues
+      if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
+        throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
+      }
+      if (errorMsg.includes("rate limit") || errorMsg.includes("429")) {
+        throw new Error("Video API rate limited. Please wait a moment and try again.");
+      }
+      
+      throw new Error(`Video generation failed: ${errorMsg}`);
     }
     return null;
   }
