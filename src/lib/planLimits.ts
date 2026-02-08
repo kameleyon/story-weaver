@@ -80,12 +80,13 @@ export const CREDIT_COSTS = {
  * Calculate credits required for a generation
  */
 export function getCreditsRequired(
-  projectType: "doc2video" | "storytelling" | "smartflow",
+  projectType: "doc2video" | "storytelling" | "smartflow" | "cinematic",
   length: string
 ): number {
   if (projectType === "smartflow") {
     return CREDIT_COSTS.smartflow;
   }
+  // Cinematic costs more (same as storytelling for now)
   return CREDIT_COSTS[length as keyof typeof CREDIT_COSTS] || CREDIT_COSTS.short;
 }
 
@@ -102,7 +103,7 @@ export interface ValidationResult {
 export function validateGenerationAccess(
   plan: PlanTier,
   creditsBalance: number,
-  projectType: "doc2video" | "storytelling" | "smartflow",
+  projectType: "doc2video" | "storytelling" | "smartflow" | "cinematic",
   length: string,
   format: string,
   hasBrandMark?: boolean,

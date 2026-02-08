@@ -21,6 +21,7 @@ import {
   Wallpaper,
   MicVocal,
   Shield,
+  Film,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -379,6 +380,33 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                   {isCollapsed && <TooltipContent side="right">Smart Flow</TooltipContent>}
                 </Tooltip>
               </SidebarMenuItem>
+
+              {/* Cinematic - Beta (Admin Only) */}
+              {isAdmin && (
+                <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton
+                        onClick={() => navigate("/app/create?mode=cinematic")}
+                        className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
+                          isCreateRoute && currentMode === "cinematic" 
+                            ? "bg-amber-500/10 text-amber-500" 
+                            : "hover:bg-sidebar-accent/50"
+                        } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                      >
+                        <Film className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && (
+                          <span className="text-sm flex items-center gap-2">
+                            Cinematic
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">Beta</span>
+                          </span>
+                        )}
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    {isCollapsed && <TooltipContent side="right">Cinematic - Beta (Admin)</TooltipContent>}
+                  </Tooltip>
+                </SidebarMenuItem>
+              )}
 
               {/* Presenter (Coming Soon) - Commented out for now */}
               {/* <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
