@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -154,6 +154,7 @@ export function CinematicResult({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playRunIdRef = useRef(0);
   const restartRef = useRef(true);
+  const advancedFromSceneRef = useRef<number | null>(null);
 
   // Keep local scenes synced with props
   useEffect(() => {
@@ -208,6 +209,7 @@ export function CinematicResult({
     setIsPlayingAll(false);
     setSceneProgress(0);
     restartRef.current = true;
+    advancedFromSceneRef.current = null;
   }, []);
 
   const startPlayAll = useCallback(
@@ -223,6 +225,7 @@ export function CinematicResult({
       }
 
       restartRef.current = true;
+      advancedFromSceneRef.current = null;
       setSceneProgress(0);
       setCurrentSceneIndex(startIndex);
       setIsPlayingAll(true);
@@ -337,8 +340,12 @@ export function CinematicResult({
     void run();
   }, [isPlayingAll, currentSceneIndex, isMuted, localScenes]);
 
-  const handleVideoEnded = useCallback(() => {
+  const advanceToNextScene = useCallback(() => {
     if (!isPlayingAll) return;
+
+    // Prevent double-advance when both audio + video fire `ended`.
+    if (advancedFromSceneRef.current === currentSceneIndex) return;
+    advancedFromSceneRef.current = currentSceneIndex;
 
     const nextIndex = currentSceneIndex + 1;
     if (nextIndex >= localScenes.length) {
@@ -350,6 +357,14 @@ export function CinematicResult({
     setSceneProgress(0);
     setCurrentSceneIndex(nextIndex);
   }, [currentSceneIndex, isPlayingAll, localScenes.length, stop]);
+
+  const handleVideoEnded = useCallback(() => {
+    advanceToNextScene();
+  }, [advanceToNextScene]);
+
+  const handleAudioEnded = useCallback(() => {
+    advanceToNextScene();
+  }, [advanceToNextScene]);
 
   const handleVideoTimeUpdate = useCallback(() => {
     if (!isPlayingAll) return;
@@ -614,7 +629,7 @@ export function CinematicResult({
 
   return (
     <div className="space-y-6">
-      <audio ref={audioRef} className="hidden" preload="auto" />
+      <audio ref={audioRef} className="hidden" preload="auto" onEnded={handleAudioEnded} />
 
       {/* Header */}
       <div className="text-center">
@@ -666,33 +681,26 @@ export function CinematicResult({
             />
           </div>
 
-          <AnimatePresence mode="wait" initial={false}>
-            {currentScene?.videoUrl ? (
-              <motion.video
-                ref={previewVideoRef}
-                key={`preview-${currentScene.number}-${currentScene.videoUrl}`}
-                src={currentScene.videoUrl}
-                className="w-full h-full object-cover"
-                muted
-                playsInline
-                autoPlay={false}
-                loop={false}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                controls={!isPlayingAll}
-                onEnded={handleVideoEnded}
-                onTimeUpdate={handleVideoTimeUpdate}
-                preload="auto"
-              />
-            ) : (
-              <div className="text-center text-muted-foreground">
-                <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No video for Scene {currentScene?.number}</p>
-              </div>
-            )}
-          </AnimatePresence>
+          {currentScene?.videoUrl ? (
+            <video
+              ref={previewVideoRef}
+              src={currentScene.videoUrl}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+              autoPlay={false}
+              loop={false}
+              controls={!isPlayingAll}
+              onEnded={handleVideoEnded}
+              onTimeUpdate={handleVideoTimeUpdate}
+              preload="auto"
+            />
+          ) : (
+            <div className="text-center text-muted-foreground">
+              <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No video for Scene {currentScene?.number}</p>
+            </div>
+          )}
 
           {/* Scene Navigation */}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-4">
