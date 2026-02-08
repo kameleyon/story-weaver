@@ -81,7 +81,8 @@ export default function PublicShare() {
   const scenes = shareData?.scenes || [];
   const project = shareData?.project as any;
   const sharedVideoUrl = shareData?.videoUrl;
-  const isSingleVideo = !!sharedVideoUrl;
+  const hasPerSceneVideo = scenes.some((s) => !!s.videoUrl);
+  const isSingleVideo = !!sharedVideoUrl && !hasPerSceneVideo;
 
   const currentScene = scenes[currentSceneIndex];
 

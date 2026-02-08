@@ -118,14 +118,9 @@ export function ResultActionBar({
         if (error) throw error;
       }
 
-      // Use the backend function URL for social sharing - it serves proper OG meta tags
-      // and redirects humans to the branded /share/:token page.
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const metaUrl = `${supabaseUrl}/functions/v1/share-meta?token=${token}&v=${Date.now()}`;
-      setShareUrl(metaUrl);
-      
-      // Show branded URL in the UI for better UX
-      setDisplayUrl(`https://motionmax.io/share/${token}`);
+      const display = `${window.location.origin}/share/${token}`;
+      setShareUrl(display);
+      setDisplayUrl(display);
     } catch (error) {
       console.error("Failed to create share:", error);
       toast({
@@ -141,8 +136,12 @@ export function ResultActionBar({
 
   const handleCopyLink = async () => {
     try {
-      // Copy the branded URL (what users expect to share)
-      await navigator.clipboard.writeText(displayUrl);
+      const text = displayUrl;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        window.prompt("Copy link:", text);
+      }
       setHasCopied(true);
       toast({
         title: "Link copied!",
@@ -150,11 +149,7 @@ export function ResultActionBar({
       });
       setTimeout(() => setHasCopied(false), 2000);
     } catch {
-      toast({
-        title: "Failed to copy",
-        description: "Please copy the link manually",
-        variant: "destructive",
-      });
+      window.prompt("Copy link:", displayUrl);
     }
   };
 
