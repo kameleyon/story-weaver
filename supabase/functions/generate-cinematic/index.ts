@@ -450,8 +450,25 @@ async function resolveGrok(
     return null;
   }
 
-  const outputUrl = result.output;
-  if (typeof outputUrl !== "string" || !outputUrl) return null;
+  // Handle different Replicate output formats: string, array, or object
+  const output = result.output;
+  let videoUrl: string | null = null;
+
+  if (typeof output === "string" && output) {
+    videoUrl = output;
+  } else if (Array.isArray(output) && output.length > 0) {
+    // Handle array output like ["https://...mp4"]
+    videoUrl = typeof output[0] === "string" ? output[0] : null;
+  } else if (typeof output === "object" && output !== null) {
+    // Handle object output like { url: "..." } or { video: "..." }
+    const obj = output as Record<string, unknown>;
+    videoUrl = (obj.url || obj.video || obj.output) as string | null;
+  }
+
+  if (!videoUrl) {
+    console.error("[Grok] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    throw new Error("Replicate succeeded but returned no video URL");
+  }
 
   // Download the video from Replicate and upload to Supabase storage for persistence
   console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate...`);
