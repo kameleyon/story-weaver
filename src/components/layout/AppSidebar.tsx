@@ -388,9 +388,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                     <TooltipTrigger asChild>
                       <SidebarMenuButton
                         onClick={() => navigate("/app/create?mode=cinematic")}
-                        className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
                           isCreateRoute && currentMode === "cinematic" 
-                            ? "bg-amber-500/10 text-amber-500" 
+                            ? "bg-primary/10 text-primary" 
                             : "hover:bg-sidebar-accent/50"
                         } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
                       >
@@ -398,7 +398,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                         {!isCollapsed && (
                           <span className="text-sm flex items-center gap-2">
                             Cinematic
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">Beta</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary">Beta</span>
                           </span>
                         )}
                       </SidebarMenuButton>
