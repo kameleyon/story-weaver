@@ -684,7 +684,9 @@ serve(async (req) => {
 
     // =============== PHASE 5: FINALIZE ===============
     if (phase === "finalize") {
+      // Collect all video URLs from scenes
       const videoUrls = scenes.filter((s) => s.videoUrl).map((s) => s.videoUrl as string);
+      // Keep first as legacy field, but also return all clips
       const finalVideoUrl = videoUrls[0] || "";
 
       // Mark complete
@@ -715,6 +717,7 @@ serve(async (req) => {
         title: project?.title || "Untitled Cinematic",
         scenes,
         finalVideoUrl,
+        allVideoUrls: videoUrls, // All generated clips
       });
     }
 
