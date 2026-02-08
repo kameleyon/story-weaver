@@ -281,130 +281,116 @@ async function generateScriptWithGemini(
       ? { width: 1080, height: 1080 }
       : { width: 1920, height: 1080 };
 
-  // Length configuration (same as generate-video)
-  const lengthConfig: Record<string, { count: number; targetDuration: number; avgSceneDuration: number }> = {
-    short: { count: 6, targetDuration: 90, avgSceneDuration: 15 },
-    brief: { count: 7, targetDuration: 120, avgSceneDuration: 17 },
-    presentation: { count: 12, targetDuration: 240, avgSceneDuration: 20 },
+  // Length configuration - dynamic scene count ranges
+  const lengthConfig: Record<string, { minScenes: number; maxScenes: number; targetDuration: number; maxSceneDuration: number }> = {
+    short: { minScenes: 5, maxScenes: 8, targetDuration: 90, maxSceneDuration: 10 },
+    brief: { minScenes: 6, maxScenes: 10, targetDuration: 150, maxSceneDuration: 10 },
+    presentation: { minScenes: 8, maxScenes: 12, targetDuration: 180, maxSceneDuration: 10 },
   };
   const config = lengthConfig[params.length] || lengthConfig.brief;
-  const sceneCount = config.count;
-  const targetWords = Math.floor(config.avgSceneDuration * 2.5);
 
   const styleDescription = getStylePrompt(params.style, params.customStyle);
 
   // Build optional guidance sections
   const presenterGuidance = params.presenterFocus
-    ? `
-=== PRESENTER GUIDANCE ===
-${params.presenterFocus}
-`
+    ? `\n**Presenter/Focus Guidance:** ${params.presenterFocus}`
     : "";
 
   const characterGuidance = params.characterDescription
-    ? `
-=== CHARACTER APPEARANCE ===
-All human characters in visual prompts MUST match this description:
-${params.characterDescription}
-Include these character details in EVERY visualPrompt that features people.
-`
+    ? `\n**Character Appearance:** All human characters MUST match: ${params.characterDescription}`
     : "";
 
-  const systemPrompt = `You are a DYNAMIC cinematic video script writer creating engaging, narrative-driven content for AI-to-VIDEO generation.
+  const systemPrompt = `You are a world-class Cinematic Director and Screenwriter for AI-to-VIDEO generation.
+Your goal is to turn a user's request into a compelling, production-ready video script with detailed visual direction.
+
 ${CONTENT_COMPLIANCE_INSTRUCTION}
-=== LANGUAGE REQUIREMENT (CRITICAL) ===
-ALWAYS generate ALL content (voiceovers, titles, subtitles) in ENGLISH, regardless of the input language.
-The ONLY exception: If the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen), then generate in Haitian Creole.
-If the input content is in another language (French, Spanish, Portuguese, etc.), TRANSLATE it to English for the output.
 
-=== HAITIAN CREOLE ILLUSTRATION TEXT RULES ===
-When generating content in Haitian Creole:
-- Write ALL illustration text, captions, and visual descriptions in Haitian Creole
-- PRESERVE proper nouns, brand names, and specific terminology in their ORIGINAL form
-- Example: "Lionel Messi" stays "Lionel Messi", "Nike - Just Do It" stays "Nike - Just Do It"
+### PHASE 1: ASSESS & STRATEGIZE (Do this FIRST)
+Before writing, analyze the User's Request to determine the best approach:
 
-=== CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
-Before writing the script, carefully analyze the content to identify:
-1. KEY CHARACTERS: Who are the people/entities mentioned?
-2. GENDER: Determine gender from context (names, pronouns, roles, topics)
-3. ROLES & RELATIONSHIPS: Who does what?
-4. VISUAL CONSISTENCY: The SAME character must look IDENTICAL across ALL scenes
-5. TEMPORAL CONTEXT: Childhood → show AS A CHILD, Adult → show AS ADULT, etc.
-6. HISTORICAL/CULTURAL CONTEXT: Match clothing, hairstyles, technology to time period
+1. **Core Message:** What is the single most important idea to convey?
+2. **Audience:** Who is watching? (investors, social media, students, general public)
+3. **Narrative Structure:** Choose the best arc for this content:
+   - *Explainer/Problem-Solution:* Hook → Problem → Solution → Proof → CTA
+   - *Cinematic Journey:* Atmosphere → Character Intro → Conflict → Resolution
+   - *Montage:* Rhythmic sequence of high-impact visuals
+   - *Documentary:* Context → Deep Dive → Insight → Conclusion
 
-Content: ${content}
-${presenterGuidance}${characterGuidance}
+### PHASE 2: SCENE CREATION
+Create a script that flows NATURALLY based on your assessment.
 
-=== VISUAL STYLE & ART DIRECTION ===
-All image prompts must adhere to this style:
-- ART STYLE: ${styleDescription}
-- ASPECT RATIO: ${params.format} (${dimensions.width}x${dimensions.height})
-- QUALITY: Ultra-detailed, 8K resolution, dramatic cinematic lighting
-- CAMERA WORK: Use varied angles (Close-up, Wide shot, Low angle, Over-shoulder) to keep the video dynamic
+**SCENE COUNT:** Do NOT force a fixed number. Use between ${config.minScenes} and ${config.maxScenes} scenes—whatever is BEST for the story. Let the narrative breathe.
 
-=== TIMING REQUIREMENTS ===
-- Target duration: ${config.targetDuration} seconds
-- Create exactly ${sceneCount} scenes
-- MAXIMUM 20 seconds per scene - MINIMUM 5 seconds per scene
-- Each voiceover: ~${targetWords} words
+**TARGET DURATION:** ~${config.targetDuration} seconds total (under 3 minutes)
+**MAX PER SCENE:** ${config.maxSceneDuration} seconds each
 
-=== NARRATIVE ARC ===
-1. HOOK (Scene 1-2): Create intrigue (High energy, dramatic opening)
-2. CONFLICT (Early-middle): Show tension or challenge
-3. CHOICE (Middle): Fork in the road, decision point
-4. SOLUTION (Later): Show method/progress/resolution
-5. FORMULA (Final): Powerful conclusion, memorable ending
+### INPUT CONTEXT
+- **Visual Style:** ${styleDescription}
+- **Aspect Ratio:** ${params.format} (${dimensions.width}x${dimensions.height})${presenterGuidance}${characterGuidance}
 
-=== VOICEOVER STYLE ===
-- ENERGETIC, conversational, cinematic tone
-- Start each scene with a hook
-- NO labels, NO stage directions, NO markdown
-- Just raw spoken text
-${
-  params.disableExpressions
-    ? `- Do NOT include any paralinguistic tags like [chuckle], [sigh], etc.`
-    : `- Include paralinguistic tags where appropriate: [sigh], [chuckle], [gasp], [laugh]`
-}
+**User's Content:**
+${content}
 
-=== CHARACTER BIBLE (REQUIRED) ===
-You MUST create a "characters" object defining EVERY person/entity in the video.
-This ensures visual CONSISTENCY - the same person looks identical across all scenes.
+### LANGUAGE REQUIREMENT
+ALWAYS generate in ENGLISH unless the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen).
+If input is in another language, TRANSLATE to English.
+
+### VIDEO-FIRST VISUAL PROMPTS (CRITICAL)
+Your visualPrompt must be optimized for AI VIDEO generation, NOT static images. Focus on:
+
+1. **MOTION & DYNAMICS:** Describe movement, action, flow
+   - ✓ "Camera slowly pushes in as the protagonist walks forward through fog"
+   - ✗ "A person standing in fog"
+
+2. **CAMERA MOVEMENT:** Specify how the camera behaves
+   - Tracking shot, Dolly in/out, Crane up, Handheld, Steady glide, Orbit around subject
+   - "Low angle drone shot tracking fast across urban rooftops at golden hour"
+
+3. **CINEMATIC LIGHTING:** Be specific about light quality
+   - "Cyberpunk neon reflections on wet pavement", "Soft rim light separating subject from background"
+   - "Dramatic Rembrandt lighting with deep shadows"
+
+4. **COMPOSITION:** Describe framing and depth
+   - "Subject in left third of frame, shallow depth of field blurring city lights behind"
+   - "Extreme close-up on eyes, rack focus to hands in foreground"
+
+5. **ATMOSPHERE & MOOD:** Set the emotional tone visually
+   - "Tense, claustrophobic framing", "Expansive, hopeful wide shot"
+
+### CHARACTER BIBLE (REQUIRED)
+Create a "characters" object defining EVERY person/entity for VISUAL CONSISTENCY across all scenes.
 
 For each character specify:
-- GENDER (male/female) - MUST match the content context
-- AGE: The SPECIFIC age for this version of the character
-- Ethnicity/skin tone if mentioned or implied
+- GENDER, AGE, Ethnicity/skin tone
 - Hair (color, style, length)
-- Body type
-- Clothing (period-appropriate, age-appropriate)
-- Distinguishing features
+- Body type, Clothing (period/age-appropriate)
+- Distinguishing features that remain CONSTANT
 
-=== PROMPT ENGINEERING RULES (FOR IMAGE PROMPTS) ===
-When generating the 'visualPrompt' for each scene, you MUST:
-1. COPY-PASTE the full physical description from the CHARACTER BIBLE into the prompt
-2. Describe the ACTION clearly (e.g., "running", "celebrating")
-3. Define the SETTING (background, lighting, weather, environment)
-4. Include CAMERA ANGLE (close-up, wide shot, low angle, etc.)
-5. **DO NOT** describe the art style in your visualPrompt - the system will append it automatically
+When writing visualPrompt, COPY the full character description from your bible—don't just reference the name.
 
-=== OUTPUT FORMAT ===
+### VOICEOVER STYLE
+- ENERGETIC, conversational, cinematic tone
+- Start each scene with a hook that grabs attention
+- NO labels, NO stage directions, NO markdown—just raw spoken text
+${params.disableExpressions ? "- Do NOT include paralinguistic tags like [chuckle], [sigh], etc." : "- Include natural expressions where appropriate: [sigh], [chuckle], [gasp], [laugh]"}
+
+### OUTPUT FORMAT
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
-  "title": "Video Title",
+  "title": "A Creative, Compelling Title",
   "characters": {
-    "Protagonist": "A 35-year-old man with dark hair, brown eyes, athletic build..."
+    "Protagonist": "A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer..."
   },
   "scenes": [
     {
       "number": 1,
-      "voiceover": "Script text here...",
-      "visualPrompt": "Full prompt including CHARACTER BIBLE description + action + setting + camera angle...",
-      "visualStyle": "cinematic wide shot",
+      "voiceover": "Engaging narration that hooks the viewer immediately...",
+      "visualPrompt": "Slow dolly push through morning mist. A 32-year-old woman with shoulder-length black hair (from character bible) steps into frame from the right, silhouetted against golden hour sunlight. Camera tracks her movement as she walks purposefully toward camera. Shallow depth of field, lens flare kissing the edge of frame.",
+      "visualStyle": "Cinematic establishing shot with atmospheric depth",
       "duration": 8
     }
   ]
 }`;
-
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
