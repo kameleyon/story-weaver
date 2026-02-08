@@ -19,6 +19,7 @@ import { InclinationSelector } from "./InclinationSelector";
 import { StorytellingLengthSelector, type StoryLength } from "./StorytellingLengthSelector";
 import { GenerationProgress } from "./GenerationProgress";
 import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
+import { CinematicResult } from "./CinematicResult";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
 import { useSubscription, validateGenerationAccess, PLAN_LIMITS } from "@/hooks/useSubscription";
@@ -627,53 +628,15 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="max-w-5xl mx-auto space-y-6"
+                  className="max-w-5xl mx-auto"
                 >
-                  <div className="text-center mb-6">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-medium mb-3">
-                      <Film className="h-3.5 w-3.5" />
-                      Complete - {cinematicState.scenes.filter(s => s.videoUrl).length} Clips Generated
-                    </div>
-                    <h2 className="text-xl font-semibold">{cinematicState.title || "Untitled Cinematic"}</h2>
-                  </div>
-
-                  {/* All Scene Clips Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {cinematicState.scenes.filter(s => s.videoUrl).map((scene) => (
-                      <div key={scene.number} className="rounded-xl overflow-hidden border border-border/50 bg-card">
-                        <video
-                          src={scene.videoUrl}
-                          controls
-                          className="w-full aspect-video"
-                          poster={undefined}
-                        />
-                        <div className="p-3 border-t border-border/30">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-muted-foreground">Scene {scene.number}</span>
-                            <span className="text-xs text-muted-foreground">{scene.duration}s</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-2">{scene.voiceover}</p>
-                          <a 
-                            href={scene.videoUrl} 
-                            download 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-amber-500 hover:text-amber-400 mt-2 inline-block"
-                          >
-                            Download Clip
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-wrap gap-3 justify-center pt-4">
-                    <Button variant="outline" onClick={handleNewProject} className="gap-2">
-                      <RotateCcw className="h-4 w-4" />
-                      New Project
-                    </Button>
-                  </div>
+                  <CinematicResult
+                    title={cinematicState.title || "Untitled Cinematic"}
+                    scenes={cinematicState.scenes}
+                    projectId={cinematicState.projectId}
+                    generationId={cinematicState.generationId}
+                    onNewProject={handleNewProject}
+                  />
                 </motion.div>
               ) : (
                 <motion.div
