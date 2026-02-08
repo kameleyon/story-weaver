@@ -367,6 +367,25 @@ Your visualPrompt must be optimized for AI VIDEO generation, NOT static images. 
 5. **ATMOSPHERE & MOOD:** Set the emotional tone visually
    - "Tense, claustrophobic framing", "Expansive, hopeful wide shot"
 
+=== ENVIRONMENT & SETTING (MANDATORY) ===
+**EVERY scene MUST include a detailed environment/setting that matches the story context.**
+Do NOT create empty or minimal backgrounds. The environment tells the story!
+
+For each visualPrompt, specify:
+- **WHERE:** Location (kitchen, office, street, forest, etc.)
+- **WHAT'S AROUND:** Props, furniture, objects that add context
+- **ATMOSPHERE:** Time of day, weather, lighting conditions
+- **STORY RELEVANCE:** Environment should reinforce the narrative
+
+BAD EXAMPLES (TOO MINIMAL):
+- ✗ "A stick figure next to a cake" (no setting!)
+- ✗ "Person standing on white background" (empty!)
+- ✗ "Character with angry expression" (no context!)
+
+GOOD EXAMPLES (RICH CONTEXT):
+- ✓ "Inside a cluttered home kitchen at 2AM, dirty dishes piled in the sink, dim overhead light casting harsh shadows. A stick figure stands at the counter, surrounded by open flour bags and mixing bowls, staring angrily at a lopsided two-layer cake on a vintage pedestal."
+- ✓ "A cramped office cubicle with sticky notes everywhere, coffee cups stacked, computer screen glowing. Through the window, city lights twinkle. The character slumps in an ergonomic chair, papers scattered across the desk."
+
 === CHARACTER BIBLE (REQUIRED) ===
 You MUST create a "characters" object defining EVERY person/entity in the video for VISUAL CONSISTENCY across all scenes.
 
@@ -977,10 +996,23 @@ async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "
   const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
   
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  // Build video prompt with anti-lip-sync instructions
+  // We want expressions (surprised, screaming) but NOT talking/lip-sync animation
+  const videoPrompt = `${scene.visualPrompt}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+
   const prediction = await createReplicatePrediction(
     version,
     {
-      prompt: scene.visualPrompt,
+      prompt: videoPrompt,
       image: imageUrl,
       duration: Math.min(scene.duration, 15),
       resolution: "720p",
