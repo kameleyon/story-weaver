@@ -124,8 +124,13 @@ export function CinematicResult({
 }: CinematicResultProps) {
   const navigate = useNavigate();
 
-  // Compute aspect ratio class from format
-  const aspectClass = format === "portrait" ? "aspect-[9/16]" : format === "square" ? "aspect-square" : "aspect-video";
+  // Compute aspect ratio class from format (and keep preview usable on small screens)
+  const aspectClass =
+    format === "portrait"
+      ? "aspect-[9/16] max-h-[75vh]"
+      : format === "square"
+        ? "aspect-square max-h-[75vh]"
+        : "aspect-video";
 
   const [localScenes, setLocalScenes] = useState<CinematicScene[]>(scenes);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
@@ -485,10 +490,10 @@ export function CinematicResult({
         if (error) throw error;
       }
 
-      const backendUrl = import.meta.env.VITE_SUPABASE_URL;
-      const metaUrl = `${backendUrl}/functions/v1/share-meta?token=${token}&v=${Date.now()}`;
-      setShareUrl(metaUrl);
-      setDisplayUrl(`https://motionmax.io/share/${token}`);
+      const display = `${window.location.origin}/share/${token}`;
+      // Copy/share this URL (it actually resolves inside this app)
+      setShareUrl(display);
+      setDisplayUrl(display);
     } catch (e) {
       console.error("Failed to create share", e);
       toast({ title: "Failed to create share link", description: "Please try again", variant: "destructive" });
@@ -500,12 +505,18 @@ export function CinematicResult({
 
   const handleCopyLink = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(displayUrl);
+      const text = displayUrl;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Mobile Safari fallback
+        window.prompt("Copy link:", text);
+      }
       setHasCopied(true);
       toast({ title: "Link copied!", description: "Share this link with anyone" });
       window.setTimeout(() => setHasCopied(false), 2000);
     } catch {
-      toast({ title: "Failed to copy", description: "Please copy the link manually", variant: "destructive" });
+      window.prompt("Copy link:", displayUrl);
     }
   }, [displayUrl]);
 
@@ -675,7 +686,7 @@ export function CinematicResult({
 
       {/* Current Scene Preview */}
       <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm max-w-3xl mx-auto">
-        <div className={`relative ${aspectClass} bg-muted/50 flex items-center justify-center`}>
+        <div className={`relative ${aspectClass} w-full bg-muted/50 flex items-center justify-center`}>
           {/* Progress bar */}
           <div className="absolute inset-x-0 top-0 z-10 h-1 bg-background/30">
             <div
@@ -686,6 +697,7 @@ export function CinematicResult({
 
           {currentScene?.videoUrl ? (
             <video
+              key={currentScene.videoUrl}
               ref={previewVideoRef}
               src={currentScene.videoUrl}
               className="w-full h-full object-cover"
@@ -696,6 +708,13 @@ export function CinematicResult({
               controls={!isPlayingAll}
               onEnded={handleVideoEnded}
               onTimeUpdate={handleVideoTimeUpdate}
+              onError={() => {
+                toast({
+                  variant: "destructive",
+                  title: "Clip failed to load",
+                  description: `Scene ${currentScene.number} couldn’t be played. Try switching scenes or re-generating that clip.`,
+                });
+              }}
               preload="auto"
             />
           ) : (
@@ -704,6 +723,8 @@ export function CinematicResult({
               <p className="text-sm">No video for Scene {currentScene?.number}</p>
             </div>
           )}
+
+          {/* Scene Navigation */}
 
           {/* Scene Navigation */}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-4">
@@ -832,8 +853,8 @@ export function CinematicResult({
 
       {/* Export Progress Modal */}
       {exportState.status !== "idle" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <Card className="w-full max-w-md p-6 space-y-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
+            <Card className="w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-foreground">
                 {exportState.status === "error"
