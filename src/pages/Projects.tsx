@@ -339,8 +339,22 @@ export default function Projects() {
   };
 
   // Action handlers
+  const getCreateMode = (projectType?: string | null) => {
+    switch (projectType) {
+      case "storytelling":
+        return "storytelling";
+      case "smartflow":
+        return "smartflow";
+      case "cinematic":
+        return "cinematic";
+      default:
+        return "doc2video";
+    }
+  };
+
   const handleView = (project: Project) => {
-    navigate(`/app/create?project=${project.id}`);
+    const mode = getCreateMode(project.project_type);
+    navigate(`/app/create?mode=${mode}&project=${project.id}`);
   };
 
   const handleRename = (project: Project) => {
@@ -471,7 +485,8 @@ export default function Projects() {
 
       // Otherwise, redirect to workspace to export
       toast.info("Redirecting to workspace to export video...");
-      navigate(`/app/create?project=${project.id}`);
+      const mode = getCreateMode(project.project_type);
+      navigate(`/app/create?mode=${mode}&project=${project.id}`);
     } catch (err: any) {
       toast.error("Download failed: " + err.message);
     } finally {

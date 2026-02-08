@@ -435,13 +435,92 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     };
 
     const handleOpenProject = async (projectId: string) => {
-      // For now, just reset - we can implement project loading later
-      handleNewProject();
-      toast({
-        title: "Project Loading",
-        description: "Loading cinematic projects is not yet supported.",
-      });
+      setCinematicState((prev) => ({
+        ...prev,
+        step: "stitching",
+        progress: 95,
+        isGenerating: false,
+        projectId,
+        statusMessage: "Loading cinematic project...",
+      }));
+
+      try {
+        const { data: project, error: projectError } = await supabase
+          .from("projects")
+          .select("id,title,content")
+          .eq("id", projectId)
+          .maybeSingle();
+        if (projectError) throw projectError;
+        if (!project) throw new Error("Project not found");
+
+        const { data: generation, error: genError } = await supabase
+          .from("generations")
+          .select("id,scenes,video_url")
+          .eq("project_id", projectId)
+          .eq("status", "complete")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (genError) throw genError;
+        if (!generation) throw new Error("No completed cinematic generation found");
+
+        const rawScenes = generation.scenes as any;
+        const normalizedScenes: CinematicScene[] = Array.isArray(rawScenes)
+          ? rawScenes.map((s: any, idx: number) => ({
+              number: typeof s?.number === "number" ? s.number : idx + 1,
+              voiceover: s?.voiceover ?? s?.narration ?? s?.text ?? "",
+              visualPrompt:
+                s?.visualPrompt ??
+                s?.visual_prompt ??
+                s?.visual_description ??
+                s?.description ??
+                "",
+              videoUrl: s?.videoUrl ?? s?.video_url,
+              audioUrl: s?.audioUrl ?? s?.audio_url,
+              duration: typeof s?.duration === "number" ? s.duration : 8,
+            }))
+          : [];
+
+        setStoryIdea(project.content ?? "");
+
+        setCinematicState({
+          step: "complete",
+          progress: 100,
+          isGenerating: false,
+          projectId: project.id,
+          generationId: generation.id,
+          title: project.title,
+          scenes: normalizedScenes,
+          finalVideoUrl: generation.video_url ?? undefined,
+          statusMessage: "Cinematic loaded",
+        });
+      } catch (error) {
+        console.error("Failed to load cinematic project:", error);
+        const errorMessage = error instanceof Error ? error.message : "Failed to load project";
+
+        setCinematicState((prev) => ({
+          ...prev,
+          step: "error",
+          isGenerating: false,
+          error: errorMessage,
+          statusMessage: errorMessage,
+        }));
+
+        toast({
+          variant: "destructive",
+          title: "Failed to load project",
+          description: errorMessage,
+        });
+      }
     };
+
+    // Load project from URL if provided
+    useEffect(() => {
+      if (initialProjectId) {
+        void handleOpenProject(initialProjectId);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialProjectId]);
 
     useImperativeHandle(ref, () => ({
       resetWorkspace: handleNewProject,
