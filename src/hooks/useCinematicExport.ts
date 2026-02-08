@@ -291,29 +291,54 @@ export function useCinematicExport() {
             }
           }
 
+          // Helper to seek with retries (iOS is notoriously flaky with video seeking)
+          const seekWithRetry = async (video: HTMLVideoElement, time: number, maxRetries = 3): Promise<void> => {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+              try {
+                video.currentTime = time;
+                await new Promise<void>((resolve, reject) => {
+                  const timeoutMs = attempt === 0 ? 8000 : 12000; // Longer timeout on retries
+                  const to = window.setTimeout(() => reject(new Error("seek_timeout")), timeoutMs);
+                  
+                  const onSeeked = () => {
+                    window.clearTimeout(to);
+                    video.removeEventListener("seeked", onSeeked);
+                    video.removeEventListener("error", onError);
+                    resolve();
+                  };
+                  
+                  const onError = () => {
+                    window.clearTimeout(to);
+                    video.removeEventListener("seeked", onSeeked);
+                    video.removeEventListener("error", onError);
+                    reject(new Error("seek_error"));
+                  };
+                  
+                  video.addEventListener("seeked", onSeeked, { once: true });
+                  video.addEventListener("error", onError, { once: true });
+                });
+                return; // Success
+              } catch (e) {
+                if (attempt < maxRetries - 1) {
+                  // Wait before retry
+                  await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+                  continue;
+                }
+                throw new Error("Timed out seeking video - try a smaller video or use a desktop browser");
+              }
+            }
+          };
+
           // Extract and encode video frames
           tempVideo.currentTime = 0;
-           await new Promise<void>((resolve, reject) => {
-             const to = window.setTimeout(() => reject(new Error("Timed out seeking video")), 15000);
-             tempVideo.onseeked = () => {
-               window.clearTimeout(to);
-               resolve();
-             };
-           });
+          await seekWithRetry(tempVideo, 0);
 
           for (let f = 0; f < clipFrames; f++) {
             if (abortRef.current) break;
 
             const targetTime = f / fps;
             if (Math.abs(tempVideo.currentTime - targetTime) > 0.01) {
-              tempVideo.currentTime = targetTime;
-               await new Promise<void>((resolve, reject) => {
-                 const to = window.setTimeout(() => reject(new Error("Timed out seeking video")), 15000);
-                 tempVideo.onseeked = () => {
-                   window.clearTimeout(to);
-                   resolve();
-                 };
-               });
+              await seekWithRetry(tempVideo, targetTime);
             }
 
             // Draw video frame to canvas (scaled to fit)
