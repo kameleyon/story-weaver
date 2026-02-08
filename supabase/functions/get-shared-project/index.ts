@@ -10,6 +10,7 @@ interface Scene {
   imageUrl?: string;
   imageUrls?: string[];
   audioUrl?: string;
+  videoUrl?: string;
   duration?: number;
   narration?: string;
   voiceover?: string;
@@ -89,6 +90,11 @@ async function refreshSceneUrls(
   // Refresh audioUrl
   if (refreshedScene.audioUrl) {
     refreshedScene.audioUrl = await refreshSignedUrl(supabase, refreshedScene.audioUrl);
+  }
+
+  // Refresh videoUrl
+  if (refreshedScene.videoUrl) {
+    refreshedScene.videoUrl = await refreshSignedUrl(supabase, refreshedScene.videoUrl);
   }
 
   return refreshedScene;
