@@ -685,8 +685,8 @@ export default function Projects() {
                             className={cn(
                               "h-3.5 w-3.5 sm:h-4 sm:w-4 transition-colors",
                               project.is_favorite
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-muted-foreground hover:text-yellow-400"
+                                ? "fill-primary text-primary"
+                                : "text-muted-foreground hover:text-primary"
                             )}
                           />
                         </Button>

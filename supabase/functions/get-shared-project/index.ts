@@ -154,10 +154,30 @@ Deno.serve(async (req) => {
       scenes = await Promise.all(scenes.map((scene) => refreshSceneUrls(supabase, scene)));
     }
 
+    // Also fetch the latest completed generation video_url (for Doc2Video exports / stitched videos)
+    let videoUrl: string | null = null;
+    try {
+      const { data: gen } = await supabase
+        .from("generations")
+        .select("video_url")
+        .eq("project_id", sharedData.project.id)
+        .eq("status", "complete")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (gen?.video_url) {
+        videoUrl = await refreshSignedUrl(supabase, gen.video_url, 604800);
+      }
+    } catch (e) {
+      console.warn("[get-shared-project] Failed to fetch project video_url", e);
+    }
+
     const result = {
       project: sharedData.project,
       scenes,
       share: sharedData.share,
+      videoUrl,
     };
 
     console.log(`[get-shared-project] Success: ${sharedData.project?.title}`);

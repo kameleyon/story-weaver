@@ -548,12 +548,12 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
           <div className="flex items-center justify-end gap-3">
             {cinematicState.step !== "idle" && cinematicState.step !== "complete" && cinematicState.step !== "error" && (
               <motion.div
-                className="flex items-center gap-2 rounded-full bg-amber-500/10 px-3 sm:px-4 py-1.5"
+                className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
               >
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
-                <span className="text-xs sm:text-sm font-medium text-amber-500">Creating cinematic...</span>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                <span className="text-xs sm:text-sm font-medium text-primary">Creating cinematic...</span>
               </motion.div>
             )}
           </div>
@@ -573,7 +573,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                 >
                   {/* Hero */}
                   <div className="text-center">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium mb-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
                       <Film className="h-3.5 w-3.5" />
                       Cinematic - Beta
                     </div>
@@ -676,7 +676,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     <Button
                       onClick={handleGenerate}
                       disabled={!canGenerate}
-                      className="w-full gap-2 sm:gap-2.5 rounded-full bg-amber-500 py-5 sm:py-6 text-sm sm:text-base font-medium text-white shadow-sm transition-all hover:bg-amber-600 hover:shadow-md disabled:opacity-40"
+                      className="w-full gap-2 sm:gap-2.5 rounded-full bg-primary py-5 sm:py-6 text-sm sm:text-base font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-40"
                     >
                       <Play className="h-4 w-4" />
                       Create Cinematic Video
@@ -691,8 +691,8 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                   exit={{ opacity: 0, y: -20 }}
                   className="max-w-2xl mx-auto space-y-6"
                 >
-                  <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-8 text-center">
-                    <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-4" />
+                  <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-8 text-center">
+                    <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
                     <h2 className="text-xl font-semibold text-foreground mb-2">Cinematic Generation Failed</h2>
                     <p className="text-muted-foreground mb-6">{getUserFriendlyErrorMessage(cinematicState.error)}</p>
                     <Button onClick={() => { handleNewProject(); }} variant="outline" className="gap-2">
@@ -714,6 +714,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     scenes={cinematicState.scenes}
                     projectId={cinematicState.projectId}
                     generationId={cinematicState.generationId}
+                    finalVideoUrl={cinematicState.finalVideoUrl}
                     onNewProject={handleNewProject}
                   />
                 </motion.div>
@@ -727,7 +728,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                 >
                   {/* Progress UI */}
                   <div className="rounded-2xl border border-border/50 bg-card/50 p-8 text-center">
-                    <Loader2 className="h-12 w-12 mx-auto text-amber-500 mb-4 animate-spin" />
+                    <Loader2 className="h-12 w-12 mx-auto text-primary mb-4 animate-spin" />
                     <h2 className="text-xl font-semibold text-foreground mb-2">
                       {cinematicState.step === "scripting" && "Writing Script..."}
                       {cinematicState.step === "audio" && "Generating Audio..."}
@@ -739,7 +740,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     </p>
                     <div className="w-full bg-muted rounded-full h-2">
                       <div 
-                        className="bg-amber-500 h-2 rounded-full transition-all duration-500" 
+                        className="bg-primary h-2 rounded-full transition-all duration-500" 
                         style={{ width: `${cinematicState.progress}%` }}
                       />
                     </div>

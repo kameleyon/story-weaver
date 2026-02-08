@@ -614,18 +614,18 @@ export default function Usage() {
                                       {cleanTitle}
                                     </span>
                                     {/* Only show non-complete status badges */}
-                                    {!isComplete && (
-                                      <Badge 
-                                        variant="secondary" 
-                                        className={`shrink-0 text-[10px] px-1.5 py-0 h-4 font-normal ${
-                                          isFailed
-                                            ? "bg-destructive/20 text-destructive"
-                                            : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                                        }`}
-                                      >
-                                        {activity.status}
-                                      </Badge>
-                                    )}
+                                      {!isComplete && (
+                                        <Badge
+                                          variant="secondary"
+                                          className={`shrink-0 text-[10px] px-1.5 py-0 h-4 font-normal ${
+                                            isFailed
+                                              ? "bg-destructive/20 text-destructive"
+                                              : "bg-primary/10 text-primary"
+                                          }`}
+                                        >
+                                          {activity.status}
+                                        </Badge>
+                                      )}
                                   </div>
                                   <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
                                     {format(new Date(activity.created_at), "MMM d, h:mm a")}
