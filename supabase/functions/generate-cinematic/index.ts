@@ -41,36 +41,123 @@ const GLIF_TXT2VID_ID = "cmlcrert2000204l8u8z1nysa"; // Text-to-Video
 const GLIF_IMG2VID_ID = "cmlcswdal000404l217ez6vkf"; // Image-to-Video
 const GLIF_STITCH_ID = "cmlctayju000004l5qxf7ydrd"; // Video Stitching
 
-async function callGlifApi(
-  glifId: string, 
-  inputs: Record<string, string> | string[], 
+// Try multiple input formats to discover what Glif workflow expects
+async function callGlifApiWithRetry(
+  glifId: string,
+  promptValue: string,
+  audioUrl: string | undefined,
   apiToken: string
 ): Promise<any> {
-  console.log(`Calling Glif API with id: ${glifId}, inputs:`, JSON.stringify(inputs));
-  
-  const response = await fetch(GLIF_API_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      id: glifId,
-      inputs,
-    }),
-  });
+  // Input format variants to try (Glif workflows may use different node names)
+  const inputVariants: (Record<string, string> | string[])[] = [
+    // Array format (as per Glif docs example)
+    audioUrl ? [promptValue, audioUrl] : [promptValue],
+    // Object with common key names
+    audioUrl 
+      ? { prompt: promptValue, audio_url: audioUrl }
+      : { prompt: promptValue },
+    audioUrl 
+      ? { Prompt: promptValue, audio_url: audioUrl }
+      : { Prompt: promptValue },
+    audioUrl 
+      ? { text: promptValue, audio_url: audioUrl }
+      : { text: promptValue },
+    audioUrl 
+      ? { input: promptValue, audio_url: audioUrl }
+      : { input: promptValue },
+  ];
 
-  const result = await response.json();
-  
-  // Log full response for debugging
-  console.log("Full Glif response:", JSON.stringify(result));
-  
-  if (result.error) {
-    console.error("Glif API error:", result.error);
-    throw new Error(`Glif API error: ${result.error}`);
+  let lastError: Error | null = null;
+
+  for (const inputs of inputVariants) {
+    console.log(`Trying Glif API with id: ${glifId}, inputs:`, JSON.stringify(inputs));
+    
+    try {
+      const response = await fetch(GLIF_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: glifId,
+          inputs,
+        }),
+      });
+
+      const result = await response.json();
+      console.log("Full Glif response:", JSON.stringify(result));
+      
+      if (result.error) {
+        console.warn(`Glif returned error with format ${JSON.stringify(inputs)}:`, result.error);
+        lastError = new Error(`Glif API error: ${result.error}`);
+        continue; // Try next format
+      }
+
+      // Success! Log which format worked
+      console.log(`SUCCESS: Glif accepted input format:`, JSON.stringify(inputs));
+      return result;
+    } catch (e) {
+      console.error(`Network error with format ${JSON.stringify(inputs)}:`, e);
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
   }
 
-  return result;
+  // All formats failed
+  throw lastError || new Error("All Glif input formats failed");
+}
+
+// Simple call for stitching (different workflow, may need different format)
+async function callGlifStitch(
+  glifId: string,
+  videoUrls: string[],
+  apiToken: string
+): Promise<any> {
+  // Try different formats for stitching
+  const inputVariants: (Record<string, string> | string[])[] = [
+    videoUrls, // Array of URLs directly
+    { videos: videoUrls.join(",") },
+    { video_urls: videoUrls.join(",") },
+    { clips: videoUrls.join(",") },
+    { input: videoUrls.join(",") },
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const inputs of inputVariants) {
+    console.log(`Trying Glif stitch with id: ${glifId}, inputs:`, JSON.stringify(inputs));
+    
+    try {
+      const response = await fetch(GLIF_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: glifId,
+          inputs,
+        }),
+      });
+
+      const result = await response.json();
+      console.log("Full Glif stitch response:", JSON.stringify(result));
+      
+      if (result.error) {
+        console.warn(`Glif stitch error with format:`, result.error);
+        lastError = new Error(`Glif API error: ${result.error}`);
+        continue;
+      }
+
+      console.log(`SUCCESS: Glif stitch accepted format:`, JSON.stringify(inputs));
+      return result;
+    } catch (e) {
+      console.error(`Network error during stitch:`, e);
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
+  }
+
+  throw lastError || new Error("All Glif stitch formats failed");
 }
 
 // Extract JSON from potentially markdown-wrapped response
@@ -387,16 +474,15 @@ serve(async (req) => {
       console.log(`Generating video for scene ${i + 1}/${scenesWithAudio.length}`);
 
       try {
-        // Use object-based inputs for Glif txt2vid workflow
-        const glifInputs: Record<string, string> = {
-          prompt: `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`,
-        };
-        
-        if (scene.audioUrl) {
-          glifInputs.audio_url = scene.audioUrl;
-        }
+        // Build prompt with style info
+        const promptValue = `${scene.visualPrompt}. Cinematic quality, ${params.style} style, ${scene.duration} seconds.`;
 
-        const glifResult = await callGlifApi(GLIF_TXT2VID_ID, glifInputs, glifToken);
+        const glifResult = await callGlifApiWithRetry(
+          GLIF_TXT2VID_ID, 
+          promptValue, 
+          scene.audioUrl, 
+          glifToken
+        );
         
         if (glifResult.output) {
           scenesWithVideo.push({ ...scene, videoUrl: glifResult.output });
@@ -426,10 +512,8 @@ serve(async (req) => {
 
     if (videoUrls.length > 0) {
       try {
-        // Glif stitch expects object with videos input
-        const stitchResult = await callGlifApi(GLIF_STITCH_ID, { 
-          videos: videoUrls.join(",") 
-        }, glifToken);
+        // Use stitch function with retry logic
+        const stitchResult = await callGlifStitch(GLIF_STITCH_ID, videoUrls, glifToken);
         if (stitchResult.output) {
           finalVideoUrl = stitchResult.output;
         } else {
