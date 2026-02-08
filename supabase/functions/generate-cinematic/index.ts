@@ -301,10 +301,19 @@ async function generateScriptWithGemini(
     ? `\n**Character Appearance:** All human characters MUST match: ${params.characterDescription}`
     : "";
 
-  const systemPrompt = `You are a world-class Cinematic Director and Screenwriter for AI-to-VIDEO generation.
-Your goal is to turn a user's request into a compelling, production-ready video script with detailed visual direction.
+  const systemPrompt = `You are a world-class Cinematic Director and Screenwriter.
+
+Your goal is to turn a user's request into a compelling, production-ready video script and visual plan.
 
 ${CONTENT_COMPLIANCE_INSTRUCTION}
+
+### PHASE 1: ASSESS & STRATEGIZE
+
+First, analyze the User's Request to determine the best approach:
+
+1. **Core Message:** What is the single most important idea to convey?
+2. **Audience:** Who is watching? (e.g., investors, social media, students).
+3. **Narrative Arc:** Choose the best structure (Explainer, Cinematic Journey, or Montage).
 
 === CONTENT ANALYSIS (CRITICAL - DO THIS FIRST) ===
 Before writing the script, carefully analyze the content to identify:
@@ -315,28 +324,35 @@ Before writing the script, carefully analyze the content to identify:
 5. **TEMPORAL CONTEXT:** Childhood → show AS A CHILD, Adult → show AS ADULT
 6. **HISTORICAL/CULTURAL CONTEXT:** Match clothing, hairstyles, technology to time period
 
-### PHASE 1: ASSESS & STRATEGIZE
-After content analysis, determine the best approach:
+### PHASE 2: ANIMATION RULES (CRITICAL & STRICT)
 
-1. **Core Message:** What is the single most important idea to convey?
-2. **Audience:** Who is watching? (investors, social media, students, general public)
-3. **Narrative Structure:** Choose the best arc for this content:
-   - *Explainer/Problem-Solution:* Hook → Problem → Solution → Proof → CTA
-   - *Cinematic Journey:* Atmosphere → Character Intro → Conflict → Resolution
-   - *Montage:* Rhythmic sequence of high-impact visuals
-   - *Documentary:* Context → Deep Dive → Insight → Conclusion
+You are writing prompts for a generative video AI that CANNOT do lip-sync. You must follow these rules strictly:
 
-### PHASE 2: SCENE CREATION
-Create a script that flows NATURALLY based on your assessment.
+1. **NO TALKING FACES:** Characters must **NEVER** be described as "talking", "speaking", "saying", or "moving mouth".
 
-**SCENE COUNT:** Do NOT force a fixed number. Use between ${config.minScenes} and ${config.maxScenes} scenes—whatever is BEST for the story. Let the narrative breathe.
+2. **VISUAL-AUDIO DISSOCIATION:** If the voiceover is dialogue, the visual must be a **Reaction Shot**, **Action Shot**, or **Cutaway**.
+   - *Bad:* "Close up of John explaining the plan."
+   - *Good:* "Close up of John looking determined, nodding slightly while holding the map. Subtle wind blows his hair."
+
+3. **ALLOWED MOTIONS:**
+   - *Body:* Walking, running, gesturing, pointing, fighting, dancing.
+   - *Face:* Shock, laughter (mouth open but not speaking), crying, anger, subtle breathing.
+   - *Camera:* Dolly zoom, tracking shot, pan, tilt, rack focus.
+
+4. **STATIC POSES:** For dialogue-heavy moments, use "Static pose with subtle breathing and idle movement" or "Cinematic portrait, staring intensely."
+
+### PHASE 3: SCENE CREATION
+
+Create a script with ${config.minScenes}-${config.maxScenes} scenes (variable based on story needs).
 
 **TARGET DURATION:** ~${config.targetDuration} seconds total (under 3 minutes)
 **MAX PER SCENE:** ${config.maxSceneDuration} seconds each
 
 ### INPUT CONTEXT
+
 - **Visual Style:** ${styleDescription}
-- **Aspect Ratio:** ${params.format} (${dimensions.width}x${dimensions.height})${presenterGuidance}${characterGuidance}
+- **Aspect Ratio:** ${params.format} (${dimensions.width}x${dimensions.height})
+- **Tone:** cinematic${presenterGuidance}${characterGuidance}
 
 **User's Content:**
 ${content}
@@ -425,7 +441,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     {
       "number": 1,
       "voiceover": "Engaging narration that hooks the viewer immediately...",
-      "visualPrompt": "'THE JOURNEY BEGINS' in bold, modern typography fading in over: Slow dolly push through morning mist. A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer (from character bible) steps into frame from the right, silhouetted against golden hour sunlight. Camera tracks her movement as she walks purposefully toward camera. Shallow depth of field, lens flare kissing the edge of frame.",
+      "visualPrompt": "'THE JOURNEY BEGINS' in bold, modern typography fading in over: Slow dolly push through morning mist. A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer (from character bible) steps into frame from the right. Camera tracks her movement. She walks purposefully but does NOT speak—static determined expression with subtle breathing. Shallow depth of field, lens flare kissing the edge of frame.",
       "visualStyle": "Cinematic establishing shot with atmospheric depth",
       "duration": 8
     }
