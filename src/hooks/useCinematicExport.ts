@@ -81,24 +81,16 @@ async function loadAudioBuffer(url: string, decodeCtx: OfflineAudioContext, time
   }
 }
 
-// 🚀 Optimized Boomerang: seek-based + ImageBitmap caching for speed
-async function captureBoomerangFrames(
+// 🚀 Pre-cache all unique frames ONCE, then encode from memory (no per-frame seeking)
+async function preCacheVideoFrames(
   videoElement: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  videoEncoder: any,
-  fps: number,
-  targetDuration: number,
-  globalFrameOffset: number,
-  cumulativeTimestampOffset: number,
-  onProgress?: (framesRendered: number) => void
-): Promise<number> {
+  fps: number
+): Promise<ImageBitmap[]> {
   const sourceDuration = videoElement.duration || 5;
-  const totalFrames = Math.ceil(targetDuration * fps);
-  const cycleDuration = sourceDuration * 2;
-  const frameDuration = Math.round(1e6 / fps);
-
-  console.log(`[CinematicExport] Boomerang: src=${sourceDuration.toFixed(2)}s → target=${targetDuration.toFixed(2)}s, ${totalFrames} frames`);
+  const sourceFrameCount = Math.ceil(sourceDuration * fps);
+  const frameDuration = 1 / fps;
 
   const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
   const canvasAspect = canvas.width / canvas.height;
@@ -111,63 +103,72 @@ async function captureBoomerangFrames(
     dx = (canvas.width - dw) / 2; dy = 0;
   }
 
-  // Pre-fill canvas black once
   ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const waitSeek = () => new Promise<void>((resolve) => {
     if (!videoElement.seeking) { resolve(); return; }
     videoElement.addEventListener("seeked", () => resolve(), { once: true });
   });
 
-  // Cache: avoid re-seeking if the playback time hasn't changed
-  let lastSeekTime = -1;
-  let cachedBitmap: ImageBitmap | null = null;
+  const frames: ImageBitmap[] = [];
+  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames from ${sourceDuration.toFixed(2)}s video`);
+
+  for (let i = 0; i < sourceFrameCount; i++) {
+    const seekTime = Math.min(i * frameDuration, sourceDuration - 0.05);
+    videoElement.currentTime = seekTime;
+    await waitSeek();
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(videoElement, dx, dy, dw, dh);
+    frames.push(await createImageBitmap(canvas));
+    // Yield occasionally during caching
+    if (i % 30 === 0) await yieldToUI();
+  }
+
+  console.log(`[CinematicExport] Cached ${frames.length} frames`);
+  return frames;
+}
+
+// Encode frames using forward-only looping (no reverse boomerang)
+async function encodeLoopedFrames(
+  cachedFrames: ImageBitmap[],
+  videoEncoder: any,
+  fps: number,
+  targetDuration: number,
+  cumulativeTimestampOffset: number,
+  onProgress?: (framesRendered: number) => void
+): Promise<number> {
+  const totalFrames = Math.ceil(targetDuration * fps);
+  const frameDuration = Math.round(1e6 / fps);
+  const sourceFrameCount = cachedFrames.length;
+
+  console.log(`[CinematicExport] Forward-loop: ${sourceFrameCount} cached → ${totalFrames} output frames (${targetDuration.toFixed(2)}s)`);
 
   let framesRendered = 0;
   for (let frame = 0; frame < totalFrames; frame++) {
-    // Backpressure: wait if encoder queue is too deep
+    // Backpressure
     if (videoEncoder.encodeQueueSize > 10) {
       await new Promise<void>(r => setTimeout(r, 1));
     }
 
-    const timeInScene = frame / fps;
-    let playbackTime = timeInScene % cycleDuration;
-    if (playbackTime > sourceDuration) {
-      playbackTime = sourceDuration - (playbackTime - sourceDuration);
-    }
-    playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
-
-    // Quantize to avoid unnecessary seeks (round to nearest ~33ms)
-    const quantized = Math.round(playbackTime * fps) / fps;
-
-    if (Math.abs(quantized - lastSeekTime) > 0.001) {
-      videoElement.currentTime = quantized;
-      await waitSeek();
-      // Draw and cache
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(videoElement, dx, dy, dw, dh);
-      if (cachedBitmap) cachedBitmap.close();
-      cachedBitmap = await createImageBitmap(canvas);
-      lastSeekTime = quantized;
-    }
+    // Forward-only loop: wraps around to start when source ends
+    const sourceIdx = frame % sourceFrameCount;
+    const bitmap = cachedFrames[sourceIdx];
 
     const timestamp = cumulativeTimestampOffset + Math.round(frame * frameDuration);
     const keyFrame = frame % (fps * 2) === 0;
 
-    const vf = new VideoFrame(cachedBitmap!, { timestamp, duration: frameDuration });
+    const vf = new VideoFrame(bitmap, { timestamp, duration: frameDuration });
     videoEncoder.encode(vf, { keyFrame });
     vf.close();
 
     framesRendered++;
     if (onProgress) onProgress(framesRendered);
 
-    // Yield every 120 frames to keep UI alive without slowing down
-    if (frame % 120 === 0) await yieldToUI();
+    // Yield every 200 frames — encoding from cache is fast, yield less
+    if (frame % 200 === 0) await yieldToUI();
   }
 
-  if (cachedBitmap) cachedBitmap.close();
-  console.log(`[CinematicExport] Boomerang done: ${framesRendered} frames`);
+  console.log(`[CinematicExport] Encoding done: ${framesRendered} frames`);
   return framesRendered;
 }
 
@@ -339,19 +340,25 @@ export function useCinematicExport() {
           const targetDuration = sceneAudioDuration || scene.duration || tempVideo.duration || 5;
           console.log(`[CinematicExport] Scene ${i + 1}: target=${targetDuration.toFixed(2)}s (audio=${sceneAudioDuration?.toFixed(2) ?? "none"}, video=${tempVideo.duration?.toFixed(2)}s)`);
 
-          const framesRendered = await captureBoomerangFrames(
-            tempVideo, canvas, ctx, videoEncoder, fps, targetDuration,
-            globalFrameCount, cumulativeTimestampOffset,
+          // Step 1: Pre-cache all unique frames from video (FAST — only seeks once per unique frame)
+          const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
+
+          // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
+          const framesRendered = await encodeLoopedFrames(
+            cachedFrames, videoEncoder, fps, targetDuration, cumulativeTimestampOffset,
             (rendered) => {
               const pct = baseProgress + (rendered / Math.ceil(targetDuration * fps)) * (70 / scenesWithVideo.length);
               setState({ status: "rendering", progress: Math.floor(pct) });
             }
           );
 
+          // Cleanup cached frames
+          cachedFrames.forEach(b => b.close());
+
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
-          // Cleanup
+          // Cleanup video element
           URL.revokeObjectURL(tempVideo.src);
           tempVideo.remove();
           await yieldToUI();
