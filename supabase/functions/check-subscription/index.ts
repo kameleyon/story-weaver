@@ -191,6 +191,16 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
+
+    // If the error is a JWT expiration, return 401 so the client can refresh
+    const lowerMsg = errorMessage.toLowerCase();
+    if (lowerMsg.includes("jwt") || lowerMsg.includes("expired") || lowerMsg.includes("token")) {
+      return new Response(JSON.stringify({ error: "Token expired", code: "TOKEN_EXPIRED" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
+
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
