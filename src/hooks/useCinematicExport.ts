@@ -45,7 +45,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   ]);
 }
 
-async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
+async function loadVideoElement(url: string, timeoutMs = 60000): Promise<HTMLVideoElement> {
   console.log("[CinematicExport] Loading video:", url.substring(0, 80));
   const response = await withTimeout(fetch(url, { mode: "cors" }), timeoutMs, "Video fetch timed out");
   if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
@@ -347,8 +347,14 @@ export function useCinematicExport() {
           const baseProgress = 15 + Math.floor((i / scenesWithVideo.length) * 70);
           setState({ status: "rendering", progress: baseProgress });
 
-          // Load video
-          const tempVideo = await loadVideoElement(scene.videoUrl!);
+          // Load video — skip scene on failure instead of crashing entire export
+          let tempVideo: HTMLVideoElement;
+          try {
+            tempVideo = await loadVideoElement(scene.videoUrl!);
+          } catch (loadErr) {
+            console.warn(`[CinematicExport] Scene ${i + 1} video load failed, skipping:`, loadErr);
+            continue;
+          }
 
           // Process audio & get actual duration
           let sceneAudioDuration: number | null = null;
