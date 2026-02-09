@@ -803,37 +803,65 @@ async function generateSceneAudio(
     return {};
   }
 
-  // CASE 4: Standard voice → Replicate Chatterbox
+  // CASE 4: Standard voice → Replicate Chatterbox (with retry + fallback)
   console.log(`[TTS] Scene ${scene.number}: Standard voice via Replicate Chatterbox`);
   const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
 
-  const response = await fetch(CHATTERBOX_TURBO_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${replicateToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: {
-        text: voiceoverText,
-        voice: voiceName,
-        temperature: 0.9,
-        top_p: 1,
-        top_k: 1800,
-        repetition_penalty: 2,
+  const MAX_TTS_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_TTS_RETRIES; attempt++) {
+    const response = await fetch(CHATTERBOX_TURBO_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateToken}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        input: {
+          text: voiceoverText,
+          voice: voiceName,
+          temperature: 0.9,
+          top_p: 1,
+          top_k: 1800,
+          repetition_penalty: 2,
+        },
+      }),
+    });
 
-  if (!response.ok) {
+    if (response.ok) {
+      const prediction = await response.json();
+      console.log(`[TTS] Chatterbox-Turbo prediction started: ${prediction.id}`);
+      return { predictionId: prediction.id };
+    }
+
     const errorText = await response.text();
-    console.error(`[TTS] Chatterbox-Turbo create error: ${errorText}`);
-    throw new Error(`Chatterbox-Turbo failed (${response.status})`);
+
+    // On rate limit (429) or server error (503/502), retry with exponential backoff
+    if ((response.status === 429 || response.status >= 500) && attempt < MAX_TTS_RETRIES) {
+      const delayMs = 1500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
+      console.warn(`[TTS] Scene ${scene.number}: Chatterbox-Turbo ${response.status}, retry ${attempt}/${MAX_TTS_RETRIES} in ${delayMs}ms`);
+      await sleep(delayMs);
+      continue;
+    }
+
+    console.error(`[TTS] Chatterbox-Turbo create error (attempt ${attempt}): ${errorText}`);
   }
 
-  const prediction = await response.json();
-  console.log(`[TTS] Chatterbox-Turbo prediction started: ${prediction.id}`);
-  return { predictionId: prediction.id };
+  // Fallback: try ElevenLabs if Chatterbox is exhausted
+  if (elevenLabsApiKey) {
+    console.warn(`[TTS] Scene ${scene.number}: Chatterbox exhausted, falling back to ElevenLabs`);
+    const fallbackVoiceId = voiceGender === "male" ? "pNInz6obpgDQGcFmaJgB" : "EXAVITQu4vr4xnSDxMaL";
+    const audioUrl = await generateAudioWithElevenLabs(voiceoverText, scene.number, fallbackVoiceId, elevenLabsApiKey, supabase);
+    if (audioUrl) return { audioUrl };
+  }
+
+  // Fallback: try Gemini TTS
+  if (googleApiKey) {
+    console.warn(`[TTS] Scene ${scene.number}: Trying Gemini TTS as last resort`);
+    const audioUrl = await generateAudioWithGeminiTTS(voiceoverText, scene.number, googleApiKey, supabase);
+    if (audioUrl) return { audioUrl };
+  }
+
+  throw new Error(`Audio generation failed for scene ${scene.number} after all retries and fallbacks`);
 }
 
 async function resolveChatterbox(
