@@ -45,7 +45,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   ]);
 }
 
-async function loadVideoElement(url: string, timeoutMs = 60000): Promise<HTMLVideoElement> {
+async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
   console.log("[CinematicExport] Loading video:", url.substring(0, 80));
   const response = await withTimeout(fetch(url, { mode: "cors" }), timeoutMs, "Video fetch timed out");
   if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
@@ -57,23 +57,15 @@ async function loadVideoElement(url: string, timeoutMs = 60000): Promise<HTMLVid
   video.preload = "auto";
   video.crossOrigin = "anonymous";
   video.src = blobUrl;
-  // Accept loadeddata (not just canplaythrough) — mobile Safari often never fires canplaythrough
   await withTimeout(
     new Promise<void>((resolve, reject) => {
-      video.onloadeddata = () => resolve();
+      video.onloadedmetadata = () => resolve();
       video.onerror = () => reject(new Error("Failed to decode video"));
     }),
     timeoutMs,
     "Video decode timed out"
   );
-  // Force buffer by briefly playing then pausing — helps mobile Safari
-  try {
-    await video.play();
-    video.pause();
-    video.currentTime = 0;
-    await new Promise<void>(r => setTimeout(r, 200));
-  } catch { /* ignore autoplay restrictions */ }
-  console.log("[CinematicExport] Video loaded & buffered:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
+  console.log("[CinematicExport] Video loaded:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
   return video;
 }
 
@@ -89,18 +81,16 @@ async function loadAudioBuffer(url: string, decodeCtx: OfflineAudioContext, time
   }
 }
 
-// 🚀 Pre-cache frames at a low sample rate for mobile reliability, then stretch during encoding
+// 🚀 Pre-cache all unique frames ONCE, then encode from memory (no per-frame seeking)
 async function preCacheVideoFrames(
   videoElement: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  _outputFps: number
+  fps: number
 ): Promise<ImageBitmap[]> {
   const sourceDuration = videoElement.duration || 5;
-  // Use a LOW sample rate (6fps) to minimize seeks — mobile Safari chokes on rapid seeking
-  const cacheFps = 6;
-  const sourceFrameCount = Math.ceil(sourceDuration * cacheFps);
-  const frameDuration = 1 / cacheFps;
+  const sourceFrameCount = Math.ceil(sourceDuration * fps);
+  const frameDuration = 1 / fps;
 
   const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
   const canvasAspect = canvas.width / canvas.height;
@@ -116,21 +106,22 @@ async function preCacheVideoFrames(
   ctx.fillStyle = "#000";
 
   let consecutiveTimeouts = 0;
-  const MAX_CONSECUTIVE_TIMEOUTS = 8;
+  const MAX_CONSECUTIVE_TIMEOUTS = 5;
 
   const waitSeek = () => new Promise<void>((resolve) => {
     if (!videoElement.seeking) { consecutiveTimeouts = 0; resolve(); return; }
     const timeout = setTimeout(() => {
       consecutiveTimeouts++;
       resolve();
-    }, 2000);
+    }, 500);
     videoElement.addEventListener("seeked", () => { clearTimeout(timeout); consecutiveTimeouts = 0; resolve(); }, { once: true });
   });
 
   const frames: ImageBitmap[] = [];
-  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames at ${cacheFps}fps from ${sourceDuration.toFixed(2)}s video`);
+  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames from ${sourceDuration.toFixed(2)}s video`);
 
   for (let i = 0; i < sourceFrameCount; i++) {
+    // If seeking is consistently failing, stop caching and reuse what we have
     if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && frames.length > 0) {
       console.warn(`[CinematicExport] Seeking stalled after ${frames.length} frames, using cached frames only`);
       break;
@@ -142,10 +133,10 @@ async function preCacheVideoFrames(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(videoElement, dx, dy, dw, dh);
     frames.push(await createImageBitmap(canvas));
-    if (i % 10 === 0) await yieldToUI();
+    if (i % 30 === 0) await yieldToUI();
   }
 
-  console.log(`[CinematicExport] Cached ${frames.length} frames (${cacheFps}fps sampling)`);
+  console.log(`[CinematicExport] Cached ${frames.length} frames`);
   return frames;
 }
 
@@ -177,12 +168,11 @@ async function encodeSlowMotionFrames(
       await new Promise<void>(r => setTimeout(r, 1));
     }
 
-    // Map output time to source frame index
-    // cachedFrames are sampled at ~6fps from the source, so map via time ratio
+    // Map output time to source frame index via slowed playback rate
     const outputTimeSec = frame / fps;
     const sourceTimeSec = outputTimeSec * playbackRate;
     const sourceIdx = Math.min(
-      Math.floor(sourceTimeSec / sourceDuration * sourceFrameCount),
+      Math.floor(sourceTimeSec * fps),
       sourceFrameCount - 1
     );
     const bitmap = cachedFrames[sourceIdx];
@@ -327,66 +317,8 @@ export function useCinematicExport() {
           const baseProgress = 15 + Math.floor((i / scenesWithVideo.length) * 70);
           setState({ status: "rendering", progress: baseProgress });
 
-          // Load video — skip scene on failure instead of crashing entire export
-          let tempVideo: HTMLVideoElement;
-          try {
-            tempVideo = await loadVideoElement(scene.videoUrl!);
-          } catch (e) {
-            console.warn(`[CinematicExport] Scene ${i + 1} video load failed, skipping:`, e);
-            // Still encode audio for this scene if available
-            if (audioEncoder && audioTrackConfig && scene.audioUrl) {
-              const sceneAudioBuffer = await loadAudioBuffer(scene.audioUrl, decodeCtx);
-              if (sceneAudioBuffer) {
-                const sampleRate = audioTrackConfig.sampleRate;
-                const renderLen = Math.ceil(sceneAudioBuffer.duration * sampleRate);
-                const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(2, renderLen, sampleRate);
-                const source = offlineCtx.createBufferSource();
-                source.buffer = sceneAudioBuffer;
-                source.connect(offlineCtx.destination);
-                source.start(0);
-                const renderedBuf = await offlineCtx.startRendering();
-                const rawData = new Float32Array(renderedBuf.length * 2);
-                const left = renderedBuf.getChannelData(0);
-                const right = renderedBuf.numberOfChannels > 1 ? renderedBuf.getChannelData(1) : left;
-                for (let s = 0; s < renderedBuf.length; s++) {
-                  rawData[s * 2] = left[s];
-                  rawData[s * 2 + 1] = right[s];
-                }
-                const chunkFrames = 4096;
-                for (let offset = 0; offset < renderedBuf.length; offset += chunkFrames) {
-                  const size = Math.min(chunkFrames, renderedBuf.length - offset);
-                  const chunkData = rawData.subarray(offset * 2, (offset + size) * 2);
-                  const audioData = new AudioData({
-                    format: "f32", sampleRate, numberOfFrames: size, numberOfChannels: 2,
-                    timestamp: Math.floor((globalAudioSampleCount / sampleRate) * 1_000_000),
-                    data: chunkData
-                  });
-                  audioEncoder.encode(audioData);
-                  audioData.close();
-                  globalAudioSampleCount += size;
-                }
-                // Encode black frames for the audio duration
-                const blackDuration = sceneAudioBuffer.duration;
-                const blackFrames = Math.ceil(blackDuration * fps);
-                const frameDurationUs = Math.round(1e6 / fps);
-                ctx.fillStyle = "#000";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                const blackBitmap = await createImageBitmap(canvas);
-                for (let f = 0; f < blackFrames; f++) {
-                  if (videoEncoder.encodeQueueSize > 10) await new Promise<void>(r => setTimeout(r, 1));
-                  const ts = cumulativeTimestampOffset + Math.round(f * frameDurationUs);
-                  const vf = new VideoFrame(blackBitmap, { timestamp: ts, duration: frameDurationUs });
-                  videoEncoder.encode(vf, { keyFrame: f % (fps * 2) === 0 });
-                  vf.close();
-                  if (f % 200 === 0) await yieldToUI();
-                }
-                blackBitmap.close();
-                globalFrameCount += blackFrames;
-                cumulativeTimestampOffset += Math.round(blackDuration * 1_000_000);
-              }
-            }
-            continue;
-          }
+          // Load video
+          const tempVideo = await loadVideoElement(scene.videoUrl!);
 
           // Process audio & get actual duration
           let sceneAudioDuration: number | null = null;
@@ -431,10 +363,10 @@ export function useCinematicExport() {
           const targetDuration = sceneAudioDuration || scene.duration || tempVideo.duration || 5;
           console.log(`[CinematicExport] Scene ${i + 1}: target=${targetDuration.toFixed(2)}s (audio=${sceneAudioDuration?.toFixed(2) ?? "none"}, video=${tempVideo.duration?.toFixed(2)}s)`);
 
-          // Step 1: Pre-cache all unique frames from video
+          // Step 1: Pre-cache all unique frames from video (FAST — only seeks once per unique frame)
           const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
 
-          // Step 2: Encode using slow-motion stretch from cache
+          // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
           const sourceDuration = tempVideo.duration || 5;
           const framesRendered = await encodeSlowMotionFrames(
             cachedFrames, videoEncoder, fps, sourceDuration, targetDuration, cumulativeTimestampOffset,
@@ -450,14 +382,10 @@ export function useCinematicExport() {
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
-          // Cleanup video element to free memory for next scene
+          // Cleanup video element
           URL.revokeObjectURL(tempVideo.src);
-          tempVideo.src = "";
-          tempVideo.load();
           tempVideo.remove();
           await yieldToUI();
-          // Give mobile Safari extra breathing room between scenes
-          await new Promise<void>(r => setTimeout(r, 300));
         }
 
         // Finalize
@@ -513,105 +441,13 @@ export function useCinematicExport() {
     []
   );
 
-  const downloadVideo = useCallback(async (url: string, filename = "video.mp4") => {
-    if (!url) return;
-
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isIOSChrome = isIOS && /CriOS/i.test(navigator.userAgent);
-
-    // iOS: blob URLs don't work across tabs and anchor downloads often fail.
-    if (isIOS) {
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const file = new File([blob], filename, { type: "video/mp4" });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: filename });
-          return;
-        }
-      } catch (e) {
-        console.warn("iOS share failed:", e);
-      }
-
-      if (isIOSChrome) {
-        try {
-          const response = await fetch(url);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          window.location.href = blobUrl;
-          return;
-        } catch (e) {
-          console.warn("iOS Chrome blob navigation failed:", e);
-          alert("To save the video: Long-press on the video above and select 'Save Video'");
-          return;
-        }
-      }
-
-      // iOS Safari fallback: data URL
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const a = document.createElement("a");
-          a.href = reader.result as string;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        };
-        reader.readAsDataURL(blob);
-        return;
-      } catch (e) {
-        console.warn("iOS data URL download failed:", e);
-        alert("To save the video: Long-press on the video above and select 'Save Video'");
-        return;
-      }
-    }
-
-    // Android: Share API is most reliable
-    if (isAndroid) {
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const file = new File([blob], filename, { type: "video/mp4" });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: filename });
-          return;
-        }
-
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = filename;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
-        return;
-      } catch (e) {
-        console.warn("Android download failed:", e);
-        alert("To save the video: Long-press on the video above and select 'Download video'");
-        return;
-      }
-    }
-
-    // Desktop: standard anchor download
-    try {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 100);
-    } catch (e) {
-      console.warn("Desktop download failed:", e);
-      window.open(url, "_blank");
-    }
+  const downloadVideo = useCallback((url: string, filename: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }, []);
 
   const shareVideo = useCallback(async (url: string, filename: string) => {
@@ -621,17 +457,11 @@ export function useCinematicExport() {
       const file = new File([blob], filename, { type: "video/mp4" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename.replace(".mp4", "") });
-      } else {
-        // Fallback: trigger download
-        await downloadVideo(url, filename);
       }
-    } catch (error: any) {
-      if (error?.name === "AbortError") return;
+    } catch (error) {
       console.error("[CinematicExport] Share failed:", error);
-      // Fallback to download
-      await downloadVideo(url, filename);
     }
-  }, [downloadVideo]);
+  }, []);
 
   return { state, exportVideo, downloadVideo, shareVideo, reset };
 }
