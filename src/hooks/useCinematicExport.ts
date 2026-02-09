@@ -128,126 +128,72 @@ async function loadAudioBuffer(
   }
 }
 
-// 🚀 FAST: Capture frames during real-time playback using requestVideoFrameCallback
-async function captureVideoFrames(
+// 🚀 Smart Boomerang: Seek-based rendering that loops video Forward→Backward→Forward
+// to fill the entire audio duration without speeding up or freezing.
+async function captureBoomerangFrames(
   videoElement: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
   fps: number,
+  targetDuration: number, // audio duration (may be longer than video)
   onFrame: (timestamp: number, keyFrame: boolean) => void,
   onProgress?: (progress: number) => void
 ): Promise<void> {
-  const targetFrameInterval = 1 / fps;
-  const totalDuration = videoElement.duration;
-  const totalFrames = Math.ceil(totalDuration * fps);
-  
-  let frameCount = 0;
-  let lastCaptureTime = -1;
-  
-  const drawFrame = () => {
-    const currentTime = videoElement.currentTime;
-    
-    // Only capture if enough time has passed (throttle to target FPS)
-    if (currentTime - lastCaptureTime >= targetFrameInterval * 0.9) {
-      // Draw video frame to canvas (scaled to fit)
-      const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-      const canvasAspect = canvas.width / canvas.height;
-      
-      let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
-      if (videoAspect > canvasAspect) {
-        drawWidth = canvas.width;
-        drawHeight = canvas.width / videoAspect;
-        drawX = 0;
-        drawY = (canvas.height - drawHeight) / 2;
-      } else {
-        drawHeight = canvas.height;
-        drawWidth = canvas.height * videoAspect;
-        drawX = (canvas.width - drawWidth) / 2;
-        drawY = 0;
-      }
-      
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(videoElement, drawX, drawY, drawWidth, drawHeight);
-      
-      // Calculate timestamp in microseconds
-      const timestamp = Math.round(frameCount * (1_000_000 / fps));
-      const keyFrame = frameCount % (fps * 2) === 0; // Keyframe every 2 seconds
-      
-      onFrame(timestamp, keyFrame);
-      
-      frameCount++;
-      lastCaptureTime = currentTime;
-      
-      if (onProgress) {
-        onProgress(Math.min(frameCount / totalFrames, 1));
-      }
+  const sourceDuration = videoElement.duration || 5;
+  const totalFrames = Math.ceil(targetDuration * fps);
+  const cycleDuration = sourceDuration * 2; // one full forward+backward cycle
+
+  console.log(`[CinematicExport] Boomerang: source=${sourceDuration.toFixed(2)}s, target=${targetDuration.toFixed(2)}s, frames=${totalFrames}`);
+
+  // Helper to draw video scaled/centered with letterboxing
+  const drawVideo = () => {
+    const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+    const canvasAspect = canvas.width / canvas.height;
+    let dw: number, dh: number, dx: number, dy: number;
+    if (videoAspect > canvasAspect) {
+      dw = canvas.width; dh = canvas.width / videoAspect;
+      dx = 0; dy = (canvas.height - dh) / 2;
+    } else {
+      dh = canvas.height; dw = canvas.height * videoAspect;
+      dx = (canvas.width - dw) / 2; dy = 0;
     }
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(videoElement, dx, dy, dw, dh);
   };
 
-  // Check if requestVideoFrameCallback is available
-  const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-  
-  return new Promise<void>((resolve, reject) => {
-    const onEnded = () => {
-      console.log(`[CinematicExport] Video ended, captured ${frameCount} frames`);
-      cleanup();
-      resolve();
-    };
-    
-    const onError = () => {
-      cleanup();
-      reject(new Error("Video playback error"));
-    };
-    
-    const cleanup = () => {
-      videoElement.removeEventListener('ended', onEnded);
-      videoElement.removeEventListener('error', onError);
-    };
-    
-    videoElement.addEventListener('ended', onEnded);
-    videoElement.addEventListener('error', onError);
-    
-    if (hasRVFC) {
-      // Use requestVideoFrameCallback (Chrome/Edge) - most precise
-      const captureLoop = () => {
-        if (videoElement.ended || videoElement.paused) {
-          console.log(`[CinematicExport] Captured ${frameCount} frames via RVFC`);
-          cleanup();
-          resolve();
-          return;
-        }
-        
-        drawFrame();
-        (videoElement as any).requestVideoFrameCallback(captureLoop);
-      };
-      
-      (videoElement as any).requestVideoFrameCallback(captureLoop);
-      videoElement.play().catch((e) => {
-        cleanup();
-        reject(e);
-      });
-    } else {
-      // Fallback: use requestAnimationFrame (less precise but still fast)
-      const captureLoop = () => {
-        if (videoElement.ended || videoElement.paused) {
-          console.log(`[CinematicExport] Captured ${frameCount} frames via RAF`);
-          cleanup();
-          resolve();
-          return;
-        }
-        
-        drawFrame();
-        requestAnimationFrame(captureLoop);
-      };
-      
-      requestAnimationFrame(captureLoop);
-      videoElement.play().catch((e) => {
-        cleanup();
-        reject(e);
-      });
-    }
+  // Wait for a seek to finish
+  const waitSeek = () => new Promise<void>((resolve) => {
+    if (!videoElement.seeking) { resolve(); return; }
+    videoElement.addEventListener("seeked", () => resolve(), { once: true });
   });
+
+  for (let frame = 0; frame < totalFrames; frame++) {
+    const timeInScene = frame / fps;
+
+    // --- SMART BOOMERANG ---
+    let playbackTime = timeInScene % cycleDuration;
+    if (playbackTime > sourceDuration) {
+      playbackTime = sourceDuration - (playbackTime - sourceDuration); // backward
+    }
+    playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
+
+    videoElement.currentTime = playbackTime;
+    await waitSeek();
+
+    drawVideo();
+
+    const timestamp = Math.round(frame * (1_000_000 / fps));
+    const keyFrame = frame % (fps * 2) === 0;
+    onFrame(timestamp, keyFrame);
+
+    if (onProgress) onProgress(frame / totalFrames);
+
+    // Yield every 30 frames to keep UI responsive
+    if (frame % 30 === 0) await yieldToUI();
+  }
+
+  console.log(`[CinematicExport] Boomerang complete: ${totalFrames} frames rendered`);
 }
 
 export function useCinematicExport() {
@@ -480,16 +426,18 @@ export function useCinematicExport() {
             }
           }
 
-          // 🚀 FAST: Capture frames during real-time playback (NOT frame-by-frame seeking!)
+          // 🚀 Smart Boomerang: loop video to match audio duration
           const sceneStartFrame = globalFrameCount;
+          // Use audio duration if available, otherwise fall back to video duration
+          const targetDuration = scene.duration || tempVideo.duration || 5;
           
-          await captureVideoFrames(
+          await captureBoomerangFrames(
             tempVideo,
             canvas,
             ctx,
             fps,
+            targetDuration,
             (timestamp, keyFrame) => {
-              // Offset timestamp by cumulative duration of previous scenes
               const adjustedTimestamp = cumulativeTimestampOffset + timestamp;
               
               const frame = new VideoFrame(canvas, { 
@@ -497,7 +445,6 @@ export function useCinematicExport() {
                 duration: Math.round(1e6 / fps) 
               });
               
-              // Force keyframe every 2 seconds globally
               const forceKeyFrame = globalFrameCount % (fps * 2) === 0;
               videoEncoder.encode(frame, { keyFrame: keyFrame || forceKeyFrame });
               frame.close();
@@ -511,7 +458,7 @@ export function useCinematicExport() {
           );
           
           // Update cumulative offset for next scene
-          cumulativeTimestampOffset += Math.round(tempVideo.duration * 1_000_000);
+          cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
           
           console.log(`[CinematicExport] Scene ${i + 1} complete: ${globalFrameCount - sceneStartFrame} frames`);
 
