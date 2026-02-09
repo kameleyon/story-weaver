@@ -49,7 +49,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
 }
 
 // Load video with proper error handling
-async function loadVideoElement(url: string, timeoutMs = 60000): Promise<HTMLVideoElement> {
+async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
   console.log("[CinematicExport] Loading video:", url.substring(0, 100));
   
   // Fetch the video blob with CORS
@@ -190,7 +190,7 @@ async function captureBoomerangFrames(
     if (onProgress) onProgress(frame / totalFrames);
 
     // Yield every 30 frames to keep UI responsive
-    if (frame % 30 === 0) await yieldToUI();
+    if (frame % 60 === 0) await yieldToUI();
   }
 
   console.log(`[CinematicExport] Boomerang complete: ${totalFrames} frames rendered`);
@@ -374,10 +374,12 @@ export function useCinematicExport() {
           }
 
           // Process audio for this scene
+          let sceneAudioDuration: number | null = null;
           if (audioEncoder && audioTrackConfig && scene.audioUrl) {
             const sceneAudioBuffer = await loadAudioBuffer(scene.audioUrl, decodeCtx);
             
             if (sceneAudioBuffer) {
+              sceneAudioDuration = sceneAudioBuffer.duration;
               const sampleRate = audioTrackConfig.sampleRate;
               const renderLen = Math.ceil(sceneAudioBuffer.duration * sampleRate);
               
@@ -426,10 +428,12 @@ export function useCinematicExport() {
             }
           }
 
-          // 🚀 Smart Boomerang: loop video to match audio duration
+          // 🚀 Smart Boomerang: loop video to match ACTUAL audio duration
           const sceneStartFrame = globalFrameCount;
-          // Use audio duration if available, otherwise fall back to video duration
-          const targetDuration = scene.duration || tempVideo.duration || 5;
+          // CRITICAL: Use the actual decoded audio length first, then metadata, then video length
+          const actualAudioDuration = sceneAudioDuration; // set during audio processing above
+          const targetDuration = actualAudioDuration || scene.duration || tempVideo.duration || 5;
+          console.log(`[CinematicExport] Scene ${i+1} target=${targetDuration.toFixed(2)}s (audio=${actualAudioDuration?.toFixed(2)}s, meta=${scene.duration}s, video=${tempVideo.duration?.toFixed(2)}s)`);
           
           await captureBoomerangFrames(
             tempVideo,
