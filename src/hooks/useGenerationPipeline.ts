@@ -23,6 +23,7 @@ export interface Scene {
   imageUrl?: string;
   imageUrls?: string[];
   audioUrl?: string;
+  videoUrl?: string;
   title?: string;
   subtitle?: string;
 }
