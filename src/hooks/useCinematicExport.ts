@@ -107,7 +107,11 @@ async function preCacheVideoFrames(
 
   const waitSeek = () => new Promise<void>((resolve) => {
     if (!videoElement.seeking) { resolve(); return; }
-    videoElement.addEventListener("seeked", () => resolve(), { once: true });
+    const timeout = setTimeout(() => {
+      console.warn("[CinematicExport] Seek timeout, continuing with current frame");
+      resolve();
+    }, 3000);
+    videoElement.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
   });
 
   const frames: ImageBitmap[] = [];
