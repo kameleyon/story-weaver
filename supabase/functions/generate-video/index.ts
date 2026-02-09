@@ -1961,105 +1961,120 @@ async function generateSceneAudio(
 }
 
 // ============= IMAGE GENERATION WITH NANO BANANA (Pro uses nano-banana-pro at 1K) =============
+const MAX_IMAGE_RETRIES = 4;
+
 async function generateImageWithReplicate(
   prompt: string,
   replicateApiKey: string,
   format: string,
-  useProModel: boolean = false, // Pro/Enterprise users get nano-banana-pro with 1K resolution
+  useProModel: boolean = false,
 ): Promise<
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
-  // Map format to nano-banana supported aspect ratios
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-
-  // Pro users get nano-banana-pro at 1K resolution for higher quality
   const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
   const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana";
 
-  try {
-    console.log(`[IMG] Generating image with ${modelName}, format: ${format}, aspect_ratio: ${aspectRatio}`);
-
-    // Build input - nano-banana-pro supports resolution parameter
-    const input: Record<string, unknown> = {
-      prompt,
-      aspect_ratio: aspectRatio,
-      output_format: "png",
-    };
-
-    // Add resolution for Pro model (1K = 1024px on the long side)
-    if (useProModel) {
-      input.resolution = "1K";
-    }
-
-    const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${replicateApiKey}`,
-        "Content-Type": "application/json",
-        Prefer: "wait",
-      },
-      body: JSON.stringify({ input }),
-    });
-
-    if (!createResponse.ok) {
-      const status = createResponse.status;
-      const retryAfter = createResponse.headers.get("retry-after");
-      const errText = await createResponse.text().catch(() => "");
-      console.error(`[IMG] ${modelName} create failed: ${status} - ${errText}`);
-      return {
-        ok: false,
-        error: `Replicate ${modelName} failed: ${status}${errText ? ` - ${errText}` : ""}`,
-        status,
-        retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
-      };
-    }
-
-    let prediction = await createResponse.json();
-    console.log(`[IMG] ${modelName} prediction started: ${prediction.id}, status: ${prediction.status}`);
-
-    // Poll for completion if not finished
-    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-      await sleep(2000);
-      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { Authorization: `Bearer ${replicateApiKey}` },
-      });
-      prediction = await pollResponse.json();
-    }
-
-    if (prediction.status === "failed") {
-      console.error(`[IMG] ${modelName} prediction failed: ${prediction.error}`);
-      return { ok: false, error: prediction.error || "Image generation failed" };
-    }
-
-    // Nano Banana returns output as URL string or array of URLs
-    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-    const imageUrl =
-      typeof first === "string"
-        ? first
-        : first && typeof first === "object" && typeof first.url === "string"
-          ? first.url
-          : null;
-
-    if (!imageUrl) {
-      console.error(
-        `[IMG] ${modelName} no image URL in response:`,
-        JSON.stringify(prediction.output).substring(0, 200),
-      );
-      return { ok: false, error: `No image URL returned from ${modelName}` };
-    }
-
-    console.log(`[IMG] ${modelName} success, downloading from: ${imageUrl.substring(0, 80)}...`);
-
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
-
-    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[IMG] ${modelName} image downloaded: ${bytes.length} bytes`);
-    return { ok: true, bytes };
-  } catch (err) {
-    console.error(`[IMG] ${modelName} error:`, err);
-    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  const input: Record<string, unknown> = {
+    prompt,
+    aspect_ratio: aspectRatio,
+    output_format: "png",
+  };
+  if (useProModel) {
+    input.resolution = "1K";
   }
+
+  let lastError = "Unknown error";
+  let lastStatus: number | undefined;
+
+  for (let attempt = 1; attempt <= MAX_IMAGE_RETRIES; attempt++) {
+    try {
+      console.log(`[IMG] Generating image with ${modelName} (attempt ${attempt}/${MAX_IMAGE_RETRIES}), format: ${format}`);
+
+      const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateApiKey}`,
+          "Content-Type": "application/json",
+          Prefer: "wait",
+        },
+        body: JSON.stringify({ input }),
+      });
+
+      if (!createResponse.ok) {
+        const status = createResponse.status;
+        const retryAfter = createResponse.headers.get("retry-after");
+        const errText = await createResponse.text().catch(() => "");
+        lastError = `Replicate ${modelName} failed: ${status}${errText ? ` - ${errText}` : ""}`;
+        lastStatus = status;
+        console.error(`[IMG] ${modelName} create failed: ${status} - ${errText}`);
+
+        if ((status === 429 || status >= 500) && attempt < MAX_IMAGE_RETRIES) {
+          const backoffBase = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2000 * Math.pow(2, attempt - 1);
+          const delayMs = backoffBase + Math.floor(Math.random() * 1000);
+          console.warn(`[IMG] ${modelName} ${status}, retry ${attempt}/${MAX_IMAGE_RETRIES} in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+
+        return { ok: false, error: lastError, status, retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined };
+      }
+
+      let prediction = await createResponse.json();
+      console.log(`[IMG] ${modelName} prediction started: ${prediction.id}, status: ${prediction.status}`);
+
+      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+        await sleep(2000);
+        const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+          headers: { Authorization: `Bearer ${replicateApiKey}` },
+        });
+        prediction = await pollResponse.json();
+      }
+
+      if (prediction.status === "failed") {
+        lastError = prediction.error || "Image generation failed";
+        console.error(`[IMG] ${modelName} prediction failed: ${lastError}`);
+        if (attempt < MAX_IMAGE_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[IMG] ${modelName} prediction failed, retry ${attempt}/${MAX_IMAGE_RETRIES} in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        return { ok: false, error: lastError };
+      }
+
+      const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+      const imageUrl =
+        typeof first === "string"
+          ? first
+          : first && typeof first === "object" && typeof first.url === "string"
+            ? first.url
+            : null;
+
+      if (!imageUrl) {
+        console.error(`[IMG] ${modelName} no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
+        return { ok: false, error: `No image URL returned from ${modelName}` };
+      }
+
+      console.log(`[IMG] ${modelName} success, downloading from: ${imageUrl.substring(0, 80)}...`);
+      const imgResponse = await fetch(imageUrl);
+      if (!imgResponse.ok) return { ok: false, error: "Failed to download image" };
+
+      const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+      console.log(`[IMG] ${modelName} image downloaded: ${bytes.length} bytes`);
+      return { ok: true, bytes };
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Unknown error";
+      console.error(`[IMG] ${modelName} error (attempt ${attempt}):`, err);
+      if (attempt < MAX_IMAGE_RETRIES) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        await sleep(delayMs);
+        continue;
+      }
+    }
+  }
+
+  return { ok: false, error: lastError, status: lastStatus };
 }
 
 // ============= TRUE IMAGE EDITING WITH REPLICATE NANO BANANA PRO =============
