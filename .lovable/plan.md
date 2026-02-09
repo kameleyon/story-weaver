@@ -1,57 +1,41 @@
 
-
-# Slow-Motion Stretch: Seamless Video-to-Audio Matching
-
-## The Problem
-
-When audio narration is longer than the video clip (e.g., 5s video vs 12s audio), the current forward-loop causes a visible **jump cut** when the video restarts from the beginning. Boomerang (reverse) looks unnatural. Both break immersion.
-
-## The Solution: Cinematic Slow-Motion
-
-Instead of looping or reversing, **slow the video down** to fill the audio duration naturally. A 5s clip stretched to 12s plays at ~0.4x speed -- which actually looks **more cinematic**, like a professional slow-motion shot.
-
-```text
-Current (Forward Loop - jumpy):
-Video:  [1 2 3 4 5] [1 2 3 4 5] [1 2]
-Audio:  [-------- narration continues --------]
-                    ^ visible restart
-
-New (Slow-Motion Stretch - smooth):
-Video:  [1 . 1 . 2 . 2 . 3 . 3 . 4 . 4 . 5 . 5]
-Audio:  [-------- narration continues -----------]
-         No jumps, no reverse, just smooth slow-mo
-```
-
-If the stretch ratio is extreme (video would need to play at less than 0.25x, i.e., audio is 4x+ longer than the clip), the system caps slow-motion at 0.25x and **freezes the last frame** for the remaining time -- which looks like a deliberate cinematic hold.
+# Add Crossfade Transitions Between Cinematic Scenes
 
 ## What Changes
 
-**File: `src/hooks/useCinematicExport.ts`**
+Smooth 0.5-second crossfade transitions will be added between scenes, replacing the current hard cuts. The last frame of each scene will blend into the first frame of the next scene using canvas alpha compositing.
 
-1. **Replace `encodeLoopedFrames`** with a new `encodeSlowMotionFrames` function:
-   - Calculates playback rate: `videoLength / audioLength`
-   - Maps each output frame to a source frame index using the slowed rate
-   - Caps minimum speed at 0.25x; beyond that, holds the last frame
-   - No loops, no reversals -- every frame moves forward or holds still
-
-2. **Keep `preCacheVideoFrames` as-is** -- it already caches all unique source frames into memory, which is exactly what slow-motion needs (just indexes them differently)
-
-3. **No other files change** -- the export API, UI, upload, and retry logic all remain identical
-
-## Technical Detail
+## How It Works
 
 ```text
-Playback rate = min(1.0, videoLength / targetDuration)
-Capped at: max(0.25, playbackRate)
-
-For each output frame:
-  sourceTime = outputFrame * playbackRate / fps
-  sourceIndex = floor(sourceTime * fps)
-  if sourceIndex >= cachedFrames.length:
-    sourceIndex = cachedFrames.length - 1  // freeze last frame
+Scene 1                          Scene 2
+[... normal frames ... FADE OUT] [FADE IN ... normal frames ...]
+                       |---------|
+                       ~0.5s crossfade
+                       Previous scene's last frame: opacity 1 -> 0
+                       Current scene's first frame:  opacity 0 -> 1
 ```
 
-## Performance Impact
+The crossfade happens within the existing scene duration (not added on top), so audio sync is preserved.
 
-No change to export speed -- the bottleneck (pre-caching via seeking) stays the same, and encoding from cached bitmaps is already near-instant. The only difference is the frame index mapping math, which is trivial.
+## Technical Details
 
+**File: `src/hooks/useCinematicExport.ts`**
+
+1. **Track the previous scene's last frame**: Before cleaning up cached frames at the end of each scene, save the last `ImageBitmap` as `prevSceneLastFrame` for use in the next scene's crossfade.
+
+2. **Update `encodeSlowMotionFrames` signature** to accept:
+   - `fadeInBitmap: ImageBitmap | null` -- the previous scene's last frame
+   - `canvas: HTMLCanvasElement` and `ctx: CanvasRenderingContext2D` -- needed for compositing
+
+3. **Crossfade rendering logic** inside `encodeSlowMotionFrames`:
+   - Calculate `crossfadeFrames = Math.ceil(fps * 0.5)` (~15 frames at 30fps)
+   - For the first `crossfadeFrames` of each scene (except scene 1):
+     - Clear canvas to black
+     - Draw `fadeInBitmap` (outgoing scene) with `globalAlpha = 1 - (frame / crossfadeFrames)`
+     - Draw current scene's frame with `globalAlpha = frame / crossfadeFrames`
+     - Reset `globalAlpha = 1.0`
+     - Create `VideoFrame` from the composited canvas instead of directly from the bitmap
+   - For all other frames, encode normally from the cached bitmap as before
+
+4. **Cleanup**: Close the saved `prevSceneLastFrame` bitmap after it's used (or at the end of export).
