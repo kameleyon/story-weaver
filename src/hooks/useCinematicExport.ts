@@ -128,11 +128,12 @@ async function preCacheVideoFrames(
   return frames;
 }
 
-// Encode frames using forward-only looping (no reverse boomerang)
-async function encodeLoopedFrames(
+// Encode frames using slow-motion stretch (no looping, no reverse)
+async function encodeSlowMotionFrames(
   cachedFrames: ImageBitmap[],
   videoEncoder: any,
   fps: number,
+  sourceDuration: number,
   targetDuration: number,
   cumulativeTimestampOffset: number,
   onProgress?: (framesRendered: number) => void
@@ -141,7 +142,12 @@ async function encodeLoopedFrames(
   const frameDuration = Math.round(1e6 / fps);
   const sourceFrameCount = cachedFrames.length;
 
-  console.log(`[CinematicExport] Forward-loop: ${sourceFrameCount} cached → ${totalFrames} output frames (${targetDuration.toFixed(2)}s)`);
+  // Calculate playback rate: how fast source plays relative to output
+  // rate < 1.0 = slow motion, rate = 1.0 = normal speed
+  const rawRate = sourceDuration / targetDuration;
+  const playbackRate = Math.max(0.25, Math.min(1.0, rawRate));
+
+  console.log(`[CinematicExport] Slow-motion: ${sourceFrameCount} cached, ${totalFrames} output frames, rate=${playbackRate.toFixed(3)}x (${targetDuration.toFixed(2)}s target from ${sourceDuration.toFixed(2)}s source)`);
 
   let framesRendered = 0;
   for (let frame = 0; frame < totalFrames; frame++) {
@@ -150,8 +156,13 @@ async function encodeLoopedFrames(
       await new Promise<void>(r => setTimeout(r, 1));
     }
 
-    // Forward-only loop: wraps around to start when source ends
-    const sourceIdx = frame % sourceFrameCount;
+    // Map output time to source frame index via slowed playback rate
+    const outputTimeSec = frame / fps;
+    const sourceTimeSec = outputTimeSec * playbackRate;
+    const sourceIdx = Math.min(
+      Math.floor(sourceTimeSec * fps),
+      sourceFrameCount - 1
+    );
     const bitmap = cachedFrames[sourceIdx];
 
     const timestamp = cumulativeTimestampOffset + Math.round(frame * frameDuration);
@@ -164,11 +175,11 @@ async function encodeLoopedFrames(
     framesRendered++;
     if (onProgress) onProgress(framesRendered);
 
-    // Yield every 200 frames — encoding from cache is fast, yield less
+    // Yield every 200 frames
     if (frame % 200 === 0) await yieldToUI();
   }
 
-  console.log(`[CinematicExport] Encoding done: ${framesRendered} frames`);
+  console.log(`[CinematicExport] Slow-motion done: ${framesRendered} frames`);
   return framesRendered;
 }
 
@@ -344,8 +355,9 @@ export function useCinematicExport() {
           const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
 
           // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
-          const framesRendered = await encodeLoopedFrames(
-            cachedFrames, videoEncoder, fps, targetDuration, cumulativeTimestampOffset,
+          const sourceDuration = tempVideo.duration || 5;
+          const framesRendered = await encodeSlowMotionFrames(
+            cachedFrames, videoEncoder, fps, sourceDuration, targetDuration, cumulativeTimestampOffset,
             (rendered) => {
               const pct = baseProgress + (rendered / Math.ceil(targetDuration * fps)) * (70 / scenesWithVideo.length);
               setState({ status: "rendering", progress: Math.floor(pct) });
