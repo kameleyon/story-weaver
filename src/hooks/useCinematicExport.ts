@@ -81,16 +81,18 @@ async function loadAudioBuffer(url: string, decodeCtx: OfflineAudioContext, time
   }
 }
 
-// 🚀 Pre-cache all unique frames ONCE, then encode from memory (no per-frame seeking)
+// 🚀 Pre-cache frames at a low sample rate for mobile reliability, then stretch during encoding
 async function preCacheVideoFrames(
   videoElement: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  fps: number
+  _outputFps: number
 ): Promise<ImageBitmap[]> {
   const sourceDuration = videoElement.duration || 5;
-  const sourceFrameCount = Math.ceil(sourceDuration * fps);
-  const frameDuration = 1 / fps;
+  // Use a LOW sample rate (6fps) to minimize seeks — mobile Safari chokes on rapid seeking
+  const cacheFps = 6;
+  const sourceFrameCount = Math.ceil(sourceDuration * cacheFps);
+  const frameDuration = 1 / cacheFps;
 
   const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
   const canvasAspect = canvas.width / canvas.height;
@@ -106,22 +108,21 @@ async function preCacheVideoFrames(
   ctx.fillStyle = "#000";
 
   let consecutiveTimeouts = 0;
-  const MAX_CONSECUTIVE_TIMEOUTS = 5;
+  const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
   const waitSeek = () => new Promise<void>((resolve) => {
     if (!videoElement.seeking) { consecutiveTimeouts = 0; resolve(); return; }
     const timeout = setTimeout(() => {
       consecutiveTimeouts++;
       resolve();
-    }, 500);
+    }, 2000);
     videoElement.addEventListener("seeked", () => { clearTimeout(timeout); consecutiveTimeouts = 0; resolve(); }, { once: true });
   });
 
   const frames: ImageBitmap[] = [];
-  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames from ${sourceDuration.toFixed(2)}s video`);
+  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames at ${cacheFps}fps from ${sourceDuration.toFixed(2)}s video`);
 
   for (let i = 0; i < sourceFrameCount; i++) {
-    // If seeking is consistently failing, stop caching and reuse what we have
     if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && frames.length > 0) {
       console.warn(`[CinematicExport] Seeking stalled after ${frames.length} frames, using cached frames only`);
       break;
@@ -133,10 +134,10 @@ async function preCacheVideoFrames(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(videoElement, dx, dy, dw, dh);
     frames.push(await createImageBitmap(canvas));
-    if (i % 30 === 0) await yieldToUI();
+    if (i % 10 === 0) await yieldToUI();
   }
 
-  console.log(`[CinematicExport] Cached ${frames.length} frames`);
+  console.log(`[CinematicExport] Cached ${frames.length} frames (${cacheFps}fps sampling)`);
   return frames;
 }
 
@@ -168,11 +169,12 @@ async function encodeSlowMotionFrames(
       await new Promise<void>(r => setTimeout(r, 1));
     }
 
-    // Map output time to source frame index via slowed playback rate
+    // Map output time to source frame index
+    // cachedFrames are sampled at ~6fps from the source, so map via time ratio
     const outputTimeSec = frame / fps;
     const sourceTimeSec = outputTimeSec * playbackRate;
     const sourceIdx = Math.min(
-      Math.floor(sourceTimeSec * fps),
+      Math.floor(sourceTimeSec / sourceDuration * sourceFrameCount),
       sourceFrameCount - 1
     );
     const bitmap = cachedFrames[sourceIdx];
@@ -457,9 +459,34 @@ export function useCinematicExport() {
       const file = new File([blob], filename, { type: "video/mp4" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename.replace(".mp4", "") });
+      } else {
+        // Fallback: trigger download if share not supported
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast({ title: "Saved", description: "Video downloaded to your device" });
       }
-    } catch (error) {
+    } catch (error: any) {
+      // AbortError means user cancelled the share sheet — not a real error
+      if (error?.name === "AbortError") return;
       console.error("[CinematicExport] Share failed:", error);
+      // Fallback to download on any share error
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast({ title: "Saved", description: "Video downloaded to your device" });
+      } catch {
+        toast({ title: "Share Failed", description: "Could not share or download the video", variant: "destructive" });
+      }
     }
   }, []);
 
