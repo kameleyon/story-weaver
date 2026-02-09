@@ -36,6 +36,11 @@ export function getUserFriendlyErrorMessage(error: string | undefined): string {
     return "This generation was interrupted. Please try again.";
   }
   
+  // High demand / service unavailable
+  if (lowerError.includes("high demand") || lowerError.includes("unavailable") || lowerError.includes("e003")) {
+    return "The service is experiencing high demand. Please try again in a moment.";
+  }
+  
   // Generic server errors
   if (lowerError.includes("500") || lowerError.includes("server error") || lowerError.includes("internal")) {
     return "A server error occurred. Please try again in a moment.";
