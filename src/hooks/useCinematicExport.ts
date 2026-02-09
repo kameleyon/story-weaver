@@ -158,28 +158,27 @@ async function encodeSlowMotionFrames(
   sourceDuration: number,
   targetDuration: number,
   cumulativeTimestampOffset: number,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  fadeInBitmap: ImageBitmap | null,
   onProgress?: (framesRendered: number) => void
 ): Promise<number> {
   const totalFrames = Math.ceil(targetDuration * fps);
   const frameDuration = Math.round(1e6 / fps);
   const sourceFrameCount = cachedFrames.length;
+  const crossfadeFrames = Math.ceil(fps * 0.5); // ~15 frames at 30fps
 
-  // Calculate playback rate: how fast source plays relative to output
-  // rate < 1.0 = slow motion, rate = 1.0 = normal speed
   const rawRate = sourceDuration / targetDuration;
   const playbackRate = Math.max(0.25, Math.min(1.0, rawRate));
 
-  console.log(`[CinematicExport] Slow-motion: ${sourceFrameCount} cached, ${totalFrames} output frames, rate=${playbackRate.toFixed(3)}x (${targetDuration.toFixed(2)}s target from ${sourceDuration.toFixed(2)}s source)`);
+  console.log(`[CinematicExport] Slow-motion: ${sourceFrameCount} cached, ${totalFrames} output frames, rate=${playbackRate.toFixed(3)}x, crossfade=${fadeInBitmap ? crossfadeFrames : 0} frames`);
 
   let framesRendered = 0;
   for (let frame = 0; frame < totalFrames; frame++) {
-    // Backpressure
     if (videoEncoder.encodeQueueSize > 10) {
       await new Promise<void>(r => setTimeout(r, 1));
     }
 
-    // Map output time to source frame index
-    // cachedFrames are sampled at ~6fps from the source, so map via time ratio
     const outputTimeSec = frame / fps;
     const sourceTimeSec = outputTimeSec * playbackRate;
     const sourceIdx = Math.min(
@@ -191,14 +190,33 @@ async function encodeSlowMotionFrames(
     const timestamp = cumulativeTimestampOffset + Math.round(frame * frameDuration);
     const keyFrame = frame % (fps * 2) === 0;
 
-    const vf = new VideoFrame(bitmap, { timestamp, duration: frameDuration });
+    // Crossfade: blend previous scene's last frame with current scene's first frames
+    const needsCrossfade = fadeInBitmap && frame < crossfadeFrames;
+
+    let vf: any;
+    if (needsCrossfade) {
+      const alpha = frame / crossfadeFrames; // 0 -> 1
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Draw outgoing scene (fading out)
+      ctx.globalAlpha = 1 - alpha;
+      ctx.drawImage(fadeInBitmap, 0, 0, canvas.width, canvas.height);
+      // Draw incoming scene (fading in)
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1.0;
+      vf = new VideoFrame(canvas, { timestamp, duration: frameDuration });
+    } else {
+      vf = new VideoFrame(bitmap, { timestamp, duration: frameDuration });
+    }
+
     videoEncoder.encode(vf, { keyFrame });
     vf.close();
 
     framesRendered++;
     if (onProgress) onProgress(framesRendered);
 
-    // Yield every 200 frames
     if (frame % 200 === 0) await yieldToUI();
   }
 
@@ -321,7 +339,8 @@ export function useCinematicExport() {
 
         const decodeCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(1, 1, audioTrackConfig?.sampleRate || 48000);
 
-        // Process each scene
+        // Process each scene with crossfade tracking
+        let prevSceneLastFrame: ImageBitmap | null = null;
         for (let i = 0; i < scenesWithVideo.length; i++) {
           if (abortRef.current) break;
           const scene = scenesWithVideo[i];
@@ -374,30 +393,37 @@ export function useCinematicExport() {
           const targetDuration = sceneAudioDuration || scene.duration || tempVideo.duration || 5;
           console.log(`[CinematicExport] Scene ${i + 1}: target=${targetDuration.toFixed(2)}s (audio=${sceneAudioDuration?.toFixed(2) ?? "none"}, video=${tempVideo.duration?.toFixed(2)}s)`);
 
-          // Step 1: Pre-cache all unique frames from video (FAST — only seeks once per unique frame)
+          // Step 1: Pre-cache all unique frames from video
           const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
 
-          // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
+          // Step 2: Encode with crossfade from previous scene
           const sourceDuration = tempVideo.duration || 5;
           const framesRendered = await encodeSlowMotionFrames(
             cachedFrames, videoEncoder, fps, sourceDuration, targetDuration, cumulativeTimestampOffset,
+            canvas, ctx, prevSceneLastFrame,
             (rendered) => {
               const pct = baseProgress + (rendered / Math.ceil(targetDuration * fps)) * (70 / scenesWithVideo.length);
               setState({ status: "rendering", progress: Math.floor(pct) });
             }
           );
 
-          // Cleanup cached frames
+          // Save last frame for next scene's crossfade, then cleanup
+          if (prevSceneLastFrame) prevSceneLastFrame.close();
+          prevSceneLastFrame = cachedFrames.length > 0
+            ? await createImageBitmap(cachedFrames[cachedFrames.length - 1])
+            : null;
           cachedFrames.forEach(b => b.close());
 
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
-          // Cleanup video element
           URL.revokeObjectURL(tempVideo.src);
           tempVideo.remove();
           await yieldToUI();
         }
+
+        // Cleanup last crossfade frame
+        if (prevSceneLastFrame) prevSceneLastFrame.close();
 
         // Finalize
         setState({ status: "encoding", progress: 88 });
