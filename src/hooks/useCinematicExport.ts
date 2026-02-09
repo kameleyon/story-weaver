@@ -105,26 +105,34 @@ async function preCacheVideoFrames(
 
   ctx.fillStyle = "#000";
 
+  let consecutiveTimeouts = 0;
+  const MAX_CONSECUTIVE_TIMEOUTS = 5;
+
   const waitSeek = () => new Promise<void>((resolve) => {
-    if (!videoElement.seeking) { resolve(); return; }
+    if (!videoElement.seeking) { consecutiveTimeouts = 0; resolve(); return; }
     const timeout = setTimeout(() => {
-      console.warn("[CinematicExport] Seek timeout, continuing with current frame");
+      consecutiveTimeouts++;
       resolve();
-    }, 3000);
-    videoElement.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
+    }, 500);
+    videoElement.addEventListener("seeked", () => { clearTimeout(timeout); consecutiveTimeouts = 0; resolve(); }, { once: true });
   });
 
   const frames: ImageBitmap[] = [];
   console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames from ${sourceDuration.toFixed(2)}s video`);
 
   for (let i = 0; i < sourceFrameCount; i++) {
+    // If seeking is consistently failing, stop caching and reuse what we have
+    if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && frames.length > 0) {
+      console.warn(`[CinematicExport] Seeking stalled after ${frames.length} frames, using cached frames only`);
+      break;
+    }
+
     const seekTime = Math.min(i * frameDuration, sourceDuration - 0.05);
     videoElement.currentTime = seekTime;
     await waitSeek();
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(videoElement, dx, dy, dw, dh);
     frames.push(await createImageBitmap(canvas));
-    // Yield occasionally during caching
     if (i % 30 === 0) await yieldToUI();
   }
 
