@@ -57,15 +57,24 @@ async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVid
   video.preload = "auto";
   video.crossOrigin = "anonymous";
   video.src = blobUrl;
+  // Wait for full buffering (canplaythrough) not just metadata
   await withTimeout(
     new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
+      video.oncanplaythrough = () => resolve();
+      video.onloadeddata = () => resolve(); // fallback
       video.onerror = () => reject(new Error("Failed to decode video"));
     }),
     timeoutMs,
     "Video decode timed out"
   );
-  console.log("[CinematicExport] Video loaded:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
+  // Force buffer by briefly playing then pausing — helps mobile Safari
+  try {
+    await video.play();
+    video.pause();
+    video.currentTime = 0;
+    await new Promise<void>(r => setTimeout(r, 100));
+  } catch { /* ignore autoplay restrictions */ }
+  console.log("[CinematicExport] Video loaded & buffered:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
   return video;
 }
 
@@ -108,7 +117,7 @@ async function preCacheVideoFrames(
   ctx.fillStyle = "#000";
 
   let consecutiveTimeouts = 0;
-  const MAX_CONSECUTIVE_TIMEOUTS = 3;
+  const MAX_CONSECUTIVE_TIMEOUTS = 8;
 
   const waitSeek = () => new Promise<void>((resolve) => {
     if (!videoElement.seeking) { consecutiveTimeouts = 0; resolve(); return; }
@@ -443,13 +452,105 @@ export function useCinematicExport() {
     []
   );
 
-  const downloadVideo = useCallback((url: string, filename: string) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const downloadVideo = useCallback(async (url: string, filename = "video.mp4") => {
+    if (!url) return;
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOSChrome = isIOS && /CriOS/i.test(navigator.userAgent);
+
+    // iOS: blob URLs don't work across tabs and anchor downloads often fail.
+    if (isIOS) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: "video/mp4" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      } catch (e) {
+        console.warn("iOS share failed:", e);
+      }
+
+      if (isIOSChrome) {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          window.location.href = blobUrl;
+          return;
+        } catch (e) {
+          console.warn("iOS Chrome blob navigation failed:", e);
+          alert("To save the video: Long-press on the video above and select 'Save Video'");
+          return;
+        }
+      }
+
+      // iOS Safari fallback: data URL
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const a = document.createElement("a");
+          a.href = reader.result as string;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      } catch (e) {
+        console.warn("iOS data URL download failed:", e);
+        alert("To save the video: Long-press on the video above and select 'Save Video'");
+        return;
+      }
+    }
+
+    // Android: Share API is most reliable
+    if (isAndroid) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: "video/mp4" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
+        return;
+      } catch (e) {
+        console.warn("Android download failed:", e);
+        alert("To save the video: Long-press on the video above and select 'Download video'");
+        return;
+      }
+    }
+
+    // Desktop: standard anchor download
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 100);
+    } catch (e) {
+      console.warn("Desktop download failed:", e);
+      window.open(url, "_blank");
+    }
   }, []);
 
   const shareVideo = useCallback(async (url: string, filename: string) => {
@@ -460,35 +561,16 @@ export function useCinematicExport() {
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename.replace(".mp4", "") });
       } else {
-        // Fallback: trigger download if share not supported
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        toast({ title: "Saved", description: "Video downloaded to your device" });
+        // Fallback: trigger download
+        await downloadVideo(url, filename);
       }
     } catch (error: any) {
-      // AbortError means user cancelled the share sheet — not a real error
       if (error?.name === "AbortError") return;
       console.error("[CinematicExport] Share failed:", error);
-      // Fallback to download on any share error
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        toast({ title: "Saved", description: "Video downloaded to your device" });
-      } catch {
-        toast({ title: "Share Failed", description: "Could not share or download the video", variant: "destructive" });
-      }
+      // Fallback to download
+      await downloadVideo(url, filename);
     }
-  }, []);
+  }, [downloadVideo]);
 
   return { state, exportVideo, downloadVideo, shareVideo, reset };
 }
