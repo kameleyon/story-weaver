@@ -979,11 +979,13 @@ export function CinematicResult({
                     className="w-full gap-2"
                     onClick={() => {
                       const safeName = safeFileBase(title);
-                      downloadExportedVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                      // Always use localBlobUrl for reliable mobile download
+                      const url = exportState.localBlobUrl || exportState.videoUrl!;
+                      downloadExportedVideo(url, `${safeName}.mp4`);
                     }}
                   >
                     <Download className="h-4 w-4" />
-                    Download to Files
+                    Save to Device
                   </Button>
                   {typeof navigator !== "undefined" && navigator.canShare && (
                     <Button
@@ -992,7 +994,9 @@ export function CinematicResult({
                       className="w-full gap-2"
                       onClick={() => {
                         const safeName = safeFileBase(title);
-                        shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                        // Always use localBlobUrl for reliable mobile share
+                        const url = exportState.localBlobUrl || exportState.videoUrl!;
+                        shareVideo(url, `${safeName}.mp4`);
                       }}
                     >
                       <Share2 className="h-4 w-4" />

@@ -11,6 +11,7 @@ interface ExportState {
   error?: string;
   warning?: string;
   videoUrl?: string;
+  localBlobUrl?: string; // Always a local blob URL for reliable mobile download/share
 }
 
 interface CinematicScene {
@@ -450,7 +451,7 @@ export function useCinematicExport() {
         }
 
         const localUrl = URL.createObjectURL(blob);
-        setState({ status: "complete", progress: 100, videoUrl: publicUrl || localUrl });
+        setState({ status: "complete", progress: 100, videoUrl: publicUrl || localUrl, localBlobUrl: localUrl });
         toast({ title: "Export Complete", description: "Your video is ready!" });
         return { localUrl, publicUrl, blob };
 
