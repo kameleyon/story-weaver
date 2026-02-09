@@ -45,7 +45,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   ]);
 }
 
-async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
+async function loadVideoElement(url: string, timeoutMs = 60000): Promise<HTMLVideoElement> {
   console.log("[CinematicExport] Loading video:", url.substring(0, 80));
   const response = await withTimeout(fetch(url, { mode: "cors" }), timeoutMs, "Video fetch timed out");
   if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
@@ -57,11 +57,10 @@ async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVid
   video.preload = "auto";
   video.crossOrigin = "anonymous";
   video.src = blobUrl;
-  // Wait for full buffering (canplaythrough) not just metadata
+  // Accept loadeddata (not just canplaythrough) — mobile Safari often never fires canplaythrough
   await withTimeout(
     new Promise<void>((resolve, reject) => {
-      video.oncanplaythrough = () => resolve();
-      video.onloadeddata = () => resolve(); // fallback
+      video.onloadeddata = () => resolve();
       video.onerror = () => reject(new Error("Failed to decode video"));
     }),
     timeoutMs,
@@ -72,7 +71,7 @@ async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVid
     await video.play();
     video.pause();
     video.currentTime = 0;
-    await new Promise<void>(r => setTimeout(r, 100));
+    await new Promise<void>(r => setTimeout(r, 200));
   } catch { /* ignore autoplay restrictions */ }
   console.log("[CinematicExport] Video loaded & buffered:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
   return video;
@@ -328,8 +327,66 @@ export function useCinematicExport() {
           const baseProgress = 15 + Math.floor((i / scenesWithVideo.length) * 70);
           setState({ status: "rendering", progress: baseProgress });
 
-          // Load video
-          const tempVideo = await loadVideoElement(scene.videoUrl!);
+          // Load video — skip scene on failure instead of crashing entire export
+          let tempVideo: HTMLVideoElement;
+          try {
+            tempVideo = await loadVideoElement(scene.videoUrl!);
+          } catch (e) {
+            console.warn(`[CinematicExport] Scene ${i + 1} video load failed, skipping:`, e);
+            // Still encode audio for this scene if available
+            if (audioEncoder && audioTrackConfig && scene.audioUrl) {
+              const sceneAudioBuffer = await loadAudioBuffer(scene.audioUrl, decodeCtx);
+              if (sceneAudioBuffer) {
+                const sampleRate = audioTrackConfig.sampleRate;
+                const renderLen = Math.ceil(sceneAudioBuffer.duration * sampleRate);
+                const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(2, renderLen, sampleRate);
+                const source = offlineCtx.createBufferSource();
+                source.buffer = sceneAudioBuffer;
+                source.connect(offlineCtx.destination);
+                source.start(0);
+                const renderedBuf = await offlineCtx.startRendering();
+                const rawData = new Float32Array(renderedBuf.length * 2);
+                const left = renderedBuf.getChannelData(0);
+                const right = renderedBuf.numberOfChannels > 1 ? renderedBuf.getChannelData(1) : left;
+                for (let s = 0; s < renderedBuf.length; s++) {
+                  rawData[s * 2] = left[s];
+                  rawData[s * 2 + 1] = right[s];
+                }
+                const chunkFrames = 4096;
+                for (let offset = 0; offset < renderedBuf.length; offset += chunkFrames) {
+                  const size = Math.min(chunkFrames, renderedBuf.length - offset);
+                  const chunkData = rawData.subarray(offset * 2, (offset + size) * 2);
+                  const audioData = new AudioData({
+                    format: "f32", sampleRate, numberOfFrames: size, numberOfChannels: 2,
+                    timestamp: Math.floor((globalAudioSampleCount / sampleRate) * 1_000_000),
+                    data: chunkData
+                  });
+                  audioEncoder.encode(audioData);
+                  audioData.close();
+                  globalAudioSampleCount += size;
+                }
+                // Encode black frames for the audio duration
+                const blackDuration = sceneAudioBuffer.duration;
+                const blackFrames = Math.ceil(blackDuration * fps);
+                const frameDurationUs = Math.round(1e6 / fps);
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                const blackBitmap = await createImageBitmap(canvas);
+                for (let f = 0; f < blackFrames; f++) {
+                  if (videoEncoder.encodeQueueSize > 10) await new Promise<void>(r => setTimeout(r, 1));
+                  const ts = cumulativeTimestampOffset + Math.round(f * frameDurationUs);
+                  const vf = new VideoFrame(blackBitmap, { timestamp: ts, duration: frameDurationUs });
+                  videoEncoder.encode(vf, { keyFrame: f % (fps * 2) === 0 });
+                  vf.close();
+                  if (f % 200 === 0) await yieldToUI();
+                }
+                blackBitmap.close();
+                globalFrameCount += blackFrames;
+                cumulativeTimestampOffset += Math.round(blackDuration * 1_000_000);
+              }
+            }
+            continue;
+          }
 
           // Process audio & get actual duration
           let sceneAudioDuration: number | null = null;
@@ -374,10 +431,10 @@ export function useCinematicExport() {
           const targetDuration = sceneAudioDuration || scene.duration || tempVideo.duration || 5;
           console.log(`[CinematicExport] Scene ${i + 1}: target=${targetDuration.toFixed(2)}s (audio=${sceneAudioDuration?.toFixed(2) ?? "none"}, video=${tempVideo.duration?.toFixed(2)}s)`);
 
-          // Step 1: Pre-cache all unique frames from video (FAST — only seeks once per unique frame)
+          // Step 1: Pre-cache all unique frames from video
           const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
 
-          // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
+          // Step 2: Encode using slow-motion stretch from cache
           const sourceDuration = tempVideo.duration || 5;
           const framesRendered = await encodeSlowMotionFrames(
             cachedFrames, videoEncoder, fps, sourceDuration, targetDuration, cumulativeTimestampOffset,
@@ -393,10 +450,14 @@ export function useCinematicExport() {
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
-          // Cleanup video element
+          // Cleanup video element to free memory for next scene
           URL.revokeObjectURL(tempVideo.src);
+          tempVideo.src = "";
+          tempVideo.load();
           tempVideo.remove();
           await yieldToUI();
+          // Give mobile Safari extra breathing room between scenes
+          await new Promise<void>(r => setTimeout(r, 300));
         }
 
         // Finalize
