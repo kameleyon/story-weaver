@@ -1434,6 +1434,17 @@ serve(async (req) => {
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
+      // If sceneIndex is provided as a single-scene call and video already exists,
+      // treat it as a regeneration request: clear old video to force re-generation
+      const isRegeneration = typeof body.sceneIndex === "number" && !!scene.videoUrl;
+      if (isRegeneration) {
+        console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
+        scene.videoUrl = undefined;
+        scene.videoPredictionId = undefined;
+        scenes[idx] = scene;
+        await updateScenes(supabase, generationId, scenes);
+      }
+
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
       if (!scene.imageUrl) throw new Error("Scene image is missing (run images phase first)");
 
