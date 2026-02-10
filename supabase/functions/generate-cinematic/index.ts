@@ -92,37 +92,24 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 // ============= HAITIAN CREOLE DETECTION =============
 function isHaitianCreole(text: string): boolean {
   const lowerText = text.toLowerCase();
-  
-  // Strong indicators: words unique to Haitian Creole (not common in English/French)
-  const strongIndicators = [
-    "mwen", "nou", "fè", "wè", "konnen", "kapab", "dwe", "bezwen",
-    "tankou", "paske", "lè", "kote", "kouman", "poukisa",
-    "anpil", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
-    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "pral",
-    "ayiti", "t ap",
+  const creoleIndicators = [
+    "mwen", "ou", "li", "nou", "yo", "sa", "ki", "nan", "pou", "ak",
+    "pa", "se", "te", "ap", "gen", "fè", "di", "ale", "vin", "bay",
+    "konnen", "wè", "pran", "mete", "vle", "kapab", "dwe", "bezwen",
+    "tankou", "paske", "men", "lè", "si", "kote", "kouman", "poukisa",
+    "anpil", "tout", "chak", "yon", "de", "twa", "kat", "senk",
+    "ayiti", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
+    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "apre",
+    "t ap", "pral", "ta",
   ];
 
-  // Weak indicators: words that also exist in English/French (ou, pa, se, de, si, men, di, te, ap, etc.)
-  const weakIndicators = [
-    "ou", "li", "yo", "sa", "ki", "nan", "pou", "ak",
-    "pa", "se", "te", "ap", "gen", "di", "ale", "vin", "bay",
-    "pran", "mete", "vle", "men", "si", "tout", "chak", "yon",
-    "de", "twa", "kat", "senk", "ta", "apre",
-  ];
-
-  let strongCount = 0;
-  let weakCount = 0;
-  for (const indicator of strongIndicators) {
+  let matchCount = 0;
+  for (const indicator of creoleIndicators) {
     const regex = new RegExp(`\\b${indicator}\\b`, "gi");
-    if (regex.test(lowerText)) strongCount++;
-  }
-  for (const indicator of weakIndicators) {
-    const regex = new RegExp(`\\b${indicator}\\b`, "gi");
-    if (regex.test(lowerText)) weakCount++;
+    if (regex.test(lowerText)) matchCount++;
   }
 
-  // Require at least 3 strong indicators, OR 2 strong + 5 weak
-  return strongCount >= 3 || (strongCount >= 2 && weakCount >= 5);
+  return matchCount >= 3;
 }
 
 // ============= PCM TO WAV CONVERSION =============
