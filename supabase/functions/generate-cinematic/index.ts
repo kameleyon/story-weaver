@@ -1333,6 +1333,17 @@ serve(async (req) => {
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
+      // If this is a single-scene regeneration request and audio already exists,
+      // clear it to force re-generation
+      const isAudioRegen = typeof body.sceneIndex === "number" && !!scene.audioUrl;
+      if (isAudioRegen) {
+        console.log(`[AUDIO] Scene ${scene.number}: Clearing existing audio for regeneration`);
+        scene.audioUrl = undefined;
+        scene.audioPredictionId = undefined;
+        scenes[idx] = scene;
+        await updateScenes(supabase, generationId, scenes);
+      }
+
       if (scene.audioUrl) {
         return jsonResponse({ success: true, status: "complete", scene });
       }
