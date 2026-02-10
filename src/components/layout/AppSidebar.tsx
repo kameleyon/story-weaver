@@ -381,32 +381,40 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                 </Tooltip>
               </SidebarMenuItem>
 
-              {/* Cinematic - Beta (Admin Only) */}
-              {isAdmin && (
-                <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SidebarMenuButton
-                        onClick={() => navigate("/app/create?mode=cinematic")}
-                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
-                          isCreateRoute && currentMode === "cinematic" 
-                            ? "bg-primary/10 text-primary" 
-                            : "hover:bg-sidebar-accent/50"
-                        } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
-                      >
-                        <Film className="h-4 w-4 shrink-0" />
-                        {!isCollapsed && (
-                          <span className="text-sm flex items-center gap-2">
-                            Cinematic
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary">Beta</span>
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-                    </TooltipTrigger>
-                    {isCollapsed && <TooltipContent side="right">Cinematic - Beta (Admin)</TooltipContent>}
-                  </Tooltip>
-                </SidebarMenuItem>
-              )}
+              {/* Cinematic - Beta */}
+              {(() => {
+                const canAccessCinematic = isAdmin || plan === "professional" || plan === "enterprise";
+                return (
+                  <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          onClick={() => canAccessCinematic && navigate("/app/create?mode=cinematic")}
+                          className={`rounded-lg py-2.5 transition-colors ${
+                            !canAccessCinematic
+                              ? "opacity-40 cursor-not-allowed"
+                              : isCreateRoute && currentMode === "cinematic"
+                                ? "bg-primary/10 text-primary cursor-pointer"
+                                : "hover:bg-sidebar-accent/50 cursor-pointer"
+                          } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                        >
+                          <Film className="h-4 w-4 shrink-0" />
+                          {!isCollapsed && (
+                            <span className="text-sm flex items-center gap-2">
+                              Cinematic
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary">Beta</span>
+                              {!canAccessCinematic && (
+                                <Crown className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {isCollapsed && <TooltipContent side="right">Cinematic - Beta{!canAccessCinematic ? " (Pro plan required)" : ""}</TooltipContent>}
+                    </Tooltip>
+                  </SidebarMenuItem>
+                );
+              })()}
 
               {/* Presenter (Coming Soon) - Commented out for now */}
               {/* <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
