@@ -187,9 +187,9 @@ async function encodeSlowMotionFrames(
 
   let framesRendered = 0;
   for (let frame = 0; frame < totalFrames; frame++) {
-    // Backpressure
-    if (videoEncoder.encodeQueueSize > 10) {
-      await new Promise<void>(r => setTimeout(r, 1));
+    // Strict backpressure: WAIT until encoder catches up (prevents RAM explosion on mobile)
+    while (videoEncoder.encodeQueueSize > 2) {
+      await new Promise<void>(r => setTimeout(r, 15));
     }
 
     // Map output time to source frame index
@@ -263,12 +263,13 @@ export function useCinematicExport() {
       setState({ status: "loading", progress: 5 });
 
       try {
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         const dimensions = isIOS
           ? { landscape: { w: 1280, h: 720 }, portrait: { w: 720, h: 1280 }, square: { w: 960, h: 960 } }
           : { landscape: { w: 1920, h: 1080 }, portrait: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 } };
         const dim = dimensions[format];
-        const fps = isIOS ? 24 : 30;
+        const fps = isMobile ? 24 : 30;
 
         // Audio support check
         const wantsAudio = scenesWithVideo.some(s => !!s.audioUrl);
@@ -330,8 +331,9 @@ export function useCinematicExport() {
         videoEncoder.configure({
           codec: "avc1.42E028",
           width: dim.w, height: dim.h,
-          bitrate: isIOS ? 2_500_000 : 6_000_000,
-          framerate: fps
+          bitrate: isMobile ? 1_500_000 : 6_000_000,
+          framerate: fps,
+          latencyMode: isMobile ? "realtime" : "quality",
         });
 
         const decodeCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(1, 1, audioTrackConfig?.sampleRate || 48000);
@@ -435,6 +437,7 @@ export function useCinematicExport() {
 
         let publicUrl: string | undefined;
         if (generationId) {
+          toast({ title: "Rendering done", description: "Uploading video to cloud..." });
           setState({ status: "uploading", progress: 92 });
           const fileName = `${generationId}/${crypto.randomUUID()}.mp4`;
           const { error: uploadError } = await supabase.storage
