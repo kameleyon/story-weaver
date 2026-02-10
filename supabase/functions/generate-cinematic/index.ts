@@ -284,7 +284,7 @@ async function generateScriptWithGemini(
 
   // Length configuration - dynamic scene count ranges
   const lengthConfig: Record<string, { minScenes: number; maxScenes: number; targetDuration: number; maxSceneDuration: number }> = {
-    short: { minScenes: 5, maxScenes: 8, targetDuration: 90, maxSceneDuration: 10 },
+    short: { minScenes: 15, maxScenes: 16, targetDuration: 165, maxSceneDuration: 10 },
     brief: { minScenes: 6, maxScenes: 10, targetDuration: 150, maxSceneDuration: 10 },
     presentation: { minScenes: 8, maxScenes: 12, targetDuration: 180, maxSceneDuration: 10 },
   };
