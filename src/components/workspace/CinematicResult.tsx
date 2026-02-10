@@ -983,20 +983,22 @@ export function CinematicResult({
                     }}
                   >
                     <Download className="h-4 w-4" />
-                    Save / Download
+                    Download to Files
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => {
-                      const safeName = safeFileBase(title);
-                      shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                    }}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    Share
-                  </Button>
+                  {typeof navigator !== "undefined" && navigator.canShare && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => {
+                        const safeName = safeFileBase(title);
+                        shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                      }}
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share / Save to Photos
+                    </Button>
+                  )}
                 </div>
                 <Button type="button" variant="ghost" onClick={resetExport} className="w-full">
                   Close
