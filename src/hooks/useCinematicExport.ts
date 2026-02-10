@@ -136,7 +136,7 @@ async function preCacheVideoFrames(
     const timeout = setTimeout(() => {
       consecutiveTimeouts++;
       resolve();
-    }, 2000);
+    }, 3000);
     videoElement.addEventListener("seeked", () => { clearTimeout(timeout); consecutiveTimeouts = 0; resolve(); }, { once: true });
   });
 
@@ -405,9 +405,15 @@ export function useCinematicExport() {
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
-          // Cleanup video element
+          // Cleanup video element — aggressive disposal to free mobile Safari decoder
+          tempVideo.pause();
+          tempVideo.removeAttribute("src");
+          tempVideo.load(); // forces release of media resources
           URL.revokeObjectURL(tempVideo.src);
           tempVideo.remove();
+          
+          // GC yield between scenes — critical for mobile Safari to reclaim decoder resources
+          await new Promise(r => setTimeout(r, 150));
           await yieldToUI();
         }
 
@@ -464,13 +470,32 @@ export function useCinematicExport() {
     []
   );
 
-  const downloadVideo = useCallback((url: string, filename: string) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const downloadVideo = useCallback(async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: "video/mp4" });
+      
+      // On mobile: use native share (enables "Save to Photos")
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename.replace(".mp4", "") });
+        return;
+      }
+      
+      // Desktop fallback
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      if (error?.name === "AbortError") return;
+      // Last resort: open in new tab
+      window.open(url, "_blank");
+    }
   }, []);
 
   const shareVideo = useCallback(async (url: string, filename: string) => {
