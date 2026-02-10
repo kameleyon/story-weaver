@@ -57,15 +57,36 @@ async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVid
   video.preload = "auto";
   video.crossOrigin = "anonymous";
   video.src = blobUrl;
+
+  // Wait for canplay (not just metadata) so frames are actually decodable
   await withTimeout(
     new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
       video.onerror = () => reject(new Error("Failed to decode video"));
+      const onReady = () => { resolve(); };
+      video.addEventListener("canplay", onReady, { once: true });
+      // Fallback: if canplay never fires, accept loadeddata
+      video.addEventListener("loadeddata", onReady, { once: true });
     }),
     timeoutMs,
     "Video decode timed out"
   );
-  console.log("[CinematicExport] Video loaded:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
+
+  // Kickstart: play briefly then pause to force mobile Safari to decode frames
+  try {
+    const playPromise = video.play();
+    if (playPromise) await playPromise;
+    video.pause();
+    video.currentTime = 0;
+    await new Promise<void>(r => {
+      if (!video.seeking) { r(); return; }
+      video.addEventListener("seeked", () => r(), { once: true });
+      setTimeout(r, 500);
+    });
+  } catch {
+    // play() may reject on some browsers, that's ok
+  }
+
+  console.log("[CinematicExport] Video loaded & kickstarted:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
   return video;
 }
 
