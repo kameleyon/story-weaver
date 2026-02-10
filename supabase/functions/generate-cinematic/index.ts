@@ -932,6 +932,9 @@ QUALITY REQUIREMENTS:
 
   console.log(`[IMG] Generating scene ${scene.number} with Replicate nano-banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
 
+  const MAX_IMG_RETRIES = 4;
+
+  for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
   try {
     const createResponse = await fetch(`https://api.replicate.com/v1/models/${NANO_BANANA_MODEL}/predictions`, {
       method: "POST",
@@ -951,7 +954,21 @@ QUALITY REQUIREMENTS:
 
     if (!createResponse.ok) {
       const errText = await createResponse.text();
-      console.error(`[IMG] Replicate nano-banana create failed: ${createResponse.status} - ${errText}`);
+      console.error(`[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`);
+
+      // Retry on 429 rate limit or 5xx server errors
+      if ((createResponse.status === 429 || createResponse.status >= 500) && attempt < MAX_IMG_RETRIES) {
+        // Parse retry_after from response if available
+        let retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        try {
+          const errJson = JSON.parse(errText);
+          if (errJson.retry_after) retryAfterMs = Math.max(retryAfterMs, errJson.retry_after * 1000);
+        } catch {}
+        console.warn(`[IMG] Scene ${scene.number}: Rate limited (${createResponse.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`);
+        await sleep(retryAfterMs);
+        continue;
+      }
+
       throw new Error(`Replicate nano-banana failed: ${createResponse.status}`);
     }
 
@@ -1011,9 +1028,19 @@ QUALITY REQUIREMENTS:
     console.log(`[IMG] Scene ${scene.number} image uploaded: ${urlData.publicUrl}`);
     return urlData.publicUrl;
   } catch (err) {
-    console.error(`[IMG] Scene ${scene.number} error:`, err);
-    throw err;
+    // If it's a rate limit or server error and we have retries left, the loop continue above handles it
+    // For other errors, throw immediately
+    if (attempt >= MAX_IMG_RETRIES) {
+      console.error(`[IMG] Scene ${scene.number} error after ${MAX_IMG_RETRIES} attempts:`, err);
+      throw err;
+    }
+    const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+    console.warn(`[IMG] Scene ${scene.number}: Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+    await sleep(delayMs);
   }
+  } // end retry loop
+
+  throw new Error(`Image generation failed for scene ${scene.number} after ${MAX_IMG_RETRIES} retries`);
 }
 
 // ============================================
@@ -1037,19 +1064,34 @@ ANIMATION RULES (CRITICAL):
 - Static poses with subtle breathing/idle movement are preferred for dialogue scenes
 - Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
 
-  const prediction = await createReplicatePrediction(
-    version,
-    {
-      prompt: videoPrompt,
-      image: imageUrl,
-      duration: Math.min(scene.duration, 15),
-      resolution: "720p",
-      aspect_ratio: aspectRatio,
-    },
-    replicateToken,
-  );
-  console.log(`Grok prediction started: ${prediction.id}`);
-  return prediction.id as string;
+  const MAX_GROK_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_GROK_RETRIES; attempt++) {
+    try {
+      const prediction = await createReplicatePrediction(
+        version,
+        {
+          prompt: videoPrompt,
+          image: imageUrl,
+          duration: Math.min(scene.duration, 15),
+          resolution: "720p",
+          aspect_ratio: aspectRatio,
+        },
+        replicateToken,
+      );
+      console.log(`Grok prediction started: ${prediction.id}`);
+      return prediction.id as string;
+    } catch (err: any) {
+      const errMsg = err?.message || "";
+      if ((errMsg.includes("429") || errMsg.includes("500")) && attempt < MAX_GROK_RETRIES) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        console.warn(`[Grok] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Grok video prediction failed after retries");
 }
 
 async function resolveGrok(
