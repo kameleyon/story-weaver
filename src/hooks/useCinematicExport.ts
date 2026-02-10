@@ -225,10 +225,12 @@ async function encodeSlowMotionFrames(
     }
 
     // Map output time to source frame index via slowed playback rate
+    // sourceSampleRate = sourceFrameCount / sourceDuration (actual capture rate)
+    const sourceSampleRate = sourceFrameCount / sourceDuration;
     const outputTimeSec = frame / fps;
     const sourceTimeSec = outputTimeSec * playbackRate;
     const sourceIdx = Math.min(
-      Math.floor(sourceTimeSec * fps),
+      Math.floor(sourceTimeSec * sourceSampleRate),
       sourceFrameCount - 1
     );
     const bitmap = cachedFrames[sourceIdx];
