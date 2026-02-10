@@ -3,6 +3,8 @@ import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
+const EXPORT_VERSION = "v7.0"; // Version tracking for deployment verification
+
 export type ExportStatus = "idle" | "loading" | "rendering" | "encoding" | "uploading" | "complete" | "error";
 
 interface ExportState {
@@ -45,8 +47,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   ]);
 }
 
-async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVideoElement> {
-  console.log("[CinematicExport] Loading video:", url.substring(0, 80));
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+/**
+ * Load a video as a blob, wait for it to be fully decodable.
+ * Returns both the video element and blob URL so we can properly clean up.
+ */
+async function loadVideoElement(url: string, timeoutMs = 30000): Promise<{ video: HTMLVideoElement; blobUrl: string }> {
+  console.log(`[CinematicExport ${EXPORT_VERSION}] Loading video:`, url.substring(0, 80));
   const response = await withTimeout(fetch(url, { mode: "cors" }), timeoutMs, "Video fetch timed out");
   if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
   const blob = await response.blob();
@@ -58,36 +66,33 @@ async function loadVideoElement(url: string, timeoutMs = 30000): Promise<HTMLVid
   video.crossOrigin = "anonymous";
   video.src = blobUrl;
 
-  // Wait for canplay (not just metadata) so frames are actually decodable
   await withTimeout(
     new Promise<void>((resolve, reject) => {
       video.onerror = () => reject(new Error("Failed to decode video"));
       const onReady = () => { resolve(); };
       video.addEventListener("canplay", onReady, { once: true });
-      // Fallback: if canplay never fires, accept loadeddata
       video.addEventListener("loadeddata", onReady, { once: true });
     }),
     timeoutMs,
     "Video decode timed out"
   );
 
-  // Kickstart: play briefly then pause to force mobile Safari to decode frames
-  try {
-    const playPromise = video.play();
-    if (playPromise) await playPromise;
-    video.pause();
-    video.currentTime = 0;
-    await new Promise<void>(r => {
-      if (!video.seeking) { r(); return; }
-      video.addEventListener("seeked", () => r(), { once: true });
-      setTimeout(r, 500);
-    });
-  } catch {
-    // play() may reject on some browsers, that's ok
-  }
+  console.log(`[CinematicExport ${EXPORT_VERSION}] Video loaded:`, {
+    duration: video.duration, w: video.videoWidth, h: video.videoHeight
+  });
+  return { video, blobUrl };
+}
 
-  console.log("[CinematicExport] Video loaded & kickstarted:", { duration: video.duration, w: video.videoWidth, h: video.videoHeight });
-  return video;
+/**
+ * Properly dispose of a video element and its blob URL.
+ * MUST revoke blob URL BEFORE clearing src.
+ */
+function disposeVideo(video: HTMLVideoElement, blobUrl: string) {
+  video.pause();
+  URL.revokeObjectURL(blobUrl); // Revoke FIRST while we still have the URL
+  video.removeAttribute("src");
+  video.load(); // Force release of media resources
+  video.remove();
 }
 
 async function loadAudioBuffer(url: string, decodeCtx: OfflineAudioContext, timeoutMs = 15000): Promise<AudioBuffer | null> {
@@ -102,18 +107,21 @@ async function loadAudioBuffer(url: string, decodeCtx: OfflineAudioContext, time
   }
 }
 
-// 🚀 Pre-cache frames at a low sample rate for mobile reliability, then stretch during encoding
-async function preCacheVideoFrames(
+/**
+ * Capture frames from video by PLAYING it (not seeking).
+ * Mobile Safari handles playback much better than seeking.
+ * We play the video at normal speed and grab frames at intervals.
+ */
+async function captureFramesByPlaying(
   videoElement: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  _outputFps: number
+  targetFps: number
 ): Promise<ImageBitmap[]> {
   const sourceDuration = videoElement.duration || 5;
-  // Use a LOW sample rate (6fps) to minimize seeks — mobile Safari chokes on rapid seeking
-  const cacheFps = 6;
-  const sourceFrameCount = Math.ceil(sourceDuration * cacheFps);
-  const frameDuration = 1 / cacheFps;
+  // Capture at low fps to keep memory manageable
+  const captureFps = Math.min(targetFps, isIOS() ? 6 : 10);
+  const captureInterval = 1000 / captureFps;
 
   const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
   const canvasAspect = canvas.width / canvas.height;
@@ -127,95 +135,156 @@ async function preCacheVideoFrames(
   }
 
   ctx.fillStyle = "#000";
+  const frames: ImageBitmap[] = [];
 
-  let consecutiveTimeouts = 0;
-  const MAX_CONSECUTIVE_TIMEOUTS = 3;
+  console.log(`[CinematicExport ${EXPORT_VERSION}] Play-capture: ${sourceDuration.toFixed(2)}s at ${captureFps}fps`);
 
-  const waitSeek = () => new Promise<void>((resolve) => {
-    if (!videoElement.seeking) { consecutiveTimeouts = 0; resolve(); return; }
-    const timeout = setTimeout(() => {
-      consecutiveTimeouts++;
-      resolve();
-    }, 3000);
-    videoElement.addEventListener("seeked", () => { clearTimeout(timeout); consecutiveTimeouts = 0; resolve(); }, { once: true });
+  // Reset to start
+  videoElement.currentTime = 0;
+  await new Promise<void>(r => {
+    if (!videoElement.seeking) { r(); return; }
+    videoElement.addEventListener("seeked", () => r(), { once: true });
+    setTimeout(r, 1000);
   });
 
+  // Play and capture
+  videoElement.playbackRate = 1.0;
+  
+  return new Promise<ImageBitmap[]>((resolve) => {
+    let captureTimer: number;
+    let resolved = false;
+
+    const captureFrame = async () => {
+      if (resolved) return;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(videoElement, dx, dy, dw, dh);
+      try {
+        frames.push(await createImageBitmap(canvas));
+      } catch {
+        // If createImageBitmap fails, skip this frame
+      }
+    };
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      clearInterval(captureTimer);
+      videoElement.pause();
+      console.log(`[CinematicExport ${EXPORT_VERSION}] Play-captured ${frames.length} frames`);
+      resolve(frames);
+    };
+
+    videoElement.onended = finish;
+    videoElement.onerror = finish;
+    
+    // Safety timeout: if video takes longer than expected
+    const safetyTimeout = setTimeout(finish, (sourceDuration + 2) * 1000);
+
+    // Start capturing at interval
+    captureTimer = window.setInterval(captureFrame, captureInterval);
+
+    // Capture first frame immediately
+    captureFrame();
+
+    // Start playback
+    videoElement.play().catch(() => {
+      // If play fails, fall back to seek-based capture
+      clearInterval(captureTimer);
+      clearTimeout(safetyTimeout);
+      console.warn(`[CinematicExport ${EXPORT_VERSION}] Play failed, falling back to seek capture`);
+      seekBasedCapture(videoElement, canvas, ctx, captureFps, dw, dh, dx, dy).then(seekFrames => {
+        resolve(seekFrames);
+      });
+    });
+  });
+}
+
+/**
+ * Fallback: seek-based frame capture for browsers where play() fails.
+ */
+async function seekBasedCapture(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  fps: number,
+  dw: number, dh: number, dx: number, dy: number
+): Promise<ImageBitmap[]> {
+  const duration = video.duration || 5;
+  const frameCount = Math.ceil(duration * fps);
   const frames: ImageBitmap[] = [];
-  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames at ${cacheFps}fps from ${sourceDuration.toFixed(2)}s video`);
 
-  for (let i = 0; i < sourceFrameCount; i++) {
-    if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && frames.length > 0) {
-      console.warn(`[CinematicExport] Seeking stalled after ${frames.length} frames, using cached frames only`);
-      break;
-    }
-
-    const seekTime = Math.min(i * frameDuration, sourceDuration - 0.05);
-    videoElement.currentTime = seekTime;
-    await waitSeek();
+  for (let i = 0; i < frameCount; i++) {
+    const seekTime = Math.min(i / fps, duration - 0.05);
+    video.currentTime = seekTime;
+    await new Promise<void>(r => {
+      if (!video.seeking) { r(); return; }
+      const t = setTimeout(r, 2000);
+      video.addEventListener("seeked", () => { clearTimeout(t); r(); }, { once: true });
+    });
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(videoElement, dx, dy, dw, dh);
-    frames.push(await createImageBitmap(canvas));
-    if (i % 10 === 0) await yieldToUI();
+    ctx.drawImage(video, dx, dy, dw, dh);
+    try {
+      frames.push(await createImageBitmap(canvas));
+    } catch { /* skip */ }
+    if (i % 5 === 0) await yieldToUI();
   }
 
-  console.log(`[CinematicExport] Cached ${frames.length} frames (${cacheFps}fps sampling)`);
   return frames;
 }
 
-// Encode frames using slow-motion stretch (no looping, no reverse)
-async function encodeSlowMotionFrames(
+/**
+ * Encode cached frames with slow-motion stretch to fill target duration.
+ */
+async function encodeFromCache(
   cachedFrames: ImageBitmap[],
   videoEncoder: any,
   fps: number,
   sourceDuration: number,
   targetDuration: number,
-  cumulativeTimestampOffset: number,
-  onProgress?: (framesRendered: number) => void
+  timestampOffset: number,
+  onProgress?: (rendered: number) => void
 ): Promise<number> {
   const totalFrames = Math.ceil(targetDuration * fps);
-  const frameDuration = Math.round(1e6 / fps);
+  const frameDurationMicro = Math.round(1e6 / fps);
   const sourceFrameCount = cachedFrames.length;
 
-  // Calculate playback rate: how fast source plays relative to output
-  // rate < 1.0 = slow motion, rate = 1.0 = normal speed
-  const rawRate = sourceDuration / targetDuration;
-  const playbackRate = Math.max(0.25, Math.min(1.0, rawRate));
+  if (sourceFrameCount === 0) {
+    console.warn(`[CinematicExport ${EXPORT_VERSION}] No cached frames to encode`);
+    return 0;
+  }
 
-  console.log(`[CinematicExport] Slow-motion: ${sourceFrameCount} cached, ${totalFrames} output frames, rate=${playbackRate.toFixed(3)}x (${targetDuration.toFixed(2)}s target from ${sourceDuration.toFixed(2)}s source)`);
+  const playbackRate = Math.max(0.25, Math.min(1.0, sourceDuration / targetDuration));
 
-  let framesRendered = 0;
+  console.log(`[CinematicExport ${EXPORT_VERSION}] Encoding: ${sourceFrameCount} cached → ${totalFrames} output, rate=${playbackRate.toFixed(3)}x`);
+
+  let rendered = 0;
   for (let frame = 0; frame < totalFrames; frame++) {
-    // Backpressure
-    if (videoEncoder.encodeQueueSize > 10) {
-      await new Promise<void>(r => setTimeout(r, 1));
+    // Backpressure — wait if encoder is overwhelmed
+    while (videoEncoder.encodeQueueSize > 5) {
+      await new Promise<void>(r => setTimeout(r, 5));
     }
 
-    // Map output time to source frame index
-    // cachedFrames are sampled at ~6fps from the source, so map via time ratio
     const outputTimeSec = frame / fps;
     const sourceTimeSec = outputTimeSec * playbackRate;
     const sourceIdx = Math.min(
       Math.floor(sourceTimeSec / sourceDuration * sourceFrameCount),
       sourceFrameCount - 1
     );
-    const bitmap = cachedFrames[sourceIdx];
 
-    const timestamp = cumulativeTimestampOffset + Math.round(frame * frameDuration);
+    const timestamp = timestampOffset + Math.round(frame * frameDurationMicro);
     const keyFrame = frame % (fps * 2) === 0;
 
-    const vf = new VideoFrame(bitmap, { timestamp, duration: frameDuration });
+    const vf = new VideoFrame(cachedFrames[sourceIdx], { timestamp, duration: frameDurationMicro });
     videoEncoder.encode(vf, { keyFrame });
     vf.close();
 
-    framesRendered++;
-    if (onProgress) onProgress(framesRendered);
-
-    // Yield every 200 frames
-    if (frame % 200 === 0) await yieldToUI();
+    rendered++;
+    if (onProgress) onProgress(rendered);
+    if (frame % 100 === 0) await yieldToUI();
   }
 
-  console.log(`[CinematicExport] Slow-motion done: ${framesRendered} frames`);
-  return framesRendered;
+  return rendered;
 }
 
 export function useCinematicExport() {
@@ -235,9 +304,9 @@ export function useCinematicExport() {
       _retryCount = 0
     ) => {
       abortRef.current = false;
-      const MAX_RETRIES = 2;
+      const MAX_RETRIES = 1; // Reduce retries — they waste time if the approach is broken
 
-      console.log("[CinematicExport] Starting export", { scenes: scenes.length, format, generationId, retry: _retryCount });
+      console.log(`[CinematicExport ${EXPORT_VERSION}] Starting export`, { scenes: scenes.length, format, generationId, retry: _retryCount });
 
       const VideoEncoderCtor = (globalThis as any).VideoEncoder;
       const AudioEncoderCtor = (globalThis as any).AudioEncoder;
@@ -260,12 +329,13 @@ export function useCinematicExport() {
       setState({ status: "loading", progress: 5 });
 
       try {
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        const dimensions = isIOS
-          ? { landscape: { w: 1280, h: 720 }, portrait: { w: 720, h: 1280 }, square: { w: 960, h: 960 } }
+        const onIOS = isIOS();
+        // Use lower resolution on iOS to prevent OOM
+        const dimensions = onIOS
+          ? { landscape: { w: 960, h: 540 }, portrait: { w: 540, h: 960 }, square: { w: 720, h: 720 } }
           : { landscape: { w: 1920, h: 1080 }, portrait: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 } };
         const dim = dimensions[format];
-        const fps = isIOS ? 24 : 30;
+        const fps = onIOS ? 24 : 30;
 
         // Audio support check
         const wantsAudio = scenesWithVideo.some(s => !!s.audioUrl);
@@ -319,31 +389,33 @@ export function useCinematicExport() {
           audioEncoder.configure(audioTrackConfig);
         }
 
-        // Video encoder
+        // Video encoder — use Baseline profile on iOS for better compatibility
         const videoEncoder = new VideoEncoderCtor({
           output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
-          error: (e: any) => { throw e; }
+          error: (e: any) => console.error("[CinematicExport] Video encode error", e)
         });
         videoEncoder.configure({
-          codec: "avc1.42E028",
+          codec: onIOS ? "avc1.42001f" : "avc1.42E028", // Baseline on iOS, High on desktop
           width: dim.w, height: dim.h,
-          bitrate: isIOS ? 2_500_000 : 6_000_000,
+          bitrate: onIOS ? 2_000_000 : 6_000_000,
           framerate: fps
         });
 
         const decodeCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(1, 1, audioTrackConfig?.sampleRate || 48000);
 
-        // Process each scene
+        // Process each scene ONE AT A TIME
         for (let i = 0; i < scenesWithVideo.length; i++) {
           if (abortRef.current) break;
           const scene = scenesWithVideo[i];
           const baseProgress = 15 + Math.floor((i / scenesWithVideo.length) * 70);
           setState({ status: "rendering", progress: baseProgress });
 
-          // Load video
-          const tempVideo = await loadVideoElement(scene.videoUrl!);
+          console.log(`[CinematicExport ${EXPORT_VERSION}] Processing scene ${i + 1}/${scenesWithVideo.length}`);
 
-          // Process audio & get actual duration
+          // Load video — returns both element and blob URL for proper cleanup
+          const { video: tempVideo, blobUrl } = await loadVideoElement(scene.videoUrl!);
+
+          // Process audio
           let sceneAudioDuration: number | null = null;
           if (audioEncoder && audioTrackConfig && scene.audioUrl) {
             const sceneAudioBuffer = await loadAudioBuffer(scene.audioUrl, decodeCtx);
@@ -382,16 +454,16 @@ export function useCinematicExport() {
             }
           }
 
-          // CRITICAL: audio duration drives video length
+          // Audio duration drives video length
           const targetDuration = sceneAudioDuration || scene.duration || tempVideo.duration || 5;
-          console.log(`[CinematicExport] Scene ${i + 1}: target=${targetDuration.toFixed(2)}s (audio=${sceneAudioDuration?.toFixed(2) ?? "none"}, video=${tempVideo.duration?.toFixed(2)}s)`);
-
-          // Step 1: Pre-cache all unique frames from video (FAST — only seeks once per unique frame)
-          const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
-
-          // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
           const sourceDuration = tempVideo.duration || 5;
-          const framesRendered = await encodeSlowMotionFrames(
+          console.log(`[CinematicExport ${EXPORT_VERSION}] Scene ${i + 1}: target=${targetDuration.toFixed(2)}s, source=${sourceDuration.toFixed(2)}s`);
+
+          // CAPTURE FRAMES BY PLAYING (not seeking) — much more reliable on mobile Safari
+          const cachedFrames = await captureFramesByPlaying(tempVideo, canvas, ctx, fps);
+
+          // Encode from cache with slow-motion stretch
+          const framesRendered = await encodeFromCache(
             cachedFrames, videoEncoder, fps, sourceDuration, targetDuration, cumulativeTimestampOffset,
             (rendered) => {
               const pct = baseProgress + (rendered / Math.ceil(targetDuration * fps)) * (70 / scenesWithVideo.length);
@@ -405,15 +477,11 @@ export function useCinematicExport() {
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
-          // Cleanup video element — aggressive disposal to free mobile Safari decoder
-          tempVideo.pause();
-          tempVideo.removeAttribute("src");
-          tempVideo.load(); // forces release of media resources
-          URL.revokeObjectURL(tempVideo.src);
-          tempVideo.remove();
-          
-          // GC yield between scenes — critical for mobile Safari to reclaim decoder resources
-          await new Promise(r => setTimeout(r, 150));
+          // CRITICAL: Properly dispose video element — revoke blob URL BEFORE clearing src
+          disposeVideo(tempVideo, blobUrl);
+
+          // Allow GC to reclaim memory between scenes
+          await new Promise(r => setTimeout(r, 200));
           await yieldToUI();
         }
 
@@ -427,7 +495,7 @@ export function useCinematicExport() {
 
         const { buffer } = muxer.target as ArrayBufferTarget;
         const blob = new Blob([buffer], { type: "video/mp4" });
-        console.log("[CinematicExport] Done:", { size: blob.size, frames: globalFrameCount });
+        console.log(`[CinematicExport ${EXPORT_VERSION}] Done:`, { size: blob.size, frames: globalFrameCount });
 
         let publicUrl: string | undefined;
         if (generationId) {
@@ -453,12 +521,11 @@ export function useCinematicExport() {
         return { localUrl, publicUrl, blob };
 
       } catch (error) {
-        console.error("[CinematicExport] Export failed:", error);
-        // Auto-retry up to MAX_RETRIES
+        console.error(`[CinematicExport ${EXPORT_VERSION}] Export failed:`, error);
         if (_retryCount < MAX_RETRIES) {
-          console.log(`[CinematicExport] Auto-retrying (${_retryCount + 1}/${MAX_RETRIES})...`);
+          console.log(`[CinematicExport ${EXPORT_VERSION}] Auto-retrying (${_retryCount + 1}/${MAX_RETRIES})...`);
           toast({ title: "Retrying export...", description: `Attempt ${_retryCount + 2}` });
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1500));
           return exportVideo(scenes, format, generationId, _retryCount + 1);
         }
         const errorMsg = error instanceof Error ? error.message : "Export failed";
@@ -475,13 +542,13 @@ export function useCinematicExport() {
       const response = await fetch(url);
       const blob = await response.blob();
       const file = new File([blob], filename, { type: "video/mp4" });
-      
+
       // On mobile: use native share (enables "Save to Photos")
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename.replace(".mp4", "") });
         return;
       }
-      
+
       // Desktop fallback
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -493,7 +560,6 @@ export function useCinematicExport() {
       URL.revokeObjectURL(blobUrl);
     } catch (error: any) {
       if (error?.name === "AbortError") return;
-      // Last resort: open in new tab
       window.open(url, "_blank");
     }
   }, []);
@@ -506,29 +572,30 @@ export function useCinematicExport() {
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: filename.replace(".mp4", "") });
       } else {
-        // Fallback: trigger download if share not supported
+        const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
+        a.href = blobUrl;
         a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
         toast({ title: "Saved", description: "Video downloaded to your device" });
       }
     } catch (error: any) {
-      // AbortError means user cancelled the share sheet — not a real error
       if (error?.name === "AbortError") return;
       console.error("[CinematicExport] Share failed:", error);
-      // Fallback to download on any share error
       try {
         const response = await fetch(url);
         const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
+        a.href = blobUrl;
         a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
         toast({ title: "Saved", description: "Video downloaded to your device" });
       } catch {
         toast({ title: "Share Failed", description: "Could not share or download the video", variant: "destructive" });
