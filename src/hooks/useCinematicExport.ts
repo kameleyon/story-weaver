@@ -37,6 +37,8 @@ function generateAACAudioSpecificConfig(sampleRate: number, channels: number): U
 }
 
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const longYield = () => new Promise<void>((resolve) => setTimeout(resolve, 16));
+const gcYield = () => new Promise<void>((resolve) => setTimeout(resolve, 50));
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> {
   return Promise.race([
@@ -210,8 +212,9 @@ async function encodeSlowMotionFrames(
     framesRendered++;
     if (onProgress) onProgress(framesRendered);
 
-    // Yield every 200 frames
-    if (frame % 200 === 0) await yieldToUI();
+    // Aggressive yielding to prevent browser tab kill
+    if (frame % 5 === 0) await yieldToUI();
+    if (frame % 30 === 0) await longYield();
   }
 
   console.log(`[CinematicExport] Slow-motion done: ${framesRendered} frames`);
@@ -405,10 +408,17 @@ export function useCinematicExport() {
           globalFrameCount += framesRendered;
           cumulativeTimestampOffset += Math.round(targetDuration * 1_000_000);
 
+          // Per-scene audio flush to release memory between scenes
+          if (audioEncoder) {
+            await audioEncoder.flush();
+          }
+
           // Cleanup video element
           URL.revokeObjectURL(tempVideo.src);
           tempVideo.remove();
-          await yieldToUI();
+
+          // GC yield between scenes to let browser reclaim memory
+          await gcYield();
         }
 
         // Finalize
@@ -464,13 +474,98 @@ export function useCinematicExport() {
     []
   );
 
-  const downloadVideo = useCallback((url: string, filename: string) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const downloadVideo = useCallback(async (url: string, filename: string) => {
+    if (!url) return;
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOSChrome = isIOS && /CriOS/i.test(navigator.userAgent);
+
+    if (isIOS) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: "video/mp4" });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      } catch (e) {
+        console.warn("[CinematicExport] iOS share failed:", e);
+      }
+
+      if (isIOSChrome) {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          window.location.href = URL.createObjectURL(blob);
+          return;
+        } catch (e) {
+          console.warn("[CinematicExport] iOS Chrome blob nav failed:", e);
+          alert("To save the video: Long-press on the video above and select 'Save Video'");
+          return;
+        }
+      }
+
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const a = document.createElement("a");
+          a.href = reader.result as string;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      } catch (e) {
+        console.warn("[CinematicExport] iOS data URL download failed:", e);
+        alert("To save the video: Long-press on the video above and select 'Save Video'");
+        return;
+      }
+    }
+
+    if (isAndroid) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], filename, { type: "video/mp4" });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
+        return;
+      } catch (e) {
+        console.warn("[CinematicExport] Android download failed:", e);
+        alert("To save the video: Long-press on the video above and select 'Download video'");
+        return;
+      }
+    }
+
+    // Desktop
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 100);
+    } catch (e) {
+      console.warn("[CinematicExport] Desktop download failed:", e);
+      window.open(url, "_blank");
+    }
   }, []);
 
   const shareVideo = useCallback(async (url: string, filename: string) => {
