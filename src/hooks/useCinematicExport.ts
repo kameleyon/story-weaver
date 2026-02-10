@@ -89,8 +89,11 @@ async function preCacheVideoFrames(
   fps: number
 ): Promise<ImageBitmap[]> {
   const sourceDuration = videoElement.duration || 5;
-  const sourceFrameCount = Math.ceil(sourceDuration * fps);
-  const frameDuration = 1 / fps;
+  // Sample at lower rate on mobile to reduce seeking stress
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const sampleFps = isIOS ? Math.min(fps, 6) : fps;
+  const sourceFrameCount = Math.ceil(sourceDuration * sampleFps);
+  const frameDuration = 1 / sampleFps;
 
   const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
   const canvasAspect = canvas.width / canvas.height;
@@ -105,6 +108,17 @@ async function preCacheVideoFrames(
 
   ctx.fillStyle = "#000";
 
+  // Kickstart hardware decoder on mobile Safari with play-pause
+  try {
+    videoElement.currentTime = 0;
+    await videoElement.play();
+    videoElement.pause();
+    await new Promise(r => setTimeout(r, 100));
+    console.log("[CinematicExport] Decoder kickstarted via play-pause");
+  } catch (e) {
+    console.warn("[CinematicExport] Play-pause kickstart failed (ok):", e);
+  }
+
   let consecutiveTimeouts = 0;
   const MAX_CONSECUTIVE_TIMEOUTS = 5;
 
@@ -117,11 +131,18 @@ async function preCacheVideoFrames(
     videoElement.addEventListener("seeked", () => { clearTimeout(timeout); consecutiveTimeouts = 0; resolve(); }, { once: true });
   });
 
+  // Wait until video has pixel data ready
+  const waitReady = () => new Promise<void>((resolve) => {
+    if (videoElement.readyState >= 2) { resolve(); return; }
+    const timeout = setTimeout(resolve, 300);
+    videoElement.addEventListener("canplay", () => { clearTimeout(timeout); resolve(); }, { once: true });
+  });
+
   const frames: ImageBitmap[] = [];
-  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames from ${sourceDuration.toFixed(2)}s video`);
+  let lastGoodBitmap: ImageBitmap | null = null;
+  console.log(`[CinematicExport] Pre-caching ${sourceFrameCount} frames @ ${sampleFps}fps from ${sourceDuration.toFixed(2)}s video`);
 
   for (let i = 0; i < sourceFrameCount; i++) {
-    // If seeking is consistently failing, stop caching and reuse what we have
     if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS && frames.length > 0) {
       console.warn(`[CinematicExport] Seeking stalled after ${frames.length} frames, using cached frames only`);
       break;
@@ -130,13 +151,30 @@ async function preCacheVideoFrames(
     const seekTime = Math.min(i * frameDuration, sourceDuration - 0.05);
     videoElement.currentTime = seekTime;
     await waitSeek();
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(videoElement, dx, dy, dw, dh);
-    frames.push(await createImageBitmap(canvas));
+    await waitReady();
+
+    // Check if the video actually has decodable pixel data
+    if (videoElement.readyState >= 2) {
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(videoElement, dx, dy, dw, dh);
+      const bitmap = await createImageBitmap(canvas);
+      frames.push(bitmap);
+      lastGoodBitmap = bitmap;
+    } else if (lastGoodBitmap) {
+      // Re-use last successfully decoded frame to avoid black frames
+      console.warn(`[CinematicExport] Frame ${i}: not ready, reusing last good frame`);
+      frames.push(await createImageBitmap(lastGoodBitmap));
+    } else {
+      // Very first frame failed — draw black and continue
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const bitmap = await createImageBitmap(canvas);
+      frames.push(bitmap);
+    }
+
     if (i % 30 === 0) await yieldToUI();
   }
 
-  console.log(`[CinematicExport] Cached ${frames.length} frames`);
+  console.log(`[CinematicExport] Cached ${frames.length} frames (sampled @ ${sampleFps}fps)`);
   return frames;
 }
 
