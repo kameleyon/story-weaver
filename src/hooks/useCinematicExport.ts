@@ -179,6 +179,7 @@ async function preCacheVideoFrames(
 }
 
 // Encode frames using slow-motion stretch (no looping, no reverse)
+// Optional fade-in/fade-out support for scene transitions
 async function encodeSlowMotionFrames(
   cachedFrames: ImageBitmap[],
   videoEncoder: any,
@@ -186,6 +187,10 @@ async function encodeSlowMotionFrames(
   sourceDuration: number,
   targetDuration: number,
   cumulativeTimestampOffset: number,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  fadeInFrames: number = 0,
+  fadeOutFrames: number = 0,
   onProgress?: (framesRendered: number) => void
 ): Promise<number> {
   const totalFrames = Math.ceil(targetDuration * fps);
@@ -215,10 +220,29 @@ async function encodeSlowMotionFrames(
     );
     const bitmap = cachedFrames[sourceIdx];
 
+    // Apply fade-in/fade-out opacity
+    let opacity = 1.0;
+    if (fadeInFrames > 0 && frame < fadeInFrames) {
+      opacity = frame / fadeInFrames;
+    } else if (fadeOutFrames > 0 && frame >= totalFrames - fadeOutFrames) {
+      opacity = (totalFrames - 1 - frame) / fadeOutFrames;
+    }
+
     const timestamp = cumulativeTimestampOffset + Math.round(frame * frameDuration);
     const keyFrame = frame % (fps * 2) === 0;
 
-    const vf = new VideoFrame(bitmap, { timestamp, duration: frameDuration });
+    let frameSource: ImageBitmap | HTMLCanvasElement = bitmap;
+    if (opacity < 1.0) {
+      // Draw faded frame onto canvas
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1.0;
+      frameSource = canvas;
+    }
+
+    const vf = new VideoFrame(frameSource, { timestamp, duration: frameDuration });
     videoEncoder.encode(vf, { keyFrame });
     vf.close();
 
@@ -404,10 +428,17 @@ export function useCinematicExport() {
           // Step 1: Pre-cache all unique frames from video (FAST — only seeks once per unique frame)
           const cachedFrames = await preCacheVideoFrames(tempVideo, canvas, ctx, fps);
 
-          // Step 2: Encode using forward-only looping from cache (INSTANT — no seeking)
+          // Step 2: Encode with slow-motion and crossfade transitions
           const sourceDuration = tempVideo.duration || 5;
+          const FADE_DURATION = 0.5; // seconds
+          const fadeFrameCount = Math.round(FADE_DURATION * fps);
+          const isFirstScene = i === 0;
+          const isLastScene = i === scenesWithVideo.length - 1;
           const framesRendered = await encodeSlowMotionFrames(
             cachedFrames, videoEncoder, fps, sourceDuration, targetDuration, cumulativeTimestampOffset,
+            canvas, ctx,
+            isFirstScene ? 0 : fadeFrameCount,  // fade-in (skip for first scene)
+            isLastScene ? 0 : fadeFrameCount,    // fade-out (skip for last scene)
             (rendered) => {
               const pct = baseProgress + (rendered / Math.ceil(targetDuration * fps)) * (70 / scenesWithVideo.length);
               setState({ status: "rendering", progress: Math.floor(pct) });
