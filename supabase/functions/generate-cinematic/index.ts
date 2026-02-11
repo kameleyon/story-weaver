@@ -343,7 +343,12 @@ You are writing prompts for a generative video AI that CANNOT do lip-sync. You m
 
 ### PHASE 3: SCENE CREATION
 
-Create a script with ${config.minScenes}-${config.maxScenes} scenes (variable based on story needs).
+⚠️ MANDATORY SCENE COUNT RULE — THIS IS NON-NEGOTIABLE:
+You MUST generate a MINIMUM of ${config.minScenes} scenes and a MAXIMUM of ${config.maxScenes} scenes.
+- Generating fewer than ${config.minScenes} scenes is a CRITICAL FAILURE. Do NOT do it.
+- Generating more than ${config.maxScenes} scenes is also a failure.
+- Count your scenes before finalizing. If you have fewer than ${config.minScenes}, ADD MORE scenes.
+- The acceptable range is EXACTLY ${config.minScenes} to ${config.maxScenes} scenes. No exceptions.
 
 **TARGET DURATION:** ~${config.targetDuration} seconds total (under 3 minutes)
 **MAX PER SCENE:** ${config.maxSceneDuration} seconds each
