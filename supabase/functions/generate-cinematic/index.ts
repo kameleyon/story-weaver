@@ -1075,7 +1075,7 @@ ANIMATION RULES (CRITICAL):
           input: {
             image: imageUrl,
             prompt: truncatedPrompt,
-            duration: Math.min(Math.max(Math.round(scene.duration), 5), 10),
+            duration: [5, 10, 15].reduce((prev, curr) => Math.abs(curr - scene.duration) < Math.abs(prev - scene.duration) ? curr : prev),
             resolution: "720p",
             audio_enabled: false,
             enable_prompt_expansion: false,
