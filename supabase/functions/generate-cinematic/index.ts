@@ -443,7 +443,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       "voiceover": "Engaging narration that hooks the viewer immediately...",
       "visualPrompt": "'THE JOURNEY BEGINS' in bold, modern typography fading in over: Slow dolly push through morning mist. A 32-year-old woman with shoulder-length black hair, warm brown skin, athletic build, wearing a tailored navy blazer (from character bible) steps into frame from the right. Camera tracks her movement. She walks purposefully but does NOT speak—static determined expression with subtle breathing. Shallow depth of field, lens flare kissing the edge of frame.",
       "visualStyle": "Cinematic establishing shot with atmospheric depth",
-      "duration": 8
+      "duration": 10
     }
   ]
 }`;
@@ -522,7 +522,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
         voiceover: s?.voiceover ?? "",
         visualPrompt: `${s?.visualPrompt ?? ""}\n\nSTYLE: ${styleDescription}`,
         visualStyle: s?.visualStyle ?? "cinematic",
-        duration: typeof s?.duration === "number" ? s.duration : 8,
+        duration: typeof s?.duration === "number" ? s.duration : 10,
       })),
     };
   }
@@ -1324,7 +1324,7 @@ serve(async (req) => {
       voiceover: s?.voiceover ?? "",
       visualPrompt: s?.visualPrompt ?? "",
       visualStyle: s?.visualStyle ?? "cinematic",
-      duration: typeof s?.duration === "number" ? s.duration : 6,
+      duration: typeof s?.duration === "number" ? s.duration : 10,
       audioUrl: s?.audioUrl,
       imageUrl: s?.imageUrl,
       videoUrl: s?.videoUrl,
