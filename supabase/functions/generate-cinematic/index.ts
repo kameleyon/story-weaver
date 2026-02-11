@@ -53,7 +53,7 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
 // Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
-const WAN_VIDEO_MODEL = "wan-video/wan2.6-i2v-flash";
+const WAN_VIDEO_MODEL = "wan-video/wan-2.2-t2v-fast";
 
 // Nano Banana models for image generation (Replicate)
 const NANO_BANANA_MODEL = "google/nano-banana";
@@ -1044,9 +1044,9 @@ QUALITY REQUIREMENTS:
 }
 
 // ============================================
-// STEP 4: Video Generation with Wan 2.6 Flash (phased)
+// STEP 4: Video Generation with Wan 2.2 T2V Fast (phased)
 // ============================================
-async function startVideoGeneration(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
+async function startVideoGeneration(scene: Scene, format: "landscape" | "portrait" | "square", replicateToken: string) {
   // Build video prompt with anti-lip-sync instructions
   const videoPrompt = `${scene.visualPrompt}
 
@@ -1061,10 +1061,28 @@ ANIMATION RULES (CRITICAL):
   // Truncate prompt to 2000 chars max for API compliance
   const truncatedPrompt = videoPrompt.length > 2000 ? videoPrompt.substring(0, 2000) : videoPrompt;
 
+  // Map format to aspect_ratio (model only supports 16:9 and 9:16)
+  const aspectRatio = format === "portrait" ? "9:16" : "16:9";
+
+  // Calculate num_frames and fps to match audio duration (target 8-10s)
+  // num_frames: 81-121, fps: 5-30 (default 16)
+  // duration = num_frames / fps
+  const targetDuration = Math.min(10, Math.max(8, scene.duration));
+  // Try at 16fps first
+  let numFrames = Math.round(targetDuration * 16);
+  let fps = 16;
+  if (numFrames > 121) {
+    // Need to reduce fps to fit target duration within 121 frames
+    numFrames = 121;
+    fps = Math.max(5, Math.min(30, Math.round(121 / targetDuration)));
+  }
+  numFrames = Math.min(121, Math.max(81, numFrames));
+
+  console.log(`[Wan2.2] Target duration: ${targetDuration}s, num_frames: ${numFrames}, fps: ${fps}, aspect: ${aspectRatio}`);
+
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // Use Replicate Models API for wan-video/wan2.6-i2v-flash
       const response = await fetch(`${REPLICATE_MODELS_URL}/${WAN_VIDEO_MODEL}/predictions`, {
         method: "POST",
         headers: {
@@ -1073,13 +1091,15 @@ ANIMATION RULES (CRITICAL):
         },
         body: JSON.stringify({
           input: {
-            image: imageUrl,
             prompt: truncatedPrompt,
-            duration: [5, 10, 15].reduce((prev, curr) => Math.abs(curr - scene.duration) < Math.abs(prev - scene.duration) ? curr : prev),
+            num_frames: numFrames,
+            frames_per_second: fps,
+            aspect_ratio: aspectRatio,
             resolution: "720p",
-            audio_enabled: false,
-            enable_prompt_expansion: false,
-            negative_prompt: "lip sync, talking, moving mouth, speaking, mouth movement",
+            go_fast: true,
+            optimize_prompt: false,
+            interpolate_output: true,
+            disable_safety_checker: false,
           },
         }),
       });
@@ -1090,13 +1110,13 @@ ANIMATION RULES (CRITICAL):
       }
 
       const prediction = await response.json();
-      console.log(`[Wan2.6] Prediction started: ${prediction.id}`);
+      console.log(`[Wan2.2] Prediction started: ${prediction.id}`);
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
       if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("503")) && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[Wan2.6] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Wan2.2] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
@@ -1117,7 +1137,7 @@ async function resolveVideoGeneration(
   if (result.status !== "succeeded") {
     if (result.status === "failed") {
       const errorMsg = result.error || "Video generation failed";
-      console.error("[Wan2.6] Failed:", errorMsg);
+      console.error("[Wan2.2] Failed:", errorMsg);
       
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
@@ -1145,12 +1165,12 @@ async function resolveVideoGeneration(
   }
 
   if (!videoUrl) {
-    console.error("[Wan2.6] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    console.error("[Wan2.2] Succeeded but no video URL found. Output:", JSON.stringify(output));
     throw new Error("Replicate succeeded but returned no video URL");
   }
 
   // Download and upload to storage
-  console.log(`[Wan2.6] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
+  console.log(`[Wan2.2] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
     throw new Error(`Failed to download generated video: ${videoResponse.status}`);
@@ -1176,7 +1196,7 @@ async function resolveVideoGeneration(
   }
 
   const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-  console.log(`[Wan2.6] Video uploaded: ${urlData.publicUrl}`);
+  console.log(`[Wan2.2] Video uploaded: ${urlData.publicUrl}`);
   return urlData.publicUrl;
 }
 
@@ -1465,7 +1485,7 @@ serve(async (req) => {
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
-      if (!scene.imageUrl) throw new Error("Scene image is missing (run images phase first)");
+      // Note: T2V model doesn't require imageUrl, but images phase should still run for thumbnails
 
       // Read format from project
       const { data: project, error: projectError } = await supabase
@@ -1478,7 +1498,7 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        const predictionId = await startVideoGeneration(scene, scene.imageUrl, format, replicateToken);
+        const predictionId = await startVideoGeneration(scene, format, replicateToken);
         scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
@@ -1587,7 +1607,7 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startVideoGeneration(scene, format, replicateToken);
       
       // Poll for video completion
       let videoUrl: string | null = null;
@@ -1630,7 +1650,7 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startVideoGeneration(scene, format, replicateToken);
       
       // Poll for video completion
       let videoUrl: string | null = null;
