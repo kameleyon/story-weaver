@@ -285,7 +285,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
           ...prev,
           step: "visuals",
           progress: 60,
-          statusMessage: "Images complete. Generating video clips with Wan 2.6...",
+          statusMessage: "Images complete. Generating video clips with Grok...",
         }));
 
         for (let i = 0; i < sceneCount; i++) {
@@ -559,7 +559,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                       Create Cinematic Video
                     </h1>
                     <p className="mt-1.5 sm:mt-2 text-sm text-muted-foreground/70">
-                      Transform your ideas into cinematic AI-generated videos using Replicate + Wan 2.6
+                      Transform your ideas into cinematic AI-generated videos using Replicate + Grok
                     </p>
                   </div>
 
