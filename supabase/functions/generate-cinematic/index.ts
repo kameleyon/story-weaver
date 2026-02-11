@@ -53,7 +53,7 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
 // Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
-const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
+const WAN_VIDEO_MODEL = "wan-video/wan2.6-i2v-flash";
 
 // Nano Banana models for image generation (Replicate)
 const NANO_BANANA_MODEL = "google/nano-banana";
@@ -1044,16 +1044,10 @@ QUALITY REQUIREMENTS:
 }
 
 // ============================================
-// STEP 4: Video Generation with Replicate Grok (phased)
+// STEP 4: Video Generation with Wan 2.6 Flash (phased)
 // ============================================
-async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
-  // Fetch latest version dynamically
-  const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
-  
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
+async function startVideoGeneration(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
   // Build video prompt with anti-lip-sync instructions
-  // We want expressions (surprised, screaming) but NOT talking/lip-sync animation
   const videoPrompt = `${scene.visualPrompt}
 
 ANIMATION RULES (CRITICAL):
@@ -1064,37 +1058,55 @@ ANIMATION RULES (CRITICAL):
 - Static poses with subtle breathing/idle movement are preferred for dialogue scenes
 - Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
 
-  const MAX_GROK_RETRIES = 4;
-  for (let attempt = 1; attempt <= MAX_GROK_RETRIES; attempt++) {
+  // Truncate prompt to 2000 chars max for API compliance
+  const truncatedPrompt = videoPrompt.length > 2000 ? videoPrompt.substring(0, 2000) : videoPrompt;
+
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const prediction = await createReplicatePrediction(
-        version,
-        {
-          prompt: videoPrompt,
-          image: imageUrl,
-          duration: Math.min(scene.duration, 15),
-          resolution: "720p",
-          aspect_ratio: aspectRatio,
+      // Use Replicate Models API for wan-video/wan2.6-i2v-flash
+      const response = await fetch(`${REPLICATE_MODELS_URL}/${WAN_VIDEO_MODEL}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
         },
-        replicateToken,
-      );
-      console.log(`Grok prediction started: ${prediction.id}`);
+        body: JSON.stringify({
+          input: {
+            image: imageUrl,
+            prompt: truncatedPrompt,
+            duration: Math.min(scene.duration, 5),
+            resolution: "720p",
+            audio_enabled: false,
+            enable_prompt_expansion: false,
+            negative_prompt: "lip sync, talking, moving mouth, speaking, mouth movement",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Wan video prediction start failed (${response.status}): ${errorText}`);
+      }
+
+      const prediction = await response.json();
+      console.log(`[Wan2.6] Prediction started: ${prediction.id}`);
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if ((errMsg.includes("429") || errMsg.includes("500")) && attempt < MAX_GROK_RETRIES) {
+      if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("503")) && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[Grok] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Wan2.6] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
       throw err;
     }
   }
-  throw new Error("Grok video prediction failed after retries");
+  throw new Error("Wan video prediction failed after retries");
 }
 
-async function resolveGrok(
+async function resolveVideoGeneration(
   predictionId: string,
   replicateToken: string,
   supabase: ReturnType<typeof createClient>,
@@ -1105,9 +1117,8 @@ async function resolveGrok(
   if (result.status !== "succeeded") {
     if (result.status === "failed") {
       const errorMsg = result.error || "Video generation failed";
-      console.error("Grok failed:", errorMsg);
+      console.error("[Wan2.6] Failed:", errorMsg);
       
-      // Surface user-friendly error messages for common issues
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
       }
@@ -1120,31 +1131,29 @@ async function resolveGrok(
     return null;
   }
 
-  // Handle different Replicate output formats: string, array, or object
+  // Handle different Replicate output formats: string, array, or object with url()
   const output = result.output;
   let videoUrl: string | null = null;
 
   if (typeof output === "string" && output) {
     videoUrl = output;
   } else if (Array.isArray(output) && output.length > 0) {
-    // Handle array output like ["https://...mp4"]
     videoUrl = typeof output[0] === "string" ? output[0] : null;
   } else if (typeof output === "object" && output !== null) {
-    // Handle object output like { url: "..." } or { video: "..." }
     const obj = output as Record<string, unknown>;
     videoUrl = (obj.url || obj.video || obj.output) as string | null;
   }
 
   if (!videoUrl) {
-    console.error("[Grok] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    console.error("[Wan2.6] Succeeded but no video URL found. Output:", JSON.stringify(output));
     throw new Error("Replicate succeeded but returned no video URL");
   }
 
-  // Download the video from Replicate and upload to Supabase storage for persistence
-  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate: ${videoUrl}`);
+  // Download and upload to storage
+  console.log(`[Wan2.6] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
-    throw new Error(`Failed to download generated video from Replicate: ${videoResponse.status}`);
+    throw new Error(`Failed to download generated video: ${videoResponse.status}`);
   }
   const videoBuffer = await videoResponse.arrayBuffer();
 
@@ -1154,7 +1163,6 @@ async function resolveGrok(
     .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
 
   if (upload.error) {
-    // Try create bucket if missing
     try {
       await supabase.storage.createBucket("scene-videos", { public: true });
       const retry = await supabase.storage
@@ -1168,7 +1176,7 @@ async function resolveGrok(
   }
 
   const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-  console.log(`[Grok] Video uploaded: ${urlData.publicUrl}`);
+  console.log(`[Wan2.6] Video uploaded: ${urlData.publicUrl}`);
   return urlData.publicUrl;
 }
 
@@ -1470,13 +1478,13 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        const predictionId = await startGrok(scene, scene.imageUrl, format, replicateToken);
+        const predictionId = await startVideoGeneration(scene, scene.imageUrl, format, replicateToken);
         scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      const videoUrl = await resolveVideoGeneration(scene.videoPredictionId, replicateToken, supabase, scene.number);
       if (!videoUrl) {
         return jsonResponse({ success: true, status: "processing", scene });
       }
@@ -1579,13 +1587,13 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
       
       // Poll for video completion
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number);
         if (videoUrl) break;
       }
 
@@ -1622,13 +1630,13 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
       
       // Poll for video completion
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number);
         if (videoUrl) break;
       }
 
