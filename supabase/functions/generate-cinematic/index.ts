@@ -1044,25 +1044,116 @@ QUALITY REQUIREMENTS:
 }
 
 // ============================================
-// STEP 4: Video Generation with Replicate Grok (phased)
+// STEP 4: Video Generation – Pollo.ai ViduQ3 Pro (primary) + Replicate Grok (fallback)
 // ============================================
-async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
-  // Fetch latest version dynamically
-  const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
-  
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
-  // Build video prompt with anti-lip-sync instructions
-  // We want expressions (surprised, screaming) but NOT talking/lip-sync animation
-  const videoPrompt = `${scene.visualPrompt}
 
-ANIMATION RULES (CRITICAL):
-- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
-- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
-- Body movement IS allowed: walking, running, gesturing, pointing, reacting
-- Environment animation IS allowed: wind, particles, camera movement, lighting changes
-- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
-- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+const POLLO_API_BASE = "https://pollo.ai/api/platform/generation";
+
+// --- Pollo.ai ViduQ3 Pro ---
+async function startPolloVideo(
+  scene: Scene,
+  imageUrl: string,
+  format: "landscape" | "portrait" | "square",
+  polloApiKey: string,
+): Promise<string> {
+  const videoPrompt = buildVideoPrompt(scene);
+
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(`${POLLO_API_BASE}/vidu/viduq3-pro`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": polloApiKey,
+        },
+        body: JSON.stringify({
+          input: {
+            image: imageUrl,
+            prompt: videoPrompt,
+            length: 5,
+            resolution: "720p",
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[Pollo] Rate limited/error on attempt ${attempt}, retrying in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new Error(`Pollo API error ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json();
+      const taskId = data.taskId;
+      if (!taskId) throw new Error("Pollo API returned no taskId");
+      console.log(`[Pollo] ViduQ3 Pro task started: ${taskId}`);
+      return `pollo:${taskId}`;
+    } catch (err: any) {
+      if (attempt < MAX_RETRIES && (err?.message?.includes("429") || err?.message?.includes("500"))) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Pollo video task failed after retries");
+}
+
+async function resolvePolloVideo(
+  taskId: string,
+  polloApiKey: string,
+  supabase: ReturnType<typeof createClient>,
+  sceneNumber: number,
+): Promise<string | null> {
+  const res = await fetch(`${POLLO_API_BASE}/${taskId}/status`, {
+    method: "GET",
+    headers: { "x-api-key": polloApiKey },
+  });
+
+  if (!res.ok) {
+    console.error(`[Pollo] Status check failed: ${res.status}`);
+    return null;
+  }
+
+  const data = await res.json();
+  const generation = data.generations?.[0];
+  if (!generation) return null;
+
+  if (generation.status === "failed") {
+    const failMsg = generation.failMsg || "Video generation failed";
+    console.error(`[Pollo] Failed: ${failMsg}`);
+    throw new Error(`Pollo video failed: ${failMsg}`);
+  }
+
+  if (generation.status !== "succeed") {
+    return null; // still processing/waiting
+  }
+
+  const videoUrl = generation.url;
+  if (!videoUrl) {
+    throw new Error("[Pollo] Succeeded but no video URL returned");
+  }
+
+  // Download and persist to Supabase storage
+  return await persistVideoToStorage(videoUrl, supabase, sceneNumber, "Pollo");
+}
+
+// --- Replicate Grok (fallback) ---
+async function startGrokFallback(
+  scene: Scene,
+  imageUrl: string,
+  format: "landscape" | "portrait" | "square",
+  replicateToken: string,
+): Promise<string> {
+  const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  const videoPrompt = buildVideoPrompt(scene);
 
   const MAX_GROK_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_GROK_RETRIES; attempt++) {
@@ -1078,23 +1169,23 @@ ANIMATION RULES (CRITICAL):
         },
         replicateToken,
       );
-      console.log(`Grok prediction started: ${prediction.id}`);
-      return prediction.id as string;
+      console.log(`[Grok-Fallback] prediction started: ${prediction.id}`);
+      return `grok:${prediction.id}`;
     } catch (err: any) {
       const errMsg = err?.message || "";
       if ((errMsg.includes("429") || errMsg.includes("500")) && attempt < MAX_GROK_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[Grok] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Grok-Fallback] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
       throw err;
     }
   }
-  throw new Error("Grok video prediction failed after retries");
+  throw new Error("Grok fallback video prediction failed after retries");
 }
 
-async function resolveGrok(
+async function resolveGrokFallback(
   predictionId: string,
   replicateToken: string,
   supabase: ReturnType<typeof createClient>,
@@ -1105,46 +1196,60 @@ async function resolveGrok(
   if (result.status !== "succeeded") {
     if (result.status === "failed") {
       const errorMsg = result.error || "Video generation failed";
-      console.error("Grok failed:", errorMsg);
-      
-      // Surface user-friendly error messages for common issues
+      console.error("[Grok-Fallback] failed:", errorMsg);
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
       }
       if (errorMsg.includes("rate limit") || errorMsg.includes("429")) {
         throw new Error("Video API rate limited. Please wait a moment and try again.");
       }
-      
       throw new Error(`Video generation failed: ${errorMsg}`);
     }
     return null;
   }
 
-  // Handle different Replicate output formats: string, array, or object
   const output = result.output;
   let videoUrl: string | null = null;
-
   if (typeof output === "string" && output) {
     videoUrl = output;
   } else if (Array.isArray(output) && output.length > 0) {
-    // Handle array output like ["https://...mp4"]
     videoUrl = typeof output[0] === "string" ? output[0] : null;
   } else if (typeof output === "object" && output !== null) {
-    // Handle object output like { url: "..." } or { video: "..." }
     const obj = output as Record<string, unknown>;
     videoUrl = (obj.url || obj.video || obj.output) as string | null;
   }
 
   if (!videoUrl) {
-    console.error("[Grok] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    console.error("[Grok-Fallback] Succeeded but no video URL found. Output:", JSON.stringify(output));
     throw new Error("Replicate succeeded but returned no video URL");
   }
 
-  // Download the video from Replicate and upload to Supabase storage for persistence
-  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate: ${videoUrl}`);
+  return await persistVideoToStorage(videoUrl, supabase, sceneNumber, "Grok-Fallback");
+}
+
+// --- Shared helpers ---
+function buildVideoPrompt(scene: Scene): string {
+  return `${scene.visualPrompt}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+}
+
+async function persistVideoToStorage(
+  videoUrl: string,
+  supabase: ReturnType<typeof createClient>,
+  sceneNumber: number,
+  tag: string,
+): Promise<string> {
+  console.log(`[${tag}] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
-    throw new Error(`Failed to download generated video from Replicate: ${videoResponse.status}`);
+    throw new Error(`Failed to download generated video: ${videoResponse.status}`);
   }
   const videoBuffer = await videoResponse.arrayBuffer();
 
@@ -1154,7 +1259,6 @@ async function resolveGrok(
     .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
 
   if (upload.error) {
-    // Try create bucket if missing
     try {
       await supabase.storage.createBucket("scene-videos", { public: true });
       const retry = await supabase.storage
@@ -1168,8 +1272,48 @@ async function resolveGrok(
   }
 
   const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-  console.log(`[Grok] Video uploaded: ${urlData.publicUrl}`);
+  console.log(`[${tag}] Video uploaded: ${urlData.publicUrl}`);
   return urlData.publicUrl;
+}
+
+// --- Unified start/resolve with primary (Pollo) + fallback (Grok) ---
+async function startVideoGeneration(
+  scene: Scene,
+  imageUrl: string,
+  format: "landscape" | "portrait" | "square",
+  replicateToken: string,
+): Promise<string> {
+  const polloApiKey = Deno.env.get("POLLO_API_KEY");
+  if (polloApiKey) {
+    try {
+      return await startPolloVideo(scene, imageUrl, format, polloApiKey);
+    } catch (err) {
+      console.warn(`[VIDEO] Pollo.ai failed, falling back to Grok: ${err instanceof Error ? err.message : err}`);
+    }
+  } else {
+    console.warn("[VIDEO] POLLO_API_KEY not set, using Grok fallback");
+  }
+  return await startGrokFallback(scene, imageUrl, format, replicateToken);
+}
+
+async function resolveVideoGeneration(
+  predictionId: string,
+  replicateToken: string,
+  supabase: ReturnType<typeof createClient>,
+  sceneNumber: number,
+): Promise<string | null> {
+  if (predictionId.startsWith("pollo:")) {
+    const taskId = predictionId.replace("pollo:", "");
+    const polloApiKey = Deno.env.get("POLLO_API_KEY");
+    if (!polloApiKey) throw new Error("POLLO_API_KEY missing for resolve");
+    return await resolvePolloVideo(taskId, polloApiKey, supabase, sceneNumber);
+  }
+  if (predictionId.startsWith("grok:")) {
+    const id = predictionId.replace("grok:", "");
+    return await resolveGrokFallback(id, replicateToken, supabase, sceneNumber);
+  }
+  // Legacy: bare ID assumed to be Grok
+  return await resolveGrokFallback(predictionId, replicateToken, supabase, sceneNumber);
 }
 
 async function readGenerationOwned(
@@ -1470,13 +1614,13 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        const predictionId = await startGrok(scene, scene.imageUrl, format, replicateToken);
+        const predictionId = await startVideoGeneration(scene, scene.imageUrl, format, replicateToken);
         scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      const videoUrl = await resolveVideoGeneration(scene.videoPredictionId, replicateToken, supabase, scene.number);
       if (!videoUrl) {
         return jsonResponse({ success: true, status: "processing", scene });
       }
@@ -1579,13 +1723,13 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
       
       // Poll for video completion
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number);
         if (videoUrl) break;
       }
 
@@ -1622,13 +1766,13 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
       
       // Poll for video completion
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number);
         if (videoUrl) break;
       }
 
