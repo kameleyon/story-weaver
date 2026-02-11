@@ -115,7 +115,7 @@ const normalizeScenes = (raw: unknown): Scene[] | undefined => {
     voiceover: s?.voiceover ?? s?.narration ?? "",
     visualPrompt: s?.visualPrompt ?? s?.visual_prompt ?? "",
     subVisuals: Array.isArray(s?.subVisuals) ? s.subVisuals : undefined,
-    duration: typeof s?.duration === "number" ? s.duration : 8,
+    duration: typeof s?.duration === "number" ? s.duration : 10,
     imageUrl: s?.imageUrl ?? s?.image_url,
     imageUrls: Array.isArray(s?.imageUrls) ? s.imageUrls : undefined,
     audioUrl: s?.audioUrl ?? s?.audio_url,
