@@ -48,6 +48,40 @@ interface Scene {
   videoPredictionId?: string;
 }
 
+// ============= API CALL LOGGING =============
+async function logApiCall(params: {
+  supabase: ReturnType<typeof createClient>;
+  userId: string;
+  generationId?: string;
+  provider: string;
+  model: string;
+  status: string;
+  queueTimeMs?: number;
+  runningTimeMs?: number;
+  totalDurationMs?: number;
+  cost?: number;
+  errorMessage?: string;
+}) {
+  try {
+    const { error } = await params.supabase.from("api_call_logs").insert({
+      user_id: params.userId,
+      generation_id: params.generationId || null,
+      provider: params.provider,
+      model: params.model,
+      status: params.status,
+      queue_time_ms: params.queueTimeMs || null,
+      running_time_ms: params.runningTimeMs || null,
+      total_duration_ms: params.totalDurationMs || null,
+      cost: params.cost || 0,
+      error_message: params.errorMessage || null,
+    });
+    if (error) console.error(`[API_LOG] Failed: ${error.message}`);
+    else console.log(`[API_LOG] Logged ${params.provider}/${params.model}: ${params.status}, ${params.totalDurationMs}ms`);
+  } catch (err) {
+    console.error(`[API_LOG] Error:`, err);
+  }
+}
+
 const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
@@ -1287,14 +1321,42 @@ async function startVideoGeneration(
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
   _replicateToken: string,
+  logCtx?: { supabase: ReturnType<typeof createClient>; userId: string; generationId: string },
 ): Promise<string> {
   const polloApiKey = Deno.env.get("POLLO_API_KEY");
   if (!polloApiKey) {
     throw new Error("POLLO_API_KEY is not set. Video generation requires Pollo.ai.");
   }
-  return await startPolloVideo(scene, imageUrl, format, polloApiKey);
-  // --- Grok fallback commented out ---
-  // return await startGrokFallback(scene, imageUrl, format, replicateToken);
+  const startMs = Date.now();
+  try {
+    const result = await startPolloVideo(scene, imageUrl, format, polloApiKey);
+    if (logCtx) {
+      await logApiCall({
+        supabase: logCtx.supabase,
+        userId: logCtx.userId,
+        generationId: logCtx.generationId,
+        provider: "pollo.ai",
+        model: "vidu/viduq3-pro",
+        status: "started",
+        totalDurationMs: Date.now() - startMs,
+      });
+    }
+    return result;
+  } catch (err: any) {
+    if (logCtx) {
+      await logApiCall({
+        supabase: logCtx.supabase,
+        userId: logCtx.userId,
+        generationId: logCtx.generationId,
+        provider: "pollo.ai",
+        model: "vidu/viduq3-pro",
+        status: "error",
+        totalDurationMs: Date.now() - startMs,
+        errorMessage: err?.message || String(err),
+      });
+    }
+    throw err;
+  }
 }
 
 async function resolveVideoGeneration(
@@ -1302,12 +1364,43 @@ async function resolveVideoGeneration(
   _replicateToken: string,
   supabase: ReturnType<typeof createClient>,
   sceneNumber: number,
+  logCtx?: { userId: string; generationId: string },
 ): Promise<string | null> {
   if (predictionId.startsWith("pollo:")) {
     const taskId = predictionId.replace("pollo:", "");
     const polloApiKey = Deno.env.get("POLLO_API_KEY");
     if (!polloApiKey) throw new Error("POLLO_API_KEY missing for resolve");
-    return await resolvePolloVideo(taskId, polloApiKey, supabase, sceneNumber);
+    const startMs = Date.now();
+    try {
+      const result = await resolvePolloVideo(taskId, polloApiKey, supabase, sceneNumber);
+      // Log when video completes (result is a URL) or fails
+      if (result && logCtx) {
+        await logApiCall({
+          supabase,
+          userId: logCtx.userId,
+          generationId: logCtx.generationId,
+          provider: "pollo.ai",
+          model: "vidu/viduq3-pro",
+          status: "complete",
+          totalDurationMs: Date.now() - startMs,
+        });
+      }
+      return result;
+    } catch (err: any) {
+      if (logCtx) {
+        await logApiCall({
+          supabase,
+          userId: logCtx.userId,
+          generationId: logCtx.generationId,
+          provider: "pollo.ai",
+          model: "vidu/viduq3-pro",
+          status: "error",
+          totalDurationMs: Date.now() - startMs,
+          errorMessage: err?.message || String(err),
+        });
+      }
+      throw err;
+    }
   }
   // --- Grok resolve commented out ---
   // if (predictionId.startsWith("grok:")) {
@@ -1615,14 +1708,16 @@ serve(async (req) => {
 
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
+      const logCtx = { supabase, userId: user.id, generationId };
+
       if (!scene.videoPredictionId) {
-        const predictionId = await startVideoGeneration(scene, scene.imageUrl, format, replicateToken);
+        const predictionId = await startVideoGeneration(scene, scene.imageUrl, format, replicateToken, logCtx);
         scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      const videoUrl = await resolveVideoGeneration(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      const videoUrl = await resolveVideoGeneration(scene.videoPredictionId, replicateToken, supabase, scene.number, { userId: user.id, generationId });
       if (!videoUrl) {
         return jsonResponse({ success: true, status: "processing", scene });
       }
@@ -1725,13 +1820,14 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
+      const editLogCtx = { supabase, userId: user.id, generationId };
+      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken, editLogCtx);
       
       // Poll for video completion
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number);
+        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number, { userId: user.id, generationId });
         if (videoUrl) break;
       }
 
@@ -1768,13 +1864,14 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken);
+      const regenLogCtx = { supabase, userId: user.id, generationId };
+      const predictionId = await startVideoGeneration(scene, newImageUrl, format, replicateToken, regenLogCtx);
       
       // Poll for video completion
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number);
+        videoUrl = await resolveVideoGeneration(predictionId, replicateToken, supabase, scene.number, { userId: user.id, generationId });
         if (videoUrl) break;
       }
 
