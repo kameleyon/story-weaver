@@ -53,7 +53,7 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
 // Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
-const WAN_VIDEO_MODEL = "wan-video/wan-2.2-5b-fast";
+const WAN_VIDEO_MODEL = "wan-video/wan2.6-i2v-flash";
 
 // Nano Banana models for image generation (Replicate)
 const NANO_BANANA_MODEL = "google/nano-banana";
@@ -1044,7 +1044,7 @@ QUALITY REQUIREMENTS:
 }
 
 // ============================================
-// STEP 4: Video Generation with Wan 2.2 5B Fast (phased)
+// STEP 4: Video Generation with Wan 2.6 Flash (phased)
 // ============================================
 async function startVideoGeneration(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
   // Build video prompt with anti-lip-sync instructions
@@ -1061,21 +1061,10 @@ ANIMATION RULES (CRITICAL):
   // Truncate prompt to 2000 chars max for API compliance
   const truncatedPrompt = videoPrompt.length > 2000 ? videoPrompt.substring(0, 2000) : videoPrompt;
 
-  // wan-2.2-5b-fast uses num_frames (81-121) and frames_per_second (5-30)
-  // To achieve 7-10 second videos: fps = num_frames / desired_duration
-  // We use max frames (121) and adjust fps to match audio duration (clamped 7-10s)
-  const NUM_FRAMES = 121;
-  const targetDuration = Math.max(7, Math.min(10, scene.duration || 8));
-  const fps = Math.max(5, Math.min(30, Math.round(NUM_FRAMES / targetDuration)));
-  const actualDuration = NUM_FRAMES / fps;
-  console.log(`[Wan2.2] Scene ${scene.number}: target=${targetDuration}s, fps=${fps}, actual=${actualDuration.toFixed(1)}s`);
-
-  // Map format to aspect_ratio (model only supports 16:9 and 9:16)
-  const aspectRatio = format === "portrait" ? "9:16" : "16:9";
-
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
+      // Use Replicate Models API for wan-video/wan2.6-i2v-flash
       const response = await fetch(`${REPLICATE_MODELS_URL}/${WAN_VIDEO_MODEL}/predictions`, {
         method: "POST",
         headers: {
@@ -1086,15 +1075,11 @@ ANIMATION RULES (CRITICAL):
           input: {
             image: imageUrl,
             prompt: truncatedPrompt,
-            num_frames: NUM_FRAMES,
-            frames_per_second: fps,
+            duration: Math.min(scene.duration, 5),
             resolution: "720p",
-            aspect_ratio: aspectRatio,
-            sample_shift: 8,
-            go_fast: true,
-            optimize_prompt: false,
+            audio_enabled: false,
+            enable_prompt_expansion: false,
             negative_prompt: "lip sync, talking, moving mouth, speaking, mouth movement",
-            disable_safety_checker: false,
           },
         }),
       });
@@ -1105,13 +1090,13 @@ ANIMATION RULES (CRITICAL):
       }
 
       const prediction = await response.json();
-      console.log(`[Wan2.2] Prediction started: ${prediction.id}`);
+      console.log(`[Wan2.6] Prediction started: ${prediction.id}`);
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
       if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("503")) && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[Wan2.2] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Wan2.6] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
@@ -1132,7 +1117,7 @@ async function resolveVideoGeneration(
   if (result.status !== "succeeded") {
     if (result.status === "failed") {
       const errorMsg = result.error || "Video generation failed";
-      console.error("[Wan2.2] Failed:", errorMsg);
+      console.error("[Wan2.6] Failed:", errorMsg);
       
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
@@ -1160,12 +1145,12 @@ async function resolveVideoGeneration(
   }
 
   if (!videoUrl) {
-    console.error("[Wan2.2] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    console.error("[Wan2.6] Succeeded but no video URL found. Output:", JSON.stringify(output));
     throw new Error("Replicate succeeded but returned no video URL");
   }
 
   // Download and upload to storage
-  console.log(`[Wan2.2] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
+  console.log(`[Wan2.6] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
     throw new Error(`Failed to download generated video: ${videoResponse.status}`);
@@ -1191,7 +1176,7 @@ async function resolveVideoGeneration(
   }
 
   const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-  console.log(`[Wan2.2] Video uploaded: ${urlData.publicUrl}`);
+  console.log(`[Wan2.6] Video uploaded: ${urlData.publicUrl}`);
   return urlData.publicUrl;
 }
 
