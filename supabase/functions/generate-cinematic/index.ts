@@ -1276,29 +1276,25 @@ async function persistVideoToStorage(
   return urlData.publicUrl;
 }
 
-// --- Unified start/resolve with primary (Pollo) + fallback (Grok) ---
+// --- Unified start/resolve – Pollo.ai ONLY (Grok commented out) ---
 async function startVideoGeneration(
   scene: Scene,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  replicateToken: string,
+  _replicateToken: string,
 ): Promise<string> {
   const polloApiKey = Deno.env.get("POLLO_API_KEY");
-  if (polloApiKey) {
-    try {
-      return await startPolloVideo(scene, imageUrl, format, polloApiKey);
-    } catch (err) {
-      console.warn(`[VIDEO] Pollo.ai failed, falling back to Grok: ${err instanceof Error ? err.message : err}`);
-    }
-  } else {
-    console.warn("[VIDEO] POLLO_API_KEY not set, using Grok fallback");
+  if (!polloApiKey) {
+    throw new Error("POLLO_API_KEY is not set. Video generation requires Pollo.ai.");
   }
-  return await startGrokFallback(scene, imageUrl, format, replicateToken);
+  return await startPolloVideo(scene, imageUrl, format, polloApiKey);
+  // --- Grok fallback commented out ---
+  // return await startGrokFallback(scene, imageUrl, format, replicateToken);
 }
 
 async function resolveVideoGeneration(
   predictionId: string,
-  replicateToken: string,
+  _replicateToken: string,
   supabase: ReturnType<typeof createClient>,
   sceneNumber: number,
 ): Promise<string | null> {
@@ -1308,12 +1304,13 @@ async function resolveVideoGeneration(
     if (!polloApiKey) throw new Error("POLLO_API_KEY missing for resolve");
     return await resolvePolloVideo(taskId, polloApiKey, supabase, sceneNumber);
   }
-  if (predictionId.startsWith("grok:")) {
-    const id = predictionId.replace("grok:", "");
-    return await resolveGrokFallback(id, replicateToken, supabase, sceneNumber);
-  }
-  // Legacy: bare ID assumed to be Grok
-  return await resolveGrokFallback(predictionId, replicateToken, supabase, sceneNumber);
+  // --- Grok resolve commented out ---
+  // if (predictionId.startsWith("grok:")) {
+  //   const id = predictionId.replace("grok:", "");
+  //   return await resolveGrokFallback(id, replicateToken, supabase, sceneNumber);
+  // }
+  // return await resolveGrokFallback(predictionId, replicateToken, supabase, sceneNumber);
+  throw new Error(`Unknown video prediction format: ${predictionId}. Only Pollo.ai (pollo:) is supported.`);
 }
 
 async function readGenerationOwned(
