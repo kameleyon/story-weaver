@@ -1056,7 +1056,12 @@ async function startPolloVideo(
   format: "landscape" | "portrait" | "square",
   polloApiKey: string,
 ): Promise<string> {
-  const videoPrompt = buildVideoPrompt(scene);
+  let videoPrompt = buildVideoPrompt(scene);
+  // Pollo API enforces a 2000 character limit on prompts
+  if (videoPrompt.length > 2000) {
+    console.warn(`[Pollo] Truncating prompt from ${videoPrompt.length} to 2000 characters`);
+    videoPrompt = videoPrompt.slice(0, 2000);
+  }
 
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
