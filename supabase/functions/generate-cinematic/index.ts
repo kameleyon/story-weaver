@@ -1099,6 +1099,9 @@ ANIMATION RULES (CRITICAL):
   throw new Error("Grok video prediction failed after retries");
 }
 
+// Special return value indicating a timeout that should trigger a retry
+const GROK_TIMEOUT_RETRY = "__TIMEOUT_RETRY__";
+
 async function resolveGrok(
   predictionId: string,
   replicateToken: string,
@@ -1108,7 +1111,7 @@ async function resolveGrok(
   const result = await getReplicatePrediction(predictionId, replicateToken);
 
   if (result.status !== "succeeded") {
-    if (result.status === "failed") {
+    if (result.status === "failed" || result.status === "canceled") {
       const errorMsg = result.error || "Video generation failed";
       console.error("Grok failed:", errorMsg);
       
@@ -1118,6 +1121,12 @@ async function resolveGrok(
       }
       if (errorMsg.includes("rate limit") || errorMsg.includes("429")) {
         throw new Error("Video API rate limited. Please wait a moment and try again.");
+      }
+      
+      // Detect timeout errors — these are retryable
+      if (errorMsg.includes("timed out") || errorMsg.includes("timeout") || errorMsg.includes("deadline exceeded")) {
+        console.warn(`[Grok] Scene ${sceneNumber}: Video timed out (prediction ${predictionId}), will retry with new prediction`);
+        return GROK_TIMEOUT_RETRY;
       }
       
       throw new Error(`Video generation failed: ${errorMsg}`);
@@ -1482,6 +1491,15 @@ serve(async (req) => {
       }
 
       const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      
+      // If the prediction timed out, clear it so next poll starts a fresh prediction
+      if (videoUrl === GROK_TIMEOUT_RETRY) {
+        console.log(`[VIDEO] Scene ${scene.number}: Timeout detected, clearing prediction for auto-retry`);
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined };
+        await updateScenes(supabase, generationId, scenes);
+        return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+      }
+      
       if (!videoUrl) {
         return jsonResponse({ success: true, status: "processing", scene });
       }
