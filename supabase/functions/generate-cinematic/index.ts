@@ -301,11 +301,18 @@ async function generateScriptWithGemini(
     ? `\n**Character Appearance:** All human characters MUST match: ${params.characterDescription}`
     : "";
 
-  // Detect Haitian Creole from input content
+  // Detect Haitian Creole from input content OR presenter_focus language setting
   const inputIsCreole = isHaitianCreole(content);
-  console.log(`[Script] Haitian Creole detected in input: ${inputIsCreole}`);
+  const presenterFocusLower = (params.presenterFocus || "").toLowerCase();
+  const forceCreoleFromPresenter =
+    presenterFocusLower.includes("haitian") ||
+    presenterFocusLower.includes("kreyòl") ||
+    presenterFocusLower.includes("kreyol") ||
+    presenterFocusLower.includes("creole");
+  const isCreoleProject = inputIsCreole || forceCreoleFromPresenter;
+  console.log(`[Script] Haitian Creole detection: content=${inputIsCreole}, presenterFocus=${forceCreoleFromPresenter}, final=${isCreoleProject}`);
 
-  const languageInstruction = inputIsCreole
+  const languageInstruction = isCreoleProject
     ? `### LANGUAGE REQUIREMENT
 IMPORTANT: The user's input is in Haitian Creole (Kreyòl Ayisyen). You MUST:
 - Write ALL voiceover/narration text in Haitian Creole
@@ -737,13 +744,18 @@ async function generateSceneAudio(
   supabase: ReturnType<typeof createClient>,
   voiceGender: string = "female",
   customVoiceId?: string,
+  forceHaitianCreole: boolean = false,
 ): Promise<{ predictionId?: string; audioUrl?: string }> {
   const voiceoverText = (scene.voiceover || "").trim();
   if (!voiceoverText || voiceoverText.length < 2) {
     return {};
   }
 
-  const isHC = isHaitianCreole(voiceoverText);
+  const isHC = forceHaitianCreole || isHaitianCreole(voiceoverText);
+
+  if (forceHaitianCreole && !isHaitianCreole(voiceoverText)) {
+    console.log(`[TTS] Scene ${scene.number}: Forcing Haitian Creole from presenter_focus (text detection was false)`);
+  }
 
   // CASE 1: Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs Speech-to-Speech
   if (isHC && customVoiceId && elevenLabsApiKey && googleApiKey) {
@@ -1315,6 +1327,13 @@ serve(async (req) => {
           style,
           project_type: "cinematic",
           status: "generating",
+          presenter_focus: body.presenterFocus || null,
+          character_description: body.characterDescription || null,
+          brand_mark: body.brandMark || null,
+          voice_type: body.voiceType || "standard",
+          voice_id: body.voiceId || null,
+          voice_name: body.voiceName || null,
+          character_consistency_enabled: body.characterConsistencyEnabled || false,
         })
         .select("id")
         .single();
@@ -1388,16 +1407,25 @@ serve(async (req) => {
         return jsonResponse({ success: true, status: "complete", scene });
       }
 
-      // Get voice settings from project
+      // Get voice settings and presenter_focus from project
       const { data: project } = await supabase
         .from("projects")
-        .select("voice_name, voice_type, voice_id")
+        .select("voice_name, voice_type, voice_id, presenter_focus")
         .eq("id", generation.project_id)
         .maybeSingle();
       
       // Map voice_name to gender: "male" or "female" (default female for Marisol)
       const voiceGender = project?.voice_name === "male" ? "male" : "female";
       const customVoiceId = project?.voice_type === "custom" ? project?.voice_id : undefined;
+
+      // Detect Haitian Creole from presenter_focus
+      const presenterFocusLower = (project?.presenter_focus || "").toLowerCase();
+      const forceHaitianCreole =
+        presenterFocusLower.includes("haitian") ||
+        presenterFocusLower.includes("kreyòl") ||
+        presenterFocusLower.includes("kreyol") ||
+        presenterFocusLower.includes("creole");
+      console.log(`[AUDIO] Scene ${scene.number}: presenterFocus="${project?.presenter_focus || "none"}", forceHaitianCreole=${forceHaitianCreole}`);
       
       // Get API keys for TTS
       const googleApiKey = Deno.env.get("GOOGLE_TTS_API_KEY");
@@ -1413,6 +1441,7 @@ serve(async (req) => {
           supabase,
           voiceGender,
           customVoiceId,
+          forceHaitianCreole,
         );
 
         // If we got a direct audioUrl (Gemini/ElevenLabs), we're done
