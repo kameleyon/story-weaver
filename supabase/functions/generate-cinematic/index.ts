@@ -1240,10 +1240,22 @@ serve(async (req) => {
     const user = authData?.user;
     if (authError || !user) return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
 
-    // Verify admin access
+    // Verify plan access: Professional, Enterprise, or Admin
     const { data: isAdmin } = await supabase.rpc("is_admin", { _user_id: user.id });
+    
+    // Check subscription plan if not admin
     if (!isAdmin) {
-      return jsonResponse({ error: "Cinematic generation is only available for admins during beta" }, { status: 403 });
+      const { data: subData } = await supabase
+        .from("subscriptions")
+        .select("plan_name, status")
+        .eq("user_id", user.id)
+        .in("status", ["active"])
+        .single();
+      
+      const userPlan = subData?.plan_name || "free";
+      if (userPlan !== "professional" && userPlan !== "enterprise") {
+        return jsonResponse({ error: "Cinematic generation requires a Professional or Enterprise plan." }, { status: 403 });
+      }
     }
 
     const body: CinematicRequest = await req.json().catch(() => ({}));
