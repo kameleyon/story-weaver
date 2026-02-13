@@ -301,6 +301,22 @@ async function generateScriptWithGemini(
     ? `\n**Character Appearance:** All human characters MUST match: ${params.characterDescription}`
     : "";
 
+  // Detect Haitian Creole from input content
+  const inputIsCreole = isHaitianCreole(content);
+  console.log(`[Script] Haitian Creole detected in input: ${inputIsCreole}`);
+
+  const languageInstruction = inputIsCreole
+    ? `### LANGUAGE REQUIREMENT
+IMPORTANT: The user's input is in Haitian Creole (Kreyòl Ayisyen). You MUST:
+- Write ALL voiceover/narration text in Haitian Creole
+- Keep ALL proper nouns, brand names, and slogans in their ORIGINAL language (do NOT translate them)
+- Write visualPrompt descriptions in ENGLISH (these are for image AI, not shown to users)
+- Write the "title" in Haitian Creole
+- The voiceover must sound natural in Haitian Creole, not like a word-for-word translation`
+    : `### LANGUAGE REQUIREMENT
+ALWAYS generate in ENGLISH unless the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen).
+If input is in another language, TRANSLATE to English.`;
+
   const systemPrompt = `You are a world-class Cinematic Director and Screenwriter.
 
 Your goal is to turn a user's request into a compelling, production-ready video script and visual plan.
@@ -362,9 +378,7 @@ You MUST generate a MINIMUM of ${config.minScenes} scenes and a MAXIMUM of ${con
 **User's Content:**
 ${content}
 
-### LANGUAGE REQUIREMENT
-ALWAYS generate in ENGLISH unless the user EXPLICITLY requests Haitian Creole (Kreyòl Ayisyen).
-If input is in another language, TRANSLATE to English.
+${languageInstruction}
 
 ### VIDEO-FIRST VISUAL PROMPTS (CRITICAL)
 Your visualPrompt must be optimized for AI VIDEO generation, NOT static images. Focus on:
