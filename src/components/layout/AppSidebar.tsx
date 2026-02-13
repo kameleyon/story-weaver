@@ -383,7 +383,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
 
               {/* Cinematic - Beta */}
               {(() => {
-                const canAccessCinematic = isAdmin || plan === "professional" || plan === "enterprise";
+                const canAccessCinematic = isAdmin;
                 return (
                   <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
                     <Tooltip>
@@ -410,7 +410,7 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                           )}
                         </SidebarMenuButton>
                       </TooltipTrigger>
-                      {isCollapsed && <TooltipContent side="right">Cinematic - Beta{!canAccessCinematic ? " (Pro plan required)" : ""}</TooltipContent>}
+                      {isCollapsed && <TooltipContent side="right">Cinematic - Beta{!canAccessCinematic ? " (Admin only)" : ""}</TooltipContent>}
                     </Tooltip>
                   </SidebarMenuItem>
                 );
