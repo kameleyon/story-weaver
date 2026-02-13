@@ -56,7 +56,7 @@ const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/ch
 const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
 // Nano Banana models for image generation (Replicate)
-const NANO_BANANA_MODEL = "google/nano-banana";
+const NANO_BANANA_MODEL = "google/nano-banana-pro";
 
 // ============= STYLE PROMPTS (from generate-video/index.ts) =============
 const STYLE_PROMPTS: Record<string, string> = {

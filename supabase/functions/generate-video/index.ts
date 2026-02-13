@@ -1972,8 +1972,8 @@ async function generateImageWithReplicate(
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-  const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana";
+  const modelPath = "google/nano-banana-pro";
+  const modelName = "Nano Banana Pro";
 
   const input: Record<string, unknown> = {
     prompt,
