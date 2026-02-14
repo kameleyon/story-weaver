@@ -724,6 +724,10 @@ async function generateAudioWithGeminiTTSModel(
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[TTS-Gemini] ${modelLabel} API error: ${response.status} - ${errText}`);
+      // On 429 quota exhausted, throw special error to break retry loop immediately
+      if (response.status === 429) {
+        throw Object.assign(new Error(`Gemini TTS quota exhausted (${modelLabel})`), { quotaExhausted: true });
+      }
       return null;
     }
 
@@ -780,7 +784,9 @@ async function generateAudioWithGeminiTTSModel(
     const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
     console.log(`[TTS-Gemini] Scene ${sceneNumber} SUCCESS with ${modelLabel}`);
     return urlData.publicUrl;
-  } catch (err) {
+  } catch (err: any) {
+    // Re-throw quota exhaustion so outer loop can break immediately
+    if (err?.quotaExhausted) throw err;
     console.error(`[TTS-Gemini] Scene ${sceneNumber} ${modelLabel} attempt ${retryAttempt + 1} failed:`, err);
     return null;
   }
@@ -871,6 +877,32 @@ async function generateAudioWithElevenLabs(
   }
 }
 
+// Generate a silent WAV audio file as fallback when TTS completely fails
+async function generateSilentAudio(
+  scene: Scene,
+  supabase: ReturnType<typeof createClient>,
+): Promise<string | null> {
+  try {
+    const durationSec = scene.duration || 8;
+    const sampleRate = 24000;
+    const numSamples = sampleRate * durationSec;
+    const pcmBytes = new Uint8Array(numSamples * 2); // 16-bit silence = all zeros
+    const wavBytes = pcmToWav(pcmBytes, sampleRate, 1, 16);
+
+    const fileName = `cinematic-audio-silent-${Date.now()}-${scene.number}.wav`;
+    await supabase.storage
+      .from("audio-files")
+      .upload(fileName, wavBytes, { contentType: "audio/wav", upsert: true });
+
+    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
+    console.warn(`[TTS] Scene ${scene.number}: Using silent audio fallback (${durationSec}s)`);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error(`[TTS] Scene ${scene.number}: Silent audio generation failed:`, err);
+    return null;
+  }
+}
+
 // Unified audio generation function
 async function generateSceneAudio(
   scene: Scene,
@@ -900,23 +932,35 @@ async function generateSceneAudio(
     // Step 1: Generate base audio with Gemini (extended retry with text variations)
     const MAX_GEMINI_RETRIES = 5;
     let geminiAudioUrl: string | null = null;
-    for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
+    let quotaExhausted = false;
+    for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
       if (retry > 0) {
         console.log(`[TTS] Scene ${scene.number}: Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
         await sleep(2000 * retry);
       }
       for (const model of GEMINI_TTS_MODELS) {
-        const result = await generateAudioWithGeminiTTSModel(
-          voiceoverText, scene.number, googleApiKey, supabase,
-          model.name, model.label, retry,
-        );
-        if (result) { geminiAudioUrl = result; break; }
+        try {
+          const result = await generateAudioWithGeminiTTSModel(
+            voiceoverText, scene.number, googleApiKey, supabase,
+            model.name, model.label, retry,
+          );
+          if (result) { geminiAudioUrl = result; break; }
+        } catch (err: any) {
+          if (err?.quotaExhausted) {
+            console.warn(`[TTS] Scene ${scene.number}: Quota exhausted on ${model.label} — stopping retries`);
+            quotaExhausted = true;
+            break;
+          }
+          throw err;
+        }
       }
       if (geminiAudioUrl) break;
     }
 
     if (!geminiAudioUrl) {
-      console.error(`[TTS] Scene ${scene.number}: Gemini TTS failed for HC after ${MAX_GEMINI_RETRIES} retries`);
+      console.warn(`[TTS] Scene ${scene.number}: Gemini TTS failed for HC+Custom — falling back to silent audio`);
+      const silentAudioUrl = await generateSilentAudio(scene, supabase);
+      if (silentAudioUrl) return { audioUrl: silentAudioUrl };
       return {};
     }
 
@@ -982,24 +1026,37 @@ async function generateSceneAudio(
     console.log(`[TTS] Scene ${scene.number}: Haitian Creole via Gemini TTS with extended fallback chain`);
     
     const MAX_GEMINI_RETRIES = 5;
-    for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
+    let quotaExhausted = false;
+    for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
       if (retry > 0) {
         console.log(`[TTS] Scene ${scene.number}: Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
         await sleep(2000 * retry);
       }
       for (const model of GEMINI_TTS_MODELS) {
-        const result = await generateAudioWithGeminiTTSModel(
-          voiceoverText, scene.number, googleApiKey, supabase,
-          model.name, model.label, retry,
-        );
-        if (result) {
-          console.log(`✅ Scene ${scene.number} SUCCEEDED with: Gemini TTS (${model.label})`);
-          return { audioUrl: result };
+        try {
+          const result = await generateAudioWithGeminiTTSModel(
+            voiceoverText, scene.number, googleApiKey, supabase,
+            model.name, model.label, retry,
+          );
+          if (result) {
+            console.log(`✅ Scene ${scene.number} SUCCEEDED with: Gemini TTS (${model.label})`);
+            return { audioUrl: result };
+          }
+        } catch (err: any) {
+          if (err?.quotaExhausted) {
+            console.warn(`[TTS] Scene ${scene.number}: Quota exhausted on ${model.label} — stopping retries`);
+            quotaExhausted = true;
+            break;
+          }
+          throw err;
         }
       }
     }
     
-    console.error(`[TTS] Scene ${scene.number}: All Gemini TTS options failed for HC (2 models × 5 retries)`);
+    // Generate silent audio fallback instead of crashing the generation
+    console.warn(`[TTS] Scene ${scene.number}: All Gemini TTS options failed for HC — generating silent audio fallback`);
+    const silentAudioUrl = await generateSilentAudio(scene, supabase);
+    if (silentAudioUrl) return { audioUrl: silentAudioUrl };
     return {};
   }
 
@@ -1627,8 +1684,17 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
 
-        // Neither worked - error
-        throw new Error("Failed to start audio generation");
+        // Neither worked — generate silent fallback so the generation continues
+        console.warn(`[AUDIO] Scene ${scene.number}: TTS failed, generating silent audio fallback`);
+        const silentUrl = await generateSilentAudio(scene, supabase);
+        if (silentUrl) {
+          scenes[idx] = { ...scene, audioUrl: silentUrl };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+        }
+        // If even silent audio fails, still don't crash — return with no audio
+        console.error(`[AUDIO] Scene ${scene.number}: Even silent audio failed, continuing without audio`);
+        return jsonResponse({ success: true, status: "complete", scene });
       }
 
       // If we have a prediction ID, try to resolve it (Chatterbox async polling)
