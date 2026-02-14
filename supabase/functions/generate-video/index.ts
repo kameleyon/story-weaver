@@ -4858,9 +4858,9 @@ serve(async (req) => {
     const GOOGLE_TTS_API_KEY_2 = Deno.env.get("GOOGLE_TTS_API_KEY_2");
     const GOOGLE_TTS_API_KEY_3 = Deno.env.get("GOOGLE_TTS_API_KEY_3");
     const googleApiKeys: string[] = [];
-    if (GOOGLE_TTS_API_KEY) googleApiKeys.push(GOOGLE_TTS_API_KEY);
-    if (GOOGLE_TTS_API_KEY_2) googleApiKeys.push(GOOGLE_TTS_API_KEY_2);
     if (GOOGLE_TTS_API_KEY_3) googleApiKeys.push(GOOGLE_TTS_API_KEY_3);
+    if (GOOGLE_TTS_API_KEY_2) googleApiKeys.push(GOOGLE_TTS_API_KEY_2);
+    if (GOOGLE_TTS_API_KEY) googleApiKeys.push(GOOGLE_TTS_API_KEY);
 
     // Parse and validate request body with comprehensive input validation
     let rawBody: unknown;
