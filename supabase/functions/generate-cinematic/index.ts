@@ -1606,7 +1606,7 @@ Make only the requested changes while keeping everything else consistent.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: "google/gemini-3-pro-preview",
           messages: [
             {
               role: "user",
