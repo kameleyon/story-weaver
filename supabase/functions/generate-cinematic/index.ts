@@ -1667,9 +1667,9 @@ serve(async (req) => {
       const gk1 = Deno.env.get("GOOGLE_TTS_API_KEY");
       const gk2 = Deno.env.get("GOOGLE_TTS_API_KEY_2");
       const gk3 = Deno.env.get("GOOGLE_TTS_API_KEY_3");
-      if (gk1) googleApiKeys.push(gk1);
-      if (gk2) googleApiKeys.push(gk2);
       if (gk3) googleApiKeys.push(gk3);
+      if (gk2) googleApiKeys.push(gk2);
+      if (gk1) googleApiKeys.push(gk1);
       const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
       // If we don't have a prediction ID yet, start the audio generation
