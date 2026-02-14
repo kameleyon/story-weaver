@@ -1478,6 +1478,8 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let parsedGenerationId: string | undefined;
+
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) return jsonResponse({ error: "Not authenticated" }, { status: 401 });
@@ -1518,7 +1520,7 @@ serve(async (req) => {
     }
 
     const body: CinematicRequest = await req.json().catch(() => ({}));
-    let parsedGenerationId: string | undefined = body.generationId; // Cache for error handler
+    parsedGenerationId = body.generationId; // Cache for error handler
     const phase: Phase = body.phase || "script";
 
     // =============== PHASE 1: SCRIPT ===============
