@@ -1833,19 +1833,20 @@ async function generateSceneAudio(
     console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole + Cloned Voice workflow`);
     console.log(`[TTS] Scene ${sceneIndex + 1} - Step 1: Generate base audio with Gemini TTS`);
 
-    const MAX_GEMINI_RETRIES = 5;
+    const KEY_ROTATION_ROUNDS = 5;
     let geminiAudioUrl: string | null = null;
 
-    // Try each Google API key with retries
-    for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
-      const currentKey = googleApiKeys[keyIdx];
-      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying Google API key ${keyIdx + 1}/${googleApiKeys.length}`);
+    // Cycle through all keys multiple rounds
+    for (let round = 0; round < KEY_ROTATION_ROUNDS && !geminiAudioUrl; round++) {
+      if (round > 0) {
+        const roundDelay = 3000 * round;
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`);
+        await sleep(roundDelay);
+      }
       
-      for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
-        if (retry > 0) {
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
-          await sleep(2000 * retry);
-        }
+      for (let keyIdx = 0; keyIdx < googleApiKeys.length && !geminiAudioUrl; keyIdx++) {
+        const currentKey = googleApiKeys[keyIdx];
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`);
 
         const geminiResult = await generateSceneAudioGemini(
           scene,
@@ -1854,24 +1855,23 @@ async function generateSceneAudio(
           supabase,
           userId,
           projectId,
-          retry,
+          round,
           isRegeneration,
         );
 
         if (geminiResult.url) {
           geminiAudioUrl = geminiResult.url;
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready (key ${keyIdx + 1})`);
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready (key ${keyIdx + 1}, round ${round + 1})`);
           break;
         }
         
-        // Check if quota exhausted (429) - skip to next key
+        // Check if quota exhausted (429) - cycle to next key
         if (geminiResult.error?.includes("429") || geminiResult.error?.includes("quota") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) {
-          console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted, trying next key`);
-          break;
+          console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`);
+          continue;
         }
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} failed: ${geminiResult.error}`);
       }
-      if (geminiAudioUrl) break;
     }
 
 
@@ -1934,18 +1934,18 @@ async function generateSceneAudio(
     );
 
     if (googleApiKeys.length > 0) {
-      const MAX_GEMINI_RETRIES = 5;
+      const KEY_ROTATION_ROUNDS = 5;
 
-      for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
-        const currentKey = googleApiKeys[keyIdx];
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Trying Google API key ${keyIdx + 1}/${googleApiKeys.length}`);
-        let quotaExhausted = false;
-
-        for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
-          if (retry > 0) {
-            console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
-            await sleep(2000 * retry);
-          }
+      for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
+        if (round > 0) {
+          const roundDelay = 3000 * round;
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`);
+          await sleep(roundDelay);
+        }
+        
+        for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
+          const currentKey = googleApiKeys[keyIdx];
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`);
 
           const geminiResult = await generateSceneAudioGemini(
             scene,
@@ -1954,22 +1954,21 @@ async function generateSceneAudio(
             supabase,
             userId,
             projectId,
-            retry,
+            round,
             isRegeneration,
           );
 
           if (geminiResult.url) {
-            console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1})`);
+            console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1}) on round ${round + 1}`);
             return { ...geminiResult, provider: "Gemini TTS" };
           }
           
-          // Check if quota exhausted - skip to next key
+          // Check if quota exhausted - cycle to next key
           if (geminiResult.error?.includes("429") || geminiResult.error?.includes("quota") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) {
-            console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted, trying next key`);
-            quotaExhausted = true;
-            break;
+            console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`);
+            continue;
           }
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} failed: ${geminiResult.error}`);
         }
       }
     } else {
@@ -1977,7 +1976,7 @@ async function generateSceneAudio(
     }
 
     // All TTS options failed for Haitian Creole
-    console.error(`[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted for Haitian Creole`);
+    console.error(`[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted after 5 rounds for Haitian Creole`);
     return {
       url: null,
       error: "Audio generation failed — all TTS API keys exhausted. Please try again later.",
