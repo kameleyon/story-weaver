@@ -964,10 +964,8 @@ async function generateSceneAudio(
     }
 
     if (!geminiAudioUrl) {
-      console.warn(`[TTS] Scene ${scene.number}: All Gemini keys exhausted for HC+Custom — falling back to silent audio`);
-      const silentAudioUrl = await generateSilentAudio(scene, supabase);
-      if (silentAudioUrl) return { audioUrl: silentAudioUrl };
-      return {};
+      console.error(`[TTS] Scene ${scene.number}: All Gemini keys exhausted for HC+Custom — audio generation failed`);
+      throw new Error("Audio generation failed — all TTS API keys exhausted. Please try again later.");
     }
 
     // Step 2: Transform with ElevenLabs Speech-to-Speech
@@ -1065,11 +1063,9 @@ async function generateSceneAudio(
       }
     }
     
-    // All keys exhausted — generate silent audio fallback
-    console.warn(`[TTS] Scene ${scene.number}: All Gemini TTS keys exhausted for HC — generating silent audio fallback`);
-    const silentAudioUrl = await generateSilentAudio(scene, supabase);
-    if (silentAudioUrl) return { audioUrl: silentAudioUrl };
-    return {};
+    // All keys exhausted — return error, do NOT generate silent audio
+    console.error(`[TTS] Scene ${scene.number}: All ${googleApiKeys.length} Gemini TTS keys exhausted for HC — audio generation failed`);
+    throw new Error("Audio generation failed — all TTS API keys exhausted. Please try again later.");
   }
 
   // CASE 4: Standard voice → Replicate Chatterbox (with retry, no fallback mixing)
@@ -1670,8 +1666,10 @@ serve(async (req) => {
       const googleApiKeys: string[] = [];
       const gk1 = Deno.env.get("GOOGLE_TTS_API_KEY");
       const gk2 = Deno.env.get("GOOGLE_TTS_API_KEY_2");
+      const gk3 = Deno.env.get("GOOGLE_TTS_API_KEY_3");
       if (gk1) googleApiKeys.push(gk1);
       if (gk2) googleApiKeys.push(gk2);
+      if (gk3) googleApiKeys.push(gk3);
       const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
       // If we don't have a prediction ID yet, start the audio generation
@@ -1701,17 +1699,9 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
 
-        // Neither worked — generate silent fallback so the generation continues
-        console.warn(`[AUDIO] Scene ${scene.number}: TTS failed, generating silent audio fallback`);
-        const silentUrl = await generateSilentAudio(scene, supabase);
-        if (silentUrl) {
-          scenes[idx] = { ...scene, audioUrl: silentUrl };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
-        }
-        // If even silent audio fails, still don't crash — return with no audio
-        console.error(`[AUDIO] Scene ${scene.number}: Even silent audio failed, continuing without audio`);
-        return jsonResponse({ success: true, status: "complete", scene });
+        // Neither worked — return error instead of silent fallback
+        console.error(`[AUDIO] Scene ${scene.number}: TTS completely failed, no audio generated`);
+        return jsonResponse({ success: false, error: "Audio generation failed — all TTS API keys exhausted. Please try again later." }, { status: 500 });
       }
 
       // If we have a prediction ID, try to resolve it (Chatterbox async polling)
