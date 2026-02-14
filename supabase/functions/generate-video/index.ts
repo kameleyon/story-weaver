@@ -2320,7 +2320,22 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Text can be 15-25 words per description - the generator handles this well
 - Include supporting icons and visual elements around text
 - Create magazine-editorial quality that looks professional
-- Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
+- Focus on CONTENT and LAYOUT only - do NOT write style descriptions
+
+=== TTS CONTENT FILTER SAFETY (CRITICAL) ===
+If voiceover narration is included, avoid words that trigger Google Gemini TTS content filters:
+- NEVER use onomatopoeia like "BOUM", "BOOM", "BANG", "POW", "CRASH", "BLAST", "SMASH", "KABOOM"
+- Avoid violence words: "gun", "bomb", "bullet", "kill", "murder", "blood", "wound"
+- No profanity, drug references, sexual content, or self-harm references
+- Use safe alternatives: "Suddenly...", "In a flash...", "Like lightning..." instead of sound effects
+This applies to ALL languages including Haitian Creole.
+
+=== REAL PERSON / CELEBRITY IDENTIFICATION ===
+When the content mentions real people, celebrities, or public figures:
+- RECALL their appearance and create a detailed look-alike description in the visualPrompt
+- NEVER use the person's actual name in the visualPrompt — describe physical traits instead
+- Use phrases like "a figure reminiscent of", "evoking the look of" for legal safety
+- The voiceover CAN use their real name — only visual prompts must use look-alike descriptions`;
 
   // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
   console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
@@ -2585,6 +2600,24 @@ ${
 - Example: "Oh, that's interesting! [chuckle] Let me explain why..."`
 }
 
+=== TTS CONTENT FILTER SAFETY (CRITICAL) ===
+The voiceover text will be synthesized by Google Gemini TTS, which has aggressive content filters.
+You MUST avoid ANY words or phrases that could trigger safety filters, including:
+- **Onomatopoeia for violence/explosions:** NEVER use "BOUM", "BOOM", "BANG", "POW", "CRASH", "BLAST", "SMASH", "KABOOM", "SLASH", "STAB", "SHOOT", "KILL", "MURDER", "SLAUGHTER"
+- **Weapons & combat:** Avoid "gun", "rifle", "bomb", "grenade", "bullet", "sword", "knife" in narration
+- **Graphic body language:** Avoid "blood", "bleeding", "guts", "gore", "wound"
+- **Profanity or slurs:** Absolutely none, even mild ones
+- **Drug references:** Avoid explicit drug names or usage descriptions
+- **Sexual content:** No suggestive or explicit language whatsoever
+- **Self-harm references:** No mentions of suicide, self-harm, or related topics
+INSTEAD, use safe alternatives:
+- "BOUM/BOOM" → "Suddenly..." or "In a flash..." or "Like lightning..."
+- "BANG" → "A loud sound..." or "Toudenkou..." (in Creole)
+- "CRASH" → "A sudden impact..." or "Everything collided..."
+- For dramatic moments, use emotional language instead of sound effects
+- Express intensity through pacing, pauses, and vocal energy—NOT violent words
+This applies to ALL languages including Haitian Creole. Even translated versions of these words will be flagged.
+
 === SUB-VISUALS (REQUIRED FOR DYNAMIC PACING) ===
 - EVERY scene MUST include 2-3 subVisuals (additional visual moments)
 - subVisuals create variety and dynamic visual pacing within each scene
@@ -2602,19 +2635,36 @@ ${
 You MUST create a "characters" object defining EVERY person/entity in the video.
 This ensures visual CONSISTENCY - the same person looks identical across all scenes.
 
+=== REAL PERSON / CELEBRITY IDENTIFICATION (CRITICAL) ===
+When the content mentions **real people, celebrities, historical figures, public figures, athletes, politicians, musicians, actors, influencers, or any known individual**:
+1. **IDENTIFY** them automatically from context (names, references, descriptions)
+2. **RECALL** their well-known physical appearance from your training data
+3. **Create a DETAILED look-alike description** that captures their essence WITHOUT being an exact copy:
+   - Describe their **general build, skin tone, facial structure, signature hairstyle**
+   - Reference their **iconic fashion/style choices** (e.g., "signature round glasses", "known for all-black turtlenecks")
+   - Capture their **energy and demeanor** (e.g., "commanding presence", "warm approachable smile")
+4. **IMPORTANT - LEGAL SAFETY:** NEVER use the person's actual name in the visualPrompt. Instead:
+   - Describe them as "a man/woman closely resembling [physical traits]" or "a figure inspired by [style description]"
+   - Use phrases like "reminiscent of", "in the style of", "evoking the look of"
+   - The goal is a **recognizable look-alike / inspired representation**, NOT an identical portrait
+   - This avoids identity rights issues while maintaining visual storytelling impact
+5. **The voiceover CAN use their real name** — only the image/visual prompts must use look-alike descriptions
+
 For each character specify using "CharacterName_age" format if showing same person at different ages:
 - GENDER (male/female) - MUST match the content context
 - AGE: The SPECIFIC age for this version of the character
 - Ethnicity/skin tone if mentioned or implied
-- Hair (color, style, length)
+- FACE (face shape, jawline, brow, nose style, eye shape — be detailed for real people)
+- Hair (color, style, length — match their signature look for real people)
 - Body type
-- Clothing (period-appropriate, age-appropriate, culture-appropriate)
-- Distinguishing features that remain CONSTANT across ages (eye color, facial structure, birthmarks)
+- Clothing (period-appropriate, age-appropriate, culture-appropriate — use their signature style for real people)
+- Distinguishing features that remain CONSTANT across ages (eye color, facial structure, birthmarks, glasses, accessories)
 - Distinguishing features that CHANGE with age (wrinkles, hair color/loss)
 
 Example:
 "Protagonist_child": "A 7-year-old Argentine boy with dark hair, brown eyes, small and thin build, wearing modest 1990s clothing, playful expression"
 "Protagonist_adult": "A 35-year-old man with the SAME dark hair and brown eyes, athletic build, wearing Inter Miami jersey, determined expression"
+Example for a real person: Instead of "Elon Musk presents the car", write "A tall, athletic-build man in his early 50s with fair skin, short-cropped brown hair with subtle receding hairline, angular jawline, wearing a fitted black t-shirt and dark jeans — a tech mogul aesthetic — gestures confidently toward the vehicle on stage..."
 
 === PROMPT ENGINEERING RULES (FOR IMAGE PROMPTS) ===
 When generating the 'visualPrompt' for each scene, you MUST:
@@ -2975,6 +3025,24 @@ ${
 - Use them only at key emotional moments, not every scene`
 }
 
+=== TTS CONTENT FILTER SAFETY (CRITICAL) ===
+The voiceover text will be synthesized by Google Gemini TTS, which has aggressive content filters.
+You MUST avoid ANY words or phrases that could trigger safety filters, including:
+- **Onomatopoeia for violence/explosions:** NEVER use "BOUM", "BOOM", "BANG", "POW", "CRASH", "BLAST", "SMASH", "KABOOM", "SLASH", "STAB", "SHOOT", "KILL", "MURDER", "SLAUGHTER"
+- **Weapons & combat:** Avoid "gun", "rifle", "bomb", "grenade", "bullet", "sword", "knife" in narration
+- **Graphic body language:** Avoid "blood", "bleeding", "guts", "gore", "wound"
+- **Profanity or slurs:** Absolutely none, even mild ones
+- **Drug references:** Avoid explicit drug names or usage descriptions
+- **Sexual content:** No suggestive or explicit language whatsoever
+- **Self-harm references:** No mentions of suicide, self-harm, or related topics
+INSTEAD, use safe alternatives:
+- "BOUM/BOOM" → "Suddenly..." or "In a flash..." or "Like lightning..."
+- "BANG" → "A loud sound..."
+- "CRASH" → "A sudden impact..." or "Everything collided..."
+- For dramatic moments, use emotional language instead of sound effects
+- Express intensity through pacing, pauses, and vocal energy—NOT violent words
+This applies to ALL languages including Haitian Creole. Even translated versions of these words will be flagged.
+
 === SUB-VISUALS (REQUIRED FOR DYNAMIC PACING) ===
 - EVERY scene MUST include 2-3 subVisuals (additional visual moments)
 - subVisuals create variety and dynamic visual pacing within each scene
@@ -2993,18 +3061,34 @@ ${
 You MUST create a "characters" object defining EVERY character's EXACT visual appearance.
 This ensures visual CONSISTENCY - the same person looks identical across all scenes.
 
+=== REAL PERSON / CELEBRITY IDENTIFICATION (CRITICAL) ===
+When the content mentions **real people, celebrities, historical figures, public figures, athletes, politicians, musicians, actors, influencers, or any known individual**:
+1. **IDENTIFY** them automatically from context (names, references, descriptions)
+2. **RECALL** their well-known physical appearance from your training data
+3. **Create a DETAILED look-alike description** that captures their essence WITHOUT being an exact copy:
+   - Describe their **general build, skin tone, facial structure, signature hairstyle**
+   - Reference their **iconic fashion/style choices**
+   - Capture their **energy and demeanor**
+4. **IMPORTANT - LEGAL SAFETY:** NEVER use the person's actual name in the visualPrompt. Instead:
+   - Describe them as "a man/woman closely resembling [physical traits]" or "a figure inspired by [style description]"
+   - Use phrases like "reminiscent of", "in the style of", "evoking the look of"
+   - The goal is a **recognizable look-alike / inspired representation**, NOT an identical portrait
+5. **The voiceover CAN use their real name** — only the image/visual prompts must use look-alike descriptions
+
 For each character specify using "CharacterName_age" format if showing same person at different ages:
 - GENDER (male/female) - inferred from story context, names, pronouns
 - Species/type (human, dragon, unicorn, robot, etc.)
 - AGE: The SPECIFIC age for this version of the character
+- FACE (face shape, jawline, brow, nose style, eye shape — be detailed for real people)
 - Physical appearance (color, build, features appropriate for age)
-- Distinguishing features that remain CONSTANT (eye color, facial structure, scales color for creatures)
+- Distinguishing features that remain CONSTANT (eye color, facial structure, scales color for creatures, signature accessories)
 - Distinguishing features that CHANGE with age (size, wrinkles, body proportions)
-- Clothing/accessories (period-appropriate, age-appropriate, consistent within time period)
+- Clothing/accessories (period-appropriate, age-appropriate, consistent within time period — use their signature style for real people)
 
 Example:
 "Hero_child": "A 7-year-old human boy with bright blue eyes, messy brown hair, freckles, wearing patched medieval peasant clothes, curious expression"
 "Hero_adult": "A 30-year-old man with the SAME bright blue eyes and brown hair, now with slight stubble, wearing knight's armor, determined expression"
+Example for a real person: Instead of "Steve Jobs unveils the iPhone", write "A lean, tall man in his early 50s with close-cropped graying hair, round rimless glasses, sharp angular face, wearing his signature black turtleneck and blue jeans — gestures toward the glowing device on stage..."
 
 === PROMPT ENGINEERING RULES (FOR IMAGE PROMPTS) ===
 When generating the 'visualPrompt' for each scene, you MUST:
