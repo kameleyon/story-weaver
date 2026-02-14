@@ -167,6 +167,17 @@ You MUST avoid ANY words or onomatopoeia that could trigger these filters, inclu
 - Instead of violent/explosive onomatopoeia, use SAFE dramatic alternatives like: "Suddenly...", "In a flash...", "In an instant...", "Everything changed...", "Toudenkou..." (Creole), "At that very moment..."
 - NEVER use ALL-CAPS onomatopoeia or sound effects in voiceover text
 - Write narration that is dramatic but uses DESCRIPTIVE language, not sound-effect words
+
+### HISTORICAL, CULTURAL & VISUAL ACCURACY (CRITICAL) ###
+You are generating visual prompts that will create illustrations. You MUST ensure absolute accuracy:
+- **Historical accuracy**: If the content covers a specific time period (e.g. England 1400s), ALL visual elements must match that era — architecture, clothing, weapons, tools, furniture, hairstyles, technology. Do NOT mix elements from different centuries or regions.
+- **Geographic accuracy**: Landscapes, vegetation, weather, and urban design must match the real-world location depicted.
+- **Ethnic & facial accuracy**: Characters must reflect the correct ethnicity, skin tone, facial features, hair texture, and body type for the culture/region described.
+- **Cultural accuracy**: Clothing, jewelry, rituals, food, instruments, religious symbols, and customs must be culturally authentic and specific.
+- **Name & spelling accuracy**: Proper nouns, place names, historical figures, and brand names must be spelled correctly in voiceover and visual prompts.
+- **Color & material accuracy**: Use historically/culturally accurate colors for flags, uniforms, traditional garments, heraldry, and national symbols.
+- **Context coherence**: Every object, person, and setting must belong to the same time, place, and cultural context. No anachronisms.
+- When unsure, use the MOST COMMONLY DOCUMENTED historical/cultural representation.
 `;
 
 async function flagUserForViolation(

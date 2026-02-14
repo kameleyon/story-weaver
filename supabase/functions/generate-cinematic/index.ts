@@ -475,6 +475,17 @@ INSTEAD, use safe alternatives:
 
 This applies to ALL languages including Haitian Creole. Even translated versions of these words will be flagged.
 
+### HISTORICAL, CULTURAL & VISUAL ACCURACY (CRITICAL)
+You are generating visual prompts that will be used to create illustrations. You MUST ensure absolute accuracy:
+- **Historical accuracy**: If the content is about a specific time period (e.g. England 1400s), ALL visual elements must match that era — architecture, clothing, weapons, tools, furniture, hairstyles, and technology. Do NOT mix elements from different centuries or regions (e.g. no French châteaux in an English medieval scene, no Victorian clothing in a Renaissance scene).
+- **Geographic accuracy**: Landscapes, vegetation, weather, and urban design must match the real-world location being depicted. A scene set in West Africa should NOT look like Northern Europe.
+- **Ethnic & facial accuracy**: Characters must reflect the correct ethnicity, skin tone, facial features, hair texture, and body type for the culture and region being depicted. If the topic is about the Zulu Kingdom, characters must look Southern African — not European or East Asian.
+- **Cultural accuracy**: Clothing, jewelry, rituals, food, musical instruments, religious symbols, and social customs must be culturally authentic and specific to the people and era described.
+- **Name & spelling accuracy**: Proper nouns, place names, historical figure names, and brand names must be spelled correctly in both voiceover text and visual prompts.
+- **Color & material accuracy**: When the chosen style allows realistic colors, use historically/culturally accurate colors for flags, uniforms, traditional garments, heraldry, and national symbols.
+- **Context coherence**: Every object, person, and setting in the visual prompt must belong to the same time, place, and cultural context. No anachronisms (e.g. no smartphones in ancient Rome, no electric lights in 1200s Japan).
+- When unsure about specifics, err on the side of the MOST COMMONLY DOCUMENTED historical/cultural representation.
+
 ### OUTPUT FORMAT
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
