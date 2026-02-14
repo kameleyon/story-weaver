@@ -455,6 +455,26 @@ The FIRST scene (Scene 1) MUST include a bold, prominent title overlay in the vi
 - NO labels, NO stage directions, NO markdown—just raw spoken text
 ${params.disableExpressions ? "- Do NOT include paralinguistic tags like [chuckle], [sigh], etc." : "- Include natural expressions where appropriate: [sigh], [chuckle], [gasp], [laugh]"}
 
+### TTS CONTENT FILTER SAFETY (CRITICAL)
+The voiceover text will be synthesized by Google Gemini TTS, which has aggressive content filters.
+You MUST avoid ANY words or phrases that could trigger safety filters, including:
+- **Onomatopoeia for violence/explosions:** NEVER use "BOUM", "BOOM", "BANG", "POW", "CRASH", "BLAST", "SMASH", "KABOOM", "SLASH", "STAB", "SHOOT", "KILL", "MURDER", "SLAUGHTER"
+- **Weapons & combat:** Avoid "gun", "rifle", "bomb", "grenade", "bullet", "sword", "knife" in narration
+- **Graphic body language:** Avoid "blood", "bleeding", "guts", "gore", "wound"
+- **Profanity or slurs:** Absolutely none, even mild ones
+- **Drug references:** Avoid explicit drug names or usage descriptions
+- **Sexual content:** No suggestive or explicit language whatsoever
+- **Self-harm references:** No mentions of suicide, self-harm, or related topics
+
+INSTEAD, use safe alternatives:
+- "BOUM/BOOM" → "Suddenly..." or "In a flash..." or "Like lightning..."
+- "BANG" → "A loud sound..." or "Toudenkou..." (in Creole)
+- "CRASH" → "A sudden impact..." or "Everything collided..."
+- For dramatic moments, use emotional language instead of sound effects
+- Express intensity through pacing, pauses, and vocal energy—NOT violent words
+
+This applies to ALL languages including Haitian Creole. Even translated versions of these words will be flagged.
+
 ### OUTPUT FORMAT
 Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 {
