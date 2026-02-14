@@ -1778,9 +1778,6 @@ serve(async (req) => {
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
-      if (!scene.imageUrl) {
-        return jsonResponse({ success: false, error: "Scene image is missing — please regenerate the image first, then retry video." }, { status: 400 });
-      }
 
       // Read format from project
       const { data: project, error: projectError } = await supabase
