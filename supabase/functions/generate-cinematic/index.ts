@@ -271,7 +271,7 @@ async function generateScriptWithGemini(
       | "voiceId"
       | "voiceName"
     >>,
-  lovableApiKey: string,
+  openrouterApiKey: string,
 ): Promise<{ title: string; scenes: Scene[]; characters?: Record<string, string> }> {
   console.log("Step 1: Generating script with Gemini 3 Preview...");
 
@@ -473,10 +473,10 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     }
   ]
 }`;
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${lovableApiKey}`,
+      Authorization: `Bearer ${openrouterApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -1251,11 +1251,11 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    const openrouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
     const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
 
     if (!supabaseUrl || !supabaseKey) throw new Error("Backend configuration missing");
-    if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
+    if (!openrouterApiKey) throw new Error("OPENROUTER_API_KEY not configured");
     if (!replicateToken) throw new Error("REPLICATE_API_TOKEN not configured");
 
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -1312,7 +1312,7 @@ serve(async (req) => {
           voiceId: body.voiceId,
           voiceName: body.voiceName,
         },
-        lovableApiKey,
+        openrouterApiKey,
       );
 
       // Create project
@@ -1585,9 +1585,9 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
       const style = project.style || "realistic";
 
-      // Use Lovable AI for image editing
-      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-      if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
+      // Use OpenRouter for image editing
+      const openrouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
+      if (!openrouterApiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
       const fullStylePrompt = getStylePrompt(style);
       const editPrompt = `Edit this image: ${modification}
@@ -1597,12 +1597,12 @@ Apply the following style: ${fullStylePrompt}
 
 Make only the requested changes while keeping everything else consistent.`;
 
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via Lovable AI`);
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via OpenRouter`);
 
-      const editResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const editResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${lovableApiKey}`,
+          Authorization: `Bearer ${openrouterApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -1622,7 +1622,7 @@ Make only the requested changes while keeping everything else consistent.`;
 
       if (!editResponse.ok) {
         const errText = await editResponse.text();
-        console.error(`[IMG-EDIT] Lovable AI failed: ${errText}`);
+        console.error(`[IMG-EDIT] OpenRouter failed: ${errText}`);
         throw new Error("Image editing failed");
       }
 
@@ -1630,7 +1630,7 @@ Make only the requested changes while keeping everything else consistent.`;
       const editedImageBase64 = editData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
       
       if (!editedImageBase64) {
-        throw new Error("No edited image returned from Lovable AI");
+        throw new Error("No edited image returned from OpenRouter");
       }
 
       // Upload base64 image to storage
