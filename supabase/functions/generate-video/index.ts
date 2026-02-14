@@ -1806,7 +1806,7 @@ async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
   replicateApiKey: string,
-  googleApiKey: string | undefined,
+  googleApiKeys: string[],
   supabase: any,
   userId: string,
   projectId: string,
@@ -1836,8 +1836,11 @@ async function generateSceneAudio(
     const MAX_GEMINI_RETRIES = 5;
     let geminiAudioUrl: string | null = null;
 
-    // Try direct Google API first
-    if (googleApiKey) {
+    // Try each Google API key with retries
+    for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
+      const currentKey = googleApiKeys[keyIdx];
+      console.log(`[TTS] Scene ${sceneIndex + 1} - Trying Google API key ${keyIdx + 1}/${googleApiKeys.length}`);
+      
       for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
         if (retry > 0) {
           console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
@@ -1847,7 +1850,7 @@ async function generateSceneAudio(
         const geminiResult = await generateSceneAudioGemini(
           scene,
           sceneIndex,
-          googleApiKey,
+          currentKey,
           supabase,
           userId,
           projectId,
@@ -1857,11 +1860,18 @@ async function generateSceneAudio(
 
         if (geminiResult.url) {
           geminiAudioUrl = geminiResult.url;
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready`);
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready (key ${keyIdx + 1})`);
+          break;
+        }
+        
+        // Check if quota exhausted (429) - skip to next key
+        if (geminiResult.error?.includes("429") || geminiResult.error?.includes("quota") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) {
+          console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted, trying next key`);
           break;
         }
         console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
       }
+      if (geminiAudioUrl) break;
     }
 
 
@@ -1920,44 +1930,57 @@ async function generateSceneAudio(
   // Use Gemini TTS with extended fallback (2 models × 5 retries = up to 10 attempts)
   if (isHC) {
     console.log(
-      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with extended fallback chain`,
+      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with ${googleApiKeys.length} API keys`,
     );
 
-    if (googleApiKey) {
-      const MAX_GEMINI_RETRIES = 5; // More retries with text variations
+    if (googleApiKeys.length > 0) {
+      const MAX_GEMINI_RETRIES = 5;
 
-      for (let retry = 0; retry < MAX_GEMINI_RETRIES; retry++) {
-        if (retry > 0) {
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
-          await sleep(2000 * retry); // Longer backoff
+      for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
+        const currentKey = googleApiKeys[keyIdx];
+        console.log(`[TTS] Scene ${sceneIndex + 1} - Trying Google API key ${keyIdx + 1}/${googleApiKeys.length}`);
+        let quotaExhausted = false;
+
+        for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
+          if (retry > 0) {
+            console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
+            await sleep(2000 * retry);
+          }
+
+          const geminiResult = await generateSceneAudioGemini(
+            scene,
+            sceneIndex,
+            currentKey,
+            supabase,
+            userId,
+            projectId,
+            retry,
+            isRegeneration,
+          );
+
+          if (geminiResult.url) {
+            console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1})`);
+            return { ...geminiResult, provider: "Gemini TTS" };
+          }
+          
+          // Check if quota exhausted - skip to next key
+          if (geminiResult.error?.includes("429") || geminiResult.error?.includes("quota") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) {
+            console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted, trying next key`);
+            quotaExhausted = true;
+            break;
+          }
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
         }
-
-        const geminiResult = await generateSceneAudioGemini(
-          scene,
-          sceneIndex,
-          googleApiKey,
-          supabase,
-          userId,
-          projectId,
-          retry,
-          isRegeneration,
-        );
-
-        if (geminiResult.url) {
-          console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS`);
-          return { ...geminiResult, provider: "Gemini TTS" };
-        }
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini attempt ${retry + 1} failed: ${geminiResult.error}`);
       }
     } else {
-      console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API key configured`);
+      console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API keys configured`);
     }
 
     // All TTS options failed for Haitian Creole
-    console.error(`[TTS] Scene ${sceneIndex + 1} - All Gemini TTS options failed for Haitian Creole`);
+    console.error(`[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted for Haitian Creole`);
     return {
       url: null,
-      error: "All Gemini TTS models failed for Haitian Creole (tried 2 models × 5 retries)",
+      error: "Audio generation failed — all TTS API keys exhausted. Please try again later.",
     };
   }
 
@@ -3311,7 +3334,7 @@ async function handleAudioPhase(
   generationId: string,
   projectId: string,
   replicateApiKey: string,
-  googleApiKey?: string,
+  googleApiKeys: string[] = [],
   startIndex: number = 0,
 ): Promise<Response> {
   const requestStart = Date.now();
@@ -3406,7 +3429,7 @@ async function handleAudioPhase(
           scenes[i],
           i,
           replicateApiKey,
-          googleApiKey,
+          googleApiKeys,
           supabase,
           user.id,
           projectId,
@@ -4343,7 +4366,7 @@ async function handleRegenerateAudio(
   sceneIndex: number,
   newVoiceover: string,
   replicateApiKey: string,
-  googleApiKey: string | undefined,
+  googleApiKeys: string[],
 ): Promise<Response> {
   console.log(`[regenerate-audio] Scene ${sceneIndex + 1} - Starting audio regeneration...`);
 
@@ -4418,7 +4441,7 @@ async function handleRegenerateAudio(
     scenes[sceneIndex],
     sceneIndex,
     replicateApiKey,
-    googleApiKey,
+    googleApiKeys,
     supabase,
     user.id,
     projectId,
@@ -4832,6 +4855,12 @@ serve(async (req) => {
     }
 
     const GOOGLE_TTS_API_KEY = Deno.env.get("GOOGLE_TTS_API_KEY");
+    const GOOGLE_TTS_API_KEY_2 = Deno.env.get("GOOGLE_TTS_API_KEY_2");
+    const GOOGLE_TTS_API_KEY_3 = Deno.env.get("GOOGLE_TTS_API_KEY_3");
+    const googleApiKeys: string[] = [];
+    if (GOOGLE_TTS_API_KEY) googleApiKeys.push(GOOGLE_TTS_API_KEY);
+    if (GOOGLE_TTS_API_KEY_2) googleApiKeys.push(GOOGLE_TTS_API_KEY_2);
+    if (GOOGLE_TTS_API_KEY_3) googleApiKeys.push(GOOGLE_TTS_API_KEY_3);
 
     // Parse and validate request body with comprehensive input validation
     let rawBody: unknown;
@@ -5177,7 +5206,7 @@ serve(async (req) => {
           generationId,
           projectId,
           REPLICATE_API_KEY,
-          GOOGLE_TTS_API_KEY,
+          googleApiKeys,
           audioStartIndex || 0,
         );
       case "images":
@@ -5206,7 +5235,7 @@ serve(async (req) => {
           sceneIndex,
           newVoiceover,
           REPLICATE_API_KEY,
-          GOOGLE_TTS_API_KEY,
+          googleApiKeys,
         );
       case "regenerate-image":
         if (typeof sceneIndex !== "number") {
