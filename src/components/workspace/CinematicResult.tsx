@@ -51,6 +51,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useCinematicExport } from "@/hooks/useCinematicExport";
+import { useCinematicRegeneration } from "@/hooks/useCinematicRegeneration";
 import { cn } from "@/lib/utils";
 import { CinematicEditModal } from "./CinematicEditModal";
 import JSZip from "jszip";
@@ -73,8 +74,6 @@ interface CinematicResultProps {
   onNewProject: () => void;
   format?: "landscape" | "portrait" | "square";
 }
-
-type RegenType = "audio" | "video" | "image";
 
 function safeFileBase(name: string) {
   return name.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "cinematic";
@@ -152,12 +151,6 @@ export function CinematicResult({
   const [editVisualPrompt, setEditVisualPrompt] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Regeneration
-  const [isRegenerating, setIsRegenerating] = useState<{
-    sceneIndex: number;
-    type: RegenType;
-  } | null>(null);
-
   // Share/delete dialogs
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -230,6 +223,21 @@ export function CinematicResult({
     advancedFromSceneRef.current = null;
   }, []);
 
+  // Regeneration hook (mirrors useSceneRegeneration pattern with fetch())
+  const {
+    isRegenerating,
+    regenerateAudio,
+    regenerateVideo,
+    applyImageEdit,
+    regenerateImage,
+  } = useCinematicRegeneration(
+    generationId,
+    projectId,
+    localScenes,
+    setLocalScenes,
+    stop
+  );
+
   const startPlayAll = useCallback(
     (startIndex: number) => {
       const scene = localScenes[startIndex];
@@ -271,7 +279,7 @@ export function CinematicResult({
     });
   }, []);
 
-  // Core play loop: whenever isPlayingAll or currentSceneIndex changes, play the visible video + narration audio.
+  // Core play loop
   useEffect(() => {
     if (!isPlayingAll) return;
 
@@ -289,22 +297,16 @@ export function CinematicResult({
     restartRef.current = false;
 
     const run = async () => {
-      // Always keep clip muted — narration is a separate audio track.
       video.muted = true;
       video.playsInline = true;
 
-      // Ensure the element is really on the right source.
       if (!video.currentSrc || !video.currentSrc.includes(scene.videoUrl)) {
         video.src = scene.videoUrl;
         video.load();
       }
 
       if (shouldRestart) {
-        try {
-          video.currentTime = 0;
-        } catch {
-          // ignore
-        }
+        try { video.currentTime = 0; } catch { /* ignore */ }
       }
 
       if (audio) {
@@ -315,11 +317,7 @@ export function CinematicResult({
           }
           audio.muted = isMuted;
           if (shouldRestart) {
-            try {
-              audio.currentTime = 0;
-            } catch {
-              // ignore
-            }
+            try { audio.currentTime = 0; } catch { /* ignore */ }
           }
         } else {
           audio.pause();
@@ -360,8 +358,6 @@ export function CinematicResult({
 
   const advanceToNextScene = useCallback(() => {
     if (!isPlayingAll) return;
-
-    // Prevent double-advance when both audio + video fire `ended`.
     if (advancedFromSceneRef.current === currentSceneIndex) return;
     advancedFromSceneRef.current = currentSceneIndex;
 
@@ -376,20 +372,13 @@ export function CinematicResult({
     setCurrentSceneIndex(nextIndex);
   }, [currentSceneIndex, isPlayingAll, localScenes.length, stop]);
 
-  const handleVideoEnded = useCallback(() => {
-    advanceToNextScene();
-  }, [advanceToNextScene]);
-
-  const handleAudioEnded = useCallback(() => {
-    advanceToNextScene();
-  }, [advanceToNextScene]);
+  const handleVideoEnded = useCallback(() => { advanceToNextScene(); }, [advanceToNextScene]);
+  const handleAudioEnded = useCallback(() => { advanceToNextScene(); }, [advanceToNextScene]);
 
   const handleVideoTimeUpdate = useCallback(() => {
     if (!isPlayingAll) return;
-
     const video = previewVideoRef.current;
     if (!video) return;
-
     const dur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : currentScene?.duration || 1;
     setSceneProgress(Math.min(1, (video.currentTime || 0) / dur));
   }, [currentScene?.duration, isPlayingAll]);
@@ -409,29 +398,20 @@ export function CinematicResult({
     URL.revokeObjectURL(objectUrl);
   }, []);
 
-
   const handleDownloadClipsZip = useCallback(async () => {
     if (scenesWithVideo.length === 0) return;
-
     setIsDownloadingClipsZip(true);
     try {
       const zip = new JSZip();
-
       for (const scene of scenesWithVideo) {
         if (!scene.videoUrl) continue;
         const videoResp = await fetch(scene.videoUrl);
-        if (videoResp.ok) {
-          zip.file(`scene-${scene.number}.mp4`, await videoResp.blob());
-        }
-
+        if (videoResp.ok) zip.file(`scene-${scene.number}.mp4`, await videoResp.blob());
         if (scene.audioUrl) {
           const audioResp = await fetch(scene.audioUrl);
-          if (audioResp.ok) {
-            zip.file(`scene-${scene.number}-audio.wav`, await audioResp.blob());
-          }
+          if (audioResp.ok) zip.file(`scene-${scene.number}-audio.wav`, await audioResp.blob());
         }
       }
-
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const a = document.createElement("a");
@@ -441,7 +421,6 @@ export function CinematicResult({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
       toast({ title: "Download complete", description: "Clips ZIP downloaded." });
     } catch (e) {
       console.error("Clips ZIP download failed", e);
@@ -457,27 +436,20 @@ export function CinematicResult({
       toast({ title: "Cannot share", description: "Project must be saved first", variant: "destructive" });
       return;
     }
-
     setIsShareDialogOpen(true);
     setIsCreatingShare(true);
     setHasCopied(false);
-
     try {
       const { data: existingShare } = await supabase
         .from("project_shares")
         .select("share_token")
         .eq("project_id", projectId)
         .maybeSingle();
-
       let token = existingShare?.share_token;
-
       if (!token) {
         token = crypto.randomUUID();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Not authenticated");
-
         const { error } = await supabase.from("project_shares").insert({
           project_id: projectId,
           user_id: user.id,
@@ -485,7 +457,6 @@ export function CinematicResult({
         });
         if (error) throw error;
       }
-
       const backendUrl = import.meta.env.VITE_SUPABASE_URL;
       const metaUrl = `${backendUrl}/functions/v1/share-meta?token=${token}&v=${Date.now()}`;
       setShareUrl(metaUrl);
@@ -513,7 +484,6 @@ export function CinematicResult({
   // ===== Delete =====
   const handleDelete = useCallback(async () => {
     if (!projectId) return;
-
     setIsDeleting(true);
     try {
       await supabase.from("generations").delete().eq("project_id", projectId);
@@ -521,7 +491,6 @@ export function CinematicResult({
       await supabase.from("project_characters").delete().eq("project_id", projectId);
       const { error } = await supabase.from("projects").delete().eq("id", projectId);
       if (error) throw error;
-
       navigate("/projects", { replace: true });
       toast({ title: "Project deleted", description: "Your project has been permanently deleted" });
     } catch (e) {
@@ -533,7 +502,7 @@ export function CinematicResult({
     }
   }, [navigate, projectId]);
 
-  // ===== Edit / Regenerate =====
+  // ===== Edit =====
   const openEdit = useCallback(() => {
     const s = currentScene;
     if (!s) return;
@@ -553,22 +522,13 @@ export function CinematicResult({
 
   const saveEdit = useCallback(async () => {
     if (!currentScene) return;
-
     setIsSavingEdit(true);
     try {
       const nextScenes = localScenes.map((s, idx) =>
-        idx === currentSceneIndex
-          ? {
-              ...s,
-              voiceover: editVoiceover,
-              visualPrompt: editVisualPrompt,
-            }
-          : s
+        idx === currentSceneIndex ? { ...s, voiceover: editVoiceover, visualPrompt: editVisualPrompt } : s
       );
-
       setLocalScenes(nextScenes);
       await persistScenes(nextScenes);
-
       toast({ title: "Saved", description: "Scene updated." });
       setIsEditOpen(false);
     } catch (e) {
@@ -578,173 +538,6 @@ export function CinematicResult({
       setIsSavingEdit(false);
     }
   }, [currentScene, currentSceneIndex, editVoiceover, editVisualPrompt, localScenes, persistScenes]);
-
-  const regenerateScene = useCallback(
-    async (idx: number, type: RegenType) => {
-      if (!projectId || !generationId) {
-        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
-        return;
-      }
-
-      stop();
-      setIsRegenerating({ sceneIndex: idx, type });
-
-      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-      try {
-        while (true) {
-          const { data, error } = await supabase.functions.invoke("generate-cinematic", {
-            body: {
-              phase: type,
-              projectId,
-              generationId,
-              sceneIndex: idx,
-            },
-          });
-
-          if (error) throw new Error(error.message);
-          if (!data?.success) throw new Error(data?.error || "Regeneration failed");
-
-          const nextScene = data.scene as Partial<CinematicScene>;
-
-          setLocalScenes((prev) => {
-            const copy = [...prev];
-            copy[idx] = { ...copy[idx], ...nextScene };
-            return copy;
-          });
-
-          if (data.status === "complete") break;
-          await sleep(type === "audio" ? 1200 : 2000);
-        }
-
-        toast({ title: "Updated", description: `Scene ${idx + 1} regenerated.` });
-      } catch (e) {
-        console.error("Regenerate failed", e);
-        toast({ variant: "destructive", title: "Regenerate failed", description: "Please try again." });
-      } finally {
-        setIsRegenerating(null);
-      }
-    },
-    [generationId, projectId, stop]
-  );
-
-  // Handler for audio regeneration from the edit modal
-  const handleRegenerateAudio = useCallback(
-    async (idx: number, newVoiceover: string) => {
-      if (!projectId || !generationId) {
-        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
-        return;
-      }
-
-      // First save the new voiceover text
-      const nextScenes = localScenes.map((s, i) =>
-        i === idx ? { ...s, voiceover: newVoiceover } : s
-      );
-      setLocalScenes(nextScenes);
-      await persistScenes(nextScenes);
-
-      // Then regenerate audio
-      await regenerateScene(idx, "audio");
-    },
-    [generationId, projectId, localScenes, persistScenes, regenerateScene]
-  );
-
-  // Handler for video-only regeneration (no image change)
-  const handleRegenerateVideoOnly = useCallback(
-    async (idx: number) => {
-      await regenerateScene(idx, "video");
-    },
-    [regenerateScene]
-  );
-
-  // Handler for applying image edit (edit image then regenerate video)
-  const handleApplyImageEdit = useCallback(
-    async (idx: number, imageModification: string) => {
-      if (!projectId || !generationId) {
-        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
-        return;
-      }
-
-      stop();
-      setIsRegenerating({ sceneIndex: idx, type: "image" });
-
-      try {
-        // Call the backend with the image modification
-        const { data, error } = await supabase.functions.invoke("generate-cinematic", {
-          body: {
-            phase: "image-edit",
-            projectId,
-            generationId,
-            sceneIndex: idx,
-            imageModification,
-          },
-        });
-
-        if (error) throw new Error(error.message);
-        if (!data?.success) throw new Error(data?.error || "Image edit failed");
-
-        // Update the scene with new video
-        const nextScene = data.scene as Partial<CinematicScene>;
-        setLocalScenes((prev) => {
-          const copy = [...prev];
-          copy[idx] = { ...copy[idx], ...nextScene };
-          return copy;
-        });
-
-        toast({ title: "Updated", description: `Scene ${idx + 1} image edited and video regenerated.` });
-      } catch (e) {
-        console.error("Image edit failed", e);
-        toast({ variant: "destructive", title: "Image edit failed", description: String(e) });
-      } finally {
-        setIsRegenerating(null);
-      }
-    },
-    [generationId, projectId, stop]
-  );
-
-  // Handler for regenerating a new image (full regeneration then video)
-  const handleRegenerateImage = useCallback(
-    async (idx: number) => {
-      if (!projectId || !generationId) {
-        toast({ variant: "destructive", title: "Cannot regenerate", description: "Missing project info." });
-        return;
-      }
-
-      stop();
-      setIsRegenerating({ sceneIndex: idx, type: "image" });
-
-      try {
-        // Call the backend to regenerate image then video
-        const { data, error } = await supabase.functions.invoke("generate-cinematic", {
-          body: {
-            phase: "image-regen",
-            projectId,
-            generationId,
-            sceneIndex: idx,
-          },
-        });
-
-        if (error) throw new Error(error.message);
-        if (!data?.success) throw new Error(data?.error || "Image regeneration failed");
-
-        // Update the scene with new video
-        const nextScene = data.scene as Partial<CinematicScene>;
-        setLocalScenes((prev) => {
-          const copy = [...prev];
-          copy[idx] = { ...copy[idx], ...nextScene };
-          return copy;
-        });
-
-        toast({ title: "Updated", description: `Scene ${idx + 1} image and video regenerated.` });
-      } catch (e) {
-        console.error("Image regeneration failed", e);
-        toast({ variant: "destructive", title: "Image regeneration failed", description: String(e) });
-      } finally {
-        setIsRegenerating(null);
-      }
-    },
-    [generationId, projectId, stop]
-  );
 
   const canEdit = !!generationId;
   const regenBusy = isRegenerating?.sceneIndex === currentSceneIndex;
@@ -827,12 +620,7 @@ export function CinematicResult({
           {/* Scene Navigation */}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-4">
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={goToPrevScene}
-                disabled={currentSceneIndex === 0}
-              >
+              <Button variant="ghost" size="icon" onClick={goToPrevScene} disabled={currentSceneIndex === 0}>
                 <ChevronLeft className="h-6 w-6" />
               </Button>
 
@@ -849,12 +637,7 @@ export function CinematicResult({
                 ))}
               </div>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={goToNextScene}
-                disabled={currentSceneIndex === localScenes.length - 1}
-              >
+              <Button variant="ghost" size="icon" onClick={goToNextScene} disabled={currentSceneIndex === localScenes.length - 1}>
                 <ChevronRight className="h-6 w-6" />
               </Button>
             </div>
@@ -1099,16 +882,15 @@ export function CinematicResult({
               <TooltipContent>Share</TooltipContent>
             </Tooltip>
 
-            {/* Regenerate All */}
+            {/* Regenerate Clip */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => {
-                    // Regenerate video for current scene as a starting point
                     if (projectId && generationId) {
-                      regenerateScene(currentSceneIndex, "video");
+                      regenerateVideo(currentSceneIndex);
                     }
                   }}
                   disabled={!projectId || !generationId || !!isRegenerating}
@@ -1160,10 +942,10 @@ export function CinematicResult({
           sceneIndex={currentSceneIndex}
           format={format}
           onClose={() => setIsEditOpen(false)}
-          onRegenerateAudio={handleRegenerateAudio}
-          onRegenerateVideo={handleRegenerateVideoOnly}
-          onApplyImageEdit={handleApplyImageEdit}
-          onRegenerateImage={handleRegenerateImage}
+          onRegenerateAudio={regenerateAudio}
+          onRegenerateVideo={(idx) => regenerateVideo(idx)}
+          onApplyImageEdit={applyImageEdit}
+          onRegenerateImage={regenerateImage}
           isRegenerating={!!isRegenerating && isRegenerating.sceneIndex === currentSceneIndex}
           regeneratingType={isRegenerating?.sceneIndex === currentSceneIndex ? isRegenerating.type : null}
         />
