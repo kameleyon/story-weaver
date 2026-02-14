@@ -431,17 +431,33 @@ GOOD EXAMPLES (RICH CONTEXT):
 === CHARACTER BIBLE (REQUIRED) ===
 You MUST create a "characters" object defining EVERY person/entity in the video for VISUAL CONSISTENCY across all scenes.
 
+=== REAL PERSON / CELEBRITY IDENTIFICATION (CRITICAL) ===
+When the content mentions **real people, celebrities, historical figures, public figures, athletes, politicians, musicians, actors, influencers, or any known individual**:
+1. **IDENTIFY** them automatically from context (names, references, descriptions)
+2. **RECALL** their well-known physical appearance from your training data
+3. **Create a DETAILED look-alike description** that captures their essence WITHOUT being an exact copy:
+   - Describe their **general build, skin tone, facial structure, signature hairstyle**
+   - Reference their **iconic fashion/style choices** (e.g., "signature round glasses", "known for all-black turtlenecks")
+   - Capture their **energy and demeanor** (e.g., "commanding presence", "warm approachable smile")
+4. **IMPORTANT - LEGAL SAFETY:** NEVER use the person's actual name in the visualPrompt. Instead:
+   - Describe them as "a man/woman closely resembling [physical traits]" or "a figure inspired by [style description]"
+   - Use phrases like "reminiscent of", "in the style of", "evoking the look of"
+   - The goal is a **recognizable look-alike / inspired representation**, NOT an identical portrait
+   - This avoids identity rights issues while maintaining visual storytelling impact
+5. **The voiceover CAN use their real name** — only the image/visual prompts must use look-alike descriptions
+
 For each character specify:
 - **GENDER** (male/female/other)
 - **AGE** (specific age or age range)
 - **Ethnicity/skin tone** (be specific)
-- **Hair** (color, style, length)
+- **FACE** (face shape, jawline, brow, nose style, eye shape — be detailed for real people)
+- **Hair** (color, style, length — match their signature look)
 - **Body type** (build, height)
-- **Clothing** (period/age-appropriate, consistent across scenes)
-- **Distinguishing features** that remain CONSTANT
+- **Clothing** (period/age-appropriate, consistent across scenes — use their signature style for real people)
+- **Distinguishing features** that remain CONSTANT (glasses, tattoos, accessories, mannerisms)
 
 When writing visualPrompt, COPY the full character description from your bible—don't just reference the name.
-Example: Instead of "John enters the room", write "A 45-year-old Caucasian man with salt-and-pepper hair, square jaw, wearing a charcoal business suit (from character bible) enters the room..."
+Example for a real person: Instead of "Elon Musk presents the car", write "A tall, athletic-build man in his early 50s with fair skin, short-cropped brown hair with subtle receding hairline, angular jawline, wearing a fitted black t-shirt and dark jeans — a tech mogul aesthetic — gestures confidently toward the vehicle on stage..."
 
 ### SCENE 1 TITLE REQUIREMENT (MANDATORY)
 The FIRST scene (Scene 1) MUST include a bold, prominent title overlay in the visualPrompt.
