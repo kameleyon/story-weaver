@@ -1523,6 +1523,7 @@ serve(async (req) => {
     }
 
     const body: CinematicRequest = await req.json().catch(() => ({}));
+    let parsedGenerationId: string | undefined = body.generationId; // Cache for error handler
     const phase: Phase = body.phase || "script";
 
     // =============== PHASE 1: SCRIPT ===============
@@ -1777,7 +1778,9 @@ serve(async (req) => {
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
-      if (!scene.imageUrl) throw new Error("Scene image is missing (run images phase first)");
+      if (!scene.imageUrl) {
+        return jsonResponse({ success: false, error: "Scene image is missing — please regenerate the image first, then retry video." }, { status: 400 });
+      }
 
       // Read format from project
       const { data: project, error: projectError } = await supabase
@@ -2017,8 +2020,7 @@ Make only the requested changes while keeping everything else consistent.`;
 
     // Update project and generation status to 'error' to prevent zombie generations
     try {
-      const body2: CinematicRequest = await req.clone().json().catch(() => ({}));
-      const genId = body2.generationId;
+      const genId = parsedGenerationId;
       if (genId) {
         const supabaseUrl = Deno.env.get("SUPABASE_URL");
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
