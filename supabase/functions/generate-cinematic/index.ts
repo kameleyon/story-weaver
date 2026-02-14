@@ -907,7 +907,7 @@ async function generateSilentAudio(
 async function generateSceneAudio(
   scene: Scene,
   replicateToken: string,
-  googleApiKey: string | undefined,
+  googleApiKeys: string[],
   elevenLabsApiKey: string | undefined,
   supabase: ReturnType<typeof createClient>,
   voiceGender: string = "female",
@@ -926,39 +926,45 @@ async function generateSceneAudio(
   }
 
   // CASE 1: Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs Speech-to-Speech
-  if (isHC && customVoiceId && elevenLabsApiKey && googleApiKey) {
-    console.log(`[TTS] Scene ${scene.number}: Haitian Creole + Custom Voice workflow`);
+  if (isHC && customVoiceId && elevenLabsApiKey && googleApiKeys.length > 0) {
+    console.log(`[TTS] Scene ${scene.number}: Haitian Creole + Custom Voice workflow (${googleApiKeys.length} API keys available)`);
     
-    // Step 1: Generate base audio with Gemini (extended retry with text variations)
+    // Step 1: Generate base audio with Gemini — try each API key until one works
     const MAX_GEMINI_RETRIES = 5;
     let geminiAudioUrl: string | null = null;
-    let quotaExhausted = false;
-    for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
-      if (retry > 0) {
-        console.log(`[TTS] Scene ${scene.number}: Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
-        await sleep(2000 * retry);
-      }
-      for (const model of GEMINI_TTS_MODELS) {
-        try {
-          const result = await generateAudioWithGeminiTTSModel(
-            voiceoverText, scene.number, googleApiKey, supabase,
-            model.name, model.label, retry,
-          );
-          if (result) { geminiAudioUrl = result; break; }
-        } catch (err: any) {
-          if (err?.quotaExhausted) {
-            console.warn(`[TTS] Scene ${scene.number}: Quota exhausted on ${model.label} — stopping retries`);
-            quotaExhausted = true;
-            break;
-          }
-          throw err;
+    
+    for (let keyIdx = 0; keyIdx < googleApiKeys.length && !geminiAudioUrl; keyIdx++) {
+      const currentKey = googleApiKeys[keyIdx];
+      let quotaExhausted = false;
+      console.log(`[TTS] Scene ${scene.number}: Trying Google API key ${keyIdx + 1}/${googleApiKeys.length}`);
+      
+      for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
+        if (retry > 0) {
+          console.log(`[TTS] Scene ${scene.number}: Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
+          await sleep(2000 * retry);
         }
+        for (const model of GEMINI_TTS_MODELS) {
+          try {
+            const result = await generateAudioWithGeminiTTSModel(
+              voiceoverText, scene.number, currentKey, supabase,
+              model.name, model.label, retry,
+            );
+            if (result) { geminiAudioUrl = result; break; }
+          } catch (err: any) {
+            if (err?.quotaExhausted) {
+              console.warn(`[TTS] Scene ${scene.number}: Quota exhausted on key ${keyIdx + 1} ${model.label} — trying next key`);
+              quotaExhausted = true;
+              break;
+            }
+            throw err;
+          }
+        }
+        if (geminiAudioUrl) break;
       }
-      if (geminiAudioUrl) break;
     }
 
     if (!geminiAudioUrl) {
-      console.warn(`[TTS] Scene ${scene.number}: Gemini TTS failed for HC+Custom — falling back to silent audio`);
+      console.warn(`[TTS] Scene ${scene.number}: All Gemini keys exhausted for HC+Custom — falling back to silent audio`);
       const silentAudioUrl = await generateSilentAudio(scene, supabase);
       if (silentAudioUrl) return { audioUrl: silentAudioUrl };
       return {};
@@ -1021,40 +1027,46 @@ async function generateSceneAudio(
     if (audioUrl) return { audioUrl };
   }
 
-  // CASE 3: Haitian Creole (standard voice) → Gemini TTS with extended fallback (2 models × 5 retries = 10 attempts)
-  if (isHC && googleApiKey) {
-    console.log(`[TTS] Scene ${scene.number}: Haitian Creole via Gemini TTS with extended fallback chain`);
+  // CASE 3: Haitian Creole (standard voice) → Gemini TTS with key failover
+  if (isHC && googleApiKeys.length > 0) {
+    console.log(`[TTS] Scene ${scene.number}: Haitian Creole via Gemini TTS (${googleApiKeys.length} API keys available)`);
     
     const MAX_GEMINI_RETRIES = 5;
-    let quotaExhausted = false;
-    for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
-      if (retry > 0) {
-        console.log(`[TTS] Scene ${scene.number}: Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
-        await sleep(2000 * retry);
-      }
-      for (const model of GEMINI_TTS_MODELS) {
-        try {
-          const result = await generateAudioWithGeminiTTSModel(
-            voiceoverText, scene.number, googleApiKey, supabase,
-            model.name, model.label, retry,
-          );
-          if (result) {
-            console.log(`✅ Scene ${scene.number} SUCCEEDED with: Gemini TTS (${model.label})`);
-            return { audioUrl: result };
+    
+    for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
+      const currentKey = googleApiKeys[keyIdx];
+      let quotaExhausted = false;
+      console.log(`[TTS] Scene ${scene.number}: Trying Google API key ${keyIdx + 1}/${googleApiKeys.length}`);
+      
+      for (let retry = 0; retry < MAX_GEMINI_RETRIES && !quotaExhausted; retry++) {
+        if (retry > 0) {
+          console.log(`[TTS] Scene ${scene.number}: Gemini retry ${retry + 1}/${MAX_GEMINI_RETRIES}`);
+          await sleep(2000 * retry);
+        }
+        for (const model of GEMINI_TTS_MODELS) {
+          try {
+            const result = await generateAudioWithGeminiTTSModel(
+              voiceoverText, scene.number, currentKey, supabase,
+              model.name, model.label, retry,
+            );
+            if (result) {
+              console.log(`✅ Scene ${scene.number} SUCCEEDED with: Gemini TTS key ${keyIdx + 1} (${model.label})`);
+              return { audioUrl: result };
+            }
+          } catch (err: any) {
+            if (err?.quotaExhausted) {
+              console.warn(`[TTS] Scene ${scene.number}: Quota exhausted on key ${keyIdx + 1} ${model.label} — trying next key`);
+              quotaExhausted = true;
+              break;
+            }
+            throw err;
           }
-        } catch (err: any) {
-          if (err?.quotaExhausted) {
-            console.warn(`[TTS] Scene ${scene.number}: Quota exhausted on ${model.label} — stopping retries`);
-            quotaExhausted = true;
-            break;
-          }
-          throw err;
         }
       }
     }
     
-    // Generate silent audio fallback instead of crashing the generation
-    console.warn(`[TTS] Scene ${scene.number}: All Gemini TTS options failed for HC — generating silent audio fallback`);
+    // All keys exhausted — generate silent audio fallback
+    console.warn(`[TTS] Scene ${scene.number}: All Gemini TTS keys exhausted for HC — generating silent audio fallback`);
     const silentAudioUrl = await generateSilentAudio(scene, supabase);
     if (silentAudioUrl) return { audioUrl: silentAudioUrl };
     return {};
@@ -1653,8 +1665,12 @@ serve(async (req) => {
         presenterFocusLower.includes("creole");
       console.log(`[AUDIO] Scene ${scene.number}: presenterFocus="${project?.presenter_focus || "none"}", forceHaitianCreole=${forceHaitianCreole}`);
       
-      // Get API keys for TTS
-      const googleApiKey = Deno.env.get("GOOGLE_TTS_API_KEY");
+      // Get API keys for TTS — build array of available Google keys for failover
+      const googleApiKeys: string[] = [];
+      const gk1 = Deno.env.get("GOOGLE_TTS_API_KEY");
+      const gk2 = Deno.env.get("GOOGLE_TTS_API_KEY_2");
+      if (gk1) googleApiKeys.push(gk1);
+      if (gk2) googleApiKeys.push(gk2);
       const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
       // If we don't have a prediction ID yet, start the audio generation
@@ -1662,7 +1678,7 @@ serve(async (req) => {
         const result = await generateSceneAudio(
           scene,
           replicateToken,
-          googleApiKey,
+          googleApiKeys,
           elevenLabsApiKey,
           supabase,
           voiceGender,
