@@ -158,6 +158,15 @@ CONTENT POLICY (MANDATORY):
 - No hate speech, discrimination, or offensive stereotypes
 - No content promoting illegal activities
 - Keep all content suitable for general audiences
+
+### TTS CONTENT FILTER SAFETY (CRITICAL) ###
+The voiceover text will be read aloud by a Text-to-Speech engine with strict content safety filters.
+You MUST avoid ANY words or onomatopoeia that could trigger these filters, including but not limited to:
+- BANNED WORDS: "BOUM", "BOOM", "BANG", "POW", "CRASH", "KABOOM", "SLASH", "STAB", "SMASH", "BLAST", "EXPLODE", "EXPLOSION", "BLOW UP", "SHOOT", "SHOT", "KILL", "DIE", "DEAD", "BLOOD", "GUN", "BOMB", "ATTACK", "DESTROY", "MURDER", "WEAPON"
+- This applies to ALL languages including Haitian Creole, French, Spanish, etc.
+- Instead of violent/explosive onomatopoeia, use SAFE dramatic alternatives like: "Suddenly...", "In a flash...", "In an instant...", "Everything changed...", "Toudenkou..." (Creole), "At that very moment..."
+- NEVER use ALL-CAPS onomatopoeia or sound effects in voiceover text
+- Write narration that is dramatic but uses DESCRIPTIVE language, not sound-effect words
 `;
 
 async function flagUserForViolation(
