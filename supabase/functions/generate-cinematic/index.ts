@@ -1826,9 +1826,9 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
       const style = project.style || "realistic";
 
-      // Use OpenRouter for image editing
-      const openrouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
-      if (!openrouterApiKey) throw new Error("OPENROUTER_API_KEY not configured");
+      // Use Lovable AI gateway for image editing
+      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
 
       const fullStylePrompt = getStylePrompt(style);
       const editPrompt = `Edit this image: ${modification}
@@ -1838,16 +1838,16 @@ Apply the following style: ${fullStylePrompt}
 
 Make only the requested changes while keeping everything else consistent.`;
 
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via OpenRouter`);
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via Lovable AI gateway`);
 
-      const editResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const editResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${openrouterApiKey}`,
+          Authorization: `Bearer ${lovableApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-pro-preview",
+          model: "google/gemini-3-pro-image-preview",
           messages: [
             {
               role: "user",
@@ -1863,7 +1863,7 @@ Make only the requested changes while keeping everything else consistent.`;
 
       if (!editResponse.ok) {
         const errText = await editResponse.text();
-        console.error(`[IMG-EDIT] OpenRouter failed: ${errText}`);
+        console.error(`[IMG-EDIT] Lovable AI gateway failed: ${errText}`);
         throw new Error("Image editing failed");
       }
 
