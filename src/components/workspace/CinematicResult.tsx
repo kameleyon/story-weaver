@@ -135,8 +135,9 @@ export function CinematicResult({
 
   // Download states
   const [isDownloadingClipsZip, setIsDownloadingClipsZip] = useState(false);
+  const [isDirectDownloading, setIsDirectDownloading] = useState(false);
 
-  // Export hook for combining all scenes
+  // Export hook for combining all scenes (fallback when no finalVideoUrl exists)
   const { 
     state: exportState, 
     exportVideo, 
@@ -397,6 +398,27 @@ export function CinematicResult({
     document.body.removeChild(a);
     URL.revokeObjectURL(objectUrl);
   }, []);
+
+  // Primary export handler: prefer direct download of server-rendered video when available
+  const handleExportVideo = useCallback(async () => {
+    if (finalVideoUrl) {
+      // Direct download — no client-side processing, works reliably on mobile
+      setIsDirectDownloading(true);
+      try {
+        await downloadFromUrl(finalVideoUrl, `${safeFileBase(title)}.mp4`);
+        toast({ title: "Download complete", description: "Video saved to your device." });
+      } catch (e) {
+        console.warn("[CinematicResult] Direct download failed, falling back to client-side export", e);
+        // Fallback: use client-side stitching if direct download fails
+        void exportVideo(localScenes, format, generationId);
+      } finally {
+        setIsDirectDownloading(false);
+      }
+    } else {
+      // No pre-rendered video — use client-side export (will upload result for future direct downloads)
+      void exportVideo(localScenes, format, generationId);
+    }
+  }, [finalVideoUrl, localScenes, format, generationId, title, downloadFromUrl, exportVideo]);
 
   const handleDownloadClipsZip = useCallback(async () => {
     if (scenesWithVideo.length === 0) return;
@@ -818,15 +840,14 @@ export function CinematicResult({
       <TooltipProvider delayDuration={300}>
         <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-3 max-w-3xl mx-auto">
           <div className="flex items-center justify-center gap-2">
-            {/* Export Video (all scenes combined) */}
+            {/* Export Video — direct download when available, client-side fallback */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
-                  onClick={() => {
-                    void exportVideo(localScenes, format, generationId);
-                  }}
+                  onClick={handleExportVideo}
                   disabled={
+                    isDirectDownloading ||
                     scenesWithVideo.length === 0 || 
                     exportState.status === "loading" || 
                     exportState.status === "rendering" || 
@@ -835,15 +856,14 @@ export function CinematicResult({
                   }
                   className="h-10 w-10"
                 >
-                  {exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error" ? (
+                  {isDirectDownloading || (exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error") ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Download className="h-5 w-5" />
                   )}
-                  {exportState.status === "uploading" && <span className="sr-only">Uploading...</span>}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Export Video</TooltipContent>
+              <TooltipContent>{finalVideoUrl ? "Download Video" : "Export Video"}</TooltipContent>
             </Tooltip>
 
             {/* Download Clips ZIP */}
