@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -113,10 +113,10 @@ export default function Projects() {
   const { refreshThumbnails } = useRefreshThumbnails();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -132,23 +132,45 @@ export default function Projects() {
   const [refreshedThumbnails, setRefreshedThumbnails] = useState<Map<string, string | null>>(new Map());
   const refreshInProgressRef = useRef(false);
 
-  // Fast initial load - just fetch projects and basic thumbnails (no refresh)
-  const { data: projects = [], isLoading } = useQuery({
-    queryKey: ["all-projects", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
+  // Debounce search input
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
+
+  // Server-side paginated, sorted, filtered query
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["all-projects", user?.id, debouncedSearch, sortField, sortOrder],
+    queryFn: async ({ pageParam = 0 }) => {
+      if (!user?.id) return { projects: [], nextCursor: null };
       
-      // Fetch projects
-      const { data: projectsData, error } = await supabase
+      const from = pageParam * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      let q = supabase
         .from("projects")
         .select("*")
         .eq("user_id", user.id)
-        .order("updated_at", { ascending: false });
+        .order("is_favorite", { ascending: false })
+        .order(sortField, { ascending: sortOrder === "asc" })
+        .range(from, to);
+
+      if (debouncedSearch.length > 0) {
+        q = q.ilike("title", `%${debouncedSearch}%`);
+      }
+
+      const { data: projectsData, error } = await q;
       if (error) throw error;
-      
-      if (!projectsData?.length) return [];
-      
-      // Fetch thumbnails from generations
+
+      if (!projectsData?.length) return { projects: [], nextCursor: null };
+
+      // Fetch thumbnails for this page
       const projectIds = projectsData.map(p => p.id);
       const { data: generations } = await supabase
         .from("generations")
@@ -156,8 +178,7 @@ export default function Projects() {
         .in("project_id", projectIds)
         .eq("status", "complete")
         .order("created_at", { ascending: false });
-      
-      // Create initial thumbnail map (using stored URLs, may be expired)
+
       const thumbnailMap: Record<string, string | null> = {};
       if (generations) {
         for (const gen of generations) {
@@ -174,29 +195,41 @@ export default function Projects() {
           }
         }
       }
-      
-      return projectsData.map(p => ({
+
+      const projects = projectsData.map(p => ({
         ...p,
         thumbnailUrl: thumbnailMap[p.id] || null,
       })) as Project[];
+
+      return {
+        projects,
+        nextCursor: projectsData.length === ITEMS_PER_PAGE ? pageParam + 1 : null,
+      };
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: !!user?.id,
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 30000,
   });
+
+  // Flatten all pages into a single array
+  const allProjects = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap(page => page.projects);
+  }, [data]);
 
   // Background refresh of thumbnails after initial load
   useEffect(() => {
-    if (projects.length === 0 || refreshInProgressRef.current) return;
+    if (allProjects.length === 0 || refreshInProgressRef.current) return;
     
-    const thumbnailInputs = projects
+    const thumbnailInputs = allProjects
       .filter(p => p.thumbnailUrl && p.thumbnailUrl.includes("/storage/v1/object/sign/"))
-      .map(p => ({ projectId: p.id, thumbnailUrl: p.thumbnailUrl }));
+      .map(p => ({ projectId: p.id, thumbnailUrl: p.thumbnailUrl! }));
     
     if (thumbnailInputs.length === 0) return;
     
     refreshInProgressRef.current = true;
     
-    // Run in background, don't block UI
     refreshThumbnails(thumbnailInputs)
       .then(refreshedMap => {
         setRefreshedThumbnails(refreshedMap);
@@ -207,16 +240,16 @@ export default function Projects() {
       .finally(() => {
         refreshInProgressRef.current = false;
       });
-  }, [projects, refreshThumbnails]);
+  }, [allProjects, refreshThumbnails]);
 
   // Merge refreshed thumbnails with projects
   const projectsWithThumbnails = useMemo(() => {
-    if (refreshedThumbnails.size === 0) return projects;
-    return projects.map(p => ({
+    if (refreshedThumbnails.size === 0) return allProjects;
+    return allProjects.map(p => ({
       ...p,
       thumbnailUrl: refreshedThumbnails.get(p.id) ?? p.thumbnailUrl,
     }));
-  }, [projects, refreshedThumbnails]);
+  }, [allProjects, refreshedThumbnails]);
 
   // Mutations
   const deleteProjectMutation = useMutation({
@@ -271,54 +304,6 @@ export default function Projects() {
     onError: (error) => toast.error("Failed to update: " + error.message),
   });
 
-  // Filter and sort - use projectsWithThumbnails for refreshed URLs
-  const filteredProjects = useMemo(() => {
-    let result = projectsWithThumbnails.filter((p) =>
-      p.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    result.sort((a, b) => {
-      if (a.is_favorite !== b.is_favorite) {
-        return a.is_favorite ? -1 : 1;
-      }
-
-      let aVal: string | number = a[sortField];
-      let bVal: string | number = b[sortField];
-
-      if (sortField === "created_at" || sortField === "updated_at") {
-        aVal = new Date(aVal).getTime();
-        bVal = new Date(bVal).getTime();
-      } else {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
-      }
-
-      if (sortOrder === "asc") {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      } else {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
-      }
-    });
-
-    return result;
-  }, [projectsWithThumbnails, searchQuery, sortField, sortOrder]);
-
-  // Paginated projects
-  const paginatedProjects = useMemo(() => {
-    return filteredProjects.slice(0, visibleCount);
-  }, [filteredProjects, visibleCount]);
-
-  const hasMore = visibleCount < filteredProjects.length;
-
-  const handleShowMore = () => {
-    setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredProjects.length));
-  };
-
-  // Reset visible count when search changes
-  useEffect(() => {
-    setVisibleCount(ITEMS_PER_PAGE);
-  }, [searchQuery]);
-
   // Selection handlers
   const toggleSelect = (id: string) => {
     const newSet = new Set(selectedIds);
@@ -331,10 +316,10 @@ export default function Projects() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredProjects.length) {
+    if (selectedIds.size === projectsWithThumbnails.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredProjects.map((p) => p.id)));
+      setSelectedIds(new Set(projectsWithThumbnails.map((p) => p.id)));
     }
   };
 
@@ -588,7 +573,7 @@ export default function Projects() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : filteredProjects.length === 0 ? (
+        ) : projectsWithThumbnails.length === 0 ? (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -612,7 +597,7 @@ export default function Projects() {
           /* Grid View */
           <>
             <ProjectsGridView
-              projects={paginatedProjects}
+              projects={projectsWithThumbnails}
               onView={handleView}
               onRename={handleRename}
               onDelete={handleDelete}
@@ -622,14 +607,19 @@ export default function Projects() {
               downloadingProjectId={downloadingProjectId}
             />
             {/* Show More Button for Grid */}
-            {hasMore && (
+            {hasNextPage && (
               <div className="mt-6 flex justify-center">
                 <Button 
                   variant="outline" 
-                  onClick={handleShowMore}
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
                   className="gap-2"
                 >
-                  Show more ({filteredProjects.length - visibleCount} remaining)
+                  {isFetchingNextPage ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Loading...</>
+                  ) : (
+                    "Show more"
+                  )}
                 </Button>
               </div>
             )}
@@ -643,7 +633,7 @@ export default function Projects() {
                 <TableRow className="hover:bg-transparent border-border/60 bg-muted/20">
                   <TableHead className="w-8 sm:w-10 py-2 px-1.5 sm:px-3">
                     <Checkbox
-                      checked={selectedIds.size === filteredProjects.length && filteredProjects.length > 0}
+                      checked={selectedIds.size === projectsWithThumbnails.length && projectsWithThumbnails.length > 0}
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
@@ -656,7 +646,7 @@ export default function Projects() {
               </TableHeader>
               <TableBody>
                 <AnimatePresence>
-                  {paginatedProjects.map((project, index) => (
+                  {projectsWithThumbnails.map((project, index) => (
                     <motion.tr
                       key={project.id}
                       initial={{ opacity: 0 }}
@@ -769,14 +759,19 @@ export default function Projects() {
             </div>
 
             {/* Show More Button */}
-            {hasMore && (
+            {hasNextPage && (
               <div className="p-4 border-t border-border/30 flex justify-center">
                 <Button 
                   variant="outline" 
-                  onClick={handleShowMore}
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
                   className="gap-2"
                 >
-                  Show more ({filteredProjects.length - visibleCount} remaining)
+                  {isFetchingNextPage ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Loading...</>
+                  ) : (
+                    "Show more"
+                  )}
                 </Button>
               </div>
             )}
@@ -786,24 +781,24 @@ export default function Projects() {
         {/* Footer Stats */}
         <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
           <span className="text-xs sm:text-sm">
-            {paginatedProjects.length}/{filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}
+            {projectsWithThumbnails.length} project{projectsWithThumbnails.length !== 1 ? "s" : ""} loaded
             {selectedIds.size > 0 && ` • ${selectedIds.size} selected`}
           </span>
-          {filteredProjects.length > 0 && (
+          {projectsWithThumbnails.length > 0 && (
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="flex items-center gap-1 sm:gap-1.5" title="Explainers">
                 <Video className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{filteredProjects.filter(p => p.project_type === "doc2video" || !p.project_type).length}</span>
+                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "doc2video" || !p.project_type).length}</span>
                 <span className="hidden sm:inline text-xs sm:text-sm">explainers</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-1.5" title="Stories">
                 <Clapperboard className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{filteredProjects.filter(p => p.project_type === "storytelling").length}</span>
+                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "storytelling").length}</span>
                 <span className="hidden sm:inline text-xs sm:text-sm">stories</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-1.5" title="SmartFlow">
                 <Wallpaper className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{filteredProjects.filter(p => p.project_type === "smartflow").length}</span>
+                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "smartflow").length}</span>
                 <span className="hidden sm:inline text-xs sm:text-sm">smartflow</span>
               </div>
             </div>
