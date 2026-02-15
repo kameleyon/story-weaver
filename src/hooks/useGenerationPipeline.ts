@@ -414,31 +414,44 @@ export function useGenerationPipeline() {
             statusMessage: "Images complete. Generating video clips...",
           }));
 
-          for (let i = 0; i < cSceneCount; i++) {
+          // Phase 4: Video clips (batched in groups of 3 for parallelism)
+          const VIDEO_BATCH_SIZE = 3;
+
+          for (let i = 0; i < cSceneCount; i += VIDEO_BATCH_SIZE) {
+            const batchEnd = Math.min(i + VIDEO_BATCH_SIZE, cSceneCount);
+
             setState((prev) => ({
               ...prev,
-              statusMessage: `Generating clips (${i + 1}/${cSceneCount})...`,
+              statusMessage: `Generating clips (${i + 1}-${batchEnd}/${cSceneCount})...`,
               progress: 60 + Math.floor(((i + 0.25) / cSceneCount) * 35),
             }));
 
-            let videoComplete = false;
-            while (!videoComplete) {
-              const vidRes = await callPhase(
-                { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
-                480000,
-                cinematicEndpoint
-              );
-              if (!vidRes.success) throw new Error(vidRes.error || "Video generation failed");
-              if (vidRes.status === "complete") {
-                videoComplete = true;
-              } else {
-                await sleep(2000);
-              }
+            // Process batch in parallel
+            const batchPromises = [];
+            for (let j = i; j < batchEnd; j++) {
+              batchPromises.push((async () => {
+                let videoComplete = false;
+                while (!videoComplete) {
+                  const vidRes = await callPhase(
+                    { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: j },
+                    480000,
+                    cinematicEndpoint
+                  );
+                  if (!vidRes.success) throw new Error(vidRes.error || `Video generation failed for scene ${j + 1}`);
+                  if (vidRes.status === "complete") {
+                    videoComplete = true;
+                  } else {
+                    await sleep(3000);
+                  }
+                }
+              })());
             }
+
+            await Promise.all(batchPromises);
 
             setState((prev) => ({
               ...prev,
-              progress: 60 + Math.floor(((i + 1) / cSceneCount) * 35),
+              progress: 60 + Math.floor((batchEnd / cSceneCount) * 35),
             }));
           }
 
