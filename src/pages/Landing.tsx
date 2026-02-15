@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
+import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -34,14 +35,14 @@ const pricingPlans = [
     price: "$0",
     description: "Get started with basic features",
     features: [
-      { text: "5 credits/month", included: true },
+      { text: `${PLAN_LIMITS.free.creditsPerMonth} credits/month`, included: true },
       { text: "Short videos only (<2 min)", included: true },
       { text: "720p quality", included: true },
       { text: "5 basic visual styles", included: true },
-      { text: "Landscape format only", included: true },
+      { text: `${PLAN_LIMITS.free.allowedFormats.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(" ")} format only`, included: true },
       { text: "Watermark on exports", included: true },
-      { text: "Voice cloning", included: false },
-      { text: "Infographics", included: false },
+      { text: "Voice cloning", included: !PLAN_LIMITS.free.allowVoiceCloning },
+      { text: "Infographics", included: PLAN_LIMITS.free.infographicsPerMonth > 0 },
     ],
     buttonText: "Get Started",
     buttonVariant: "outline" as const,
@@ -53,8 +54,8 @@ const pricingPlans = [
     price: "$14.99",
     description: "Hobbyists & social creators",
     features: [
-      { text: "30 credits/month", included: true },
-      { text: "Short + Brief videos", included: true },
+      { text: `${PLAN_LIMITS.starter.creditsPerMonth} credits/month`, included: true },
+      { text: `${PLAN_LIMITS.starter.allowedLengths.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(" + ")} videos`, included: true },
       { text: "1080p quality", included: true },
       { text: "10 visual styles", included: true },
       { text: "All formats (16:9, 9:16, 1:1)", included: true },
@@ -72,13 +73,13 @@ const pricingPlans = [
     price: "$39.99",
     description: "Content creators & small biz",
     features: [
-      { text: "100 credits/month", included: true },
+      { text: `${PLAN_LIMITS.creator.creditsPerMonth} credits/month`, included: true },
       { text: "All video lengths", included: true },
       { text: "1080p quality", included: true },
-      { text: "All 13 styles + Custom", included: true },
+      { text: `All 13 styles${PLAN_LIMITS.creator.allowCustomStyle ? " + Custom" : ""}`, included: true },
       { text: "Full narration + voice effects", included: true },
-      { text: "1 voice clone", included: true },
-      { text: "50 infographics/month", included: true },
+      { text: `${PLAN_LIMITS.creator.voiceClones} voice clone`, included: PLAN_LIMITS.creator.allowVoiceCloning },
+      { text: `${PLAN_LIMITS.creator.infographicsPerMonth} infographics/month`, included: PLAN_LIMITS.creator.infographicsPerMonth > 0 },
       { text: "Priority support (24h)", included: true },
     ],
     buttonText: "Upgrade to Creator",
@@ -91,12 +92,12 @@ const pricingPlans = [
     price: "$89.99",
     description: "Agencies & marketing teams",
     features: [
-      { text: "300 credits/month", included: true },
+      { text: `${PLAN_LIMITS.professional.creditsPerMonth} credits/month`, included: true },
       { text: "4K quality", included: true },
       { text: "All styles + premium effects", included: true },
       { text: "Full narration + multilingual", included: true },
-      { text: "3 voice clones", included: true },
-      { text: "Unlimited infographics", included: true },
+      { text: `${PLAN_LIMITS.professional.voiceClones} voice clones`, included: PLAN_LIMITS.professional.allowVoiceCloning },
+      { text: "Unlimited infographics", included: PLAN_LIMITS.professional.infographicsPerMonth > 0 },
       { text: "API access (5K requests/mo)", included: true },
       { text: "Priority support (12h)", included: true },
     ],
