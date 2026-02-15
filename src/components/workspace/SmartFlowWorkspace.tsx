@@ -1,9 +1,9 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Menu, AlertCircle, RotateCcw, Wallpaper } from "lucide-react";
+import { Play, AlertCircle, RotateCcw, Wallpaper } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { FormatSelector, type VideoFormat } from "./FormatSelector";
 import { VoiceSelector, type VoiceSelection } from "./VoiceSelector";
 import { GenerationProgress } from "./GenerationProgress";
-import { ThemedLogo } from "@/components/ThemedLogo";
+
 import { SmartFlowStyleSelector, type SmartFlowStyle } from "./SmartFlowStyleSelector";
 import { SmartFlowResult } from "./SmartFlowResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
@@ -195,41 +195,19 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       openProject: handleOpenProject,
     }));
 
+    const headerActions = generationState.step !== "idle" && generationState.step !== "complete" && generationState.step !== "error" ? (
+      <motion.div
+        className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
+        initial={{ opacity: 0, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        <span className="text-xs sm:text-sm font-medium text-primary">Generating...</span>
+      </motion.div>
+    ) : null;
+
     return (
-      <div className="flex h-screen flex-col bg-background overflow-hidden">
-        {/* Top Bar */}
-        <header className="grid h-14 sm:h-16 grid-cols-3 items-center justify-between border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
-          <div className="flex items-center gap-3 sm:gap-4 justify-start">
-            <SidebarTrigger className="lg:hidden">
-              <Menu className="h-5 w-5 text-muted-foreground" />
-            </SidebarTrigger>
-            <div className="hidden lg:flex items-center">
-              <ThemedLogo className="h-10 w-auto" />
-            </div>
-          </div>
-
-          {/* Mobile centered logo */}
-          <div className="flex justify-center lg:hidden">
-            <ThemedLogo className="h-10 w-auto" />
-          </div>
-
-          <div className="flex items-center justify-end gap-3">
-            {generationState.step !== "idle" && generationState.step !== "complete" && generationState.step !== "error" && (
-              <motion.div
-                className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-              >
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                <span className="text-xs sm:text-sm font-medium text-primary">Generating...</span>
-              </motion.div>
-            )}
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-4xl px-3 sm:px-6 py-4 sm:py-12">
+      <WorkspaceLayout headerActions={headerActions}>
             <AnimatePresence mode="wait">
               {generationState.step === "idle" ? (
                 <motion.div
@@ -405,8 +383,6 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-        </main>
 
         {/* Modals */}
         <UpgradeRequiredModal
@@ -421,7 +397,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
           onOpenChange={setShowSuspendedModal}
           status={suspendedStatus}
         />
-      </div>
+      </WorkspaceLayout>
     );
   }
 );

@@ -1,9 +1,9 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2, Lightbulb, MessageSquareOff } from "lucide-react";
+import { Play, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2, Lightbulb, MessageSquareOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ContentInput } from "./ContentInput";
@@ -16,7 +16,7 @@ import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
 import { GenerationProgress } from "./GenerationProgress";
 import { CinematicResult } from "./CinematicResult";
-import { ThemedLogo } from "@/components/ThemedLogo";
+
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
 import { useSubscription, validateGenerationAccess, PLAN_LIMITS } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -505,41 +505,19 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
       openProject: handleOpenProject,
     }));
 
+    const headerActions = cinematicState.step !== "idle" && cinematicState.step !== "complete" && cinematicState.step !== "error" ? (
+      <motion.div
+        className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
+        initial={{ opacity: 0, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+      >
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+        <span className="text-xs sm:text-sm font-medium text-primary">Creating cinematic...</span>
+      </motion.div>
+    ) : null;
+
     return (
-      <div className="flex h-screen flex-col bg-background overflow-hidden">
-        {/* Top Bar */}
-        <header className="grid h-14 sm:h-16 grid-cols-3 items-center border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
-          <div className="flex items-center gap-3 sm:gap-4 justify-start">
-            <SidebarTrigger className="lg:hidden">
-              <Menu className="h-5 w-5 text-muted-foreground" />
-            </SidebarTrigger>
-            <div className="hidden lg:flex items-center">
-              <ThemedLogo className="h-10 w-auto" />
-            </div>
-          </div>
-
-          {/* Mobile centered logo */}
-          <div className="flex justify-center lg:hidden">
-            <ThemedLogo className="h-10 w-auto" />
-          </div>
-
-          <div className="flex items-center justify-end gap-3">
-            {cinematicState.step !== "idle" && cinematicState.step !== "complete" && cinematicState.step !== "error" && (
-              <motion.div
-                className="flex items-center gap-2 rounded-full bg-primary/10 px-3 sm:px-4 py-1.5"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                <span className="text-xs sm:text-sm font-medium text-primary">Creating cinematic...</span>
-              </motion.div>
-            )}
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-4xl px-3 sm:px-6 py-4 sm:py-12">
+      <WorkspaceLayout headerActions={headerActions}>
             <AnimatePresence mode="wait">
               {cinematicState.step === "idle" ? (
                 <motion.div
@@ -733,8 +711,6 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-        </main>
 
         {/* Modals */}
         <UpgradeRequiredModal
@@ -749,7 +725,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
           onOpenChange={setShowSuspendedModal}
           status={suspendedStatus}
         />
-      </div>
+      </WorkspaceLayout>
     );
   }
 );
