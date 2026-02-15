@@ -76,10 +76,7 @@ import { ProjectSearch } from "@/components/layout/ProjectSearch";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
-interface AppSidebarProps {
-  onNewProject: () => void;
-  onOpenProject: (projectId: string) => void;
-}
+// No external props needed — navigation is handled internally
 
 const STARTER_PERKS = [
   "30 credits per month",
@@ -90,7 +87,7 @@ const STARTER_PERKS = [
   "No watermark",
 ];
 
-export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
+export function AppSidebar() {
   const { state, isMobile, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
   const { theme, setTheme } = useTheme();
@@ -291,7 +288,9 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
         {/* Search bar - only when expanded (desktop) or always on mobile */}
         {(!isCollapsed || isMobile) && (
           <div>
-            <ProjectSearch onSelectProject={onOpenProject} />
+            <ProjectSearch onSelectProject={(projectId) => {
+              navigate(`/app/create?project=${projectId}`);
+            }} />
           </div>
         )}
       </SidebarHeader>
@@ -523,7 +522,6 @@ export function AppSidebar({ onNewProject, onOpenProject }: AppSidebarProps) {
                       <SidebarMenuButton
                           onClick={() => {
                             navigate(`/app/create?mode=${projectMode}&project=${project.id}`);
-                            onOpenProject(project.id);
                           }}
                           className={`w-full cursor-pointer rounded-lg px-3 py-2 sm:py-2.5 transition-colors pr-8 ${
                             isActiveProject 
