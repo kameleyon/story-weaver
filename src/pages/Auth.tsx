@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthErrorMessage } from "@/lib/authErrors";
 
 type AuthMode = "login" | "signup" | "reset" | "update";
 
@@ -51,7 +52,7 @@ export default function Auth() {
       if (mode === "login") {
         const { error } = await signIn(email, password);
         if (error) {
-          toast({ variant: "destructive", title: "Sign in failed", description: error.message });
+          toast({ variant: "destructive", title: "Sign in failed", description: getAuthErrorMessage(error.message) });
           return;
         }
         navigate("/app");
@@ -61,7 +62,7 @@ export default function Auth() {
       if (mode === "signup") {
         const { error } = await signUp(email, password);
         if (error) {
-          toast({ variant: "destructive", title: "Sign up failed", description: error.message });
+          toast({ variant: "destructive", title: "Sign up failed", description: getAuthErrorMessage(error.message) });
           return;
         }
         toast({ title: "Account created", description: "Welcome to MotionMax!" });
@@ -72,7 +73,7 @@ export default function Auth() {
       if (mode === "reset") {
         const { error } = await resetPassword(email);
         if (error) {
-          toast({ variant: "destructive", title: "Reset failed", description: error.message });
+          toast({ variant: "destructive", title: "Reset failed", description: getAuthErrorMessage(error.message) });
           return;
         }
         toast({
@@ -95,7 +96,7 @@ export default function Auth() {
 
       const { error } = await updatePassword(password);
       if (error) {
-        toast({ variant: "destructive", title: "Update failed", description: error.message });
+        toast({ variant: "destructive", title: "Update failed", description: getAuthErrorMessage(error.message) });
         return;
       }
 
