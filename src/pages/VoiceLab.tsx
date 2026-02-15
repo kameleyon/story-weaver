@@ -251,10 +251,8 @@ export default function VoiceLab() {
   return (
     <SidebarProvider defaultOpen={sidebarOpen} onOpenChange={setSidebarOpen}>
       <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar 
-          onNewProject={() => navigate("/app/create?mode=doc2video")} 
-          onOpenProject={(id) => navigate(`/app/create?project=${id}`)} 
-        />
+        <AppSidebar />
+        
         
         <main className="flex-1 flex flex-col">
           {/* Header */}
