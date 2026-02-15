@@ -7,7 +7,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import featuresBackground from "@/assets/features-bg-dark.png";
 import motionmaxLogo from "@/assets/motionmax-logo.png";
 import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
-import heroPromoVideo from "@/assets/hero-promo.mp4";
 import heroVideoPoster from "@/assets/hero-video-poster.png";
 
 const features = [
@@ -193,15 +192,11 @@ export default function Landing() {
               className="w-full max-w-2xl"
             >
               <div className="w-full rounded-2xl shadow-2xl overflow-hidden">
-                <video
-                  src={heroPromoVideo}
-                  className="w-full h-full"
-                  controls
-                  preload="metadata"
-                  poster={heroVideoPoster}
-                >
-                  Your browser does not support the video tag.
-                </video>
+                <img
+                  src={heroVideoPoster}
+                  alt="MotionMax – Turn text into engaging visual content"
+                  className="w-full h-full object-cover"
+                />
               </div>
             </motion.div>
           </div>
