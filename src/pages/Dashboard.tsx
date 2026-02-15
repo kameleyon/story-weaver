@@ -435,17 +435,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Community Coming Soon Section */}
-          <div className="rounded-xl border border-dashed border-primary/50 bg-white/80 dark:bg-card/60 backdrop-blur-sm p-8 text-center shadow-sm">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary/20 dark:bg-primary/20 text-brand-primary dark:text-primary text-xs font-semibold mb-3">
-              <Users className="h-3 w-3" />
-              Coming Soon
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground mb-2">Community Showcase</h3>
-            <p className="text-sm text-gray-700 dark:text-muted-foreground max-w-md mx-auto">
-              Share your creations with the community. Toggle videos to public, get likes, and discover what others are creating.
-            </p>
-          </div>
         </div>
       </main>
     </div>
