@@ -55,12 +55,13 @@ export interface GenerationState {
   title?: string;
   scenes?: Scene[];
   format?: "landscape" | "portrait" | "square";
+  finalVideoUrl?: string;
   error?: string;
   statusMessage?: string;
   costTracking?: CostTracking;
   phaseTimings?: PhaseTimings;
   totalTimeMs?: number;
-  projectType?: "doc2video" | "storytelling" | "smartflow";
+  projectType?: "doc2video" | "storytelling" | "smartflow" | "cinematic";
 }
 
 interface GenerationParams {
@@ -80,7 +81,7 @@ interface GenerationParams {
   voiceId?: string;
   voiceName?: string;
   // New storytelling fields
-  projectType?: "doc2video" | "storytelling" | "smartflow";
+  projectType?: "doc2video" | "storytelling" | "smartflow" | "cinematic";
   inspirationStyle?: string;
   storyTone?: string;
   storyGenre?: string;
@@ -106,6 +107,7 @@ export type ProjectRow = {
   story_tone?: string | null;
   story_genre?: string | null;
   voice_inclination?: string | null;
+  project_type?: string | null;
 };
 
 const normalizeScenes = (raw: unknown): Scene[] | undefined => {
@@ -194,7 +196,8 @@ export function useGenerationPipeline() {
   // Helper to call a phase with configurable timeout and fresh auth
   const callPhase = async (
     body: Record<string, unknown>,
-    timeoutMs: number = 120000 // Default 2 minutes
+    timeoutMs: number = 120000, // Default 2 minutes
+    endpoint: string = "generate-video"
   ): Promise<any> => {
     // Retry transient network failures (these often surface as TypeError: Failed to fetch)
     // so generation doesn't hard-fail on a single dropped connection.
@@ -208,7 +211,7 @@ export function useGenerationPipeline() {
         // Get fresh token before each phase call to avoid JWT expiration mid-generation
         const accessToken = await getFreshSession();
 
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`, {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -296,6 +299,191 @@ export function useGenerationPipeline() {
         // Verify user is logged in before starting (fresh token will be fetched per-phase)
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (!initialSession) throw new Error("You must be logged in to generate videos");
+
+        // ============= CINEMATIC PIPELINE =============
+        if (params.projectType === "cinematic") {
+          const cinematicEndpoint = "generate-cinematic";
+
+          // Phase 1: Script
+          setState((prev) => ({
+            ...prev,
+            step: "scripting",
+            progress: 5,
+            statusMessage: "Generating cinematic script...",
+          }));
+
+          const scriptResult = await callPhase(
+            {
+              phase: "script",
+              content: params.content,
+              format: params.format,
+              length: params.length,
+              style: params.style,
+              customStyle: params.customStyle,
+              brandMark: params.brandMark,
+              presenterFocus: params.presenterFocus,
+              characterDescription: params.characterDescription,
+              disableExpressions: params.disableExpressions,
+              characterConsistencyEnabled: params.characterConsistencyEnabled,
+              voiceType: params.voiceType,
+              voiceId: params.voiceId,
+              voiceName: params.voiceName,
+            },
+            180000,
+            cinematicEndpoint
+          );
+
+          if (!scriptResult.success) throw new Error(scriptResult.error || "Script generation failed");
+
+          const cProjectId = scriptResult.projectId;
+          const cGenerationId = scriptResult.generationId;
+          const cTitle = scriptResult.title;
+          const cSceneCount = scriptResult.sceneCount;
+
+          setState((prev) => ({
+            ...prev,
+            step: "visuals",
+            progress: 10,
+            projectId: cProjectId,
+            generationId: cGenerationId,
+            title: cTitle,
+            sceneCount: cSceneCount,
+            statusMessage: "Script complete. Generating audio...",
+          }));
+
+          // Phase 2: Audio (scene-by-scene with polling)
+          for (let i = 0; i < cSceneCount; i++) {
+            setState((prev) => ({
+              ...prev,
+              statusMessage: `Generating audio (${i + 1}/${cSceneCount})...`,
+              progress: 10 + Math.floor(((i + 0.25) / cSceneCount) * 25),
+            }));
+
+            let audioComplete = false;
+            while (!audioComplete) {
+              const audioRes = await callPhase(
+                { phase: "audio", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
+                300000,
+                cinematicEndpoint
+              );
+              if (!audioRes.success) throw new Error(audioRes.error || "Audio generation failed");
+              if (audioRes.status === "complete") {
+                audioComplete = true;
+              } else {
+                await sleep(1200);
+              }
+            }
+
+            setState((prev) => ({
+              ...prev,
+              progress: 10 + Math.floor(((i + 1) / cSceneCount) * 25),
+            }));
+          }
+
+          // Phase 3: Images (scene-by-scene)
+          setState((prev) => ({
+            ...prev,
+            progress: 35,
+            statusMessage: "Audio complete. Creating scene images...",
+          }));
+
+          for (let i = 0; i < cSceneCount; i++) {
+            setState((prev) => ({
+              ...prev,
+              statusMessage: `Creating images (${i + 1}/${cSceneCount})...`,
+              progress: 35 + Math.floor(((i + 0.25) / cSceneCount) * 25),
+            }));
+
+            const imgRes = await callPhase(
+              { phase: "images", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
+              480000,
+              cinematicEndpoint
+            );
+            if (!imgRes.success) throw new Error(imgRes.error || "Image generation failed");
+
+            setState((prev) => ({
+              ...prev,
+              progress: 35 + Math.floor(((i + 1) / cSceneCount) * 25),
+            }));
+          }
+
+          // Phase 4: Video clips (scene-by-scene with polling)
+          setState((prev) => ({
+            ...prev,
+            progress: 60,
+            statusMessage: "Images complete. Generating video clips...",
+          }));
+
+          for (let i = 0; i < cSceneCount; i++) {
+            setState((prev) => ({
+              ...prev,
+              statusMessage: `Generating clips (${i + 1}/${cSceneCount})...`,
+              progress: 60 + Math.floor(((i + 0.25) / cSceneCount) * 35),
+            }));
+
+            let videoComplete = false;
+            while (!videoComplete) {
+              const vidRes = await callPhase(
+                { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
+                480000,
+                cinematicEndpoint
+              );
+              if (!vidRes.success) throw new Error(vidRes.error || "Video generation failed");
+              if (vidRes.status === "complete") {
+                videoComplete = true;
+              } else {
+                await sleep(2000);
+              }
+            }
+
+            setState((prev) => ({
+              ...prev,
+              progress: 60 + Math.floor(((i + 1) / cSceneCount) * 35),
+            }));
+          }
+
+          // Phase 5: Finalize
+          setState((prev) => ({
+            ...prev,
+            step: "rendering",
+            progress: 96,
+            statusMessage: "Finalizing cinematic...",
+          }));
+
+          const cFinalRes = await callPhase(
+            { phase: "finalize", projectId: cProjectId, generationId: cGenerationId },
+            120000,
+            cinematicEndpoint
+          );
+          if (!cFinalRes.success) throw new Error(cFinalRes.error || "Finalization failed");
+
+          const cFinalScenes = normalizeScenes(cFinalRes.scenes);
+
+          setState({
+            step: "complete",
+            progress: 100,
+            sceneCount: cFinalScenes?.length || cSceneCount,
+            currentScene: cFinalScenes?.length || cSceneCount,
+            totalImages: cFinalScenes?.length || cSceneCount,
+            completedImages: cFinalScenes?.length || cSceneCount,
+            isGenerating: false,
+            projectId: cProjectId,
+            generationId: cGenerationId,
+            title: cFinalRes.title,
+            scenes: cFinalScenes,
+            format: params.format as "landscape" | "portrait" | "square",
+            finalVideoUrl: cFinalRes.finalVideoUrl,
+            statusMessage: "Cinematic video generated!",
+            projectType: "cinematic",
+          });
+
+          toast({
+            title: "Cinematic Video Generated!",
+            description: `"${cFinalRes.title}" is ready.`,
+          });
+
+          return;
+        }
 
         // ============= PHASE 1: SCRIPT =============
         setState((prev) => ({ 
@@ -527,7 +715,7 @@ export function useGenerationPipeline() {
 
       const { data: project, error: projectError } = await supabase
         .from("projects")
-        .select("id,title,content,format,length,style,presenter_focus,character_description,voice_type,voice_id,voice_name,brand_mark,character_consistency_enabled,inspiration_style,story_tone,story_genre,voice_inclination")
+        .select("id,title,content,format,length,style,presenter_focus,character_description,voice_type,voice_id,voice_name,brand_mark,character_consistency_enabled,inspiration_style,story_tone,story_genre,voice_inclination,project_type")
         .eq("id", projectId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -541,7 +729,7 @@ export function useGenerationPipeline() {
 
       const { data: generation } = await supabase
         .from("generations")
-        .select("id,status,progress,scenes,error_message")
+        .select("id,status,progress,scenes,error_message,video_url")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -550,6 +738,7 @@ export function useGenerationPipeline() {
       if (generation?.status === "complete") {
         const scenes = normalizeScenes(generation.scenes) ?? [];
         const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
+        const isCinematic = project.project_type === "cinematic";
         
         setState({
           step: "complete",
@@ -564,9 +753,11 @@ export function useGenerationPipeline() {
           title: project.title,
           scenes,
           format: project.format as "landscape" | "portrait" | "square",
+          finalVideoUrl: isCinematic ? (generation.video_url ?? undefined) : undefined,
           costTracking: meta.costTracking,
           phaseTimings: meta.phaseTimings,
           totalTimeMs: meta.totalTimeMs,
+          projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
         });
       } else if (generation?.status === "error") {
         const msg = generation.error_message || "Generation failed";
