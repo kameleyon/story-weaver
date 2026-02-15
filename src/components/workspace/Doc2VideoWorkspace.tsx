@@ -17,6 +17,8 @@ import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
 
@@ -270,6 +272,14 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                         <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
                           <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           Character Appearance
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[240px]">
+                              Describes the visual style of characters in the story scenes (e.g., 'Pixar style 3D characters', 'Hand-drawn sketches').
+                            </TooltipContent>
+                          </Tooltip>
                         </span>
                         <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
                       </CollapsibleTrigger>
@@ -286,6 +296,14 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                         <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
                           <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           Presenter Focus
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[240px]">
+                              Describes the person speaking in the video (e.g., 'Professional news anchor', 'Friendly teacher').
+                            </TooltipContent>
+                          </Tooltip>
                         </span>
                         <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
                       </CollapsibleTrigger>

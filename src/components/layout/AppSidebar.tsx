@@ -78,8 +78,10 @@ import { toast } from "sonner";
 
 // No external props needed — navigation is handled internally
 
+import { PLAN_LIMITS } from "@/lib/planLimits";
+
 const STARTER_PERKS = [
-  "30 credits per month",
+  `${PLAN_LIMITS.starter.creditsPerMonth} credits per month`,
   "Short + Brief videos",
   "1080p HD quality",
   "10 visual styles",
@@ -414,29 +416,6 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })()}
-
-              {/* Presenter (Coming Soon) - Commented out for now */}
-              {/* <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton
-                      disabled
-                      className={`cursor-not-allowed rounded-lg py-2.5 transition-colors opacity-50 ${
-                        isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"
-                      }`}
-                    >
-                      <MicVocal className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && (
-                        <span className="text-sm flex items-center gap-2">
-                          Presenter
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Soon</span>
-                        </span>
-                      )}
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Presenter – Turn media into a guided presentation (Coming Soon)</TooltipContent>
-                </Tooltip>
-              </SidebarMenuItem> */}
 
               {/* Voice Lab */}
               <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>

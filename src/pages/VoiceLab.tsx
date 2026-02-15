@@ -75,6 +75,26 @@ export default function VoiceLab() {
   // Modal state for existing voice warning
   const [showExistingVoiceModal, setShowExistingVoiceModal] = useState(false);
 
+  // Helper to get audio duration from a blob
+  const getAudioDuration = (blob: Blob): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.addEventListener("loadedmetadata", () => {
+        if (isFinite(audio.duration)) {
+          resolve(audio.duration);
+        } else {
+          reject(new Error("Duration not available"));
+        }
+        URL.revokeObjectURL(audio.src);
+      });
+      audio.addEventListener("error", () => {
+        URL.revokeObjectURL(audio.src);
+        reject(new Error("Failed to load audio"));
+      });
+      audio.src = URL.createObjectURL(blob);
+    });
+  };
+
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -187,6 +207,22 @@ export default function VoiceLab() {
   const handleClone = async () => {
     const audioBlob = recordedBlob || uploadedFile;
     if (!audioBlob || !voiceName.trim()) return;
+
+    // Validate minimum audio duration (10 seconds)
+    try {
+      const audioDuration = await getAudioDuration(audioBlob);
+      if (audioDuration < 10) {
+        toast({
+          title: "Audio too short",
+          description: "Audio must be at least 10 seconds long for voice cloning.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch {
+      // If we can't determine duration, proceed anyway
+      console.warn("[VoiceLab] Could not determine audio duration, proceeding");
+    }
 
     await cloneVoice({ 
       file: audioBlob, 

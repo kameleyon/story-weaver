@@ -21,6 +21,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { cn } from "@/lib/utils";
 import { useSubscription, STRIPE_PLANS, CREDIT_PACKS } from "@/hooks/useSubscription";
+import { PLAN_LIMITS } from "@/lib/planLimits";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -44,7 +45,7 @@ const plans = [
     description: "Get started with basic features",
     icon: Sparkles,
     features: [
-      "5 credits/month",
+      `${PLAN_LIMITS.free.creditsPerMonth} credits/month`,
       "Short videos only (<2 min)",
       "720p quality",
       "5 basic visual styles",
@@ -70,7 +71,7 @@ const plans = [
     description: "Hobbyists & social creators",
     icon: Zap,
     features: [
-      "30 credits/month",
+      `${PLAN_LIMITS.starter.creditsPerMonth} credits/month`,
       "Short + Brief videos",
       "1080p quality",
       "10 visual styles",
@@ -97,7 +98,7 @@ const plans = [
     description: "Content creators & small biz",
     icon: Crown,
     features: [
-      "100 credits/month",
+      `${PLAN_LIMITS.creator.creditsPerMonth} credits/month`,
       "All video lengths",
       "1080p quality",
       "All 13 styles + Custom",
@@ -123,7 +124,7 @@ const plans = [
     description: "Agencies & marketing teams",
     icon: Gem,
     features: [
-      "300 credits/month",
+      `${PLAN_LIMITS.professional.creditsPerMonth} credits/month`,
       "All video lengths",
       "4K quality",
       "All styles + premium effects",
