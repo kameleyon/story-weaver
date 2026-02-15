@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as base64Decode, encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import {
+  generateSceneAudio as sharedGenerateSceneAudio,
+  isHaitianCreole,
+  pcmToWav,
+  type AudioEngineConfig,
+  type StorageStrategy,
+} from "../_shared/audioEngine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -588,578 +595,11 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 }
 
 // ============================================
-// STEP 2: Audio Generation with Multiple TTS Providers
-// - Haitian Creole: Gemini TTS (Google) with robust retry + text variations
-// - Custom Voice: ElevenLabs TTS
-// - Standard: Replicate Chatterbox-Turbo
+// STEP 2: Audio Generation — delegates to Universal Audio Engine
+// (_shared/audioEngine.ts) for all TTS routing, key rotation, and batching.
 // ============================================
 
-// Paralinguistic tags to preserve for natural TTS expression
-const ALLOWED_PARALINGUISTIC_TAGS = [
-  "clear throat", "sigh", "sush", "cough", "groan", "sniff", "gasp", "chuckle", "laugh",
-];
-
-// Extra sanitization for Gemini TTS to avoid content filtering (matches generate-video)
-function sanitizeForGeminiTTS(text: string): string {
-  let sanitized = (typeof text === "string" ? text : "").trim();
-
-  // Remove scene labels/prefixes
-  sanitized = sanitized
-    .replace(/^\s*(?:hook|scene\s*\d+|narrator|body|solution|conflict|choice|formula)\s*[:\-–—]\s*/i, "")
-    .replace(/^\s*\[[^\]]+\]\s*/g, "");
-
-  // Temporarily replace allowed paralinguistic tags with placeholders
-  const tagPlaceholders: string[] = [];
-  sanitized = sanitized.replace(/\[([^\]]+)\]/g, (match, content) => {
-    const normalized = content.toLowerCase().trim();
-    if (ALLOWED_PARALINGUISTIC_TAGS.includes(normalized)) {
-      tagPlaceholders.push(match);
-      return `__PTAG${tagPlaceholders.length - 1}__`;
-    }
-    return " ";
-  });
-
-  // Remove markdown and special characters that might trigger filters
-  sanitized = sanitized.replace(/[*_~`]+/g, "");
-  sanitized = sanitized.replace(/[^\w\s\u00C0-\u024F\u1E00-\u1EFF.,!?;:'-]/g, " ");
-
-  // Restore paralinguistic tags
-  tagPlaceholders.forEach((tag, i) => {
-    sanitized = sanitized.replace(`__PTAG${i}__`, tag);
-  });
-
-  // Collapse multiple spaces
-  sanitized = sanitized.replace(/\s+/g, " ").trim();
-
-  // Ensure proper punctuation for natural speech
-  if (sanitized && !/[.!?]$/.test(sanitized)) {
-    sanitized += ".";
-  }
-
-  return sanitized;
-}
-
-// GEMINI TTS MODELS for Haitian Creole
-const GEMINI_TTS_MODELS = [
-  { name: "gemini-2.5-pro-preview-tts", label: "2.5 Pro Preview TTS" },
-  { name: "gemini-2.5-flash-preview-tts", label: "2.5 Flash Preview TTS" },
-];
-
-// Generate audio with a single Gemini TTS model (with text variation on retry)
-async function generateAudioWithGeminiTTSModel(
-  text: string,
-  sceneNumber: number,
-  googleApiKey: string,
-  supabase: ReturnType<typeof createClient>,
-  modelName: string,
-  modelLabel: string,
-  retryAttempt: number = 0,
-): Promise<string | null> {
-  let voiceoverText = sanitizeForGeminiTTS(text);
-  if (!voiceoverText || voiceoverText.length < 2) return null;
-
-  // Remove promotional content that triggers content filters
-  const promotionalPatterns = [
-    /\b(swiv|follow|like|subscribe|kòmante|comment|pataje|share|abòneman)\b[^.]*\./gi,
-    /\b(swiv kont|follow the|like and|share this)\b[^.]*$/gi,
-    /\.\s*(swiv|like|pataje|share|follow)[^.]*$/gi,
-  ];
-  for (const pattern of promotionalPatterns) {
-    voiceoverText = voiceoverText.replace(pattern, ".");
-  }
-  voiceoverText = voiceoverText.replace(/\.+/g, ".").replace(/\s+/g, " ").trim();
-
-  // On retries, use text variations to bypass content filtering (matches generate-video)
-  if (retryAttempt > 0) {
-    voiceoverText = voiceoverText.replace(/[Ss]wiv[^.]*\./g, "").trim();
-
-    const variations = [
-      voiceoverText,
-      "Please narrate the following: " + voiceoverText,
-      "Read this story aloud: " + voiceoverText,
-      voiceoverText + " End of narration.",
-      "Educational content: " + voiceoverText,
-      "Documentary narration: " + voiceoverText,
-      "Story segment: " + voiceoverText,
-      voiceoverText.replace(/\./g, ";").replace(/;([^;]*)$/, ".$1"),
-      voiceoverText.split(".").slice(0, -1).join(".") + ".",
-      "In this segment: " + voiceoverText,
-    ];
-    voiceoverText = variations[retryAttempt % variations.length];
-    console.log(`[TTS-Gemini] Scene ${sceneNumber} retry ${retryAttempt} variation: ${voiceoverText.substring(0, 80)}...`);
-  }
-
-  try {
-    console.log(`[TTS-Gemini] Scene ${sceneNumber}: Using ${modelLabel} (attempt ${retryAttempt + 1})`);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${googleApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `[Speak with natural enthusiasm, warmth and energy like sharing exciting news with a friend] ${voiceoverText}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: "Enceladus",
-                },
-              },
-            },
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[TTS-Gemini] ${modelLabel} API error: ${response.status} - ${errText}`);
-      // On 429 quota exhausted, throw special error to break retry loop immediately
-      if (response.status === 429) {
-        throw Object.assign(new Error(`Gemini TTS quota exhausted (${modelLabel})`), { quotaExhausted: true });
-      }
-      return null;
-    }
-
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-
-    if (candidate?.finishReason === "OTHER") {
-      console.warn(`[TTS-Gemini] ${modelLabel} content filter triggered (finishReason: OTHER)`);
-      return null;
-    }
-
-    if (!candidate?.content?.parts?.[0]?.inlineData?.data) {
-      console.warn(`[TTS-Gemini] ${modelLabel} no audio data in response`);
-      return null;
-    }
-
-    const inlineData = candidate.content.parts[0].inlineData;
-
-    // Decode base64 PCM
-    let pcmBytes = base64Decode(inlineData.data);
-
-    // Trim trailing silence from PCM (16-bit samples, little-endian)
-    const SILENCE_THRESHOLD = 300;
-    let trimEnd = pcmBytes.length;
-    for (let i = pcmBytes.length - 2; i >= 0; i -= 2) {
-      const sample = Math.abs(((pcmBytes[i] | (pcmBytes[i + 1] << 8)) << 16) >> 16);
-      if (sample > SILENCE_THRESHOLD) {
-        trimEnd = Math.min(pcmBytes.length, i + 14400);
-        break;
-      }
-    }
-    if (trimEnd < pcmBytes.length) {
-      console.log(`[TTS-Gemini] Scene ${sceneNumber} trimmed ${pcmBytes.length - trimEnd} bytes trailing silence`);
-      pcmBytes = pcmBytes.slice(0, trimEnd);
-    }
-
-    // Convert to WAV
-    const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
-
-    const fileName = `cinematic-audio-${Date.now()}-${sceneNumber}.wav`;
-    const upload = await supabase.storage
-      .from("audio-files")
-      .upload(fileName, wavBytes, { contentType: "audio/wav", upsert: true });
-
-    if (upload.error) {
-      try {
-        await supabase.storage.createBucket("audio-files", { public: true });
-        await supabase.storage.from("audio-files").upload(fileName, wavBytes, { contentType: "audio/wav", upsert: true });
-      } catch {
-        throw new Error("Failed to upload audio");
-      }
-    }
-
-    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
-    console.log(`[TTS-Gemini] Scene ${sceneNumber} SUCCESS with ${modelLabel}`);
-    return urlData.publicUrl;
-  } catch (err: any) {
-    // Re-throw quota exhaustion so outer loop can break immediately
-    if (err?.quotaExhausted) throw err;
-    console.error(`[TTS-Gemini] Scene ${sceneNumber} ${modelLabel} attempt ${retryAttempt + 1} failed:`, err);
-    return null;
-  }
-}
-
-// Main Gemini TTS function with model fallback chain (matches generate-video)
-async function generateAudioWithGeminiTTS(
-  text: string,
-  sceneNumber: number,
-  googleApiKey: string,
-  supabase: ReturnType<typeof createClient>,
-): Promise<string | null> {
-  // Try each model in order
-  for (const model of GEMINI_TTS_MODELS) {
-    const result = await generateAudioWithGeminiTTSModel(
-      text, sceneNumber, googleApiKey, supabase,
-      model.name, model.label, 0,
-    );
-    if (result) return result;
-  }
-  return null;
-}
-
-// Generate audio with ElevenLabs TTS (for custom/cloned voices)
-async function generateAudioWithElevenLabs(
-  text: string,
-  sceneNumber: number,
-  voiceId: string,
-  elevenLabsApiKey: string,
-  supabase: ReturnType<typeof createClient>,
-): Promise<string | null> {
-  const sanitizedText = text.trim();
-  if (!sanitizedText || sanitizedText.length < 2) return null;
-
-  try {
-    console.log(`[TTS-ElevenLabs] Scene ${sceneNumber}: Using voice ${voiceId}`);
-
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": elevenLabsApiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: sanitizedText,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.5,
-            use_speaker_boost: true,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[TTS-ElevenLabs] API error: ${response.status} - ${errText}`);
-      return null;
-    }
-
-    const audioBuffer = await response.arrayBuffer();
-    const audioBytes = new Uint8Array(audioBuffer);
-
-    const fileName = `cinematic-audio-${Date.now()}-${sceneNumber}.mp3`;
-    const upload = await supabase.storage
-      .from("audio-files")
-      .upload(fileName, audioBytes, { contentType: "audio/mpeg", upsert: true });
-
-    if (upload.error) {
-      try {
-        await supabase.storage.createBucket("audio-files", { public: true });
-        await supabase.storage.from("audio-files").upload(fileName, audioBytes, { contentType: "audio/mpeg", upsert: true });
-      } catch {
-        throw new Error("Failed to upload audio");
-      }
-    }
-
-    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
-    console.log(`[TTS-ElevenLabs] Scene ${sceneNumber} SUCCESS`);
-    return urlData.publicUrl;
-  } catch (err) {
-    console.error(`[TTS-ElevenLabs] Scene ${sceneNumber} error:`, err);
-    return null;
-  }
-}
-
-// Generate a silent WAV audio file as fallback when TTS completely fails
-async function generateSilentAudio(
-  scene: Scene,
-  supabase: ReturnType<typeof createClient>,
-): Promise<string | null> {
-  try {
-    const durationSec = scene.duration || 8;
-    const sampleRate = 24000;
-    const numSamples = sampleRate * durationSec;
-    const pcmBytes = new Uint8Array(numSamples * 2); // 16-bit silence = all zeros
-    const wavBytes = pcmToWav(pcmBytes, sampleRate, 1, 16);
-
-    const fileName = `cinematic-audio-silent-${Date.now()}-${scene.number}.wav`;
-    await supabase.storage
-      .from("audio-files")
-      .upload(fileName, wavBytes, { contentType: "audio/wav", upsert: true });
-
-    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
-    console.warn(`[TTS] Scene ${scene.number}: Using silent audio fallback (${durationSec}s)`);
-    return urlData.publicUrl;
-  } catch (err) {
-    console.error(`[TTS] Scene ${scene.number}: Silent audio generation failed:`, err);
-    return null;
-  }
-}
-
-// Unified audio generation function
-async function generateSceneAudio(
-  scene: Scene,
-  replicateToken: string,
-  googleApiKeys: string[],
-  elevenLabsApiKey: string | undefined,
-  supabase: ReturnType<typeof createClient>,
-  voiceGender: string = "female",
-  customVoiceId?: string,
-  forceHaitianCreole: boolean = false,
-): Promise<{ predictionId?: string; audioUrl?: string }> {
-  const voiceoverText = (scene.voiceover || "").trim();
-  if (!voiceoverText || voiceoverText.length < 2) {
-    return {};
-  }
-
-  const isHC = forceHaitianCreole || isHaitianCreole(voiceoverText);
-
-  if (forceHaitianCreole && !isHaitianCreole(voiceoverText)) {
-    console.log(`[TTS] Scene ${scene.number}: Forcing Haitian Creole from presenter_focus (text detection was false)`);
-  }
-
-  // CASE 1: Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs Speech-to-Speech
-   if (isHC && customVoiceId && elevenLabsApiKey && googleApiKeys.length > 0) {
-    console.log(`[TTS] Scene ${scene.number}: Haitian Creole + Custom Voice workflow (${googleApiKeys.length} API keys available)`);
-    
-    // Step 1: Generate base audio with Gemini — cycle through all keys multiple rounds
-    const KEY_ROTATION_ROUNDS = 5;
-    let geminiAudioUrl: string | null = null;
-    
-    for (let round = 0; round < KEY_ROTATION_ROUNDS && !geminiAudioUrl; round++) {
-      if (round > 0) {
-        const roundDelay = 3000 * round;
-        console.log(`[TTS] Scene ${scene.number}: Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`);
-        await sleep(roundDelay);
-      }
-      
-      for (let keyIdx = 0; keyIdx < googleApiKeys.length && !geminiAudioUrl; keyIdx++) {
-        const currentKey = googleApiKeys[keyIdx];
-        console.log(`[TTS] Scene ${scene.number}: Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`);
-        
-        for (const model of GEMINI_TTS_MODELS) {
-          try {
-            const result = await generateAudioWithGeminiTTSModel(
-              voiceoverText, scene.number, currentKey, supabase,
-              model.name, model.label, round,
-            );
-            if (result) { geminiAudioUrl = result; break; }
-          } catch (err: any) {
-            if (err?.quotaExhausted) {
-              console.warn(`[TTS] Scene ${scene.number}: Key ${keyIdx + 1} ${model.label} quota exhausted on round ${round + 1} — cycling to next key`);
-              break; // try next key in this round
-            }
-            throw err;
-          }
-        }
-      }
-    }
-
-    if (!geminiAudioUrl) {
-      console.error(`[TTS] Scene ${scene.number}: All Gemini keys exhausted after ${KEY_ROTATION_ROUNDS} rounds for HC+Custom — audio generation failed`);
-      throw new Error("Audio generation failed — all TTS API keys exhausted. Please try again later.");
-    }
-
-    // Step 2: Transform with ElevenLabs Speech-to-Speech
-    console.log(`[TTS] Scene ${scene.number}: Transforming with ElevenLabs STS`);
-    const sourceResponse = await fetch(geminiAudioUrl);
-    if (!sourceResponse.ok) return {};
-    
-    const sourceAudioBytes = new Uint8Array(await sourceResponse.arrayBuffer());
-    const boundary = `----ElevenLabsSTS${Date.now()}`;
-    const encoder = new TextEncoder();
-    
-    const parts: Uint8Array[] = [];
-    parts.push(encoder.encode(`--${boundary}\r\n`));
-    parts.push(encoder.encode(`Content-Disposition: form-data; name="audio"; filename="source.wav"\r\n`));
-    parts.push(encoder.encode(`Content-Type: audio/wav\r\n\r\n`));
-    parts.push(sourceAudioBytes);
-    parts.push(encoder.encode(`\r\n--${boundary}\r\n`));
-    parts.push(encoder.encode(`Content-Disposition: form-data; name="model_id"\r\n\r\n`));
-    parts.push(encoder.encode(`eleven_multilingual_sts_v2\r\n`));
-    parts.push(encoder.encode(`--${boundary}--\r\n`));
-
-    const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
-    const body = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const part of parts) { body.set(part, offset); offset += part.length; }
-
-    const stsResponse = await fetch(
-      `https://api.elevenlabs.io/v1/speech-to-speech/${customVoiceId}?output_format=mp3_44100_128`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": elevenLabsApiKey,
-          "Content-Type": `multipart/form-data; boundary=${boundary}`,
-        },
-        body: body,
-      },
-    );
-
-    if (!stsResponse.ok) {
-      console.error(`[TTS] Scene ${scene.number}: ElevenLabs STS failed`);
-      return {};
-    }
-
-    const stsAudioBytes = new Uint8Array(await stsResponse.arrayBuffer());
-    const fileName = `cinematic-audio-sts-${Date.now()}-${scene.number}.mp3`;
-    await supabase.storage.from("audio-files").upload(fileName, stsAudioBytes, { contentType: "audio/mpeg", upsert: true });
-    const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
-    
-    console.log(`[TTS] Scene ${scene.number} SUCCESS: Gemini → ElevenLabs STS`);
-    return { audioUrl: urlData.publicUrl };
-  }
-
-  // CASE 2: Custom Voice (non-HC) → ElevenLabs TTS directly
-  if (customVoiceId && elevenLabsApiKey && !isHC) {
-    console.log(`[TTS] Scene ${scene.number}: Custom voice via ElevenLabs TTS`);
-    const audioUrl = await generateAudioWithElevenLabs(voiceoverText, scene.number, customVoiceId, elevenLabsApiKey, supabase);
-    if (audioUrl) return { audioUrl };
-  }
-
-  // CASE 3: Haitian Creole (standard voice) → Gemini TTS with key failover
-   if (isHC && googleApiKeys.length > 0) {
-    console.log(`[TTS] Scene ${scene.number}: Haitian Creole via Gemini TTS (${googleApiKeys.length} API keys available)`);
-    
-    const KEY_ROTATION_ROUNDS = 5;
-    
-    for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
-      if (round > 0) {
-        const roundDelay = 3000 * round;
-        console.log(`[TTS] Scene ${scene.number}: Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`);
-        await sleep(roundDelay);
-      }
-      
-      for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
-        const currentKey = googleApiKeys[keyIdx];
-        console.log(`[TTS] Scene ${scene.number}: Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`);
-        
-        for (const model of GEMINI_TTS_MODELS) {
-          try {
-            const result = await generateAudioWithGeminiTTSModel(
-              voiceoverText, scene.number, currentKey, supabase,
-              model.name, model.label, round,
-            );
-            if (result) {
-              console.log(`✅ Scene ${scene.number} SUCCEEDED with: Gemini TTS key ${keyIdx + 1} (${model.label}) on round ${round + 1}`);
-              return { audioUrl: result };
-            }
-          } catch (err: any) {
-            if (err?.quotaExhausted) {
-              console.warn(`[TTS] Scene ${scene.number}: Key ${keyIdx + 1} ${model.label} quota exhausted on round ${round + 1} — cycling to next key`);
-              break; // try next key in this round
-            }
-            throw err;
-          }
-        }
-      }
-    }
-    
-    // All keys exhausted across all rounds — return error
-    console.error(`[TTS] Scene ${scene.number}: All ${googleApiKeys.length} Gemini TTS keys exhausted after ${KEY_ROTATION_ROUNDS} rounds — audio generation failed`);
-    throw new Error("Audio generation failed — all TTS API keys exhausted. Please try again later.");
-  }
-
-  // CASE 4: Standard voice → Replicate Chatterbox (with retry, no fallback mixing)
-  console.log(`[TTS] Scene ${scene.number}: Standard voice via Replicate Chatterbox`);
-  const voiceName = voiceGender === "male" ? "Ethan" : "Marisol";
-
-  const MAX_TTS_RETRIES = 4;
-  for (let attempt = 1; attempt <= MAX_TTS_RETRIES; attempt++) {
-    const response = await fetch(CHATTERBOX_TURBO_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${replicateToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: {
-          text: voiceoverText,
-          voice: voiceName,
-          temperature: 0.9,
-          top_p: 1,
-          top_k: 1800,
-          repetition_penalty: 2,
-        },
-      }),
-    });
-
-    if (response.ok) {
-      const prediction = await response.json();
-      console.log(`[TTS] Chatterbox-Turbo prediction started: ${prediction.id}`);
-      return { predictionId: prediction.id };
-    }
-
-    const errorText = await response.text();
-
-    if ((response.status === 429 || response.status >= 500) && attempt < MAX_TTS_RETRIES) {
-      const delayMs = 1500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
-      console.warn(`[TTS] Scene ${scene.number}: Chatterbox-Turbo ${response.status}, retry ${attempt}/${MAX_TTS_RETRIES} in ${delayMs}ms`);
-      await sleep(delayMs);
-      continue;
-    }
-
-    console.error(`[TTS] Chatterbox-Turbo create error (attempt ${attempt}): ${errorText}`);
-  }
-
-  throw new Error(`Chatterbox-Turbo failed for scene ${scene.number} after ${MAX_TTS_RETRIES} retries`);
-}
-
-async function resolveChatterbox(
-  predictionId: string,
-  replicateToken: string,
-  supabase: ReturnType<typeof createClient>,
-  sceneNumber: number,
-): Promise<string | null> {
-  const result = await getReplicatePrediction(predictionId, replicateToken);
-
-  if (result.status !== "succeeded") {
-    if (result.status === "failed") {
-      console.error("Chatterbox failed:", result.error);
-      throw new Error("Chatterbox audio generation failed");
-    }
-    return null;
-  }
-
-  const outputUrl = result.output;
-  if (typeof outputUrl !== "string" || !outputUrl) return null;
-
-  // Download and upload to storage for durability
-  const audioResponse = await fetch(outputUrl);
-  if (!audioResponse.ok) {
-    throw new Error("Failed to download generated audio");
-  }
-  const audioBuffer = await audioResponse.arrayBuffer();
-
-  const fileName = `cinematic-audio-${Date.now()}-${sceneNumber}.wav`;
-  const upload = await supabase.storage
-    .from("audio-files")
-    .upload(fileName, new Uint8Array(audioBuffer), { contentType: "audio/wav", upsert: true });
-
-  if (upload.error) {
-    // Try create bucket if missing
-    try {
-      await supabase.storage.createBucket("audio-files", { public: true });
-      const retry = await supabase.storage
-        .from("audio-files")
-        .upload(fileName, new Uint8Array(audioBuffer), { contentType: "audio/wav", upsert: true });
-      if (retry.error) throw retry.error;
-    } catch (e) {
-      console.error("Audio upload error:", upload.error);
-      throw new Error("Failed to upload audio");
-    }
-  }
-
-  const { data: urlData } = supabase.storage.from("audio-files").getPublicUrl(fileName);
-  return urlData.publicUrl;
-}
+// resolveChatterbox removed — shared engine handles Chatterbox synchronously
 
 // ============================================
 // STEP 3: Image Generation with Replicate Nano Banana
@@ -1622,14 +1062,13 @@ serve(async (req) => {
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
     const requestBody = body as CinematicRequest;
 
-    // =============== PHASE 2: AUDIO ===============
+    // =============== PHASE 2: AUDIO (Universal Audio Engine) ===============
     if (phase === "audio") {
       const idx = requireNumber(sceneIndex, "sceneIndex");
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
-      // If this is a single-scene regeneration request and audio already exists,
-      // clear it to force re-generation
+      // If regeneration, clear existing audio
       const isAudioRegen = typeof body.sceneIndex === "number" && !!scene.audioUrl;
       if (isAudioRegen) {
         console.log(`[AUDIO] Scene ${scene.number}: Clearing existing audio for regeneration`);
@@ -1650,7 +1089,6 @@ serve(async (req) => {
         .eq("id", generation.project_id)
         .maybeSingle();
       
-      // Map voice_name to gender: "male" or "female" (default female for Marisol)
       const voiceGender = project?.voice_name === "male" ? "male" : "female";
       const customVoiceId = project?.voice_type === "custom" ? project?.voice_id : undefined;
 
@@ -1663,7 +1101,7 @@ serve(async (req) => {
         presenterFocusLower.includes("creole");
       console.log(`[AUDIO] Scene ${scene.number}: presenterFocus="${project?.presenter_focus || "none"}", forceHaitianCreole=${forceHaitianCreole}`);
       
-      // Get API keys for TTS — build array of available Google keys for failover
+      // Build Google API keys array (reverse order for failover)
       const googleApiKeys: string[] = [];
       const gk1 = Deno.env.get("GOOGLE_TTS_API_KEY");
       const gk2 = Deno.env.get("GOOGLE_TTS_API_KEY_2");
@@ -1671,53 +1109,39 @@ serve(async (req) => {
       if (gk3) googleApiKeys.push(gk3);
       if (gk2) googleApiKeys.push(gk2);
       if (gk1) googleApiKeys.push(gk1);
-      const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
 
-      // If we don't have a prediction ID yet, start the audio generation
-      if (!scene.audioPredictionId && !scene.audioUrl) {
-        const result = await generateSceneAudio(
-          scene,
-          replicateToken,
-          googleApiKeys,
-          elevenLabsApiKey,
-          supabase,
-          voiceGender,
-          customVoiceId,
-          forceHaitianCreole,
-        );
+      // Configure the Universal Audio Engine for cinematic storage
+      const audioConfig: AudioEngineConfig = {
+        replicateApiKey: replicateToken,
+        googleApiKeys,
+        elevenLabsApiKey: Deno.env.get("ELEVENLABS_API_KEY"),
+        supabase,
+        storage: {
+          bucket: "audio-files",
+          pathPrefix: "",
+          useSignedUrls: false,
+          filePrefix: "cinematic-audio",
+        },
+        voiceGender,
+        customVoiceId,
+        forceHaitianCreole,
+      };
 
-        // If we got a direct audioUrl (Gemini/ElevenLabs), we're done
-        if (result.audioUrl) {
-          scenes[idx] = { ...scene, audioUrl: result.audioUrl };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
-        }
+      // Call the shared audio engine (synchronous — waits for result)
+      const result = await sharedGenerateSceneAudio(
+        { number: scene.number, voiceover: scene.voiceover, duration: scene.duration },
+        audioConfig,
+      );
 
-        // If we got a predictionId (Chatterbox), save it and return processing
-        if (result.predictionId) {
-          scenes[idx] = { ...scene, audioPredictionId: result.predictionId };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-        }
-
-        // Neither worked — return error instead of silent fallback
-        console.error(`[AUDIO] Scene ${scene.number}: TTS completely failed, no audio generated`);
-        return jsonResponse({ success: false, error: "Audio generation failed — all TTS API keys exhausted. Please try again later." }, { status: 500 });
-      }
-
-      // If we have a prediction ID, try to resolve it (Chatterbox async polling)
-      if (scene.audioPredictionId) {
-        const audioUrl = await resolveChatterbox(scene.audioPredictionId, replicateToken, supabase, scene.number);
-        if (!audioUrl) {
-          return jsonResponse({ success: true, status: "processing", scene });
-        }
-
-        scenes[idx] = { ...scene, audioUrl };
+      if (result.url) {
+        scenes[idx] = { ...scene, audioUrl: result.url, audioPredictionId: undefined };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
       }
 
-      return jsonResponse({ success: true, status: "processing", scene });
+      // Audio generation failed
+      console.error(`[AUDIO] Scene ${scene.number}: TTS failed: ${result.error}`);
+      return jsonResponse({ success: false, error: result.error || "Audio generation failed. Please try again later." }, { status: 500 });
     }
 
     // =============== PHASE 3: IMAGES ===============
