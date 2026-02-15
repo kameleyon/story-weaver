@@ -1527,20 +1527,51 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = urlData.publicUrl;
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
-      // Now regenerate video with the new image
+      // Now regenerate video with the new image (Hypereal first, Replicate fallback)
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
-      
-      // Poll for video completion
+      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       let videoUrl: string | null = null;
-      for (let i = 0; i < 60; i++) {
-        await sleep(3000);
-        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
-        if (videoUrl) break;
+
+      // Try Hypereal first
+      if (hyperealApiKey) {
+        const hrVid = await startHyperealVideo(scene.visualPrompt, newImageUrl, format, scene.duration, hyperealApiKey);
+        if (hrVid.ok) {
+          for (let i = 0; i < 90; i++) {
+            await sleep(3000);
+            const poll = await pollHyperealVideo(hrVid.jobId, hyperealApiKey);
+            if (poll.status === "completed") {
+              const vidRes = await fetch(poll.outputUrl);
+              if (vidRes.ok) {
+                const vidBytes = new Uint8Array(await vidRes.arrayBuffer());
+                const vidFileName = `cinematic-video-hr-${Date.now()}-${scene.number}.mp4`;
+                await supabase.storage.from("scene-images").upload(vidFileName, vidBytes, { contentType: "video/mp4", upsert: true });
+                const { data: vidUrlData } = supabase.storage.from("scene-images").getPublicUrl(vidFileName);
+                videoUrl = vidUrlData.publicUrl;
+              }
+              break;
+            }
+            if (poll.status === "failed") {
+              console.warn(`[IMG-EDIT] Hypereal video failed: ${poll.error}`);
+              break;
+            }
+          }
+          if (videoUrl) console.log(`[IMG-EDIT] Hypereal video success for scene ${scene.number}`);
+        }
+      }
+
+      // Replicate fallback
+      if (!videoUrl) {
+        console.log(`[IMG-EDIT] Falling back to Replicate Grok for scene ${scene.number}`);
+        const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+        for (let i = 0; i < 60; i++) {
+          await sleep(3000);
+          videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+          if (videoUrl) break;
+        }
       }
 
       if (!videoUrl) {
-        throw new Error("Video generation timed out");
+        throw new Error("Video generation timed out (all providers)");
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
@@ -1573,18 +1604,48 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, hyperealApiKey || undefined);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
-      
-      // Poll for video completion
       let videoUrl: string | null = null;
-      for (let i = 0; i < 60; i++) {
-        await sleep(3000);
-        videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
-        if (videoUrl) break;
+
+      // Try Hypereal first
+      if (hyperealApiKey) {
+        const hrVid = await startHyperealVideo(scene.visualPrompt, newImageUrl, format, scene.duration, hyperealApiKey);
+        if (hrVid.ok) {
+          for (let i = 0; i < 90; i++) {
+            await sleep(3000);
+            const poll = await pollHyperealVideo(hrVid.jobId, hyperealApiKey);
+            if (poll.status === "completed") {
+              const vidRes = await fetch(poll.outputUrl);
+              if (vidRes.ok) {
+                const vidBytes = new Uint8Array(await vidRes.arrayBuffer());
+                const vidFileName = `cinematic-video-hr-${Date.now()}-${scene.number}.mp4`;
+                await supabase.storage.from("scene-images").upload(vidFileName, vidBytes, { contentType: "video/mp4", upsert: true });
+                const { data: vidUrlData } = supabase.storage.from("scene-images").getPublicUrl(vidFileName);
+                videoUrl = vidUrlData.publicUrl;
+              }
+              break;
+            }
+            if (poll.status === "failed") {
+              console.warn(`[IMG-REGEN] Hypereal video failed: ${poll.error}`);
+              break;
+            }
+          }
+          if (videoUrl) console.log(`[IMG-REGEN] Hypereal video success for scene ${scene.number}`);
+        }
+      }
+
+      // Replicate fallback
+      if (!videoUrl) {
+        console.log(`[IMG-REGEN] Falling back to Replicate Grok for scene ${scene.number}`);
+        const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+        for (let i = 0; i < 60; i++) {
+          await sleep(3000);
+          videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+          if (videoUrl) break;
+        }
       }
 
       if (!videoUrl) {
-        throw new Error("Video generation timed out");
+        throw new Error("Video generation timed out (all providers)");
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
