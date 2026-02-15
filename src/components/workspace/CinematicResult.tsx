@@ -13,17 +13,14 @@ import {
   Play,
   Plus,
   RotateCcw,
-  Share2,
   Square,
   Trash2,
   Volume2,
   VolumeX,
-  X,
   Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +47,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { useCinematicExport } from "@/hooks/useCinematicExport";
 import { useCinematicRegeneration } from "@/hooks/useCinematicRegeneration";
 import { cn } from "@/lib/utils";
 import { CinematicEditModal } from "./CinematicEditModal";
@@ -136,15 +132,6 @@ export function CinematicResult({
   // Download states
   const [isDownloadingClipsZip, setIsDownloadingClipsZip] = useState(false);
   const [isDirectDownloading, setIsDirectDownloading] = useState(false);
-
-  // Export hook for combining all scenes (fallback when no finalVideoUrl exists)
-  const { 
-    state: exportState, 
-    exportVideo, 
-    downloadVideo: downloadExportedVideo, 
-    shareVideo, 
-    reset: resetExport 
-  } = useCinematicExport();
 
   // Edit dialog
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -399,26 +386,20 @@ export function CinematicResult({
     URL.revokeObjectURL(objectUrl);
   }, []);
 
-  // Primary export handler: prefer direct download of server-rendered video when available
+  // Primary export handler: simple direct download only (no client-side rendering)
   const handleExportVideo = useCallback(async () => {
-    if (finalVideoUrl) {
-      // Direct download — no client-side processing, works reliably on mobile
-      setIsDirectDownloading(true);
-      try {
-        await downloadFromUrl(finalVideoUrl, `${safeFileBase(title)}.mp4`);
-        toast({ title: "Download complete", description: "Video saved to your device." });
-      } catch (e) {
-        console.warn("[CinematicResult] Direct download failed, falling back to client-side export", e);
-        // Fallback: use client-side stitching if direct download fails
-        void exportVideo(localScenes, format, generationId);
-      } finally {
-        setIsDirectDownloading(false);
-      }
-    } else {
-      // No pre-rendered video — use client-side export (will upload result for future direct downloads)
-      void exportVideo(localScenes, format, generationId);
+    if (!finalVideoUrl) return; // Button is disabled when missing
+    setIsDirectDownloading(true);
+    try {
+      await downloadFromUrl(finalVideoUrl, `${safeFileBase(title)}.mp4`);
+      toast({ title: "Download complete", description: "Video saved to your device." });
+    } catch (e) {
+      console.error("[CinematicResult] Direct download failed", e);
+      toast({ variant: "destructive", title: "Download failed", description: "Please try again." });
+    } finally {
+      setIsDirectDownloading(false);
     }
-  }, [finalVideoUrl, localScenes, format, generationId, title, downloadFromUrl, exportVideo]);
+  }, [finalVideoUrl, title, downloadFromUrl]);
 
   const handleDownloadClipsZip = useCallback(async () => {
     if (scenesWithVideo.length === 0) return;
@@ -749,121 +730,27 @@ export function CinematicResult({
         </div>
       </div>
 
-      {/* Export Progress Modal */}
-      {exportState.status !== "idle" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <Card className="w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-foreground">
-                {exportState.status === "error"
-                  ? "Export Failed"
-                  : exportState.status === "complete"
-                  ? "Export Complete!"
-                  : "Exporting Video..."}
-              </h3>
-              {(exportState.status === "error" || exportState.status === "complete") && (
-                <Button type="button" variant="ghost" size="icon" onClick={resetExport}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-
-            {exportState.status === "error" ? (
-              <>
-                <p className="text-sm text-muted-foreground">{exportState.error}</p>
-                <Button type="button" onClick={resetExport} variant="outline" className="w-full mt-4">
-                  Close
-                </Button>
-              </>
-            ) : exportState.status === "complete" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Your video with all {scenesWithVideo.length} scenes is ready.</p>
-                <div className="space-y-2">
-                  <Button
-                    type="button"
-                    className="w-full gap-2"
-                    onClick={() => {
-                      const safeName = safeFileBase(title);
-                      downloadExportedVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                    }}
-                  >
-                    <Download className="h-4 w-4" />
-                    Download to Files
-                  </Button>
-                  {typeof navigator !== "undefined" && navigator.canShare && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full gap-2"
-                      onClick={() => {
-                        const safeName = safeFileBase(title);
-                        shareVideo(exportState.videoUrl!, `${safeName}.mp4`);
-                      }}
-                    >
-                      <Share2 className="h-4 w-4" />
-                      Share / Save to Photos
-                    </Button>
-                  )}
-                </div>
-                <Button type="button" variant="ghost" onClick={resetExport} className="w-full">
-                  Close
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>
-                      {exportState.status === "loading" && "Loading clips..."}
-                      {exportState.status === "rendering" && "Rendering video..."}
-                      {exportState.status === "encoding" && "Encoding..."}
-                    </span>
-                    <span>{exportState.progress}%</span>
-                  </div>
-                  <Progress value={exportState.progress} className="h-2" />
-                </div>
-
-                {exportState.warning && (
-                  <p className="text-xs text-muted-foreground">{exportState.warning}</p>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  Please keep this tab open. The video is being rendered in your browser.
-                </p>
-              </>
-            )}
-          </Card>
-        </div>
-      )}
-
       {/* Action Bar */}
       <TooltipProvider delayDuration={300}>
         <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-3 max-w-3xl mx-auto">
           <div className="flex items-center justify-center gap-2">
-            {/* Export Video — direct download when available, client-side fallback */}
+            {/* Export Video — direct download only */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
                   onClick={handleExportVideo}
-                  disabled={
-                    isDirectDownloading ||
-                    scenesWithVideo.length === 0 || 
-                    exportState.status === "loading" || 
-                    exportState.status === "rendering" || 
-                    exportState.status === "encoding" ||
-                    exportState.status === "uploading"
-                  }
+                  disabled={isDirectDownloading || !finalVideoUrl}
                   className="h-10 w-10"
                 >
-                  {isDirectDownloading || (exportState.status !== "idle" && exportState.status !== "complete" && exportState.status !== "error") ? (
+                  {isDirectDownloading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Download className="h-5 w-5" />
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{finalVideoUrl ? "Download Video" : "Export Video"}</TooltipContent>
+              <TooltipContent>{finalVideoUrl ? "Download Video" : "Video processing..."}</TooltipContent>
             </Tooltip>
 
             {/* Download Clips ZIP */}
