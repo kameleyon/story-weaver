@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useCinematicRegeneration } from "@/hooks/useCinematicRegeneration";
+import { useVideoExport } from "@/hooks/useVideoExport";
 import { cn } from "@/lib/utils";
 import { CinematicEditModal } from "./CinematicEditModal";
 import JSZip from "jszip";
@@ -131,7 +132,11 @@ export function CinematicResult({
 
   // Download states
   const [isDownloadingClipsZip, setIsDownloadingClipsZip] = useState(false);
-  const [isDirectDownloading, setIsDirectDownloading] = useState(false);
+
+  // Client-side stitching export
+  const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
+  const shouldAutoDownloadRef = useRef(false);
+  const lastAutoDownloadedUrlRef = useRef<string | null>(null);
 
   // Edit dialog
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -386,20 +391,43 @@ export function CinematicResult({
     URL.revokeObjectURL(objectUrl);
   }, []);
 
-  // Primary export handler: simple direct download only (no client-side rendering)
-  const handleExportVideo = useCallback(async () => {
-    if (!finalVideoUrl) return; // Button is disabled when missing
-    setIsDirectDownloading(true);
-    try {
-      await downloadFromUrl(finalVideoUrl, `${safeFileBase(title)}.mp4`);
-      toast({ title: "Download complete", description: "Video saved to your device." });
-    } catch (e) {
-      console.error("[CinematicResult] Direct download failed", e);
-      toast({ variant: "destructive", title: "Download failed", description: "Please try again." });
-    } finally {
-      setIsDirectDownloading(false);
+  // Auto-download after export completes
+  useEffect(() => {
+    if (!shouldAutoDownloadRef.current) return;
+    if (exportState.status !== "complete" || !exportState.videoUrl) return;
+    if (lastAutoDownloadedUrlRef.current === exportState.videoUrl) return;
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      shouldAutoDownloadRef.current = false;
+      lastAutoDownloadedUrlRef.current = exportState.videoUrl;
+      return;
     }
-  }, [finalVideoUrl, title, downloadFromUrl]);
+
+    lastAutoDownloadedUrlRef.current = exportState.videoUrl;
+    shouldAutoDownloadRef.current = false;
+    downloadVideo(exportState.videoUrl, `${safeFileBase(title)}.mp4`);
+  }, [downloadVideo, exportState.status, exportState.videoUrl, title]);
+
+  // Primary export handler: client-side stitching (like explainer)
+  const handleExportVideo = useCallback(async () => {
+    const hasVideos = localScenes.some(s => !!s.videoUrl);
+    if (!hasVideos) {
+      toast({ variant: "destructive", title: "No videos", description: "No scene videos available to export." });
+      return;
+    }
+    shouldAutoDownloadRef.current = true;
+    // Convert CinematicScene to Scene shape for useVideoExport
+    const exportScenes = localScenes.map(s => ({
+      number: s.number,
+      voiceover: s.voiceover,
+      visualPrompt: s.visualPrompt,
+      duration: s.duration,
+      videoUrl: s.videoUrl,
+      audioUrl: s.audioUrl,
+    }));
+    void exportVideo(exportScenes, format).catch(() => {});
+  }, [localScenes, format, exportVideo]);
 
   const handleDownloadClipsZip = useCallback(async () => {
     if (scenesWithVideo.length === 0) return;
@@ -730,27 +758,44 @@ export function CinematicResult({
         </div>
       </div>
 
+      {/* Export Progress Bar */}
+      {(exportState.status === "rendering" || exportState.status === "encoding" || exportState.status === "loading") && (
+        <div className="max-w-3xl mx-auto space-y-2">
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${exportState.progress}%` }} />
+          </div>
+          <p className="text-xs text-center text-muted-foreground">
+            {exportState.status === "loading" ? "Loading assets..." : exportState.status === "encoding" ? "Encoding final video..." : `Rendering: ${exportState.progress}%`}
+          </p>
+        </div>
+      )}
+
       {/* Action Bar */}
       <TooltipProvider delayDuration={300}>
         <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-3 max-w-3xl mx-auto">
           <div className="flex items-center justify-center gap-2">
-            {/* Export Video — direct download only */}
+            {/* Export Video — client-side stitching */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
                   onClick={handleExportVideo}
-                  disabled={isDirectDownloading || !finalVideoUrl}
+                  disabled={exportState.status === "rendering" || exportState.status === "encoding" || exportState.status === "loading" || scenesWithVideo.length === 0}
                   className="h-10 w-10"
                 >
-                  {isDirectDownloading ? (
+                  {exportState.status === "rendering" || exportState.status === "encoding" || exportState.status === "loading" ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Download className="h-5 w-5" />
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{finalVideoUrl ? "Download Video" : "Video processing..."}</TooltipContent>
+              <TooltipContent>
+                {exportState.status === "rendering" ? `Rendering ${exportState.progress}%` 
+                  : exportState.status === "encoding" ? "Encoding..." 
+                  : exportState.status === "loading" ? "Loading assets..." 
+                  : scenesWithVideo.length > 0 ? "Export Video" : "No videos to export"}
+              </TooltipContent>
             </Tooltip>
 
             {/* Download Clips ZIP */}
