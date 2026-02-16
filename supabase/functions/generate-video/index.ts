@@ -4708,30 +4708,39 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Use Hypereal nano-banana-pro only — no Replicate fallback
+    // Use Hypereal nano-banana-pro with Replicate fallback
     const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
+    const replicateApiKey = Deno.env.get("REPLICATE_API_TOKEN") || "";
     let actualProvider = "hypereal";
     let actualModel = "nano-banana-pro-t2i";
     const regenStartTime = Date.now();
 
-    if (!hyperealKey) {
-      throw new Error("HYPEREAL_API_KEY not configured — cannot regenerate image");
+    if (hyperealKey) {
+      console.log(`[regenerate-image] Using Hypereal nano-banana-pro for T2I regeneration (up to 4 attempts)...`);
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, true);
+        if (hrResult.ok) {
+          imageResult = hrResult;
+          console.log(`[regenerate-image] Hypereal T2I regeneration succeeded on attempt ${attempt}`);
+          break;
+        }
+        console.warn(`[regenerate-image] Hypereal T2I attempt ${attempt}/4 failed: ${hrResult.error}`);
+        if (attempt < 4) {
+          await new Promise(r => setTimeout(r, 3000 * Math.pow(2, attempt - 1)));
+        }
+      }
     }
 
-    console.log(`[regenerate-image] Using Hypereal nano-banana-pro for T2I regeneration (up to 4 attempts)...`);
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, true);
-      if (hrResult.ok) {
-        imageResult = hrResult;
-        console.log(`[regenerate-image] Hypereal T2I regeneration succeeded on attempt ${attempt}`);
-        break;
-      }
-      console.warn(`[regenerate-image] Hypereal T2I attempt ${attempt}/4 failed: ${hrResult.error}`);
-      if (attempt === 4) {
-        throw new Error(`Hypereal image regeneration failed after 4 attempts: ${hrResult.error}`);
-      }
-      // INCREASED BACKOFF: 3s, 6s, 12s to allow Hypereal to recover from E1001
-      await new Promise(r => setTimeout(r, 3000 * Math.pow(2, attempt - 1)));
+    // Replicate fallback if Hypereal failed or not configured
+    if (!imageResult.ok && replicateApiKey) {
+      console.warn(`[regenerate-image] Hypereal failed, falling back to Replicate nano-banana-pro...`);
+      actualProvider = "replicate";
+      actualModel = "nano-banana-pro";
+      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
+    }
+
+    if (!imageResult.ok) {
+      throw new Error(`Image regeneration failed on all providers: ${imageResult.error}`);
     }
     const regenDurationMs = Date.now() - regenStartTime;
 
@@ -4786,6 +4795,8 @@ IMPORTANT REQUIREMENTS:
       throw new Error("HYPEREAL_API_KEY not configured — cannot edit image");
     }
 
+    const replicateApiKey = Deno.env.get("REPLICATE_API_TOKEN") || "";
+
     console.log(`[regenerate-image] Using Hypereal img2img for Apply Edit (up to 3 attempts)...`);
     for (let attempt = 1; attempt <= 3; attempt++) {
       const hrEdit = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true, sourceImageUrl);
@@ -4800,24 +4811,27 @@ IMPORTANT REQUIREMENTS:
       }
     }
 
-    // If img2img failed after all attempts, try T2I fallback (still Hypereal only)
+    // If img2img failed, try Hypereal T2I fallback
     if (!imageResult!.ok) {
       console.warn(`[regenerate-image] Hypereal img2img failed all attempts, trying Hypereal T2I fallback...`);
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const t2iFallback = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true);
-        if (t2iFallback.ok) {
-          imageResult = t2iFallback;
-          actualModel = "nano-banana-pro-t2i";
-          console.log(`[regenerate-image] Hypereal T2I fallback succeeded on attempt ${attempt}`);
-          break;
-        }
-        console.warn(`[regenerate-image] Hypereal T2I fallback attempt ${attempt}/3 failed: ${t2iFallback.error}`);
-        if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
-        } else {
-          throw new Error(`Hypereal image editing failed after all retry attempts: ${t2iFallback.error}`);
-        }
+      const t2iFallback = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true);
+      if (t2iFallback.ok) {
+        imageResult = t2iFallback;
+        actualModel = "nano-banana-pro-t2i";
+        console.log(`[regenerate-image] Hypereal T2I fallback succeeded`);
       }
+    }
+
+    // If all Hypereal attempts failed, fall back to Replicate
+    if (!imageResult!.ok && replicateApiKey) {
+      console.warn(`[regenerate-image] All Hypereal attempts failed, falling back to Replicate nano-banana-pro...`);
+      actualProvider = "replicate";
+      actualModel = "nano-banana-pro";
+      imageResult = await generateImageWithReplicate(fullEditPrompt, replicateApiKey, format, true);
+    }
+
+    if (!imageResult!.ok) {
+      throw new Error(`Image editing failed on all providers: ${imageResult!.error}`);
     }
 
     const editDurationMs = Date.now() - editStartTime;
