@@ -61,6 +61,7 @@ interface CinematicScene {
   visualPrompt: string;
   videoUrl?: string;
   audioUrl?: string;
+  imageUrl?: string;
   duration: number;
 }
 
@@ -162,10 +163,17 @@ export function CinematicResult({
   const restartRef = useRef(true);
   const advancedFromSceneRef = useRef<number | null>(null);
 
+  // Auto-recovery state
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveringScenes, setRecoveringScenes] = useState<number[]>([]);
+  const recoveryAttemptedRef = useRef(false);
+
   // Keep local scenes synced with props
   useEffect(() => {
     setLocalScenes(scenes);
   }, [scenes]);
+
+  
 
   const currentScene = localScenes[currentSceneIndex];
 
@@ -232,6 +240,46 @@ export function CinematicResult({
     setLocalScenes,
     stop
   );
+
+  // Auto-recover missing videos on mount
+  useEffect(() => {
+    if (recoveryAttemptedRef.current) return;
+    if (!generationId || !projectId) return;
+
+    const missingVideoIndices = localScenes
+      .map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1))
+      .filter((i) => i !== -1);
+
+    if (missingVideoIndices.length === 0) return;
+
+    recoveryAttemptedRef.current = true;
+    setIsRecovering(true);
+    setRecoveringScenes(missingVideoIndices);
+
+    console.log(`[CinematicResult] Auto-recovering ${missingVideoIndices.length} missing videos:`, missingVideoIndices.map(i => i + 1));
+
+    const recoverScene = async (idx: number) => {
+      try {
+        await regenerateVideo(idx);
+        setRecoveringScenes((prev) => prev.filter((i) => i !== idx));
+      } catch (e) {
+        console.error(`[CinematicResult] Recovery failed for scene ${idx + 1}`, e);
+        setRecoveringScenes((prev) => prev.filter((i) => i !== idx));
+      }
+    };
+
+    (async () => {
+      for (const idx of missingVideoIndices) {
+        await recoverScene(idx);
+      }
+      setIsRecovering(false);
+      toast({
+        title: "Videos Recovered",
+        description: `Recovered missing videos for ${missingVideoIndices.length} scene(s).`,
+      });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generationId, projectId]);
 
   const startPlayAll = useCallback(
     (startIndex: number) => {
@@ -645,8 +693,22 @@ export function CinematicResult({
             />
           ) : (
             <div className="text-center text-muted-foreground">
-              <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No video for Scene {currentScene?.number}</p>
+              {isRecovering && recoveringScenes.includes(currentSceneIndex) ? (
+                <>
+                  <Loader2 className="h-12 w-12 mx-auto mb-2 opacity-50 animate-spin" />
+                  <p className="text-sm">Recovering video for Scene {currentScene?.number}...</p>
+                </>
+              ) : isRecovering && !currentScene?.videoUrl ? (
+                <>
+                  <Loader2 className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Waiting to recover Scene {currentScene?.number}...</p>
+                </>
+              ) : (
+                <>
+                  <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No video for Scene {currentScene?.number}</p>
+                </>
+              )}
             </div>
           )}
 
@@ -724,7 +786,15 @@ export function CinematicResult({
 
       {/* All Scenes Grid */}
       <div className="space-y-4 max-w-3xl mx-auto">
-        <h3 className="text-lg font-medium text-foreground">All Scenes</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-medium text-foreground">All Scenes</h3>
+          {isRecovering && (
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Recovering {recoveringScenes.length} video(s)...
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {localScenes.map((scene, idx) => (
             <button
@@ -749,7 +819,11 @@ export function CinematicResult({
                 />
               ) : (
                 <div className="w-full h-full bg-muted/50 flex items-center justify-center">
-                  <Film className="h-8 w-8 text-muted-foreground/50" />
+                  {isRecovering && recoveringScenes.includes(idx) ? (
+                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                  ) : (
+                    <Film className="h-8 w-8 text-muted-foreground/50" />
+                  )}
                 </div>
               )}
               <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-xs text-white">
