@@ -141,6 +141,8 @@ async function startHyperealVideo(
           prompt,
           image: imageUrl,
           duration: Math.min(duration, 8),
+          aspect_ratio: format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9",
+          generate_audio: false,
         },
       }),
     });
