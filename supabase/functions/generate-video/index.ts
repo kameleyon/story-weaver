@@ -2003,7 +2003,7 @@ async function generateSceneAudio(
 }
 
 // ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://api.hypereal.tech";
+const HYPEREAL_API_BASE = "https://hypereal.tech";
 
 async function generateImageWithHypereal(
   prompt: string,
@@ -2013,7 +2013,7 @@ async function generateImageWithHypereal(
   sourceImageUrl?: string, // Optional: provide for img2img / Apply Edit
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const model = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
+  const model = "nano-banana-pro-t2i"; // Always use Pro
   const mode = sourceImageUrl ? "img2img" : "t2i";
   console.log(`[HYPEREAL-IMG] Starting ${model} ${mode} generation...`);
 
@@ -2030,7 +2030,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/images/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -2072,7 +2072,7 @@ async function generateCharacterReferenceWithHypereal(
 Full body portrait, front view, neutral pose, clean background, high detail, professional character design reference.`;
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/images/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -4042,8 +4042,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           // Wait for stagger delay before starting this request
           if (staggerDelay > 0) await sleep(staggerDelay);
 
-          let actualProvider = "replicate"; // Track which provider actually succeeded
-          let actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+          let actualProvider = "hypereal";
+          let actualModel = "nano-banana-pro-t2i";
           const imageCallStart = Date.now();
 
           for (let attempt = 1; attempt <= 4; attempt++) {
@@ -4056,7 +4056,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               if (hrResult.ok) {
                 result = hrResult;
                 actualProvider = "hypereal";
-                actualModel = useProModel ? "nano-banana-pro" : "nano-banana-pro";
+                actualModel = "nano-banana-pro-t2i";
               } else {
                 console.error(`[IMG] Hypereal failed for task ${task.taskIndex} (attempt ${attempt}): ${hrResult.error}`);
                 result = { ok: false, error: hrResult.error || "Hypereal image generation failed" };
