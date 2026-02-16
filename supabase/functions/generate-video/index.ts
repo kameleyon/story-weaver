@@ -4646,9 +4646,9 @@ async function handleRegenerateImage(
   const useProModel = isPremiumRequiredStyle;
 
   if (useProModel) {
-    console.log(`[regenerate-image] Premium style "${projectStyle}" - will use Replicate nano-banana-pro (1K) for T2I`);
+    console.log(`[regenerate-image] Premium style "${projectStyle}" - will use nano-banana-pro (1K) for T2I`);
   } else {
-    console.log(`[regenerate-image] Using Replicate nano-banana for T2I regeneration (Apply Edit always uses nano-banana-pro)`);
+    console.log(`[regenerate-image] Using standard model for T2I regeneration (Hypereal primary, Replicate fallback)`);
   }
 
   // Get existing imageUrls or create from single imageUrl
@@ -4702,21 +4702,39 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Use Replicate for image generation (Pro users get nano-banana-pro)
-    console.log(`[regenerate-image] Using Replicate ${replicateModelLabel} for regeneration (Pro: ${isProUser})`);
-    const replicateStartTime = Date.now();
-    imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
-    const replicateDurationMs = Date.now() - replicateStartTime;
+    // Try Hypereal first (primary), then Replicate (fallback)
+    const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
+    let actualProvider = "replicate";
+    let actualModel = replicateModel;
+    const regenStartTime = Date.now();
 
-    // Log Replicate API call
+    if (hyperealKey) {
+      console.log(`[regenerate-image] Trying Hypereal for T2I regeneration...`);
+      const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, useProModel);
+      if (hrResult.ok) {
+        imageResult = hrResult;
+        actualProvider = "hypereal";
+        actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
+        console.log(`[regenerate-image] Hypereal T2I regeneration succeeded`);
+      } else {
+        console.warn(`[regenerate-image] Hypereal failed: ${hrResult.error}, falling back to Replicate`);
+        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
+      }
+    } else {
+      console.log(`[regenerate-image] Using Replicate ${replicateModelLabel} for regeneration (Pro: ${isProUser})`);
+      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
+    }
+    const regenDurationMs = Date.now() - regenStartTime;
+
+    // Log API call
     await logApiCall({
       supabase,
       userId: user.id,
       generationId,
-      provider: "replicate",
-      model: replicateModel,
+      provider: actualProvider as any,
+      model: actualModel,
       status: imageResult.ok ? "success" : "error",
-      totalDurationMs: replicateDurationMs,
+      totalDurationMs: regenDurationMs,
       cost: imageResult.ok ? replicatePricing : 0,
       errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
     });
@@ -4789,20 +4807,38 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
 
-      // Use Replicate nano-banana-pro for fallback text-to-image
-      console.log(`[regenerate-image] Fallback: Using Replicate nano-banana-pro for T2I`);
-      const replicateStartTime = Date.now();
-      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true); // Always use Pro for edits
-      const replicateDurationMs = Date.now() - replicateStartTime;
+      // Try Hypereal first for fallback T2I, then Replicate
+      const fallbackHypereal = Deno.env.get("HYPEREAL_API_KEY");
+      let fallbackProvider = "replicate";
+      let fallbackModel = "google/nano-banana-pro";
+      const fallbackStartTime = Date.now();
+
+      if (fallbackHypereal) {
+        console.log(`[regenerate-image] Fallback: Trying Hypereal nano-banana-pro-t2i for T2I`);
+        const hrFallback = await generateImageWithHypereal(modifiedPrompt, format, fallbackHypereal, true);
+        if (hrFallback.ok) {
+          imageResult = hrFallback;
+          fallbackProvider = "hypereal";
+          fallbackModel = "nano-banana-pro-t2i";
+          console.log(`[regenerate-image] Fallback: Hypereal T2I succeeded`);
+        } else {
+          console.warn(`[regenerate-image] Fallback: Hypereal failed: ${hrFallback.error}, using Replicate`);
+          imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
+        }
+      } else {
+        console.log(`[regenerate-image] Fallback: Using Replicate nano-banana-pro for T2I`);
+        imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true);
+      }
+      const fallbackDurationMs = Date.now() - fallbackStartTime;
 
       await logApiCall({
         supabase,
         userId: user.id,
         generationId,
-        provider: "replicate",
-        model: "google/nano-banana-pro",
+        provider: fallbackProvider as any,
+        model: fallbackModel,
         status: imageResult.ok ? "success" : "error",
-        totalDurationMs: replicateDurationMs,
+        totalDurationMs: fallbackDurationMs,
         cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
         errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
