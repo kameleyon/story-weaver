@@ -2013,7 +2013,7 @@ async function generateImageWithHypereal(
   sourceImageUrl?: string, // Optional: provide for img2img / Apply Edit
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const model = useProModel ? "nano-banana-pro" : "nano-banana-pro";
+  const model = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
   const mode = sourceImageUrl ? "img2img" : "t2i";
   console.log(`[HYPEREAL-IMG] Starting ${model} ${mode} generation...`);
 
@@ -2030,7 +2030,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/generations/image`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -2072,7 +2072,7 @@ async function generateCharacterReferenceWithHypereal(
 Full body portrait, front view, neutral pose, clean background, high detail, professional character design reference.`;
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

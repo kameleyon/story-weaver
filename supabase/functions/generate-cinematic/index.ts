@@ -80,8 +80,9 @@ async function generateImageWithHypereal(
   console.log(`[HYPEREAL-IMG] Starting nano-banana-pro ${mode} generation...`);
 
   try {
+    const model = sourceImageUrl ? "nano-banana-pro-t2i" : "nano-banana-pro-t2i";
     const body: Record<string, unknown> = {
-      model: "nano-banana-pro",
+      model,
       prompt,
       resolution: "1K",
       aspect_ratio: aspectRatio,
@@ -92,7 +93,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/generations/image`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
