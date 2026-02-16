@@ -4730,8 +4730,8 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       if (attempt === 4) {
         throw new Error(`Hypereal image regeneration failed after 4 attempts: ${hrResult.error}`);
       }
-      // Exponential backoff: 2s, 4s, 8s
-      await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
+      // INCREASED BACKOFF: 3s, 6s, 12s to allow Hypereal to recover from E1001
+      await new Promise(r => setTimeout(r, 3000 * Math.pow(2, attempt - 1)));
     }
     const regenDurationMs = Date.now() - regenStartTime;
 
