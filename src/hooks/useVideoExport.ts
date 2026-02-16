@@ -437,8 +437,12 @@ export function useVideoExport() {
             log("Run", runId, `Scene ${i + 1}: Source video duration=${sourceDuration}s, target=${sceneDuration}s`);
 
             // Seek to start
+            const initialSeek = new Promise<void>((resolve) => {
+              const timeout = setTimeout(resolve, 500);
+              video.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
+            });
             video.currentTime = 0;
-            await new Promise<void>(r => { video.onseeked = () => r(); });
+            await initialSeek;
 
             for (let f = 0; f < sceneFrames; f++) {
               if (abortRef.current) break;
@@ -457,8 +461,12 @@ export function useVideoExport() {
               // Clamp to valid range
               playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
 
+              const seekPromise = new Promise<void>((resolve) => {
+                const timeout = setTimeout(resolve, 500); // Fallback if onseeked never fires
+                video.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
+              });
               video.currentTime = playbackTime;
-              await new Promise<void>(r => { video.onseeked = () => r(); });
+              await seekPromise;
 
               // Draw video frame scaled to canvas
               ctx.fillStyle = "#000";
