@@ -1,32 +1,37 @@
 
+# Force Hypereal nano-banana-pro for All Image Regeneration
 
-## Remove Client-Side Export Fallback from CinematicResult
+## Problem
+The `regenerate-image` handler in `generate-video/index.ts` still uses Replicate as a fallback when Hypereal fails. You want Hypereal `nano-banana-pro` to be the only provider for both "Regenerate New Image" (T2I) and "Apply Edit" (img2img) — no Replicate fallback.
 
-### Problem
-`CinematicResult.tsx` currently falls back to `useCinematicExport` (client-side frame rendering via `VideoEncoder`) when `finalVideoUrl` is missing. This fallback is the exact code path that causes mobile crashes due to thermal throttling and memory exhaustion.
+## Changes
 
-### Solution
-Remove the `useCinematicExport` fallback entirely. If `finalVideoUrl` is not available, the Export button should be disabled with a "Processing..." tooltip instead of silently triggering the crash-prone client-side renderer.
+**File: `supabase/functions/generate-video/index.ts`**
 
-### Changes
+### 1. Force `useProModel = true` always (~line 4658)
+Change from `isPremiumRequiredStyle` to `true` so `nano-banana-pro` is always used.
 
-**File: `src/components/workspace/CinematicResult.tsx`**
+### 2. Remove Replicate fallback from T2I regeneration (~lines 4717-4738)
+- Remove the `else` branch that calls `generateImageWithReplicate`
+- Remove the Replicate fallback when Hypereal fails (line 4733)
+- If Hypereal fails, throw an error instead of falling back
 
-1. Remove the `import { useCinematicExport }` line and the `useCinematicExport()` hook call (lines ~53, 138-147).
-2. Remove all references to `exportState`, `exportVideo`, `downloadVideo`, `shareVideo`, `resetExport`.
-3. Simplify `handleExportVideo`:
-   - If `finalVideoUrl` exists: download it directly (keep current direct download logic).
-   - If `finalVideoUrl` is missing: do nothing (button will be disabled).
-4. Update the Export button:
-   - Disable it when `!finalVideoUrl` (in addition to existing conditions).
-   - Show spinner only during `isDirectDownloading`.
-   - Tooltip: show "Download Video" when ready, "Video processing..." when not available.
-5. Remove the export progress bar UI that displays `exportState.progress` (since client-side export is no longer used).
+### 3. Remove Replicate fallback from Apply Edit (~lines 4801-4814)
+- Remove the Replicate `editImageWithReplicatePro` fallback block
+- If Hypereal img2img fails, fall through to T2I via Hypereal only (not Replicate)
 
-**File: `src/hooks/useCinematicExport.ts`**
+### 4. Reduce batch size and increase stagger (bulk generation, ~line 4002/4039)
+- Batch size: change to `2` for all models
+- Stagger delay: change from `1500ms` to `3000ms`
 
-- No deletion yet (other code may still import it), but it becomes unused by `CinematicResult`. Can be cleaned up in a follow-up pass.
+### 5. Redeploy `generate-video` edge function
 
-### Result
-The Export button becomes a simple, safe download button -- identical in behavior to the Explainer/Doc2Video export. No client-side video rendering will ever run on mobile.
+## Summary Table
 
+| Setting | Before | After |
+|---------|--------|-------|
+| Regenerate model | nano-banana-pro (premium) / nano-banana (standard) | nano-banana-pro (always) |
+| T2I fallback | Replicate | None (error if Hypereal fails) |
+| Apply Edit fallback | Replicate img2img | None (falls to Hypereal T2I only) |
+| Batch size | 3-5 | 2 |
+| Stagger delay | 1.5s | 3s |
