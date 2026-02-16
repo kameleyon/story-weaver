@@ -1278,20 +1278,8 @@ serve(async (req) => {
           console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
         }
 
-        // Replicate Grok fallback
-        const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
-        if (replicateToken) {
-          console.log(`[VIDEO] Falling back to Replicate Grok for scene ${scene.number}`);
-          try {
-            const predId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
-            scenes[idx] = { ...scene, videoPredictionId: predId, videoProvider: "replicate" };
-            await updateScenes(supabase, generationId, scenes);
-            return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-          } catch (grokErr) {
-            throw new Error(`Video generation failed for scene ${scene.number}: Hypereal and Replicate both failed`);
-          }
-        }
-        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed and no Replicate token available`);
+        // Replicate fallback disabled — Hypereal-only for debugging
+        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed. Replicate fallback disabled for debugging.`);
       }
 
       // Poll based on provider
@@ -1325,42 +1313,16 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
         }
         if (pollResult.status === "failed") {
-          console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}, falling back to Replicate`);
-          // Clear Hypereal prediction and fall back to Replicate
-          const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
-          if (replicateToken) {
-            try {
-              const predId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
-              scenes[idx] = { ...scene, videoPredictionId: predId, videoProvider: "replicate" };
-              await updateScenes(supabase, generationId, scenes);
-              return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-            } catch (grokErr) {
-              throw new Error(`Video failed for scene ${scene.number}: Hypereal and Replicate both failed`);
-            }
-          }
-          throw new Error(`Hypereal video failed for scene ${scene.number}: ${pollResult.error}`);
+          console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}`);
+          // Clear prediction so next poll attempt starts a fresh Hypereal job
+          scenes[idx] = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
 
-      // Replicate Grok polling
-      if (provider === "replicate") {
-        const replicateToken = Deno.env.get("REPLICATE_API_TOKEN");
-        if (!replicateToken) throw new Error("Missing Replicate token for video polling");
-        const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
-        if (videoUrl === GROK_TIMEOUT_RETRY) {
-          // Clear prediction to allow fresh retry on next poll
-          scenes[idx] = { ...scene, videoPredictionId: undefined };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-        }
-        if (videoUrl) {
-          scenes[idx] = { ...scene, videoUrl, videoPredictionId: undefined };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
-        }
-        return jsonResponse({ success: true, status: "processing", scene });
-      }
+      // Replicate polling disabled — Hypereal only
       throw new Error(`Unknown video provider for scene ${scene.number}: ${provider}`);
     }
 
