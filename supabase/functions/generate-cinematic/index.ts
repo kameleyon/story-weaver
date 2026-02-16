@@ -1283,11 +1283,12 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: completedScene });
         }
         if (pollResult.status === "failed") {
-          console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}`);
-          // Clear prediction so next poll attempt starts a fresh Hypereal job
+          console.error(`[VIDEO] Hypereal poll FAILED for scene ${scene.number}: ${pollResult.error}`);
+          // Do NOT clear predictionId and retry — that causes infinite job creation loops.
+          // Instead, mark this as a hard failure so the client stops polling.
           const failedScene = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" as const };
           await updateSingleScene(supabase, generationId, idx, () => failedScene);
-          return jsonResponse({ success: true, status: "processing", scene: failedScene });
+          throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error || "Hypereal returned failure"}`);
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
