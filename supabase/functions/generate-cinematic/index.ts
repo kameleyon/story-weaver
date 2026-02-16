@@ -1364,8 +1364,9 @@ serve(async (req) => {
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
 
       if (!scene.videoPredictionId) {
-        // Try Hypereal first, then Replicate
-        if (hyperealApiKey) {
+        // Only try Hypereal if we haven't already failed over to Replicate for this scene
+        const preferredProvider = scene.videoProvider || "hypereal";
+        if (hyperealApiKey && preferredProvider !== "replicate") {
           const hrResult = await startHyperealVideo(
             `${scene.visualPrompt}\n\nANIMATION RULES: NO lip-sync. Facial expressions allowed. Body movement allowed. Camera motion preferred.`,
             scene.imageUrl!,
@@ -1431,8 +1432,13 @@ serve(async (req) => {
       
       // If the prediction timed out, clear it so next poll starts a fresh prediction
       if (videoUrl === GROK_TIMEOUT_RETRY) {
-        console.log(`[VIDEO] Scene ${scene.number}: Timeout detected, clearing prediction for auto-retry`);
-        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined };
+        const retryCount = (scene.videoRetryCount || 0) + 1;
+        if (retryCount >= 3) {
+          console.error(`[VIDEO] Scene ${scene.number}: Max retries (3) exceeded, marking as failed`);
+          throw new Error(`Video generation failed for scene ${scene.number} after 3 retries`);
+        }
+        console.log(`[VIDEO] Scene ${scene.number}: Timeout detected, retry ${retryCount}/3`);
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }

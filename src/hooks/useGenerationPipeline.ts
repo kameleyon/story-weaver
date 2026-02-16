@@ -419,8 +419,8 @@ export function useGenerationPipeline() {
             statusMessage: "Images complete. Generating video clips...",
           }));
 
-          // Phase 4: Video clips (batched in groups of 3 for parallelism)
-          const VIDEO_BATCH_SIZE = 3;
+          // Phase 4: Video clips (sequential to prevent double-spending on providers)
+          const VIDEO_BATCH_SIZE = 1;
 
           for (let i = 0; i < cSceneCount; i += VIDEO_BATCH_SIZE) {
             const batchEnd = Math.min(i + VIDEO_BATCH_SIZE, cSceneCount);
