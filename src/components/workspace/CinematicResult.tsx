@@ -427,7 +427,7 @@ export function CinematicResult({
       videoUrl: s.videoUrl,
       audioUrl: s.audioUrl,
     }));
-    void exportVideo(exportScenes, format).catch(() => {});
+    void exportVideo(exportScenes, format, undefined, true).catch(() => {});
   }, [localScenes, format, exportVideo]);
 
   const handleDownloadClipsZip = useCallback(async () => {

@@ -114,7 +114,8 @@ export function useVideoExport() {
     async (
       scenes: Scene[], 
       format: "landscape" | "portrait" | "square",
-      brandMark?: string
+      brandMark?: string,
+      isCinematic?: boolean
     ) => {
       abortRef.current = false;
       const runId = ++exportRunIdRef.current;
@@ -169,7 +170,8 @@ export function useVideoExport() {
           : { landscape: { w: 1920, h: 1080 }, portrait: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 } };
         
         const dim = dimensions[format];
-        const fps = isIOS ? 24 : 30;
+        // Cinematic uses 15fps for faster rendering; standard uses 30/24fps
+        const fps = isCinematic ? 15 : (isIOS ? 24 : 30);
 
         log("Run", runId, "Config", { 
           isIOS, 
@@ -417,7 +419,7 @@ export function useVideoExport() {
           // D. Render Video Frames
           // Check if this scene has a video clip — use Smart Boomerang Looping
           if (scene.videoUrl) {
-            log("Run", runId, `Scene ${i + 1}: Using Smart Boomerang video loop`, { videoUrl: scene.videoUrl, sceneDuration });
+            log("Run", runId, `Scene ${i + 1}: Extracting video frames linearly`, { videoUrl: scene.videoUrl, sceneDuration });
             
             const video = document.createElement("video");
             video.crossOrigin = "anonymous";
@@ -434,47 +436,88 @@ export function useVideoExport() {
             });
 
             const sourceDuration = video.duration || 5;
-            log("Run", runId, `Scene ${i + 1}: Source video duration=${sourceDuration}s, target=${sceneDuration}s`);
+            log("Run", runId, `Scene ${i + 1}: Source=${sourceDuration}s, target=${sceneDuration}s`);
+
+            // --- FAST LINEAR EXTRACTION ---
+            // Extract source frames at extraction FPS, seeking linearly (much faster than random seeks)
+            const extractionFps = fps; // Match output fps
+            const sourceFrameCount = Math.ceil(sourceDuration * extractionFps);
+            const sourceFrames: ImageBitmap[] = [];
 
             // Seek to start
-            const initialSeek = new Promise<void>((resolve) => {
-              const timeout = setTimeout(resolve, 500);
-              video.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
+            const initSeek = new Promise<void>((r) => {
+              const t = setTimeout(r, 500);
+              video.addEventListener("seeked", () => { clearTimeout(t); r(); }, { once: true });
             });
             video.currentTime = 0;
-            await initialSeek;
+            await initSeek;
+
+            for (let sf = 0; sf < sourceFrameCount; sf++) {
+              const targetTime = Math.min((sf / extractionFps), sourceDuration - 0.01);
+              if (sf > 0) {
+                const seekP = new Promise<void>((r) => {
+                  const t = setTimeout(r, 300);
+                  video.addEventListener("seeked", () => { clearTimeout(t); r(); }, { once: true });
+                });
+                video.currentTime = targetTime;
+                await seekP;
+              }
+              // Capture frame as ImageBitmap (fast, no canvas needed)
+              try {
+                const bmp = await createImageBitmap(video);
+                sourceFrames.push(bmp);
+              } catch {
+                // If frame capture fails, duplicate last frame
+                if (sourceFrames.length > 0) {
+                  const lastCanvas = document.createElement("canvas");
+                  lastCanvas.width = dim.w;
+                  lastCanvas.height = dim.h;
+                  const lctx = lastCanvas.getContext("2d")!;
+                  lctx.drawImage(sourceFrames[sourceFrames.length - 1], 0, 0, dim.w, dim.h);
+                  sourceFrames.push(await createImageBitmap(lastCanvas));
+                }
+              }
+              // Yield periodically during extraction
+              if (sf % 10 === 0) await yieldToUI();
+            }
+
+            // Cleanup video element early
+            video.removeAttribute("src");
+            video.load();
+
+            log("Run", runId, `Scene ${i + 1}: Extracted ${sourceFrames.length} source frames, now encoding ${sceneFrames} output frames`);
+
+            // --- MAP SOURCE FRAMES TO OUTPUT TIMELINE ---
+            // For cinematic: linear stretch/compress (no boomerang)
+            // Fade-to-black for last 0.5s of scene
+            const fadeOutFrames = Math.min(Math.floor(fps * 0.5), Math.floor(sceneFrames * 0.15));
 
             for (let f = 0; f < sceneFrames; f++) {
               if (abortRef.current) break;
 
-              const timeInScene = f / fps;
+              // Map output frame to source frame index (linear stretch)
+              const progress = sourceFrames.length > 1 ? (f / (sceneFrames - 1)) : 0;
+              const srcIdx = Math.min(Math.floor(progress * (sourceFrames.length - 1)), sourceFrames.length - 1);
+              const srcBmp = sourceFrames[Math.max(0, srcIdx)];
 
-              // --- SMART BOOMERANG LOGIC ---
-              // Maps linear time (0..sceneDuration) into the source video loop
-              // Forward → Backward → Forward → ...
-              const cycleDuration = sourceDuration * 2;
-              let playbackTime = timeInScene % cycleDuration;
-              if (playbackTime > sourceDuration) {
-                // Backward phase
-                playbackTime = sourceDuration - (playbackTime - sourceDuration);
-              }
-              // Clamp to valid range
-              playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
-
-              const seekPromise = new Promise<void>((resolve) => {
-                const timeout = setTimeout(resolve, 500); // Fallback if onseeked never fires
-                video.addEventListener("seeked", () => { clearTimeout(timeout); resolve(); }, { once: true });
-              });
-              video.currentTime = playbackTime;
-              await seekPromise;
-
-              // Draw video frame scaled to canvas
+              // Draw frame
               ctx.fillStyle = "#000";
               ctx.fillRect(0, 0, dim.w, dim.h);
-              const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
-              const vw = video.videoWidth * vScale;
-              const vh = video.videoHeight * vScale;
-              ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
+              
+              if (srcBmp) {
+                const vScale = Math.min(dim.w / srcBmp.width, dim.h / srcBmp.height);
+                const vw = srcBmp.width * vScale;
+                const vh = srcBmp.height * vScale;
+                
+                // Apply fade-to-black at end of scene (cinematic transition)
+                const framesLeft = sceneFrames - f;
+                if (isCinematic && framesLeft <= fadeOutFrames && i < scenes.length - 1) {
+                  ctx.globalAlpha = framesLeft / fadeOutFrames;
+                }
+                
+                ctx.drawImage(srcBmp, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
+                ctx.globalAlpha = 1;
+              }
 
               // Brand watermark
               if (brandMark && brandMark.trim()) {
@@ -490,13 +533,13 @@ export function useVideoExport() {
               frame.close();
               globalFrameCount++;
 
-              if (globalFrameCount % 5 === 0) await yieldToUI();
-              if (globalFrameCount % 30 === 0) await longYield();
+              // Encoding from cached bitmaps is very fast, yield less often
+              if (globalFrameCount % 30 === 0) await yieldToUI();
             }
 
-            // Cleanup video element
-            video.removeAttribute("src");
-            video.load();
+            // Clean up source frame bitmaps
+            for (const bmp of sourceFrames) bmp.close();
+            sourceFrames.length = 0;
 
           } else {
             // E. Render Static Images with Fade Transitions (existing logic)
