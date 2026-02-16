@@ -427,9 +427,9 @@ export function useVideoExport() {
             video.playsInline = true;
             video.preload = "auto";
 
-            // Load video with timeout
+            // Load video with generous timeout for cross-origin assets
             await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new Error("Video load timeout (60s)")), 60000);
+              const timeout = setTimeout(() => reject(new Error("Video load timeout (180s). Try again or check your connection.")), 180000);
               video.onloadeddata = () => { clearTimeout(timeout); resolve(); };
               video.onerror = () => { clearTimeout(timeout); reject(new Error("Failed to load video")); };
               video.src = scene.videoUrl!;
