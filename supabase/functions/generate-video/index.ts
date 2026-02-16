@@ -3736,9 +3736,9 @@ async function handleAudioPhase(
 }
 
 // Images phase now processes in chunks to avoid request timeouts.
-// IMPORTANT: Smaller chunk size (4) prevents "failed to fetch" timeouts during image generation.
+// IMPORTANT: Smaller chunk size (2) prevents "failed to fetch" timeouts during image generation.
 // Pro model (nano-banana-pro 1K) is slower, so we keep chunks small and manageable.
-const MAX_IMAGES_PER_CALL_DEFAULT = 4;
+const MAX_IMAGES_PER_CALL_DEFAULT = 2;
 
 async function handleImagesPhase(
   supabase: any,
@@ -3998,8 +3998,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let totalImagesGenerated = 0;
 
   // Process this chunk in batches.
-  // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
-  const BATCH_SIZE = 2;
+  // Use batch size of 1 to ensure sequential processing and avoid rate limits/timeouts
+  const BATCH_SIZE = 1;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
