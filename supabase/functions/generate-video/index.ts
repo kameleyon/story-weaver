@@ -3999,7 +3999,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
 
   // Process this chunk in batches.
   // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
-  const BATCH_SIZE = useProModel ? 3 : 5;
+  const BATCH_SIZE = 2;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
@@ -4036,7 +4036,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
     for (let t = batchStart; t < batchEnd; t++) {
       const task = tasksThisChunk[t];
       // Stagger requests within batch to avoid rate limits (1.5s between each)
-      const staggerDelay = (t - batchStart) * 1500;
+      const staggerDelay = (t - batchStart) * 3000;
       batchPromises.push(
         (async () => {
           // Wait for stagger delay before starting this request
@@ -4653,15 +4653,9 @@ async function handleRegenerateImage(
   // Check if user is Pro/Enterprise tier (for logging purposes only)
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
   
-  // For regeneration without modification (full T2I), use standard nano-banana for all tiers
-  // Only premium-required styles get nano-banana-pro for T2I regeneration
-  const useProModel = isPremiumRequiredStyle;
-
-  if (useProModel) {
-    console.log(`[regenerate-image] Premium style "${projectStyle}" - will use nano-banana-pro (1K) for T2I`);
-  } else {
-    console.log(`[regenerate-image] Using standard model for T2I regeneration (Hypereal primary, Replicate fallback)`);
-  }
+  // Always use nano-banana-pro for all regeneration (T2I and img2img)
+  const useProModel = true;
+  console.log(`[regenerate-image] Using Hypereal nano-banana-pro for all regeneration (style: "${projectStyle}")`);
 
   // Get existing imageUrls or create from single imageUrl
   const existingImageUrls = scene.imageUrls?.length ? [...scene.imageUrls] : scene.imageUrl ? [scene.imageUrl] : [];
@@ -4714,27 +4708,23 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Try Hypereal first (primary), then Replicate (fallback)
+    // Use Hypereal nano-banana-pro only — no Replicate fallback
     const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
-    let actualProvider = "replicate";
-    let actualModel = replicateModel;
+    let actualProvider = "hypereal";
+    let actualModel = "nano-banana-pro-t2i";
     const regenStartTime = Date.now();
 
-    if (hyperealKey) {
-      console.log(`[regenerate-image] Trying Hypereal for T2I regeneration...`);
-      const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, useProModel);
-      if (hrResult.ok) {
-        imageResult = hrResult;
-        actualProvider = "hypereal";
-        actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
-        console.log(`[regenerate-image] Hypereal T2I regeneration succeeded`);
-      } else {
-        console.warn(`[regenerate-image] Hypereal failed: ${hrResult.error}, falling back to Replicate`);
-        imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
-      }
+    if (!hyperealKey) {
+      throw new Error("HYPEREAL_API_KEY not configured — cannot regenerate image");
+    }
+
+    console.log(`[regenerate-image] Using Hypereal nano-banana-pro for T2I regeneration...`);
+    const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, true);
+    if (hrResult.ok) {
+      imageResult = hrResult;
+      console.log(`[regenerate-image] Hypereal T2I regeneration succeeded`);
     } else {
-      console.log(`[regenerate-image] Using Replicate ${replicateModelLabel} for regeneration (Pro: ${isProUser})`);
-      imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
+      throw new Error(`Hypereal image regeneration failed: ${hrResult.error}`);
     }
     const regenDurationMs = Date.now() - regenStartTime;
 
@@ -4779,38 +4769,32 @@ IMPORTANT REQUIREMENTS:
       fullEditPrompt += `\n\nSTYLE CONTEXT: ${styleDescription}`;
     }
 
-    // === 1. Try Hypereal img2img first (PRIMARY) ===
+    // === Use Hypereal img2img only — no Replicate fallback ===
     const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
     const editStartTime = Date.now();
-    let actualProvider = "replicate";
-    let actualModel = "google/nano-banana-pro";
+    let actualProvider = "hypereal";
+    let actualModel = "nano-banana-pro";
 
-    if (hyperealKey) {
-      console.log(`[regenerate-image] Trying Hypereal img2img for Apply Edit...`);
-      const hrEdit = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true, sourceImageUrl);
-      if (hrEdit.ok) {
-        imageResult = hrEdit;
-        actualProvider = "hypereal";
-        actualModel = "nano-banana-pro";
-        console.log(`[regenerate-image] Hypereal img2img Apply Edit succeeded`);
-      } else {
-        console.warn(`[regenerate-image] Hypereal img2img failed: ${hrEdit.error}, falling back to Replicate`);
-      }
+    if (!hyperealKey) {
+      throw new Error("HYPEREAL_API_KEY not configured — cannot edit image");
     }
 
-    // === 2. Fallback to Replicate nano-banana-pro img2img ===
-    if (!imageResult.ok) {
-      console.log(`[regenerate-image] Falling back to Replicate Nano Banana Pro img2img...`);
-      imageResult = await editImageWithReplicatePro(
-        sourceImageUrl,
-        imageModification,
-        replicateApiKey,
-        format,
-        styleDescription,
-        scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined
-      );
-      actualProvider = "replicate";
-      actualModel = "google/nano-banana-pro";
+    console.log(`[regenerate-image] Using Hypereal img2img for Apply Edit...`);
+    const hrEdit = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true, sourceImageUrl);
+    if (hrEdit.ok) {
+      imageResult = hrEdit;
+      console.log(`[regenerate-image] Hypereal img2img Apply Edit succeeded`);
+    } else {
+      // If img2img fails, try T2I with the edit prompt as fallback (still Hypereal only)
+      console.warn(`[regenerate-image] Hypereal img2img failed: ${hrEdit.error}, trying Hypereal T2I fallback...`);
+      const t2iFallback = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true);
+      if (t2iFallback.ok) {
+        imageResult = t2iFallback;
+        actualModel = "nano-banana-pro-t2i";
+        console.log(`[regenerate-image] Hypereal T2I fallback for Apply Edit succeeded`);
+      } else {
+        throw new Error(`Hypereal image editing failed (both img2img and T2I): ${t2iFallback.error}`);
+      }
     }
 
     const editDurationMs = Date.now() - editStartTime;
