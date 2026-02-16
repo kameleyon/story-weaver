@@ -127,8 +127,7 @@ async function startHyperealVideo(
   _duration: number,
   apiKey: string,
 ): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  console.log(`[HYPEREAL-VID] Starting seedance-1-5-i2v generation (aspect_ratio=${aspectRatio}, duration=10, audio=false)...`);
+  console.log(`[KLING] Starting kling-2-5-i2v generation (duration=5)...`);
 
   try {
     const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
@@ -138,34 +137,33 @@ async function startHyperealVideo(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "seedance-1-5-i2v",
+        model: "kling-2-5-i2v",
         input: {
           prompt,
           image: imageUrl,
-          duration: 10,
-          resolution: "720p",
-          aspect_ratio: aspectRatio,
-          generate_audio: false,
+          negative_prompt: "blurry, low quality, watermark, moving lips, talking expression, distortions, extra limbs",
+          duration: 5,
+          guidance_scale: 0.5,
         },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
-      console.error(`[HYPEREAL-VID] Request failed (${response.status}): ${errText.substring(0, 300)}`);
-      return { ok: false, error: `Hypereal video failed (${response.status}): ${errText.substring(0, 200)}` };
+      console.error(`[KLING] Request failed (${response.status}): ${errText.substring(0, 300)}`);
+      return { ok: false, error: `Kling video failed (${response.status}): ${errText.substring(0, 200)}` };
     }
 
     const data = await response.json();
-    console.log(`[HYPEREAL-VID] Response:`, JSON.stringify(data).substring(0, 300));
+    console.log(`[KLING] Response:`, JSON.stringify(data).substring(0, 300));
     if (!data.jobId) {
-      return { ok: false, error: `No jobId in Hypereal video response: ${JSON.stringify(data).substring(0, 200)}` };
+      return { ok: false, error: `No jobId in Kling video response: ${JSON.stringify(data).substring(0, 200)}` };
     }
 
-    console.log(`[HYPEREAL-VID] Job started: ${data.jobId}`);
+    console.log(`[KLING] Job started: ${data.jobId}`);
     return { ok: true, jobId: data.jobId };
   } catch (err) {
-    return { ok: false, error: `Hypereal video error: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, error: `Kling video error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -175,12 +173,12 @@ async function pollHyperealVideo(
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=seedance-1-5-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=kling-2-5-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
     if (!response.ok) {
-      return { status: "failed", error: `Hypereal poll failed (${response.status})` };
+      return { status: "failed", error: `Kling poll failed (${response.status})` };
     }
 
     const data = await response.json();
@@ -188,11 +186,11 @@ async function pollHyperealVideo(
       return { status: "completed", outputUrl: data.outputUrl };
     }
     if (data.status === "failed") {
-      return { status: "failed", error: data.error || "Hypereal video generation failed" };
+      return { status: "failed", error: data.error || "Kling video generation failed" };
     }
     return { status: "processing" };
   } catch (err) {
-    return { status: "failed", error: `Hypereal poll error: ${err instanceof Error ? err.message : String(err)}` };
+    return { status: "failed", error: `Kling poll error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -1244,11 +1242,10 @@ serve(async (req) => {
             await updateSingleScene(supabase, generationId, idx, () => updatedScene);
             return jsonResponse({ success: true, status: "processing", scene: updatedScene });
           }
-          console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
+          console.warn(`[VIDEO] Kling failed for scene ${scene.number}: ${hrResult.error}, no fallback available`);
         }
 
-        // Replicate fallback disabled — Hypereal-only for debugging
-        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed. Replicate fallback disabled for debugging.`);
+        throw new Error(`Video generation failed for scene ${scene.number}: Kling AI failed.`);
       }
 
       // Poll based on provider
@@ -1283,17 +1280,14 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: completedScene });
         }
         if (pollResult.status === "failed") {
-          console.error(`[VIDEO] Hypereal poll FAILED for scene ${scene.number}: ${pollResult.error}`);
-          // Do NOT clear predictionId and retry — that causes infinite job creation loops.
-          // Instead, mark this as a hard failure so the client stops polling.
+          console.error(`[VIDEO] Kling poll FAILED for scene ${scene.number}: ${pollResult.error}`);
           const failedScene = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" as const };
           await updateSingleScene(supabase, generationId, idx, () => failedScene);
-          throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error || "Hypereal returned failure"}`);
+          throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error || "Kling returned failure"}`);
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
 
-      // Replicate polling disabled — Hypereal only
       throw new Error(`Unknown video provider for scene ${scene.number}: ${provider}`);
     }
 
@@ -1446,17 +1440,16 @@ Make only the requested changes while keeping everything else consistent.`;
               break;
             }
             if (poll.status === "failed") {
-              console.warn(`[IMG-EDIT] Hypereal video failed: ${poll.error}`);
+              console.warn(`[IMG-EDIT] Kling video failed: ${poll.error}`);
               break;
             }
           }
-          if (videoUrl) console.log(`[IMG-EDIT] Hypereal video success for scene ${scene.number}`);
+          if (videoUrl) console.log(`[IMG-EDIT] Kling video success for scene ${scene.number}`);
         }
       }
 
-      // Replicate fallback — COMMENTED OUT for Hypereal debugging
       if (!videoUrl) {
-        throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+        throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}: Kling AI failed`);
       }
 
       if (!videoUrl) {
@@ -1514,17 +1507,16 @@ Make only the requested changes while keeping everything else consistent.`;
               break;
             }
             if (poll.status === "failed") {
-              console.warn(`[IMG-REGEN] Hypereal video failed: ${poll.error}`);
+              console.warn(`[IMG-REGEN] Kling video failed: ${poll.error}`);
               break;
             }
           }
-          if (videoUrl) console.log(`[IMG-REGEN] Hypereal video success for scene ${scene.number}`);
+          if (videoUrl) console.log(`[IMG-REGEN] Kling video success for scene ${scene.number}`);
         }
       }
 
-      // Replicate fallback — COMMENTED OUT for Hypereal debugging
       if (!videoUrl) {
-        throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+        throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}: Kling AI failed`);
       }
 
       if (!videoUrl) {
