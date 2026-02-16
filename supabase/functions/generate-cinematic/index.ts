@@ -124,10 +124,11 @@ async function startHyperealVideo(
   prompt: string,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  duration: number,
+  _duration: number,
   apiKey: string,
 ): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
-  console.log(`[HYPEREAL-VID] Starting veo-3-1-i2v generation...`);
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  console.log(`[HYPEREAL-VID] Starting seedance-1-5-i2v generation (aspect_ratio=${aspectRatio}, duration=10, audio=false)...`);
 
   try {
     const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
@@ -137,12 +138,14 @@ async function startHyperealVideo(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "veo-3-1-i2v",
+        model: "seedance-1-5-i2v",
         input: {
           prompt,
           image: imageUrl,
-          duration: Math.min(duration, 8),
-          aspect_ratio: format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9",
+          duration: 10,
+          resolution: "720p",
+          aspect_ratio: aspectRatio,
+          generate_audio: false,
         },
       }),
     });
@@ -172,7 +175,7 @@ async function pollHyperealVideo(
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=seedance-1-5-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
