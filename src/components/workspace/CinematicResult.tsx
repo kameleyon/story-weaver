@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -134,7 +135,7 @@ export function CinematicResult({
   const [isDownloadingClipsZip, setIsDownloadingClipsZip] = useState(false);
 
   // Client-side stitching export
-  const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
+  const { state: exportState, exportVideo, downloadVideo, shareVideo, reset: resetExport } = useVideoExport();
   const shouldAutoDownloadRef = useRef(false);
   const lastAutoDownloadedUrlRef = useRef<string | null>(null);
 
@@ -758,15 +759,88 @@ export function CinematicResult({
         </div>
       </div>
 
-      {/* Export Progress Bar */}
-      {(exportState.status === "rendering" || exportState.status === "encoding" || exportState.status === "loading") && (
-        <div className="max-w-3xl mx-auto space-y-2">
-          <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${exportState.progress}%` }} />
-          </div>
-          <p className="text-xs text-center text-muted-foreground">
-            {exportState.status === "loading" ? "Loading assets..." : exportState.status === "encoding" ? "Encoding final video..." : `Rendering: ${exportState.progress}%`}
-          </p>
+      {/* Export Progress Modal (same pattern as explainer) */}
+      {exportState.status !== "idle" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">
+                {exportState.status === "error"
+                  ? "Export Failed"
+                  : exportState.status === "complete"
+                  ? "Export Complete!"
+                  : "Exporting Video..."}
+              </h3>
+              {(exportState.status === "error" || exportState.status === "complete") && (
+                <Button type="button" variant="ghost" size="icon" onClick={resetExport}>
+                  <Square className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {exportState.status === "error" ? (
+              <>
+                <p className="text-sm text-muted-foreground">{exportState.error}</p>
+                <Button type="button" onClick={resetExport} variant="outline" className="w-full mt-4">
+                  Close
+                </Button>
+              </>
+            ) : exportState.status === "complete" ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Your video is ready.</p>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    className="w-full gap-2"
+                    onClick={() => {
+                      downloadVideo(exportState.videoUrl!, `${safeFileBase(title)}.mp4`);
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download to Files
+                  </Button>
+                  {typeof navigator !== "undefined" && navigator.canShare && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => {
+                        shareVideo(exportState.videoUrl!, `${safeFileBase(title)}.mp4`);
+                      }}
+                    >
+                      <Link2 className="h-4 w-4" />
+                      Share / Save to Photos
+                    </Button>
+                  )}
+                </div>
+                <Button type="button" variant="ghost" onClick={resetExport} className="w-full">
+                  Close
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>
+                      {exportState.status === "loading" && "Loading assets..."}
+                      {exportState.status === "rendering" && "Rendering video..."}
+                      {exportState.status === "encoding" && "Encoding..."}
+                    </span>
+                    <span>{exportState.progress}%</span>
+                  </div>
+                  <Progress value={exportState.progress} className="h-2" />
+                </div>
+
+                {exportState.warning && (
+                  <p className="text-xs text-muted-foreground">{exportState.warning}</p>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  Please keep this tab open. The video is being rendered in your browser.
+                </p>
+              </>
+            )}
+          </Card>
         </div>
       )}
 
