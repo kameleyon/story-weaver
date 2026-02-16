@@ -171,7 +171,7 @@ async function pollHyperealVideo(
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/api/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
