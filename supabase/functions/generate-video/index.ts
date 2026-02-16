@@ -4718,13 +4718,20 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       throw new Error("HYPEREAL_API_KEY not configured — cannot regenerate image");
     }
 
-    console.log(`[regenerate-image] Using Hypereal nano-banana-pro for T2I regeneration...`);
-    const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, true);
-    if (hrResult.ok) {
-      imageResult = hrResult;
-      console.log(`[regenerate-image] Hypereal T2I regeneration succeeded`);
-    } else {
-      throw new Error(`Hypereal image regeneration failed: ${hrResult.error}`);
+    console.log(`[regenerate-image] Using Hypereal nano-banana-pro for T2I regeneration (up to 4 attempts)...`);
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const hrResult = await generateImageWithHypereal(fullPrompt, format, hyperealKey, true);
+      if (hrResult.ok) {
+        imageResult = hrResult;
+        console.log(`[regenerate-image] Hypereal T2I regeneration succeeded on attempt ${attempt}`);
+        break;
+      }
+      console.warn(`[regenerate-image] Hypereal T2I attempt ${attempt}/4 failed: ${hrResult.error}`);
+      if (attempt === 4) {
+        throw new Error(`Hypereal image regeneration failed after 4 attempts: ${hrResult.error}`);
+      }
+      // Exponential backoff: 2s, 4s, 8s
+      await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
     }
     const regenDurationMs = Date.now() - regenStartTime;
 
@@ -4779,21 +4786,37 @@ IMPORTANT REQUIREMENTS:
       throw new Error("HYPEREAL_API_KEY not configured — cannot edit image");
     }
 
-    console.log(`[regenerate-image] Using Hypereal img2img for Apply Edit...`);
-    const hrEdit = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true, sourceImageUrl);
-    if (hrEdit.ok) {
-      imageResult = hrEdit;
-      console.log(`[regenerate-image] Hypereal img2img Apply Edit succeeded`);
-    } else {
-      // If img2img fails, try T2I with the edit prompt as fallback (still Hypereal only)
-      console.warn(`[regenerate-image] Hypereal img2img failed: ${hrEdit.error}, trying Hypereal T2I fallback...`);
-      const t2iFallback = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true);
-      if (t2iFallback.ok) {
-        imageResult = t2iFallback;
-        actualModel = "nano-banana-pro-t2i";
-        console.log(`[regenerate-image] Hypereal T2I fallback for Apply Edit succeeded`);
-      } else {
-        throw new Error(`Hypereal image editing failed (both img2img and T2I): ${t2iFallback.error}`);
+    console.log(`[regenerate-image] Using Hypereal img2img for Apply Edit (up to 3 attempts)...`);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const hrEdit = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true, sourceImageUrl);
+      if (hrEdit.ok) {
+        imageResult = hrEdit;
+        console.log(`[regenerate-image] Hypereal img2img Apply Edit succeeded on attempt ${attempt}`);
+        break;
+      }
+      console.warn(`[regenerate-image] Hypereal img2img attempt ${attempt}/3 failed: ${hrEdit.error}`);
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
+      }
+    }
+
+    // If img2img failed after all attempts, try T2I fallback (still Hypereal only)
+    if (!imageResult!.ok) {
+      console.warn(`[regenerate-image] Hypereal img2img failed all attempts, trying Hypereal T2I fallback...`);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const t2iFallback = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true);
+        if (t2iFallback.ok) {
+          imageResult = t2iFallback;
+          actualModel = "nano-banana-pro-t2i";
+          console.log(`[regenerate-image] Hypereal T2I fallback succeeded on attempt ${attempt}`);
+          break;
+        }
+        console.warn(`[regenerate-image] Hypereal T2I fallback attempt ${attempt}/3 failed: ${t2iFallback.error}`);
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
+        } else {
+          throw new Error(`Hypereal image editing failed after all retry attempts: ${t2iFallback.error}`);
+        }
       }
     }
 
