@@ -79,8 +79,11 @@ export function useCinematicRegeneration(
       if (!projectId || !generationId) return;
 
       const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+      const MAX_POLLS = 90; // ~3 minutes for video (90 * 2s), ~1.8min for audio (90 * 1.2s)
+      let polls = 0;
 
-      while (true) {
+      while (polls < MAX_POLLS) {
+        polls++;
         const result = await authenticatedFetch("generate-cinematic", {
           phase: type,
           projectId,
@@ -93,9 +96,11 @@ export function useCinematicRegeneration(
           scenes.map((s, i) => (i === idx ? { ...s, ...nextScene } : s))
         );
 
-        if (result.status === "complete") break;
+        if (result.status === "complete") return;
         await sleep(type === "audio" ? 1200 : 2000);
       }
+
+      throw new Error(`Timed out waiting for ${type} generation after ${MAX_POLLS} polls`);
     },
     [generationId, projectId, scenes, onScenesUpdate]
   );
