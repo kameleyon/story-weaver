@@ -4049,24 +4049,21 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           for (let attempt = 1; attempt <= 4; attempt++) {
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
 
-            // Try Hypereal first (primary), then Replicate (fallback)
+            // Always try Hypereal (primary provider) — Replicate fallback disabled for debugging
             const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
-            if (hyperealKey && attempt === 1) {
+            if (hyperealKey) {
               const hrResult = await generateImageWithHypereal(task.prompt, format, hyperealKey, useProModel);
               if (hrResult.ok) {
                 result = hrResult;
                 actualProvider = "hypereal";
-                actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
+                actualModel = useProModel ? "nano-banana-pro" : "nano-banana-pro";
               } else {
-                console.warn(`[IMG] Hypereal failed for task ${task.taskIndex}: ${hrResult.error}, falling back to Replicate`);
-                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
-                actualProvider = "replicate";
-                actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+                console.error(`[IMG] Hypereal failed for task ${task.taskIndex} (attempt ${attempt}): ${hrResult.error}`);
+                result = { ok: false, error: hrResult.error || "Hypereal image generation failed" };
               }
             } else {
-              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
-              actualProvider = "replicate";
-              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+              console.error(`[IMG] HYPEREAL_API_KEY not set — cannot generate images`);
+              result = { ok: false, error: "HYPEREAL_API_KEY not configured" };
             }
 
             if (result.ok) {
