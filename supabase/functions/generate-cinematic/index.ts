@@ -905,6 +905,34 @@ async function updateScenes(
     .eq("id", generationId);
 }
 
+// Atomic update for a single scene — re-reads latest scenes from DB to avoid race conditions
+// when multiple scenes are being updated in parallel (e.g. video batch polling)
+async function updateSingleScene(
+  supabase: ReturnType<typeof createClient>,
+  generationId: string,
+  sceneIndex: number,
+  updater: (scene: Scene) => Scene,
+): Promise<Scene[]> {
+  // Re-read latest scenes from DB to avoid overwriting parallel updates
+  const { data: gen } = await supabase
+    .from("generations")
+    .select("scenes")
+    .eq("id", generationId)
+    .maybeSingle();
+
+  const latestScenes = (gen?.scenes as Scene[]) || [];
+  if (latestScenes[sceneIndex]) {
+    latestScenes[sceneIndex] = updater(latestScenes[sceneIndex]);
+  }
+
+  await supabase
+    .from("generations")
+    .update({ scenes: latestScenes })
+    .eq("id", generationId);
+
+  return latestScenes;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1183,8 +1211,9 @@ serve(async (req) => {
         console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
-        scenes[idx] = scene;
-        await updateScenes(supabase, generationId, scenes);
+        await updateSingleScene(supabase, generationId, idx, (s) => ({
+          ...s, videoUrl: undefined, videoPredictionId: undefined,
+        }));
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
@@ -1213,9 +1242,9 @@ serve(async (req) => {
             hyperealApiKey,
           );
           if (hrResult.ok) {
-            scenes[idx] = { ...scene, videoPredictionId: hrResult.jobId, videoProvider: "hypereal" };
-            await updateScenes(supabase, generationId, scenes);
-            return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+            const updatedScene = { ...scene, videoPredictionId: hrResult.jobId, videoProvider: "hypereal" as const };
+            await updateSingleScene(supabase, generationId, idx, () => updatedScene);
+            return jsonResponse({ success: true, status: "processing", scene: updatedScene });
           }
           console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
         }
@@ -1250,16 +1279,17 @@ serve(async (req) => {
           }
 
           const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-          scenes[idx] = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+          const completedScene = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
+          // Use atomic update to avoid race condition with parallel batch polling
+          await updateSingleScene(supabase, generationId, idx, () => completedScene);
+          return jsonResponse({ success: true, status: "complete", scene: completedScene });
         }
         if (pollResult.status === "failed") {
           console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}`);
           // Clear prediction so next poll attempt starts a fresh Hypereal job
-          scenes[idx] = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+          const failedScene = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" as const };
+          await updateSingleScene(supabase, generationId, idx, () => failedScene);
+          return jsonResponse({ success: true, status: "processing", scene: failedScene });
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
@@ -1510,8 +1540,16 @@ Make only the requested changes while keeping everything else consistent.`;
 
     // =============== PHASE 5: FINALIZE ===============
     if (phase === "finalize") {
+      // Re-read latest scenes from DB to capture all atomic video updates
+      const { data: latestGen } = await supabase
+        .from("generations")
+        .select("scenes")
+        .eq("id", generationId)
+        .maybeSingle();
+      const finalScenes = (latestGen?.scenes as Scene[]) || scenes;
+
       // Collect all video URLs from scenes
-      const videoUrls = scenes.filter((s) => s.videoUrl).map((s) => s.videoUrl as string);
+      const videoUrls = finalScenes.filter((s) => s.videoUrl).map((s) => s.videoUrl as string);
       // Keep first as legacy field, but also return all clips
       const finalVideoUrl = videoUrls[0] || "";
 
@@ -1522,7 +1560,7 @@ Make only the requested changes while keeping everything else consistent.`;
           status: "complete",
           progress: 100,
           completed_at: new Date().toISOString(),
-          scenes,
+          scenes: finalScenes,
           video_url: finalVideoUrl,
         })
         .eq("id", generationId);
@@ -1541,7 +1579,7 @@ Make only the requested changes while keeping everything else consistent.`;
         projectId: generation.project_id,
         generationId,
         title: project?.title || "Untitled Cinematic",
-        scenes,
+        scenes: finalScenes,
         finalVideoUrl,
         allVideoUrls: videoUrls, // All generated clips
       });
