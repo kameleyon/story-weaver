@@ -121,6 +121,9 @@ const normalizeScenes = (raw: unknown): Scene[] | undefined => {
     imageUrl: s?.imageUrl ?? s?.image_url,
     imageUrls: Array.isArray(s?.imageUrls) ? s.imageUrls : undefined,
     audioUrl: s?.audioUrl ?? s?.audio_url,
+    videoUrl: s?.videoUrl ?? s?.video_url,
+    videoPredictionId: s?.videoPredictionId,
+    videoProvider: s?.videoProvider,
     title: s?.title,
     subtitle: s?.subtitle,
   }));
