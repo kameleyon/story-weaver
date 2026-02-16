@@ -4732,15 +4732,15 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
     }
 
     // Replicate fallback if Hypereal failed or not configured
-    if (!imageResult.ok && replicateApiKey) {
+    if (!imageResult?.ok && replicateApiKey) {
       console.warn(`[regenerate-image] Hypereal failed, falling back to Replicate nano-banana-pro...`);
       actualProvider = "replicate";
       actualModel = "nano-banana-pro";
       imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, true);
     }
 
-    if (!imageResult.ok) {
-      throw new Error(`Image regeneration failed on all providers: ${imageResult.error}`);
+    if (!imageResult?.ok) {
+      throw new Error(`Image regeneration failed on all providers: ${imageResult?.error || "No provider available"}`);
     }
     const regenDurationMs = Date.now() - regenStartTime;
 
