@@ -4812,7 +4812,7 @@ IMPORTANT REQUIREMENTS:
     }
 
     // If img2img failed, try Hypereal T2I fallback
-    if (!imageResult!.ok) {
+    if (!imageResult?.ok) {
       console.warn(`[regenerate-image] Hypereal img2img failed all attempts, trying Hypereal T2I fallback...`);
       const t2iFallback = await generateImageWithHypereal(fullEditPrompt, format, hyperealKey, true);
       if (t2iFallback.ok) {
@@ -4823,15 +4823,15 @@ IMPORTANT REQUIREMENTS:
     }
 
     // If all Hypereal attempts failed, fall back to Replicate
-    if (!imageResult!.ok && replicateApiKey) {
+    if (!imageResult?.ok && replicateApiKey) {
       console.warn(`[regenerate-image] All Hypereal attempts failed, falling back to Replicate nano-banana-pro...`);
       actualProvider = "replicate";
       actualModel = "nano-banana-pro";
       imageResult = await generateImageWithReplicate(fullEditPrompt, replicateApiKey, format, true);
     }
 
-    if (!imageResult!.ok) {
-      throw new Error(`Image editing failed on all providers: ${imageResult!.error}`);
+    if (!imageResult?.ok) {
+      throw new Error(`Image editing failed on all providers: ${imageResult?.error || "No provider available"}`);
     }
 
     const editDurationMs = Date.now() - editStartTime;
@@ -4917,8 +4917,8 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
     }
   }
 
-  if (!imageResult.ok) {
-    throw new Error(imageResult.error || "Image regeneration failed");
+  if (!imageResult?.ok) {
+    throw new Error(imageResult?.error || "Image regeneration failed");
   }
 
   // Upload to storage (use "audio" bucket which is already configured for media storage)
