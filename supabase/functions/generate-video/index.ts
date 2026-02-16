@@ -4751,10 +4751,10 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       generationId,
       provider: actualProvider as any,
       model: actualModel,
-      status: imageResult.ok ? "success" : "error",
+      status: imageResult?.ok ? "success" : "error",
       totalDurationMs: regenDurationMs,
-      cost: imageResult.ok ? replicatePricing : 0,
-      errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+      cost: imageResult?.ok ? replicatePricing : 0,
+      errorMessage: imageResult?.ok ? undefined : (imageResult as any)?.error || "Unknown error",
     });
   } else {
     // Apply Edit - use Hypereal img2img as PRIMARY, Replicate as fallback
@@ -4843,15 +4843,15 @@ IMPORTANT REQUIREMENTS:
       generationId,
       provider: actualProvider as any,
       model: actualModel,
-      status: imageResult.ok ? "success" : "error",
+      status: imageResult?.ok ? "success" : "error",
       totalDurationMs: editDurationMs,
-      cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-      errorMessage: imageResult.ok ? undefined : (imageResult as any).error || "Unknown error",
+      cost: imageResult?.ok ? PRICING.imageNanoBananaPro : 0,
+      errorMessage: imageResult?.ok ? undefined : (imageResult as any)?.error || "Unknown error",
     });
 
     // If both Hypereal and Replicate img2img failed, fall back to T2I
-    if (!imageResult.ok) {
-      const editError = (imageResult as any).error || "Unknown edit error";
+    if (!imageResult?.ok) {
+      const editError = (imageResult as any)?.error || "Unknown edit error";
       console.log(`[regenerate-image] Both img2img providers failed (${editError}), falling back to text-to-image generation`);
 
       await logSystemEvent({
@@ -4909,10 +4909,10 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
         generationId,
         provider: fallbackProvider as any,
         model: fallbackModel,
-        status: imageResult.ok ? "success" : "error",
+        status: imageResult?.ok ? "success" : "error",
         totalDurationMs: fallbackDurationMs,
-        cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
-        errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
+        cost: imageResult?.ok ? PRICING.imageNanoBananaPro : 0,
+        errorMessage: imageResult?.ok ? undefined : (imageResult as any)?.error || "Unknown error",
       });
     }
   }
