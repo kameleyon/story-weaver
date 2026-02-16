@@ -1574,7 +1574,7 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image (Hypereal first, Replicate fallback)
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+      // hyperealApiKey already declared above
       let videoUrl: string | null = null;
 
       // Try Hypereal first
