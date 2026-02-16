@@ -1204,25 +1204,14 @@ serve(async (req) => {
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
-      // If sceneIndex is provided as a single-scene call, handle regeneration/recovery
-      const isSingleSceneCall = typeof body.sceneIndex === "number";
-      if (isSingleSceneCall) {
-        if (scene.videoUrl) {
-          // Explicit regeneration: clear existing video
-          console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
-          scene.videoUrl = undefined;
-          scene.videoPredictionId = undefined;
-          await updateSingleScene(supabase, generationId, idx, (s) => ({
-            ...s, videoUrl: undefined, videoPredictionId: undefined,
-          }));
-        } else if (scene.videoPredictionId && !scene.videoUrl) {
-          // Recovery: stale prediction ID from a race condition — clear it to start fresh
-          console.log(`[VIDEO] Scene ${scene.number}: Clearing stale prediction ID for recovery`);
-          scene.videoPredictionId = undefined;
-          await updateSingleScene(supabase, generationId, idx, (s) => ({
-            ...s, videoPredictionId: undefined,
-          }));
-        }
+      // If user explicitly triggers regeneration on a scene that already has a video, clear it
+      if (typeof body.sceneIndex === "number" && scene.videoUrl) {
+        console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
+        scene.videoUrl = undefined;
+        scene.videoPredictionId = undefined;
+        await updateSingleScene(supabase, generationId, idx, (s) => ({
+          ...s, videoUrl: undefined, videoPredictionId: undefined,
+        }));
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
