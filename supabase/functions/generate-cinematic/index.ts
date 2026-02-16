@@ -67,7 +67,7 @@ const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 const NANO_BANANA_MODEL = "google/nano-banana";
 
 // ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://api.hypereal.tech";
+const HYPEREAL_API_BASE = "https://hypereal.tech";
 
 async function generateImageWithHypereal(
   prompt: string,
@@ -77,10 +77,10 @@ async function generateImageWithHypereal(
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
   const mode = sourceImageUrl ? "img2img" : "t2i";
-  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro ${mode} generation...`);
+  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i ${mode} generation...`);
 
   try {
-    const model = sourceImageUrl ? "nano-banana-pro-t2i" : "nano-banana-pro-t2i";
+    const model = "nano-banana-pro-t2i"; // Always use Pro
     const body: Record<string, unknown> = {
       model,
       prompt,
@@ -93,7 +93,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/images/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -130,7 +130,7 @@ async function startHyperealVideo(
   console.log(`[HYPEREAL-VID] Starting veo-3-1-i2v generation...`);
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/videos/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
