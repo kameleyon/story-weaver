@@ -73,39 +73,49 @@ async function generateImageWithHypereal(
   prompt: string,
   format: "landscape" | "portrait" | "square",
   apiKey: string,
+  sourceImageUrl?: string, // Optional: provide for img2img / Apply Edit
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i generation...`);
+  const mode = sourceImageUrl ? "img2img" : "t2i";
+  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro ${mode} generation...`);
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
+    const body: Record<string, unknown> = {
+      model: "nano-banana-pro",
+      prompt,
+      resolution: "1K",
+      aspect_ratio: aspectRatio,
+    };
+
+    // If a source image is provided, this becomes an img2img / edit request
+    if (sourceImageUrl) {
+      body.image = sourceImageUrl;
+    }
+
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/generations/image`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "nano-banana-pro-t2i",
-        prompt,
-        aspect_ratio: aspectRatio,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
-      return { ok: false, error: `Hypereal image failed (${response.status}): ${errText.substring(0, 200)}` };
+      return { ok: false, error: `Hypereal ${mode} failed (${response.status}): ${errText.substring(0, 200)}` };
     }
 
     const data = await response.json();
-    const imageUrl = data?.data?.[0]?.url;
+    const imageUrl = data?.data?.[0]?.url || data?.url || (data?.output && Array.isArray(data.output) ? data.output[0] : data?.output);
     if (!imageUrl) {
-      return { ok: false, error: "No image URL in Hypereal response" };
+      return { ok: false, error: `No image URL in Hypereal ${mode} response` };
     }
 
-    console.log(`[HYPEREAL-IMG] Success: ${imageUrl.substring(0, 80)}...`);
-    return { ok: true, url: imageUrl };
+    console.log(`[HYPEREAL-IMG] ${mode} success: ${(imageUrl as string).substring(0, 80)}...`);
+    return { ok: true, url: imageUrl as string };
   } catch (err) {
-    return { ok: false, error: `Hypereal image error: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, error: `Hypereal ${mode} error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -1457,10 +1467,7 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
       const style = project.style || "realistic";
 
-      // Use OpenRouter directly for image editing
-      const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
-      if (!openrouterKey) throw new Error("OPENROUTER_API_KEY not configured");
-
+      // Build edit prompt
       const fullStylePrompt = getStylePrompt(style);
       const editPrompt = `Edit this image: ${modification}
 
@@ -1469,62 +1476,100 @@ Apply the following style: ${fullStylePrompt}
 
 Make only the requested changes while keeping everything else consistent.`;
 
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via OpenRouter`);
+      let newImageUrl: string | null = null;
 
-      const editResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openrouterKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-image-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: editPrompt },
-                { type: "image_url", image_url: { url: scene.imageUrl } },
-              ],
-            },
-          ],
-          modalities: ["image", "text"],
-        }),
-      });
-
-      if (!editResponse.ok) {
-        const errText = await editResponse.text();
-        console.error(`[IMG-EDIT] OpenRouter failed: ${errText}`);
-        throw new Error("Image editing failed");
-      }
-
-      const editData = await editResponse.json();
-      const editedImageBase64 = editData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      
-      if (!editedImageBase64) {
-        throw new Error("No edited image returned from OpenRouter");
-      }
-
-      // Upload base64 image to storage
-      const base64Data = editedImageBase64.replace(/^data:image\/\w+;base64,/, "");
-      const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-      
-      const fileName = `cinematic-scene-edited-${Date.now()}-${scene.number}.png`;
-      const upload = await supabase.storage
-        .from("scene-images")
-        .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
-
-      if (upload.error) {
-        try {
-          await supabase.storage.createBucket("scene-images", { public: true });
-          await supabase.storage.from("scene-images").upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
-        } catch (e) {
-          throw new Error("Failed to upload edited image");
+      // === 1. Try Hypereal img2img first (PRIMARY) ===
+      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+      if (hyperealApiKey && scene.imageUrl) {
+        console.log(`[IMG-EDIT] Scene ${scene.number}: Trying Hypereal img2img...`);
+        const hrEdit = await generateImageWithHypereal(editPrompt, format, hyperealApiKey, scene.imageUrl);
+        if (hrEdit.ok) {
+          // Hypereal returns a URL directly, download and upload to our storage
+          const dlRes = await fetch(hrEdit.url);
+          if (dlRes.ok) {
+            const imageBuffer = new Uint8Array(await dlRes.arrayBuffer());
+            const fileName = `cinematic-scene-edited-${Date.now()}-${scene.number}.png`;
+            const upload = await supabase.storage
+              .from("scene-images")
+              .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+            if (upload.error) {
+              try {
+                await supabase.storage.createBucket("scene-images", { public: true });
+                await supabase.storage.from("scene-images").upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+              } catch (_e) { /* ignore */ }
+            }
+            const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+            newImageUrl = urlData.publicUrl;
+            console.log(`[IMG-EDIT] Hypereal img2img success for scene ${scene.number}`);
+          }
+        } else {
+          console.warn(`[IMG-EDIT] Hypereal img2img failed: ${hrEdit.error}, falling back to OpenRouter`);
         }
       }
 
-      const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
-      const newImageUrl = urlData.publicUrl;
+      // === 2. Fallback to OpenRouter Gemini img2img ===
+      if (!newImageUrl) {
+        const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
+        if (!openrouterKey) throw new Error("OPENROUTER_API_KEY not configured");
+
+        console.log(`[IMG-EDIT] Scene ${scene.number}: Falling back to OpenRouter Gemini img2img`);
+
+        const editResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openrouterKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3-pro-image-preview",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: editPrompt },
+                  { type: "image_url", image_url: { url: scene.imageUrl } },
+                ],
+              },
+            ],
+            modalities: ["image", "text"],
+          }),
+        });
+
+        if (!editResponse.ok) {
+          const errText = await editResponse.text();
+          console.error(`[IMG-EDIT] OpenRouter failed: ${errText}`);
+          throw new Error("Image editing failed on all providers");
+        }
+
+        const editData = await editResponse.json();
+        const editedImageBase64 = editData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+        
+        if (!editedImageBase64) {
+          throw new Error("No edited image returned from OpenRouter");
+        }
+
+        // Upload base64 image to storage
+        const base64Data = editedImageBase64.replace(/^data:image\/\w+;base64,/, "");
+        const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+        
+        const fileName = `cinematic-scene-edited-${Date.now()}-${scene.number}.png`;
+        const upload = await supabase.storage
+          .from("scene-images")
+          .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+
+        if (upload.error) {
+          try {
+            await supabase.storage.createBucket("scene-images", { public: true });
+            await supabase.storage.from("scene-images").upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+          } catch (e) {
+            throw new Error("Failed to upload edited image");
+          }
+        }
+
+        const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+        newImageUrl = urlData.publicUrl;
+      }
+
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
       // Now regenerate video with the new image (Hypereal first, Replicate fallback)
