@@ -2030,7 +2030,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -2072,7 +2072,7 @@ async function generateCharacterReferenceWithHypereal(
 Full body portrait, front view, neutral pose, clean background, high detail, professional character design reference.`;
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
