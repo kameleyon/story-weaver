@@ -2003,7 +2003,7 @@ async function generateSceneAudio(
 }
 
 // ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://hypereal.tech";
+const HYPEREAL_API_BASE = "https://api.hypereal.tech";
 
 async function generateImageWithHypereal(
   prompt: string,
