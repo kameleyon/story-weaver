@@ -499,7 +499,7 @@ async function generateGeminiTTSWithKeyRotation(
   }
 
   console.error(`[TTS] Scene ${sceneNumber}: All ${googleApiKeys.length} Gemini keys exhausted after ${KEY_ROTATION_ROUNDS} rounds`);
-  throw new Error("Audio generation failed — all TTS API keys exhausted. Please try again later.");
+  return { url: null, error: "All Gemini TTS keys exhausted" };
 }
 
 // ============= ELEVENLABS TTS (Custom/Cloned Voices) =============
@@ -781,12 +781,19 @@ export async function generateSceneAudio(
   if (isHC && customVoiceId && elevenLabsApiKey && googleApiKeys.length > 0) {
     console.log(`[TTS] Scene ${scene.number}: HC + Custom Voice workflow (${googleApiKeys.length} keys)`);
 
-    const geminiResult = await generateGeminiTTSWithKeyRotation(
-      voiceoverText, scene.number, googleApiKeys, supabase, storage,
-    );
+    let geminiResult: AudioResult;
+    try {
+      geminiResult = await generateGeminiTTSWithKeyRotation(
+        voiceoverText, scene.number, googleApiKeys, supabase, storage,
+      );
+    } catch {
+      geminiResult = { url: null, error: "Gemini TTS failed" };
+    }
 
     if (!geminiResult.url) {
-      return geminiResult;
+      // Fallback: use Chatterbox instead of failing entirely
+      console.warn(`[TTS] Scene ${scene.number}: HC + Custom Voice Gemini failed, falling back to Chatterbox`);
+      return await generateChatterboxChunked(scene, scene.number, replicateApiKey, supabase, storage, voiceGender);
     }
 
     // Transform with ElevenLabs STS
@@ -818,10 +825,20 @@ export async function generateSceneAudio(
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
   if (isHC && googleApiKeys.length > 0) {
     console.log(`[TTS] Scene ${scene.number}: HC standard voice via Gemini TTS (${googleApiKeys.length} keys)`);
-    const result = await generateGeminiTTSWithKeyRotation(
-      voiceoverText, scene.number, googleApiKeys, supabase, storage,
-    );
-    return { ...result, provider: result.provider || "Gemini TTS" };
+    let result: AudioResult;
+    try {
+      result = await generateGeminiTTSWithKeyRotation(
+        voiceoverText, scene.number, googleApiKeys, supabase, storage,
+      );
+    } catch {
+      result = { url: null, error: "Gemini TTS failed" };
+    }
+    if (result.url) {
+      return { ...result, provider: result.provider || "Gemini TTS" };
+    }
+    // Fallback to Chatterbox when all Gemini keys are exhausted
+    console.warn(`[TTS] Scene ${scene.number}: HC Gemini exhausted, falling back to Chatterbox`);
+    return await generateChatterboxChunked(scene, scene.number, replicateApiKey, supabase, storage, voiceGender);
   }
 
   // ========== CASE 4: Default (English/other) ==========
