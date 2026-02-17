@@ -162,9 +162,10 @@ ANIMATION RULES (CRITICAL):
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
         const status = response.status;
-        if ((status === 429 || status >= 500) && attempt < MAX_RETRIES) {
-          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-          console.warn(`[GROK-VIDEO] Rate limited (${status}) attempt ${attempt}, retrying in ${delayMs}ms`);
+        const isRetryable = status === 429 || status >= 500 || status === 422 || errText.toLowerCase().includes("queue is full");
+        if (isRetryable && attempt < MAX_RETRIES) {
+          const delayMs = 3000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 2000);
+          console.warn(`[GROK-VIDEO] Retryable error (${status}) attempt ${attempt}/${MAX_RETRIES}, retrying in ${delayMs}ms: ${errText.substring(0, 100)}`);
           await sleep(delayMs);
           continue;
         }
@@ -180,9 +181,11 @@ ANIMATION RULES (CRITICAL):
       console.log(`[GROK-VIDEO] Prediction started: ${data.id}`);
       return data.id;
     } catch (err: any) {
-      if (attempt < MAX_RETRIES && (err?.message?.includes("429") || err?.message?.includes("500"))) {
-        const delayMs = 2000 * Math.pow(2, attempt - 1);
-        console.warn(`[GROK-VIDEO] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+      const msg = err?.message || String(err);
+      const isRetryable = msg.includes("429") || msg.includes("500") || msg.toLowerCase().includes("queue is full") || msg.includes("422");
+      if (attempt < MAX_RETRIES && isRetryable) {
+        const delayMs = 3000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 2000);
+        console.warn(`[GROK-VIDEO] Retryable error on attempt ${attempt}/${MAX_RETRIES}, retrying in ${delayMs}ms: ${msg.substring(0, 100)}`);
         await sleep(delayMs);
         continue;
       }
@@ -1155,10 +1158,21 @@ serve(async (req) => {
       const pollResult = await pollGrokVideo(scene.videoPredictionId, replicateToken);
       
       if (pollResult.status === "failed") {
-        // Clear prediction and let client retry
+        const errorMsg = pollResult.error || "Unknown video error";
+        const isQueueFull = errorMsg.toLowerCase().includes("queue is full") || errorMsg.toLowerCase().includes("queue_full");
+        
+        if (isQueueFull) {
+          // Queue full — clear prediction so client retries with a fresh start
+          console.warn(`[VIDEO] Scene ${scene.number}: Queue is full, clearing prediction for retry`);
+          const retryScene = { ...scene, videoPredictionId: undefined };
+          await updateSingleScene(supabase, generationId, idx, () => retryScene);
+          return jsonResponse({ success: true, status: "processing", scene: retryScene });
+        }
+        
+        // Non-retryable failure — clear prediction and throw
         const failedScene = { ...scene, videoPredictionId: undefined };
         await updateSingleScene(supabase, generationId, idx, () => failedScene);
-        throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error}`);
+        throw new Error(`Video generation failed for scene ${scene.number}: ${errorMsg}`);
       }
       
       if (pollResult.status === "completed") {
