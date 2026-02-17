@@ -181,8 +181,9 @@ ANIMATION RULES (CRITICAL):
         throw new Error(`No jobId in Hailuo response: ${JSON.stringify(data).substring(0, 200)}`);
       }
 
-      console.log(`[HAILUO] Job started: ${data.jobId}`);
-      return data.jobId as string;
+      const pollUrl = data.pollUrl || `${HYPEREAL_API_BASE}/v1/jobs/${data.jobId}?model=hailuo-02-i2v&type=video`;
+      console.log(`[HAILUO] Job started: ${data.jobId}, pollUrl: ${pollUrl.substring(0, 120)}`);
+      return pollUrl as string;
     } catch (err: any) {
       if (attempt < MAX_RETRIES && (err?.message?.includes("429") || err?.message?.includes("500"))) {
         const delayMs = 2000 * Math.pow(2, attempt - 1);
@@ -197,14 +198,13 @@ ANIMATION RULES (CRITICAL):
 }
 
 async function pollHailuo(
-  jobId: string,
+  pollUrl: string,
   apiKey: string,
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
-    const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=hailuo-02-i2v&type=video`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    );
+    const response = await fetch(pollUrl, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
 
     if (!response.ok) {
       return { status: "failed", error: `Hailuo poll failed (${response.status})` };
