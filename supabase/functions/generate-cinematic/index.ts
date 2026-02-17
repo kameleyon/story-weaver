@@ -786,7 +786,7 @@ ANIMATION RULES (CRITICAL):
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if ((errMsg.includes("429") || errMsg.includes("500")) && attempt < MAX_GROK_RETRIES) {
+      if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) && attempt < MAX_GROK_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[Grok] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
@@ -818,8 +818,9 @@ async function resolveGrok(
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
       }
-      if (errorMsg.includes("rate limit") || errorMsg.includes("429")) {
-        throw new Error("Video API rate limited. Please wait a moment and try again.");
+      if (errorMsg.includes("rate limit") || errorMsg.includes("429") || errorMsg.includes("Queue is full")) {
+        console.warn(`[Grok] Scene ${sceneNumber}: Queue full / rate limited (prediction ${predictionId}), will retry with new prediction`);
+        return GROK_TIMEOUT_RETRY;
       }
       
       // Detect timeout errors — these are retryable
