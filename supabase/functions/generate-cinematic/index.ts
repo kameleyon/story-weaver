@@ -80,9 +80,8 @@ async function generateImageWithHypereal(
   console.log(`[HYPEREAL-IMG] Starting nano-banana-pro ${mode} generation...`);
 
   try {
-    const model = sourceImageUrl ? "nano-banana-pro-t2i" : "nano-banana-pro-t2i";
     const body: Record<string, unknown> = {
-      model,
+      model: "nano-banana-pro",
       prompt,
       resolution: "1K",
       aspect_ratio: aspectRatio,
@@ -93,7 +92,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/generations/image`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -142,8 +141,6 @@ async function startHyperealVideo(
           prompt,
           image: imageUrl,
           duration: Math.min(duration, 8),
-          aspect_ratio: format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9",
-          generate_audio: false,
         },
       }),
     });
@@ -792,9 +789,116 @@ QUALITY REQUIREMENTS:
     }
   }
 
-  // 2. Replicate fallback — COMMENTED OUT for Hypereal debugging
-  // If Hypereal failed above, throw immediately so we can see the actual error
-  throw new Error(`Image generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+  // 2. Replicate fallback
+  const MAX_IMG_RETRIES = 4;
+
+  for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
+  try {
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/${NANO_BANANA_MODEL}/predictions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateToken}`,
+        "Content-Type": "application/json",
+        Prefer: "wait",
+      },
+      body: JSON.stringify({
+        input: {
+          prompt: imagePrompt,
+          aspect_ratio: aspectRatio,
+          output_format: "png",
+        },
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errText = await createResponse.text();
+      console.error(`[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`);
+
+      // Retry on 429 rate limit or 5xx server errors
+      if ((createResponse.status === 429 || createResponse.status >= 500) && attempt < MAX_IMG_RETRIES) {
+        // Parse retry_after from response if available
+        let retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        try {
+          const errJson = JSON.parse(errText);
+          if (errJson.retry_after) retryAfterMs = Math.max(retryAfterMs, errJson.retry_after * 1000);
+        } catch {}
+        console.warn(`[IMG] Scene ${scene.number}: Rate limited (${createResponse.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`);
+        await sleep(retryAfterMs);
+        continue;
+      }
+
+      throw new Error(`Replicate nano-banana failed: ${createResponse.status}`);
+    }
+
+    let prediction = await createResponse.json();
+    console.log(`[IMG] Nano-banana prediction started: ${prediction.id}, status: ${prediction.status}`);
+
+    // Poll for completion if not finished
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await sleep(2000);
+      const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${replicateToken}` },
+      });
+      prediction = await pollResponse.json();
+    }
+
+    if (prediction.status === "failed") {
+      console.error(`[IMG] Nano-banana prediction failed: ${prediction.error}`);
+      throw new Error(prediction.error || "Image generation failed");
+    }
+
+    // Get image URL from output
+    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    const imageUrl = typeof first === "string" ? first : first?.url || null;
+
+    if (!imageUrl) {
+      throw new Error("No image URL returned from Replicate");
+    }
+
+    console.log(`[IMG] Nano-banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
+
+    // Download and upload to Supabase storage
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) throw new Error("Failed to download image");
+
+    const imageBuffer = new Uint8Array(await imgResponse.arrayBuffer());
+    console.log(`[IMG] Scene ${scene.number} image downloaded: ${imageBuffer.length} bytes`);
+
+    const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
+    const upload = await supabase.storage
+      .from("scene-images")
+      .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+
+    if (upload.error) {
+      try {
+        await supabase.storage.createBucket("scene-images", { public: true });
+        const retry = await supabase.storage
+          .from("scene-images")
+          .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+        if (retry.error) throw retry.error;
+      } catch (e) {
+        console.error("Image upload error:", upload.error);
+        throw new Error("Failed to upload scene image");
+      }
+    }
+
+    const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+    console.log(`[IMG] Scene ${scene.number} image uploaded: ${urlData.publicUrl}`);
+    return urlData.publicUrl;
+  } catch (err) {
+    // If it's a rate limit or server error and we have retries left, the loop continue above handles it
+    // For other errors, throw immediately
+    if (attempt >= MAX_IMG_RETRIES) {
+      console.error(`[IMG] Scene ${scene.number} error after ${MAX_IMG_RETRIES} attempts:`, err);
+      throw err;
+    }
+    const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+    console.warn(`[IMG] Scene ${scene.number}: Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+    await sleep(delayMs);
+  }
+  } // end retry loop
+
+  throw new Error(`Image generation failed for scene ${scene.number} after ${MAX_IMG_RETRIES} retries`);
 }
 
 // ============================================
@@ -1260,9 +1364,8 @@ serve(async (req) => {
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
 
       if (!scene.videoPredictionId) {
-        // Only try Hypereal if we haven't already failed over to Replicate for this scene
-        const preferredProvider = scene.videoProvider || "hypereal";
-        if (hyperealApiKey && preferredProvider !== "replicate") {
+        // Try Hypereal first, then Replicate
+        if (hyperealApiKey) {
           const hrResult = await startHyperealVideo(
             `${scene.visualPrompt}\n\nANIMATION RULES: NO lip-sync. Facial expressions allowed. Body movement allowed. Camera motion preferred.`,
             scene.imageUrl!,
@@ -1278,8 +1381,10 @@ serve(async (req) => {
           console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
         }
 
-        // COMMENTED OUT for Hypereal debugging — no Replicate fallback
-        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+        const predictionId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
+        scenes[idx] = { ...scene, videoPredictionId: predictionId, videoProvider: "replicate" };
+        await updateScenes(supabase, generationId, scenes);
+        return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
       // Poll based on provider
@@ -1313,14 +1418,33 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
         }
         if (pollResult.status === "failed") {
-          // COMMENTED OUT Replicate fallback for debugging — throw instead
-          throw new Error(`Hypereal video failed for scene ${scene.number}: ${pollResult.error}. Replicate fallback disabled for debugging.`);
+          console.warn(`[VIDEO] Hypereal video failed for scene ${scene.number}: ${pollResult.error}, clearing for Replicate retry`);
+          scenes[idx] = { ...scene, videoPredictionId: undefined, videoProvider: "replicate" };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
 
-      // Replicate polling — COMMENTED OUT for Hypereal debugging
-      throw new Error(`Video polling failed for scene ${scene.number}: Replicate polling is disabled for debugging. Provider was: ${provider}`);
+      // Replicate polling
+      const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      
+      // If the prediction timed out, clear it so next poll starts a fresh prediction
+      if (videoUrl === GROK_TIMEOUT_RETRY) {
+        console.log(`[VIDEO] Scene ${scene.number}: Timeout detected, clearing prediction for auto-retry`);
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined };
+        await updateScenes(supabase, generationId, scenes);
+        return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+      }
+      
+      if (!videoUrl) {
+        return jsonResponse({ success: true, status: "processing", scene });
+      }
+
+      scenes[idx] = { ...scene, videoUrl };
+      await updateScenes(supabase, generationId, scenes);
+
+      return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
     }
 
     // =============== IMAGE-EDIT PHASE (Apply modification then regenerate video) ===============
@@ -1450,7 +1574,7 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image (Hypereal first, Replicate fallback)
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      // hyperealApiKey already declared above
+      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       let videoUrl: string | null = null;
 
       // Try Hypereal first
@@ -1480,9 +1604,15 @@ Make only the requested changes while keeping everything else consistent.`;
         }
       }
 
-      // Replicate fallback — COMMENTED OUT for Hypereal debugging
+      // Replicate fallback
       if (!videoUrl) {
-        throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+        console.log(`[IMG-EDIT] Falling back to Replicate Grok for scene ${scene.number}`);
+        const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+        for (let i = 0; i < 60; i++) {
+          await sleep(3000);
+          videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+          if (videoUrl) break;
+        }
       }
 
       if (!videoUrl) {
@@ -1548,9 +1678,15 @@ Make only the requested changes while keeping everything else consistent.`;
         }
       }
 
-      // Replicate fallback — COMMENTED OUT for Hypereal debugging
+      // Replicate fallback
       if (!videoUrl) {
-        throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+        console.log(`[IMG-REGEN] Falling back to Replicate Grok for scene ${scene.number}`);
+        const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+        for (let i = 0; i < 60; i++) {
+          await sleep(3000);
+          videoUrl = await resolveGrok(predictionId, replicateToken, supabase, scene.number);
+          if (videoUrl) break;
+        }
       }
 
       if (!videoUrl) {

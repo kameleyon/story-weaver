@@ -2013,7 +2013,7 @@ async function generateImageWithHypereal(
   sourceImageUrl?: string, // Optional: provide for img2img / Apply Edit
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const model = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
+  const model = useProModel ? "nano-banana-pro" : "nano-banana-pro";
   const mode = sourceImageUrl ? "img2img" : "t2i";
   console.log(`[HYPEREAL-IMG] Starting ${model} ${mode} generation...`);
 
@@ -2030,7 +2030,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/generations/image`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -2072,7 +2072,7 @@ async function generateCharacterReferenceWithHypereal(
 Full body portrait, front view, neutral pose, clean background, high detail, professional character design reference.`;
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -4049,21 +4049,24 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           for (let attempt = 1; attempt <= 4; attempt++) {
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
 
-            // Always try Hypereal (primary provider) — Replicate fallback disabled for debugging
+            // Try Hypereal first (primary), then Replicate (fallback)
             const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
-            if (hyperealKey) {
+            if (hyperealKey && attempt === 1) {
               const hrResult = await generateImageWithHypereal(task.prompt, format, hyperealKey, useProModel);
               if (hrResult.ok) {
                 result = hrResult;
                 actualProvider = "hypereal";
-                actualModel = useProModel ? "nano-banana-pro" : "nano-banana-pro";
+                actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
               } else {
-                console.error(`[IMG] Hypereal failed for task ${task.taskIndex} (attempt ${attempt}): ${hrResult.error}`);
-                result = { ok: false, error: hrResult.error || "Hypereal image generation failed" };
+                console.warn(`[IMG] Hypereal failed for task ${task.taskIndex}: ${hrResult.error}, falling back to Replicate`);
+                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+                actualProvider = "replicate";
+                actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
               }
             } else {
-              console.error(`[IMG] HYPEREAL_API_KEY not set — cannot generate images`);
-              result = { ok: false, error: "HYPEREAL_API_KEY not configured" };
+              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+              actualProvider = "replicate";
+              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
             }
 
             if (result.ok) {
