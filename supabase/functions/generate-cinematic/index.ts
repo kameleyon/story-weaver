@@ -1147,7 +1147,7 @@ serve(async (req) => {
         }
 
         // Use Grok Imagine Video via Replicate
-        const predictionId = await startGrokVideo(scene, scene.imageUrl!, format, scene.duration || 10, replicateToken);
+        const predictionId = await startVideoGeneration(scene, scene.imageUrl!, format, scene.duration || 10, replicateToken);
         const updatedScene = { ...scene, videoPredictionId: predictionId, videoProvider: "replicate" as const };
         await updateSingleScene(supabase, generationId, idx, () => updatedScene);
         return jsonResponse({ success: true, status: "processing", scene: updatedScene });
@@ -1330,7 +1330,7 @@ CRITICAL RULES:
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrokVideo(scene, newImageUrl, format, scene.duration || 10, replicateToken);
+      const grokPredictionId = await startVideoGeneration(scene, newImageUrl, format, scene.duration || 10, replicateToken);
       // Poll until complete
       for (let i = 0; i < 120; i++) {
         await sleep(3000);
@@ -1390,7 +1390,7 @@ CRITICAL RULES:
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       let videoUrl: string | null = null;
 
-      const grokPredId = await startGrokVideo(scene, newImageUrl, format, scene.duration || 10, replicateToken);
+      const grokPredId = await startVideoGeneration(scene, newImageUrl, format, scene.duration || 10, replicateToken);
       // Poll until complete
       for (let i = 0; i < 120; i++) {
         await sleep(3000);
