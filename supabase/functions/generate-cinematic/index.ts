@@ -1274,8 +1274,16 @@ serve(async (req) => {
           console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
         }
 
-        // Replicate fallback disabled — Hypereal-only for debugging
-        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed. Replicate fallback disabled for debugging.`);
+        // Replicate Grok fallback
+        if (replicateToken) {
+          console.log(`[VIDEO] Scene ${scene.number}: Falling back to Replicate Grok`);
+          const grokPredictionId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
+          const updatedScene = { ...scene, videoPredictionId: grokPredictionId, videoProvider: "replicate" as const };
+          await updateSingleScene(supabase, generationId, idx, () => updatedScene);
+          return jsonResponse({ success: true, status: "processing", scene: updatedScene });
+        }
+
+        throw new Error(`Video generation failed for scene ${scene.number}: All providers failed.`);
       }
 
       // Poll based on provider
@@ -1320,7 +1328,34 @@ serve(async (req) => {
         return jsonResponse({ success: true, status: "processing", scene });
       }
 
-      // Replicate polling disabled — Hypereal only
+      // Replicate Grok polling
+      if (provider === "replicate") {
+        const grokResult = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
+        
+        if (grokResult === GROK_TIMEOUT_RETRY) {
+          console.log(`[VIDEO] Scene ${scene.number}: Grok timed out, retrying with new prediction`);
+          const newPredictionId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
+          const retryScene = { ...scene, videoPredictionId: newPredictionId };
+          await updateSingleScene(supabase, generationId, idx, () => retryScene);
+          return jsonResponse({ success: true, status: "processing", scene: retryScene });
+        }
+        
+        if (grokResult) {
+          // Download and upload to storage
+          const videoResponse = await fetch(grokResult);
+          if (!videoResponse.ok) throw new Error("Failed to download Grok video");
+          const videoBuffer = new Uint8Array(await videoResponse.arrayBuffer());
+          const fileName = `cinematic-video-grok-${Date.now()}-${scene.number}.mp4`;
+          await supabase.storage.from("scene-videos").upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
+          const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
+          const completedScene = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
+          await updateSingleScene(supabase, generationId, idx, () => completedScene);
+          return jsonResponse({ success: true, status: "complete", scene: completedScene });
+        }
+        
+        return jsonResponse({ success: true, status: "processing", scene });
+      }
+
       throw new Error(`Unknown video provider for scene ${scene.number}: ${provider}`);
     }
 
@@ -1481,13 +1516,30 @@ CRITICAL RULES:
         }
       }
 
-      // Replicate fallback — COMMENTED OUT for Hypereal debugging
-      if (!videoUrl) {
-        throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+      // Replicate Grok fallback for image-edit
+      if (!videoUrl && replicateToken) {
+        console.log(`[IMG-EDIT] Scene ${scene.number}: Falling back to Replicate Grok for video`);
+        const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+        for (let i = 0; i < 90; i++) {
+          await sleep(3000);
+          const grokResult = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
+          if (grokResult === GROK_TIMEOUT_RETRY) break;
+          if (grokResult) {
+            const vidRes = await fetch(grokResult);
+            if (vidRes.ok) {
+              const vidBytes = new Uint8Array(await vidRes.arrayBuffer());
+              const vidFileName = `cinematic-video-grok-${Date.now()}-${scene.number}.mp4`;
+              await supabase.storage.from("scene-videos").upload(vidFileName, vidBytes, { contentType: "video/mp4", upsert: true });
+              const { data: vidUrlData } = supabase.storage.from("scene-videos").getPublicUrl(vidFileName);
+              videoUrl = vidUrlData.publicUrl;
+            }
+            break;
+          }
+        }
       }
 
       if (!videoUrl) {
-        throw new Error("Video generation timed out (all providers)");
+        throw new Error(`Video generation failed for scene ${scene.number}: All providers failed`);
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
@@ -1549,13 +1601,30 @@ CRITICAL RULES:
         }
       }
 
-      // Replicate fallback — COMMENTED OUT for Hypereal debugging
-      if (!videoUrl) {
-        throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
+      // Replicate Grok fallback for image-regen
+      if (!videoUrl && replicateToken) {
+        console.log(`[IMG-REGEN] Scene ${scene.number}: Falling back to Replicate Grok for video`);
+        const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+        for (let i = 0; i < 90; i++) {
+          await sleep(3000);
+          const grokResult = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
+          if (grokResult === GROK_TIMEOUT_RETRY) break;
+          if (grokResult) {
+            const vidRes = await fetch(grokResult);
+            if (vidRes.ok) {
+              const vidBytes = new Uint8Array(await vidRes.arrayBuffer());
+              const vidFileName = `cinematic-video-grok-${Date.now()}-${scene.number}.mp4`;
+              await supabase.storage.from("scene-videos").upload(vidFileName, vidBytes, { contentType: "video/mp4", upsert: true });
+              const { data: vidUrlData } = supabase.storage.from("scene-videos").getPublicUrl(vidFileName);
+              videoUrl = vidUrlData.publicUrl;
+            }
+            break;
+          }
+        }
       }
 
       if (!videoUrl) {
-        throw new Error("Video generation timed out (all providers)");
+        throw new Error(`Video generation failed for scene ${scene.number}: All providers failed`);
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
