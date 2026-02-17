@@ -76,11 +76,8 @@ async function fetchSubscription(accessToken: string | undefined): Promise<Subsc
     },
   });
 
-  // Handle token expiration - supabase-js puts non-2xx responses in error
-  const isTokenExpired = error?.message?.includes("401") || 
-    error?.message?.toLowerCase().includes("token") ||
-    data?.code === "TOKEN_EXPIRED";
-  if (isTokenExpired) {
+  // Handle token expiration
+  if (error?.message?.includes("401") || data?.code === "TOKEN_EXPIRED") {
     const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
     if (refreshError || !refreshData.session) {
       throw new Error("Session expired. Please log in again.");

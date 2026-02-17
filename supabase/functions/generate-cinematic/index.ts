@@ -66,7 +66,7 @@ const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 // Nano Banana models for image generation (Replicate fallback)
 const NANO_BANANA_MODEL = "google/nano-banana";
 
-// ============= HYPEREAL API HELPERS (images only — video moved to Grok) =============
+// ============= HYPEREAL API HELPERS =============
 const HYPEREAL_API_BASE = "https://hypereal.tech";
 
 async function generateImageWithHypereal(
@@ -121,131 +121,81 @@ async function generateImageWithHypereal(
   }
 }
 
-// ============= HAILUO HELPERS (COMMENTED OUT — replaced by Grok Imagine Video via Replicate) =============
-// async function startHailuo(scene, imageUrl, format, duration, apiKey) { ... }
-// async function pollHailuo(pollUrl, apiKey) { ... }
-// See git history for full Hailuo implementation if needed for rollback.
-
-// ============= GROK IMAGINE VIDEO HELPERS (via Replicate API) =============
-async function startGrokVideo(
-  scene: Scene,
+async function startHyperealVideo(
+  prompt: string,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  replicateToken: string,
-): Promise<string> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  _duration: number,
+  apiKey: string,
+): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
+  console.log(`[HYPEREAL-VID] Starting kling-2-5-i2v generation (duration=5)...`);
 
-  const videoPrompt = `${scene.visualPrompt}
-
-ANIMATION RULES (CRITICAL):
-- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
-- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
-- Body movement IS allowed: walking, running, gesturing, pointing, reacting
-- Environment animation IS allowed: wind, particles, camera movement, lighting changes
-- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
-- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
-
-  const input: Record<string, unknown> = {
-    prompt: videoPrompt,
-    image: imageUrl,
-    duration: 5,
-    resolution: "720p",
-    // aspect_ratio is ignored when image is provided per Grok schema, but include for safety
-    aspect_ratio: aspectRatio,
-  };
-
-  console.log(`[GROK-VIDEO] Starting xai/grok-imagine-video for scene ${scene.number} (format=${format})...`);
-
-  const MAX_RETRIES = 8;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetch(`${REPLICATE_MODELS_URL}/${GROK_VIDEO_MODEL}/predictions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${replicateToken}`,
-          "Content-Type": "application/json",
-          Prefer: "respond-async",
+  try {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "kling-2-5-i2v",
+        input: {
+          prompt,
+          image: imageUrl,
+          negative_prompt: "blurry, low quality, watermark, multiple limbs, talking animation",
+          duration: 5,
+          guidance_scale: 0.5,
         },
-        body: JSON.stringify({ input }),
-      });
+      }),
+    });
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        const status = response.status;
-
-        // Handle Queue Full (429) or Server Errors (5xx) with exponential backoff
-        if ((status === 422 || status === 429 || status >= 500) && attempt < MAX_RETRIES) {
-          const baseDelay = status === 429 ? 8000 : 3000;
-          const delayMs = baseDelay * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 3000);
-          console.warn(`[GROK-VIDEO] Queue full or retryable error (${status}) attempt ${attempt}/${MAX_RETRIES}, retrying in ${delayMs}ms...`);
-          await sleep(delayMs);
-          continue;
-        }
-
-        const errorMessage = errText.includes("Queue is full")
-          ? "The video generation queue is currently at capacity. Please try again in a few minutes."
-          : `Grok video start failed (${status}): ${errText.substring(0, 300)}`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      if (!data.id) {
-        throw new Error(`No prediction ID in Grok response: ${JSON.stringify(data).substring(0, 200)}`);
-      }
-
-      console.log(`[GROK-VIDEO] Prediction started: ${data.id}, status: ${data.status}`);
-      return data.id as string;
-    } catch (err: any) {
-      if (attempt < MAX_RETRIES) {
-        const delayMs = 4000 * Math.pow(2, attempt - 1);
-        console.warn(`[GROK-VIDEO] Network/Request error on attempt ${attempt}, retrying in ${delayMs}ms: ${err.message}`);
-        await sleep(delayMs);
-        continue;
-      }
-      throw err;
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      console.error(`[HYPEREAL-VID] Request failed (${response.status}): ${errText.substring(0, 300)}`);
+      return { ok: false, error: `Hypereal video failed (${response.status}): ${errText.substring(0, 200)}` };
     }
+
+    const data = await response.json();
+    console.log(`[HYPEREAL-VID] Response:`, JSON.stringify(data).substring(0, 300));
+    if (!data.jobId) {
+      return { ok: false, error: `No jobId in Hypereal video response: ${JSON.stringify(data).substring(0, 200)}` };
+    }
+
+    console.log(`[HYPEREAL-VID] Job started: ${data.jobId}`);
+    return { ok: true, jobId: data.jobId };
+  } catch (err) {
+    return { ok: false, error: `Hypereal video error: ${err instanceof Error ? err.message : String(err)}` };
   }
-  throw new Error("Grok video prediction failed after retries");
 }
 
-async function pollGrokVideo(
-  predictionId: string,
-  replicateToken: string,
+async function pollHyperealVideo(
+  jobId: string,
+  apiKey: string,
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
-    const prediction = await getReplicatePrediction(predictionId, replicateToken);
+    const response = await fetch(
+      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=kling-2-5-i2v&type=video`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    );
 
-    if (prediction.status === "succeeded") {
-      // Output can be a URL string, an object with .url(), or an array
-      let outputUrl: string | null = null;
-      if (typeof prediction.output === "string") {
-        outputUrl = prediction.output;
-      } else if (prediction.output?.url) {
-        outputUrl = typeof prediction.output.url === "function" ? prediction.output.url() : prediction.output.url;
-      } else if (Array.isArray(prediction.output) && prediction.output.length > 0) {
-        const first = prediction.output[0];
-        outputUrl = typeof first === "string" ? first : first?.url || null;
-      }
-
-      if (!outputUrl) {
-        return { status: "failed", error: `Grok succeeded but no output URL found: ${JSON.stringify(prediction.output).substring(0, 200)}` };
-      }
-      return { status: "completed", outputUrl };
+    if (!response.ok) {
+      return { status: "failed", error: `Hypereal poll failed (${response.status})` };
     }
 
-    if (prediction.status === "failed" || prediction.status === "canceled") {
-      return { status: "failed", error: prediction.error || `Grok video ${prediction.status}` };
+    const data = await response.json();
+    if (data.status === "completed" && data.outputUrl) {
+      return { status: "completed", outputUrl: data.outputUrl };
     }
-
-    // starting, processing
+    if (data.status === "failed") {
+      return { status: "failed", error: data.error || "Hypereal video generation failed" };
+    }
     return { status: "processing" };
   } catch (err) {
-    return { status: "failed", error: `Grok poll error: ${err instanceof Error ? err.message : String(err)}` };
+    return { status: "failed", error: `Hypereal poll error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
 // ============= STYLE PROMPTS (from generate-video/index.ts) =============
-
 const STYLE_PROMPTS: Record<string, string> = {
   minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
 
@@ -270,8 +220,6 @@ const STYLE_PROMPTS: Record<string, string> = {
   storybook: `Whimsical storybook hand-drawn ink style. Hand-drawn black ink outlines with visible rough sketch construction lines, slightly uneven strokes, and occasional line overlap (imperfect but intentional). Bold vivid natural color palette. Crosshatching and scribbly pen shading for depth and texture, especially in shadows and on fabric folds. Watercolor + gouache-like washes: layered, semi-opaque paint with soft gradients. Edges slightly loose (not crisp), with gentle paint bleed and dry-brush texture in places. Cartoon-proportioned character design: slightly exaggerated features (large eyes, long limbs, expressive faces), but grounded in believable anatomy and posture. Background detailed but painterly: textured walls, props with sketchy detail, and atmospheric depth. Subtle grain + ink flecks for a handmade print feel. Cinematic framing, shallow depth cues, soft focus in far background. Editorial illustration / indie animation concept art aesthetic. Charming, cozy, slightly messy, richly textured, high detail, UHD. No 3D render, no clean vector, no flat icon style, no anime/manga linework, no glossy neon gradients, no photorealism.`,
 
   crayon: `Cute childlike crayon illustration on clean white paper background. Waxy crayon / oil pastel scribble texture with visible stroke marks and uneven fill (messy on purpose). Simple rounded shapes, thick hand-drawn outlines, minimal details, playful proportions (big head, small body). Bright limited palette like orange + blue + yellow, rough shading and light smudges like real crayons on paper. Simple cheerful scene, lots of white space, friendly smiley faces. Looks like kindergarten drawing scanned into computer. High resolution. No vector, no clean digital painting, no 3D, no realism, no gradients, no sharp edges.`,
-
-  painterly: `Lush impressionistic oil-painting style with visible thick impasto brush strokes and rich, saturated colors. Romantic landscape aesthetic with dreamy, atmospheric backgrounds. Characters have a soft, story-illustration quality with gentle features and warm skin tones. Cinematic golden-hour lighting with dramatic light rays filtering through. Rich textures throughout – canvas weave visible in flat areas, heavy paint buildup on highlights. Palette: warm golds, deep blues, forest greens, and burnt sienna. Think Studio Ghibli backgrounds meet classical oil painting. UHD quality.`,
 
   chalkboard: `A hand-drawn chalkboard illustration style characterized by voluntarily imperfect, organic lines that capture the authentic vibe of human handwriting. Unlike rigid digital art, the strokes feature subtle wobbles, varying pressure, and natural endpoints, mimicking the tactile feel of chalk held by a steady hand. The background is a deep, dark slate grey, almost black, with a very subtle, fine-grain slate texture that suggests a fresh, clean surface rather than a dusty one. The line work features crisp, monoline chalk outlines that possess the dry, slightly grainy texture of real chalk and are drawn with authentic vibe of hand-drawing, yet ensuring a confident and legible look. The color palette utilizes high-contrast stark white. The rendering is flat and illustrative, with solid chalk fills textured via diagonal hatching or stippling to let the dark background show through slightly, creating a vibe that is smart, academic, and hand-crafted yet thoroughly professional. No other colors than white.`,
 };
@@ -790,7 +738,143 @@ QUALITY REQUIREMENTS:
   throw new Error(`Image generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
 }
 
-// Hailuo/Replicate video functions removed — all video generation now uses Grok Imagine Video via Replicate
+// ============================================
+// STEP 4: Video Generation with Replicate Grok (phased)
+// ============================================
+async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
+  // Fetch latest version dynamically
+  const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
+  
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  
+  // Build video prompt with anti-lip-sync instructions
+  // We want expressions (surprised, screaming) but NOT talking/lip-sync animation
+  const videoPrompt = `${scene.visualPrompt}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+
+  const MAX_GROK_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_GROK_RETRIES; attempt++) {
+    try {
+      const prediction = await createReplicatePrediction(
+        version,
+        {
+          prompt: videoPrompt,
+          image: imageUrl,
+          duration: Math.min(scene.duration, 15),
+          resolution: "720p",
+          aspect_ratio: aspectRatio,
+        },
+        replicateToken,
+      );
+      console.log(`Grok prediction started: ${prediction.id}`);
+      return prediction.id as string;
+    } catch (err: any) {
+      const errMsg = err?.message || "";
+      if ((errMsg.includes("429") || errMsg.includes("500")) && attempt < MAX_GROK_RETRIES) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        console.warn(`[Grok] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Grok video prediction failed after retries");
+}
+
+// Special return value indicating a timeout that should trigger a retry
+const GROK_TIMEOUT_RETRY = "__TIMEOUT_RETRY__";
+
+async function resolveGrok(
+  predictionId: string,
+  replicateToken: string,
+  supabase: ReturnType<typeof createClient>,
+  sceneNumber: number,
+): Promise<string | null> {
+  const result = await getReplicatePrediction(predictionId, replicateToken);
+
+  if (result.status !== "succeeded") {
+    if (result.status === "failed" || result.status === "canceled") {
+      const errorMsg = result.error || "Video generation failed";
+      console.error("Grok failed:", errorMsg);
+      
+      // Surface user-friendly error messages for common issues
+      if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
+        throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
+      }
+      if (errorMsg.includes("rate limit") || errorMsg.includes("429")) {
+        throw new Error("Video API rate limited. Please wait a moment and try again.");
+      }
+      
+      // Detect timeout errors — these are retryable
+      if (errorMsg.includes("timed out") || errorMsg.includes("timeout") || errorMsg.includes("deadline exceeded")) {
+        console.warn(`[Grok] Scene ${sceneNumber}: Video timed out (prediction ${predictionId}), will retry with new prediction`);
+        return GROK_TIMEOUT_RETRY;
+      }
+      
+      throw new Error(`Video generation failed: ${errorMsg}`);
+    }
+    return null;
+  }
+
+  // Handle different Replicate output formats: string, array, or object
+  const output = result.output;
+  let videoUrl: string | null = null;
+
+  if (typeof output === "string" && output) {
+    videoUrl = output;
+  } else if (Array.isArray(output) && output.length > 0) {
+    // Handle array output like ["https://...mp4"]
+    videoUrl = typeof output[0] === "string" ? output[0] : null;
+  } else if (typeof output === "object" && output !== null) {
+    // Handle object output like { url: "..." } or { video: "..." }
+    const obj = output as Record<string, unknown>;
+    videoUrl = (obj.url || obj.video || obj.output) as string | null;
+  }
+
+  if (!videoUrl) {
+    console.error("[Grok] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    throw new Error("Replicate succeeded but returned no video URL");
+  }
+
+  // Download the video from Replicate and upload to Supabase storage for persistence
+  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate: ${videoUrl}`);
+  const videoResponse = await fetch(videoUrl);
+  if (!videoResponse.ok) {
+    throw new Error(`Failed to download generated video from Replicate: ${videoResponse.status}`);
+  }
+  const videoBuffer = await videoResponse.arrayBuffer();
+
+  const fileName = `cinematic-video-${Date.now()}-${sceneNumber}.mp4`;
+  const upload = await supabase.storage
+    .from("scene-videos")
+    .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
+
+  if (upload.error) {
+    // Try create bucket if missing
+    try {
+      await supabase.storage.createBucket("scene-videos", { public: true });
+      const retry = await supabase.storage
+        .from("scene-videos")
+        .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
+      if (retry.error) throw retry.error;
+    } catch (e) {
+      console.error("Video upload error:", upload.error);
+      throw new Error("Failed to upload video to storage");
+    }
+  }
+
+  const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
+  console.log(`[Grok] Video uploaded: ${urlData.publicUrl}`);
+  return urlData.publicUrl;
+}
 
 async function readGenerationOwned(
   supabase: ReturnType<typeof createClient>,
@@ -1123,7 +1207,7 @@ serve(async (req) => {
       return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
     }
 
-    // =============== PHASE 4: VIDEO (Grok Imagine Video via Replicate) ===============
+    // =============== PHASE 4: VIDEO ===============
     if (phase === "video") {
       const idx = requireNumber(sceneIndex, "sceneIndex");
       const scene = scenes[idx];
@@ -1151,6 +1235,8 @@ serve(async (req) => {
 
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
+      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+
       if (!scene.videoPredictionId) {
         // DEDUP: Re-read scene from DB to avoid race condition with parallel batch polling
         const { data: freshGen } = await supabase
@@ -1168,50 +1254,26 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: freshScenes[idx] });
         }
 
-        // Use Grok Imagine Video via Replicate for video generation
-        const predictionId = await startGrokVideo(scene, scene.imageUrl!, format, replicateToken);
-        const updatedScene = { ...scene, videoPredictionId: predictionId, videoProvider: "replicate" as const };
+        // Use Replicate/Grok for video regeneration
+        const grokPredId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
+        const updatedScene = { ...scene, videoPredictionId: grokPredId, videoProvider: "replicate" as const };
         await updateSingleScene(supabase, generationId, idx, () => updatedScene);
         return jsonResponse({ success: true, status: "processing", scene: updatedScene });
       }
 
-      // Poll Grok video
-      const pollResult = await pollGrokVideo(scene.videoPredictionId, replicateToken);
+      // Poll Replicate/Grok
+      const grokResult = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
       
-      if (pollResult.status === "failed") {
-        const isQueueFull = pollResult.error?.includes("Queue is full") || pollResult.error?.includes("queue");
-        if (isQueueFull) {
-          // Queue full is transient — clear prediction so client can retry on next poll
-          const retryScene = { ...scene, videoPredictionId: undefined };
-          await updateSingleScene(supabase, generationId, idx, () => retryScene);
-          console.warn(`[VIDEO] Scene ${scene.number}: Queue full, cleared prediction for retry`);
-          return jsonResponse({ success: true, status: "processing", scene: retryScene });
-        }
-        // Clear prediction and let client retry
+      if (grokResult === GROK_TIMEOUT_RETRY) {
+        // Timeout — clear prediction and let client retry
         const failedScene = { ...scene, videoPredictionId: undefined };
         await updateSingleScene(supabase, generationId, idx, () => failedScene);
-        throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error}`);
+        throw new Error(`Video generation timed out for scene ${scene.number}, please retry`);
       }
       
-      if (pollResult.status === "completed") {
-        // Download and upload to our storage
-        const videoResponse = await fetch(pollResult.outputUrl);
-        if (!videoResponse.ok) throw new Error(`Failed to download Grok video: ${videoResponse.status}`);
-        const videoBuffer = new Uint8Array(await videoResponse.arrayBuffer());
-        
-        const fileName = `cinematic-video-${Date.now()}-${scene.number}.mp4`;
-        const upload = await supabase.storage
-          .from("scene-videos")
-          .upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
-        if (upload.error) {
-          try {
-            await supabase.storage.createBucket("scene-videos", { public: true });
-            await supabase.storage.from("scene-videos").upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
-          } catch (_e) { /* ignore */ }
-        }
-        const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-        
-        const completedScene = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
+      if (grokResult) {
+        // grokResult is already a public URL from resolveGrok
+        const completedScene = { ...scene, videoUrl: grokResult, videoPredictionId: undefined };
         await updateSingleScene(supabase, generationId, idx, () => completedScene);
         return jsonResponse({ success: true, status: "complete", scene: completedScene });
       }
@@ -1345,36 +1407,32 @@ CRITICAL RULES:
 
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
-      // Now regenerate video with the new image using Grok Imagine Video via Replicate
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
+      // Now regenerate video with the new image using Replicate/Grok
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Replicate/Grok`);
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
+      const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
       // Poll until complete
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < 90; i++) {
         await sleep(3000);
-        const result = await pollGrokVideo(grokPredictionId, replicateToken);
-        if (result.status === "failed") {
-          console.warn(`[IMG-EDIT] Grok video failed for scene ${scene.number}: ${result.error}`);
+        const result = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
+        if (result === GROK_TIMEOUT_RETRY) {
+          console.warn(`[IMG-EDIT] Grok timed out for scene ${scene.number}, retrying...`);
           break;
         }
-        if (result.status === "completed") {
-          // Download and upload to our storage
-          const vidRes = await fetch(result.outputUrl);
-          if (vidRes.ok) {
-            const vidBuf = new Uint8Array(await vidRes.arrayBuffer());
-            const fn = `cinematic-video-edit-${Date.now()}-${scene.number}.mp4`;
-            await supabase.storage.from("scene-videos").upload(fn, vidBuf, { contentType: "video/mp4", upsert: true });
-            const { data: u } = supabase.storage.from("scene-videos").getPublicUrl(fn);
-            videoUrl = u.publicUrl;
-            console.log(`[IMG-EDIT] Grok video success for scene ${scene.number}`);
-          }
+        if (result) {
+          videoUrl = result;
+          console.log(`[IMG-EDIT] Grok video success for scene ${scene.number}`);
           break;
         }
       }
 
       if (!videoUrl) {
         throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}`);
+      }
+
+      if (!videoUrl) {
+        throw new Error("Video generation timed out (all providers)");
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
@@ -1406,36 +1464,31 @@ CRITICAL RULES:
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, hyperealApiKey || undefined);
 
-      // Now regenerate video with the new image using Grok Imagine Video via Replicate
-      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Replicate/Grok`);
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
+      const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
       // Poll until complete
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < 90; i++) {
         await sleep(3000);
-        const result = await pollGrokVideo(grokPredictionId, replicateToken);
-        if (result.status === "failed") {
-          console.warn(`[IMG-REGEN] Grok video failed for scene ${scene.number}: ${result.error}`);
+        const result = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
+        if (result === GROK_TIMEOUT_RETRY) {
+          console.warn(`[IMG-REGEN] Grok timed out for scene ${scene.number}, retrying...`);
           break;
         }
-        if (result.status === "completed") {
-          // Download and upload to our storage
-          const vidRes = await fetch(result.outputUrl);
-          if (vidRes.ok) {
-            const vidBuf = new Uint8Array(await vidRes.arrayBuffer());
-            const fn = `cinematic-video-regen-${Date.now()}-${scene.number}.mp4`;
-            await supabase.storage.from("scene-videos").upload(fn, vidBuf, { contentType: "video/mp4", upsert: true });
-            const { data: u } = supabase.storage.from("scene-videos").getPublicUrl(fn);
-            videoUrl = u.publicUrl;
-            console.log(`[IMG-REGEN] Grok video success for scene ${scene.number}`);
-          }
+        if (result) {
+          videoUrl = result;
+          console.log(`[IMG-REGEN] Grok video success for scene ${scene.number}`);
           break;
         }
       }
 
       if (!videoUrl) {
         throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}`);
+      }
+
+      if (!videoUrl) {
+        throw new Error("Video generation timed out (all providers)");
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
