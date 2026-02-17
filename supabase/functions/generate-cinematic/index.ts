@@ -85,11 +85,13 @@ async function generateImageWithHypereal(
       resolution: "1k",
       aspect_ratio: aspectRatio,
       output_format: "png",
+      model: "nano-banana-pro",
     };
 
     // If a source image is provided, this becomes an img2img / edit request
     if (sourceImageUrl) {
       body.image = sourceImageUrl;
+      body.strength = 0.55; // Preserve most of the original image during edits
     }
 
     const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/images/generate`, {
@@ -1238,6 +1240,22 @@ serve(async (req) => {
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
 
       if (!scene.videoPredictionId) {
+        // DEDUP: Re-read scene from DB to avoid race condition with parallel batch polling
+        const { data: freshGen } = await supabase
+          .from("generations")
+          .select("scenes")
+          .eq("id", generationId)
+          .maybeSingle();
+        const freshScenes = (freshGen?.scenes as Scene[]) || [];
+        if (freshScenes[idx]?.videoPredictionId) {
+          console.log(`[VIDEO] Scene ${scene.number}: videoPredictionId already set by parallel request, skipping duplicate start`);
+          return jsonResponse({ success: true, status: "processing", scene: freshScenes[idx] });
+        }
+        if (freshScenes[idx]?.videoUrl) {
+          console.log(`[VIDEO] Scene ${scene.number}: videoUrl already set, returning complete`);
+          return jsonResponse({ success: true, status: "complete", scene: freshScenes[idx] });
+        }
+
         // Only try Hypereal if we haven't already failed over to Replicate for this scene
         const preferredProvider = scene.videoProvider || "hypereal";
         if (hyperealApiKey && preferredProvider !== "replicate") {
