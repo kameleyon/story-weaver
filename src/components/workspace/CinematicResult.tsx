@@ -61,7 +61,6 @@ interface CinematicScene {
   visualPrompt: string;
   videoUrl?: string;
   audioUrl?: string;
-  imageUrl?: string;
   duration: number;
 }
 
@@ -163,14 +162,10 @@ export function CinematicResult({
   const restartRef = useRef(true);
   const advancedFromSceneRef = useRef<number | null>(null);
 
-   // Auto-recovery removed — manual regeneration only to prevent cost loops
-
   // Keep local scenes synced with props
   useEffect(() => {
     setLocalScenes(scenes);
   }, [scenes]);
-
-  
 
   const currentScene = localScenes[currentSceneIndex];
 
@@ -237,8 +232,6 @@ export function CinematicResult({
     setLocalScenes,
     stop
   );
-
-   // Auto-recovery removed to prevent infinite regeneration loops that waste credits
 
   const startPlayAll = useCallback(
     (startIndex: number) => {
@@ -651,10 +644,10 @@ export function CinematicResult({
               preload="auto"
             />
           ) : (
-             <div className="text-center text-muted-foreground">
-                 <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                 <p className="text-sm">No video for Scene {currentScene?.number}</p>
-             </div>
+            <div className="text-center text-muted-foreground">
+              <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No video for Scene {currentScene?.number}</p>
+            </div>
           )}
 
           {/* Scene Navigation */}
@@ -731,9 +724,7 @@ export function CinematicResult({
 
       {/* All Scenes Grid */}
       <div className="space-y-4 max-w-3xl mx-auto">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-medium text-foreground">All Scenes</h3>
-        </div>
+        <h3 className="text-lg font-medium text-foreground">All Scenes</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {localScenes.map((scene, idx) => (
             <button
@@ -758,7 +749,7 @@ export function CinematicResult({
                 />
               ) : (
                 <div className="w-full h-full bg-muted/50 flex items-center justify-center">
-                   <Film className="h-8 w-8 text-muted-foreground/50" />
+                  <Film className="h-8 w-8 text-muted-foreground/50" />
                 </div>
               )}
               <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-xs text-white">

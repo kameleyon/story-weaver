@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as base64Decode, encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import {
   generateSceneAudio as sharedGenerateSceneAudio,
@@ -80,11 +80,12 @@ async function generateImageWithHypereal(
   console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i ${mode} generation...`);
 
   try {
+    const model = "nano-banana-pro-t2i"; // Always use Pro
     const body: Record<string, unknown> = {
+      model,
       prompt,
-      resolution: "1k",
+      resolution: "1K",
       aspect_ratio: aspectRatio,
-      output_format: "png",
     };
 
     // If a source image is provided, this becomes an img2img / edit request
@@ -1203,8 +1204,10 @@ serve(async (req) => {
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
-      // If user explicitly triggers regeneration on a scene that already has a video, clear it
-      if (typeof body.sceneIndex === "number" && scene.videoUrl) {
+      // If sceneIndex is provided as a single-scene call and video already exists,
+      // treat it as a regeneration request: clear old video to force re-generation
+      const isRegeneration = typeof body.sceneIndex === "number" && !!scene.videoUrl;
+      if (isRegeneration) {
         console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
@@ -1282,12 +1285,11 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: completedScene });
         }
         if (pollResult.status === "failed") {
-          console.error(`[VIDEO] Hypereal poll FAILED for scene ${scene.number}: ${pollResult.error}`);
-          // Do NOT clear predictionId and retry — that causes infinite job creation loops.
-          // Instead, mark this as a hard failure so the client stops polling.
+          console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}`);
+          // Clear prediction so next poll attempt starts a fresh Hypereal job
           const failedScene = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" as const };
           await updateSingleScene(supabase, generationId, idx, () => failedScene);
-          throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error || "Hypereal returned failure"}`);
+          return jsonResponse({ success: true, status: "processing", scene: failedScene });
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
