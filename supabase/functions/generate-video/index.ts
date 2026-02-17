@@ -2002,107 +2002,6 @@ async function generateSceneAudio(
   return result;
 }
 
-// ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://api.hypereal.tech";
-
-async function generateImageWithHypereal(
-  prompt: string,
-  format: string,
-  apiKey: string,
-  useProModel: boolean = true,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const model = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
-  console.log(`[HYPEREAL-IMG] Starting ${model} generation...`);
-
-  try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model, prompt, aspect_ratio: aspectRatio }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      return { ok: false, error: `Hypereal image failed (${response.status}): ${errText.substring(0, 200)}` };
-    }
-
-    const data = await response.json();
-    const imageUrl = data?.data?.[0]?.url;
-    if (!imageUrl) return { ok: false, error: "No image URL in Hypereal response" };
-
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) return { ok: false, error: "Failed to download Hypereal image" };
-
-    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[HYPEREAL-IMG] Success: ${bytes.length} bytes`);
-    return { ok: true, bytes };
-  } catch (err) {
-    return { ok: false, error: `Hypereal error: ${err instanceof Error ? err.message : String(err)}` };
-  }
-}
-
-async function generateCharacterReferenceWithHypereal(
-  charName: string,
-  charDescription: string,
-  apiKey: string,
-  supabase: any,
-  userId: string,
-  projectId: string,
-): Promise<{ url?: string; error?: string }> {
-  const prompt = `Character reference sheet for "${charName}": ${charDescription}. 
-Full body portrait, front view, neutral pose, clean background, high detail, professional character design reference.`;
-
-  try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "nano-banana-pro-t2i",
-        prompt,
-        aspect_ratio: "3:4",
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      return { error: `Hypereal character ref failed (${response.status}): ${errText.substring(0, 200)}` };
-    }
-
-    const data = await response.json();
-    const imageUrl = data?.data?.[0]?.url;
-    if (!imageUrl) return { error: "No URL in Hypereal character ref response" };
-
-    // Download and upload to storage
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) return { error: "Failed to download character ref image" };
-
-    const bytes = new Uint8Array(await imgResponse.arrayBuffer());
-    const fileName = `character-ref-${charName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.png`;
-    const path = `${userId}/${projectId}/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("audio")
-      .upload(path, bytes, { contentType: "image/png", upsert: true });
-
-    if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
-
-    const { data: signedData } = await supabase.storage
-      .from("audio")
-      .createSignedUrl(path, 604800);
-
-    return { url: signedData?.signedUrl || undefined };
-  } catch (err) {
-    return { error: `Hypereal character ref error: ${err instanceof Error ? err.message : String(err)}` };
-  }
-}
-
 // ============= IMAGE GENERATION WITH NANO BANANA (Pro uses nano-banana-pro at 1K) =============
 const MAX_IMAGE_RETRIES = 4;
 
@@ -4034,25 +3933,13 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           for (let attempt = 1; attempt <= 4; attempt++) {
             let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
 
-            // Try Hypereal first (primary), then Replicate (fallback)
-            const hyperealKey = Deno.env.get("HYPEREAL_API_KEY");
-            if (hyperealKey && attempt === 1) {
-              const hrResult = await generateImageWithHypereal(task.prompt, format, hyperealKey, useProModel);
-              if (hrResult.ok) {
-                result = hrResult;
-                actualProvider = "hypereal";
-                actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
-              } else {
-                console.warn(`[IMG] Hypereal failed for task ${task.taskIndex}: ${hrResult.error}, falling back to Replicate`);
-                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
-                actualProvider = "replicate";
-                actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-              }
-            } else {
-              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
-              actualProvider = "replicate";
-              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-            }
+            // Use Replicate for all image generation (Pro users get nano-banana-pro)
+            console.log(
+              `[IMG] Using Replicate ${useProModel ? "nano-banana-pro (1K)" : "nano-banana"} for task ${task.taskIndex}`,
+            );
+            result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+            actualProvider = "replicate";
+            actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
 
             if (result.ok) {
               const imageCallDuration = Date.now() - imageCallStart;

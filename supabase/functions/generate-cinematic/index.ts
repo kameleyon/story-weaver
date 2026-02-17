@@ -53,7 +53,6 @@ interface Scene {
   videoUrl?: string;
   audioPredictionId?: string;
   videoPredictionId?: string;
-  videoProvider?: "hypereal" | "replicate";
 }
 
 const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
@@ -63,121 +62,8 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
 const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
-// Nano Banana models for image generation (Replicate fallback)
+// Nano Banana models for image generation (Replicate)
 const NANO_BANANA_MODEL = "google/nano-banana";
-
-// ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://api.hypereal.tech";
-
-async function generateImageWithHypereal(
-  prompt: string,
-  format: "landscape" | "portrait" | "square",
-  apiKey: string,
-): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i generation...`);
-
-  try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/images/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "nano-banana-pro-t2i",
-        prompt,
-        aspect_ratio: aspectRatio,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      return { ok: false, error: `Hypereal image failed (${response.status}): ${errText.substring(0, 200)}` };
-    }
-
-    const data = await response.json();
-    const imageUrl = data?.data?.[0]?.url;
-    if (!imageUrl) {
-      return { ok: false, error: "No image URL in Hypereal response" };
-    }
-
-    console.log(`[HYPEREAL-IMG] Success: ${imageUrl.substring(0, 80)}...`);
-    return { ok: true, url: imageUrl };
-  } catch (err) {
-    return { ok: false, error: `Hypereal image error: ${err instanceof Error ? err.message : String(err)}` };
-  }
-}
-
-async function startHyperealVideo(
-  prompt: string,
-  imageUrl: string,
-  format: "landscape" | "portrait" | "square",
-  duration: number,
-  apiKey: string,
-): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
-  console.log(`[HYPEREAL-VID] Starting veo-3-1-i2v generation...`);
-
-  try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/v1/videos/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "veo-3-1-i2v",
-        input: {
-          prompt,
-          image: imageUrl,
-          duration: Math.min(duration, 8),
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      return { ok: false, error: `Hypereal video failed (${response.status}): ${errText.substring(0, 200)}` };
-    }
-
-    const data = await response.json();
-    if (!data.jobId) {
-      return { ok: false, error: "No jobId in Hypereal video response" };
-    }
-
-    console.log(`[HYPEREAL-VID] Job started: ${data.jobId}`);
-    return { ok: true, jobId: data.jobId };
-  } catch (err) {
-    return { ok: false, error: `Hypereal video error: ${err instanceof Error ? err.message : String(err)}` };
-  }
-}
-
-async function pollHyperealVideo(
-  jobId: string,
-  apiKey: string,
-): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
-  try {
-    const response = await fetch(
-      `${HYPEREAL_API_BASE}/api/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    );
-
-    if (!response.ok) {
-      return { status: "failed", error: `Hypereal poll failed (${response.status})` };
-    }
-
-    const data = await response.json();
-    if (data.status === "completed" && data.outputUrl) {
-      return { status: "completed", outputUrl: data.outputUrl };
-    }
-    if (data.status === "failed") {
-      return { status: "failed", error: data.error || "Hypereal video generation failed" };
-    }
-    return { status: "processing" };
-  } catch (err) {
-    return { status: "failed", error: `Hypereal poll error: ${err instanceof Error ? err.message : String(err)}` };
-  }
-}
 
 // ============= STYLE PROMPTS (from generate-video/index.ts) =============
 const STYLE_PROMPTS: Record<string, string> = {
@@ -724,7 +610,6 @@ async function generateSceneImage(
   format: "landscape" | "portrait" | "square",
   replicateToken: string,
   supabase: ReturnType<typeof createClient>,
-  hyperealApiKey?: string,
 ): Promise<string> {
   // Map format to aspect ratio
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
@@ -749,37 +634,8 @@ QUALITY REQUIREMENTS:
 - Ultra high resolution
 - Professional illustration with dynamic composition and clear visual hierarchy`;
 
-  console.log(`[IMG] Generating scene ${scene.number}, format: ${format}, aspect_ratio: ${aspectRatio}`);
+  console.log(`[IMG] Generating scene ${scene.number} with Replicate nano-banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
 
-  // 1. Try Hypereal first (primary provider)
-  if (hyperealApiKey) {
-    const hrResult = await generateImageWithHypereal(imagePrompt, format, hyperealApiKey);
-    if (hrResult.ok) {
-      // Download and upload to Supabase storage
-      try {
-        const imgResponse = await fetch(hrResult.url);
-        if (imgResponse.ok) {
-          const imageBuffer = new Uint8Array(await imgResponse.arrayBuffer());
-          const fileName = `cinematic-scene-hr-${Date.now()}-${scene.number}.png`;
-          const upload = await supabase.storage
-            .from("scene-images")
-            .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
-
-          if (!upload.error) {
-            const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
-            console.log(`[IMG] Hypereal success for scene ${scene.number}: ${urlData.publicUrl}`);
-            return urlData.publicUrl;
-          }
-        }
-      } catch (dlErr) {
-        console.warn(`[IMG] Hypereal download/upload failed for scene ${scene.number}: ${dlErr}`);
-      }
-    } else {
-      console.warn(`[IMG] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
-    }
-  }
-
-  // 2. Replicate fallback
   const MAX_IMG_RETRIES = 4;
 
   for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
@@ -1201,7 +1057,6 @@ serve(async (req) => {
       videoUrl: s?.videoUrl,
       audioPredictionId: s?.audioPredictionId,
       videoPredictionId: s?.videoPredictionId,
-      videoProvider: s?.videoProvider,
     }));
 
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
@@ -1306,14 +1161,12 @@ serve(async (req) => {
 
       if (projectError || !project) throw new Error("Project not found");
 
-      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       const imageUrl = await generateSceneImage(
         scene,
         project.style || "realistic",
         (project.format || "portrait") as "landscape" | "portrait" | "square",
         replicateToken,
         supabase,
-        hyperealApiKey || undefined,
       );
 
       scenes[idx] = { ...scene, imageUrl };
@@ -1351,72 +1204,13 @@ serve(async (req) => {
 
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
-      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-
       if (!scene.videoPredictionId) {
-        // Try Hypereal first, then Replicate
-        if (hyperealApiKey) {
-          const hrResult = await startHyperealVideo(
-            `${scene.visualPrompt}\n\nANIMATION RULES: NO lip-sync. Facial expressions allowed. Body movement allowed. Camera motion preferred.`,
-            scene.imageUrl!,
-            format,
-            scene.duration,
-            hyperealApiKey,
-          );
-          if (hrResult.ok) {
-            scenes[idx] = { ...scene, videoPredictionId: hrResult.jobId, videoProvider: "hypereal" };
-            await updateScenes(supabase, generationId, scenes);
-            return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-          }
-          console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
-        }
-
-        const predictionId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
-        scenes[idx] = { ...scene, videoPredictionId: predictionId, videoProvider: "replicate" };
+        const predictionId = await startGrok(scene, scene.imageUrl, format, replicateToken);
+        scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      // Poll based on provider
-      const provider = scene.videoProvider || "replicate";
-
-      if (provider === "hypereal" && hyperealApiKey) {
-        const pollResult = await pollHyperealVideo(scene.videoPredictionId, hyperealApiKey);
-        if (pollResult.status === "completed") {
-          // Download and upload to Supabase storage
-          const videoResponse = await fetch(pollResult.outputUrl);
-          if (!videoResponse.ok) throw new Error("Failed to download Hypereal video");
-          const videoBuffer = new Uint8Array(await videoResponse.arrayBuffer());
-
-          const fileName = `cinematic-video-hr-${Date.now()}-${scene.number}.mp4`;
-          const upload = await supabase.storage
-            .from("scene-videos")
-            .upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
-
-          if (upload.error) {
-            try {
-              await supabase.storage.createBucket("scene-videos", { public: true });
-              await supabase.storage.from("scene-videos").upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
-            } catch (e) {
-              throw new Error("Failed to upload Hypereal video to storage");
-            }
-          }
-
-          const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-          scenes[idx] = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
-        }
-        if (pollResult.status === "failed") {
-          console.warn(`[VIDEO] Hypereal video failed for scene ${scene.number}: ${pollResult.error}, clearing for Replicate retry`);
-          scenes[idx] = { ...scene, videoPredictionId: undefined, videoProvider: "replicate" };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-        }
-        return jsonResponse({ success: true, status: "processing", scene });
-      }
-
-      // Replicate polling
       const videoUrl = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
       
       // If the prediction timed out, clear it so next poll starts a fresh prediction
@@ -1569,8 +1363,7 @@ Make only the requested changes while keeping everything else consistent.`;
       console.log(`[IMG-REGEN] Scene ${scene.number}: Regenerating image`);
 
       // Generate new image
-      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-      const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, hyperealApiKey || undefined);
+      const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
       const predictionId = await startGrok(scene, newImageUrl, format, replicateToken);
