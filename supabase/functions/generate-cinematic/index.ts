@@ -1254,32 +1254,72 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: freshScenes[idx] });
         }
 
-        // Use Replicate/Grok for video regeneration
-        const grokPredId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
-        const updatedScene = { ...scene, videoPredictionId: grokPredId, videoProvider: "replicate" as const };
-        await updateSingleScene(supabase, generationId, idx, () => updatedScene);
-        return jsonResponse({ success: true, status: "processing", scene: updatedScene });
+        // Only try Hypereal if we haven't already failed over to Replicate for this scene
+        const preferredProvider = scene.videoProvider || "hypereal";
+        if (hyperealApiKey && preferredProvider !== "replicate") {
+          const hrResult = await startHyperealVideo(
+            `${scene.visualPrompt}\n\nANIMATION RULES: NO lip-sync. Facial expressions allowed. Body movement allowed. Camera motion preferred.`,
+            scene.imageUrl!,
+            format,
+            scene.duration,
+            hyperealApiKey,
+          );
+          if (hrResult.ok) {
+            const updatedScene = { ...scene, videoPredictionId: hrResult.jobId, videoProvider: "hypereal" as const };
+            await updateSingleScene(supabase, generationId, idx, () => updatedScene);
+            return jsonResponse({ success: true, status: "processing", scene: updatedScene });
+          }
+          console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
+        }
+
+        // Replicate fallback disabled — Hypereal-only for debugging
+        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed. Replicate fallback disabled for debugging.`);
       }
 
-      // Poll Replicate/Grok
-      const grokResult = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
-      
-      if (grokResult === GROK_TIMEOUT_RETRY) {
-        // Timeout — clear prediction and let client retry
-        const failedScene = { ...scene, videoPredictionId: undefined };
-        await updateSingleScene(supabase, generationId, idx, () => failedScene);
-        throw new Error(`Video generation timed out for scene ${scene.number}, please retry`);
+      // Poll based on provider
+      const provider = scene.videoProvider || "replicate";
+
+      if (provider === "hypereal" && hyperealApiKey) {
+        const pollResult = await pollHyperealVideo(scene.videoPredictionId, hyperealApiKey);
+        if (pollResult.status === "completed") {
+          // Download and upload to Supabase storage
+          const videoResponse = await fetch(pollResult.outputUrl);
+          if (!videoResponse.ok) throw new Error("Failed to download Hypereal video");
+          const videoBuffer = new Uint8Array(await videoResponse.arrayBuffer());
+
+          const fileName = `cinematic-video-hr-${Date.now()}-${scene.number}.mp4`;
+          const upload = await supabase.storage
+            .from("scene-videos")
+            .upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
+
+          if (upload.error) {
+            try {
+              await supabase.storage.createBucket("scene-videos", { public: true });
+              await supabase.storage.from("scene-videos").upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
+            } catch (e) {
+              throw new Error("Failed to upload Hypereal video to storage");
+            }
+          }
+
+          const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
+          const completedScene = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
+          // Use atomic update to avoid race condition with parallel batch polling
+          await updateSingleScene(supabase, generationId, idx, () => completedScene);
+          return jsonResponse({ success: true, status: "complete", scene: completedScene });
+        }
+        if (pollResult.status === "failed") {
+          console.error(`[VIDEO] Hypereal poll FAILED for scene ${scene.number}: ${pollResult.error}`);
+          // Do NOT clear predictionId and retry — that causes infinite job creation loops.
+          // Instead, mark this as a hard failure so the client stops polling.
+          const failedScene = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" as const };
+          await updateSingleScene(supabase, generationId, idx, () => failedScene);
+          throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error || "Hypereal returned failure"}`);
+        }
+        return jsonResponse({ success: true, status: "processing", scene });
       }
-      
-      if (grokResult) {
-        // grokResult is already a public URL from resolveGrok
-        const completedScene = { ...scene, videoUrl: grokResult, videoPredictionId: undefined };
-        await updateSingleScene(supabase, generationId, idx, () => completedScene);
-        return jsonResponse({ success: true, status: "complete", scene: completedScene });
-      }
-      
-      // Still processing
-      return jsonResponse({ success: true, status: "processing", scene });
+
+      // Replicate polling disabled — Hypereal only
+      throw new Error(`Unknown video provider for scene ${scene.number}: ${provider}`);
     }
 
     // =============== IMAGE-EDIT PHASE (Apply modification then regenerate video) ===============
@@ -1407,28 +1447,41 @@ CRITICAL RULES:
 
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
-      // Now regenerate video with the new image using Replicate/Grok
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Replicate/Grok`);
+      // Now regenerate video with the new image (Hypereal first, Replicate fallback)
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
+      // hyperealApiKey already declared above
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
-      // Poll until complete
-      for (let i = 0; i < 90; i++) {
-        await sleep(3000);
-        const result = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
-        if (result === GROK_TIMEOUT_RETRY) {
-          console.warn(`[IMG-EDIT] Grok timed out for scene ${scene.number}, retrying...`);
-          break;
-        }
-        if (result) {
-          videoUrl = result;
-          console.log(`[IMG-EDIT] Grok video success for scene ${scene.number}`);
-          break;
+      // Try Hypereal first
+      if (hyperealApiKey) {
+        const hrVid = await startHyperealVideo(scene.visualPrompt, newImageUrl, format, scene.duration, hyperealApiKey);
+        if (hrVid.ok) {
+          for (let i = 0; i < 90; i++) {
+            await sleep(3000);
+            const poll = await pollHyperealVideo(hrVid.jobId, hyperealApiKey);
+            if (poll.status === "completed") {
+              const vidRes = await fetch(poll.outputUrl);
+              if (vidRes.ok) {
+                const vidBytes = new Uint8Array(await vidRes.arrayBuffer());
+                const vidFileName = `cinematic-video-hr-${Date.now()}-${scene.number}.mp4`;
+                await supabase.storage.from("scene-images").upload(vidFileName, vidBytes, { contentType: "video/mp4", upsert: true });
+                const { data: vidUrlData } = supabase.storage.from("scene-images").getPublicUrl(vidFileName);
+                videoUrl = vidUrlData.publicUrl;
+              }
+              break;
+            }
+            if (poll.status === "failed") {
+              console.warn(`[IMG-EDIT] Hypereal video failed: ${poll.error}`);
+              break;
+            }
+          }
+          if (videoUrl) console.log(`[IMG-EDIT] Hypereal video success for scene ${scene.number}`);
         }
       }
 
+      // Replicate fallback — COMMENTED OUT for Hypereal debugging
       if (!videoUrl) {
-        throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}`);
+        throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
       }
 
       if (!videoUrl) {
@@ -1464,27 +1517,39 @@ CRITICAL RULES:
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, hyperealApiKey || undefined);
 
-      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Replicate/Grok`);
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
-      // Poll until complete
-      for (let i = 0; i < 90; i++) {
-        await sleep(3000);
-        const result = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
-        if (result === GROK_TIMEOUT_RETRY) {
-          console.warn(`[IMG-REGEN] Grok timed out for scene ${scene.number}, retrying...`);
-          break;
-        }
-        if (result) {
-          videoUrl = result;
-          console.log(`[IMG-REGEN] Grok video success for scene ${scene.number}`);
-          break;
+      // Try Hypereal first
+      if (hyperealApiKey) {
+        const hrVid = await startHyperealVideo(scene.visualPrompt, newImageUrl, format, scene.duration, hyperealApiKey);
+        if (hrVid.ok) {
+          for (let i = 0; i < 90; i++) {
+            await sleep(3000);
+            const poll = await pollHyperealVideo(hrVid.jobId, hyperealApiKey);
+            if (poll.status === "completed") {
+              const vidRes = await fetch(poll.outputUrl);
+              if (vidRes.ok) {
+                const vidBytes = new Uint8Array(await vidRes.arrayBuffer());
+                const vidFileName = `cinematic-video-hr-${Date.now()}-${scene.number}.mp4`;
+                await supabase.storage.from("scene-images").upload(vidFileName, vidBytes, { contentType: "video/mp4", upsert: true });
+                const { data: vidUrlData } = supabase.storage.from("scene-images").getPublicUrl(vidFileName);
+                videoUrl = vidUrlData.publicUrl;
+              }
+              break;
+            }
+            if (poll.status === "failed") {
+              console.warn(`[IMG-REGEN] Hypereal video failed: ${poll.error}`);
+              break;
+            }
+          }
+          if (videoUrl) console.log(`[IMG-REGEN] Hypereal video success for scene ${scene.number}`);
         }
       }
 
+      // Replicate fallback — COMMENTED OUT for Hypereal debugging
       if (!videoUrl) {
-        throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}`);
+        throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
       }
 
       if (!videoUrl) {
