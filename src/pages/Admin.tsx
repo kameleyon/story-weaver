@@ -64,7 +64,7 @@ export default function Admin() {
             {/* User info - right aligned */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate("/app")}
+                onClick={() => navigate("/settings")}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-sm">

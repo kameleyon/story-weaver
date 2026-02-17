@@ -124,11 +124,10 @@ async function startHyperealVideo(
   prompt: string,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  _duration: number,
+  duration: number,
   apiKey: string,
 ): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  console.log(`[HYPEREAL-VID] Starting seedance-1-5-i2v generation (aspect_ratio=${aspectRatio}, duration=10, audio=false)...`);
+  console.log(`[HYPEREAL-VID] Starting veo-3-1-i2v generation...`);
 
   try {
     const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
@@ -138,14 +137,12 @@ async function startHyperealVideo(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "seedance-1-5-i2v",
+        model: "veo-3-1-i2v",
         input: {
           prompt,
           image: imageUrl,
-          duration: 10,
-          resolution: "720p",
-          aspect_ratio: aspectRatio,
-          generate_audio: false,
+          duration: Math.min(duration, 8),
+          aspect_ratio: format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9",
         },
       }),
     });
@@ -175,7 +172,7 @@ async function pollHyperealVideo(
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=seedance-1-5-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
@@ -227,7 +224,69 @@ const STYLE_PROMPTS: Record<string, string> = {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// NOTE: isHaitianCreole and pcmToWav are imported from _shared/audioEngine.ts above
+// ============= HAITIAN CREOLE DETECTION =============
+function isHaitianCreole(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  const creoleIndicators = [
+    "mwen", "ou", "li", "nou", "yo", "sa", "ki", "nan", "pou", "ak",
+    "pa", "se", "te", "ap", "gen", "fè", "di", "ale", "vin", "bay",
+    "konnen", "wè", "pran", "mete", "vle", "kapab", "dwe", "bezwen",
+    "tankou", "paske", "men", "lè", "si", "kote", "kouman", "poukisa",
+    "anpil", "tout", "chak", "yon", "de", "twa", "kat", "senk",
+    "ayiti", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
+    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "apre",
+    "t ap", "pral", "ta",
+  ];
+
+  let matchCount = 0;
+  for (const indicator of creoleIndicators) {
+    const regex = new RegExp(`\\b${indicator}\\b`, "gi");
+    if (regex.test(lowerText)) matchCount++;
+  }
+
+  return matchCount >= 3;
+}
+
+// ============= PCM TO WAV CONVERSION =============
+function pcmToWav(
+  pcmData: Uint8Array,
+  sampleRate: number = 24000,
+  numChannels: number = 1,
+  bitsPerSample: number = 16,
+): Uint8Array {
+  const audioFormat = bitsPerSample === 32 ? 3 : 1;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+
+  const buffer = new ArrayBuffer(totalSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+  view.setUint32(4, totalSize - 8, true);
+  view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
+
+  // fmt subchunk
+  view.setUint8(12, 0x66); view.setUint8(13, 0x6d); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, audioFormat, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data subchunk
+  view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+  view.setUint32(40, dataSize, true);
+
+  const result = new Uint8Array(buffer);
+  result.set(pcmData, headerSize);
+  return result;
+}
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
@@ -905,34 +964,6 @@ async function updateScenes(
     .eq("id", generationId);
 }
 
-// Atomic update for a single scene — re-reads latest scenes from DB to avoid race conditions
-// when multiple scenes are being updated in parallel (e.g. video batch polling)
-async function updateSingleScene(
-  supabase: ReturnType<typeof createClient>,
-  generationId: string,
-  sceneIndex: number,
-  updater: (scene: Scene) => Scene,
-): Promise<Scene[]> {
-  // Re-read latest scenes from DB to avoid overwriting parallel updates
-  const { data: gen } = await supabase
-    .from("generations")
-    .select("scenes")
-    .eq("id", generationId)
-    .maybeSingle();
-
-  const latestScenes = (gen?.scenes as Scene[]) || [];
-  if (latestScenes[sceneIndex]) {
-    latestScenes[sceneIndex] = updater(latestScenes[sceneIndex]);
-  }
-
-  await supabase
-    .from("generations")
-    .update({ scenes: latestScenes })
-    .eq("id", generationId);
-
-  return latestScenes;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1211,9 +1242,8 @@ serve(async (req) => {
         console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
-        await updateSingleScene(supabase, generationId, idx, (s) => ({
-          ...s, videoUrl: undefined, videoPredictionId: undefined,
-        }));
+        scenes[idx] = scene;
+        await updateScenes(supabase, generationId, scenes);
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
@@ -1242,9 +1272,9 @@ serve(async (req) => {
             hyperealApiKey,
           );
           if (hrResult.ok) {
-            const updatedScene = { ...scene, videoPredictionId: hrResult.jobId, videoProvider: "hypereal" as const };
-            await updateSingleScene(supabase, generationId, idx, () => updatedScene);
-            return jsonResponse({ success: true, status: "processing", scene: updatedScene });
+            scenes[idx] = { ...scene, videoPredictionId: hrResult.jobId, videoProvider: "hypereal" };
+            await updateScenes(supabase, generationId, scenes);
+            return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
           }
           console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
         }
@@ -1279,17 +1309,16 @@ serve(async (req) => {
           }
 
           const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-          const completedScene = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
-          // Use atomic update to avoid race condition with parallel batch polling
-          await updateSingleScene(supabase, generationId, idx, () => completedScene);
-          return jsonResponse({ success: true, status: "complete", scene: completedScene });
+          scenes[idx] = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
         }
         if (pollResult.status === "failed") {
           console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}`);
           // Clear prediction so next poll attempt starts a fresh Hypereal job
-          const failedScene = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" as const };
-          await updateSingleScene(supabase, generationId, idx, () => failedScene);
-          return jsonResponse({ success: true, status: "processing", scene: failedScene });
+          scenes[idx] = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
@@ -1540,16 +1569,8 @@ Make only the requested changes while keeping everything else consistent.`;
 
     // =============== PHASE 5: FINALIZE ===============
     if (phase === "finalize") {
-      // Re-read latest scenes from DB to capture all atomic video updates
-      const { data: latestGen } = await supabase
-        .from("generations")
-        .select("scenes")
-        .eq("id", generationId)
-        .maybeSingle();
-      const finalScenes = (latestGen?.scenes as Scene[]) || scenes;
-
       // Collect all video URLs from scenes
-      const videoUrls = finalScenes.filter((s) => s.videoUrl).map((s) => s.videoUrl as string);
+      const videoUrls = scenes.filter((s) => s.videoUrl).map((s) => s.videoUrl as string);
       // Keep first as legacy field, but also return all clips
       const finalVideoUrl = videoUrls[0] || "";
 
@@ -1560,7 +1581,7 @@ Make only the requested changes while keeping everything else consistent.`;
           status: "complete",
           progress: 100,
           completed_at: new Date().toISOString(),
-          scenes: finalScenes,
+          scenes,
           video_url: finalVideoUrl,
         })
         .eq("id", generationId);
@@ -1579,7 +1600,7 @@ Make only the requested changes while keeping everything else consistent.`;
         projectId: generation.project_id,
         generationId,
         title: project?.title || "Untitled Cinematic",
-        scenes: finalScenes,
+        scenes,
         finalVideoUrl,
         allVideoUrls: videoUrls, // All generated clips
       });
