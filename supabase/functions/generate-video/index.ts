@@ -2013,15 +2013,16 @@ async function generateImageWithHypereal(
   sourceImageUrl?: string, // Optional: provide for img2img / Apply Edit
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+  const model = "nano-banana-pro-t2i"; // Always use Pro
   const mode = sourceImageUrl ? "img2img" : "t2i";
-  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i ${mode} generation...`);
+  console.log(`[HYPEREAL-IMG] Starting ${model} ${mode} generation...`);
 
   try {
     const body: Record<string, unknown> = {
+      model,
       prompt,
-      resolution: "1k",
+      resolution: "1K",
       aspect_ratio: aspectRatio,
-      output_format: "png",
     };
 
     // If a source image is provided, this becomes an img2img / edit request
@@ -2078,10 +2079,9 @@ Full body portrait, front view, neutral pose, clean background, high detail, pro
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        model: "nano-banana-pro-t2i",
         prompt,
-        resolution: "1k",
         aspect_ratio: "3:4",
-        output_format: "png",
       }),
     });
 
