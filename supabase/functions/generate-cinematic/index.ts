@@ -61,7 +61,7 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
 // Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
-const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
+const VIDEO_MODEL = "minimax/video-01-live";
 
 // Nano Banana models for image generation (Replicate fallback)
 const NANO_BANANA_MODEL = "google/nano-banana";
@@ -121,15 +121,14 @@ async function generateImageWithHypereal(
   }
 }
 
-async function startGrokVideo(
+async function startVideoGeneration(
   scene: Scene,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
   duration: number,
   replicateToken: string,
 ): Promise<string> {
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  console.log(`[GROK-VIDEO] Starting grok-imagine-video generation (duration=${duration}, aspect_ratio=${aspectRatio})...`);
+  console.log(`[VIDEO] Starting minimax/video-01-live generation...`);
 
   const videoPrompt = `${scene.visualPrompt}
 
@@ -144,7 +143,7 @@ ANIMATION RULES (CRITICAL):
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(`${REPLICATE_MODELS_URL}/${GROK_VIDEO_MODEL}/predictions`, {
+      const response = await fetch(`${REPLICATE_MODELS_URL}/${VIDEO_MODEL}/predictions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${replicateToken}`,
@@ -153,8 +152,8 @@ ANIMATION RULES (CRITICAL):
         body: JSON.stringify({
           input: {
             prompt: videoPrompt,
-            image: imageUrl,
-            aspect_ratio: aspectRatio,
+            first_frame_image: imageUrl,
+            prompt_optimizer: true,
           },
         }),
       });
