@@ -121,9 +121,6 @@ const normalizeScenes = (raw: unknown): Scene[] | undefined => {
     imageUrl: s?.imageUrl ?? s?.image_url,
     imageUrls: Array.isArray(s?.imageUrls) ? s.imageUrls : undefined,
     audioUrl: s?.audioUrl ?? s?.audio_url,
-    videoUrl: s?.videoUrl ?? s?.video_url,
-    videoPredictionId: s?.videoPredictionId,
-    videoProvider: s?.videoProvider,
     title: s?.title,
     subtitle: s?.subtitle,
   }));
@@ -240,11 +237,6 @@ export function useGenerationPipeline() {
           }
           if (response.status === 402) {
             throw new Error("AI credits exhausted. Please add credits.");
-          }
-          if (response.status === 401 && attempt < MAX_ATTEMPTS) {
-            // Token may have expired mid-generation; retry with a fresh one
-            await sleep(500);
-            continue;
           }
           if (response.status === 401) {
             throw new Error("Session expired. Please refresh the page and try again.");
@@ -423,7 +415,7 @@ export function useGenerationPipeline() {
           }));
 
           // Phase 4: Video clips (parallel batches for faster generation)
-          const VIDEO_BATCH_SIZE = 5;
+          const VIDEO_BATCH_SIZE = 3;
 
           for (let i = 0; i < cSceneCount; i += VIDEO_BATCH_SIZE) {
             const batchEnd = Math.min(i + VIDEO_BATCH_SIZE, cSceneCount);
