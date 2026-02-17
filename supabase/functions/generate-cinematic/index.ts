@@ -66,7 +66,7 @@ const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 // Nano Banana models for image generation (Replicate fallback)
 const NANO_BANANA_MODEL = "google/nano-banana";
 
-// ============= HYPEREAL API HELPERS =============
+// ============= HYPEREAL API HELPERS (images only — video moved to Grok) =============
 const HYPEREAL_API_BASE = "https://hypereal.tech";
 
 async function generateImageWithHypereal(
@@ -121,17 +121,19 @@ async function generateImageWithHypereal(
   }
 }
 
-async function startHailuo(
+// ============= HAILUO HELPERS (COMMENTED OUT — replaced by Grok Imagine Video via Replicate) =============
+// async function startHailuo(scene, imageUrl, format, duration, apiKey) { ... }
+// async function pollHailuo(pollUrl, apiKey) { ... }
+// See git history for full Hailuo implementation if needed for rollback.
+
+// ============= GROK IMAGINE VIDEO HELPERS (via Replicate API) =============
+async function startGrokVideo(
   scene: Scene,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  duration: number,
-  apiKey: string,
+  replicateToken: string,
 ): Promise<string> {
-  const clampedDuration = duration <= 7 ? 5 : 10; // Hailuo supports 5 or 10
-  // 1080p only supports 5s; use 768p for 10s
-  const resolution = clampedDuration === 10 ? "768p" : "1080p";
-  console.log(`[HAILUO] Starting hailuo-02-i2v generation (duration=${clampedDuration}, resolution=${resolution})...`);
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   const videoPrompt = `${scene.visualPrompt}
 
@@ -143,87 +145,101 @@ ANIMATION RULES (CRITICAL):
 - Static poses with subtle breathing/idle movement are preferred for dialogue scenes
 - Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
 
+  const input: Record<string, unknown> = {
+    prompt: videoPrompt,
+    image: imageUrl,
+    duration: 5,
+    resolution: "720p",
+    // aspect_ratio is ignored when image is provided per Grok schema, but include for safety
+    aspect_ratio: aspectRatio,
+  };
+
+  console.log(`[GROK-VIDEO] Starting xai/grok-imagine-video for scene ${scene.number} (format=${format})...`);
+
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
+      // Use the model-specific predictions endpoint (no version ID needed)
+      const response = await fetch(`${REPLICATE_MODELS_URL}/${GROK_VIDEO_MODEL}/predictions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${replicateToken}`,
           "Content-Type": "application/json",
+          Prefer: "respond-async",
         },
-        body: JSON.stringify({
-          model: "hailuo-02-i2v",
-          input: {
-            prompt: videoPrompt,
-            image: imageUrl,
-            duration: clampedDuration,
-            resolution,
-          },
-        }),
+        body: JSON.stringify({ input }),
       });
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
         const status = response.status;
-        if ((status === 429 || status >= 500) && attempt < MAX_RETRIES) {
-          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-          console.warn(`[HAILUO] Rate limited (${status}) attempt ${attempt}, retrying in ${delayMs}ms`);
+        if ((status === 422 || status === 429 || status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 3000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[GROK-VIDEO] Retryable error (${status}) attempt ${attempt}, retrying in ${delayMs}ms`);
           await sleep(delayMs);
           continue;
         }
-        throw new Error(`Hailuo video failed (${status}): ${errText.substring(0, 200)}`);
+        throw new Error(`Grok video start failed (${status}): ${errText.substring(0, 300)}`);
       }
 
       const data = await response.json();
-      console.log(`[HAILUO] Response:`, JSON.stringify(data).substring(0, 300));
-      if (!data.jobId) {
-        throw new Error(`No jobId in Hailuo response: ${JSON.stringify(data).substring(0, 200)}`);
+      if (!data.id) {
+        throw new Error(`No prediction ID in Grok response: ${JSON.stringify(data).substring(0, 200)}`);
       }
 
-      const pollUrl = data.pollUrl || `${HYPEREAL_API_BASE}/v1/jobs/${data.jobId}?model=hailuo-02-i2v&type=video`;
-      console.log(`[HAILUO] Job started: ${data.jobId}, pollUrl: ${pollUrl.substring(0, 120)}`);
-      return pollUrl as string;
+      console.log(`[GROK-VIDEO] Prediction started: ${data.id}, status: ${data.status}`);
+      return data.id as string;
     } catch (err: any) {
-      if (attempt < MAX_RETRIES && (err?.message?.includes("429") || err?.message?.includes("500"))) {
-        const delayMs = 2000 * Math.pow(2, attempt - 1);
-        console.warn(`[HAILUO] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+      if (attempt < MAX_RETRIES && (err?.message?.includes("422") || err?.message?.includes("429") || err?.message?.includes("500"))) {
+        const delayMs = 3000 * Math.pow(2, attempt - 1);
+        console.warn(`[GROK-VIDEO] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
       throw err;
     }
   }
-  throw new Error("Hailuo video prediction failed after retries");
+  throw new Error("Grok video prediction failed after retries");
 }
 
-async function pollHailuo(
-  pollUrl: string,
-  apiKey: string,
+async function pollGrokVideo(
+  predictionId: string,
+  replicateToken: string,
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
-    const response = await fetch(pollUrl, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    const prediction = await getReplicatePrediction(predictionId, replicateToken);
 
-    if (!response.ok) {
-      return { status: "failed", error: `Hailuo poll failed (${response.status})` };
+    if (prediction.status === "succeeded") {
+      // Output can be a URL string, an object with .url(), or an array
+      let outputUrl: string | null = null;
+      if (typeof prediction.output === "string") {
+        outputUrl = prediction.output;
+      } else if (prediction.output?.url) {
+        outputUrl = typeof prediction.output.url === "function" ? prediction.output.url() : prediction.output.url;
+      } else if (Array.isArray(prediction.output) && prediction.output.length > 0) {
+        const first = prediction.output[0];
+        outputUrl = typeof first === "string" ? first : first?.url || null;
+      }
+
+      if (!outputUrl) {
+        return { status: "failed", error: `Grok succeeded but no output URL found: ${JSON.stringify(prediction.output).substring(0, 200)}` };
+      }
+      return { status: "completed", outputUrl };
     }
 
-    const data = await response.json();
-    if (data.status === "completed" && data.outputUrl) {
-      return { status: "completed", outputUrl: data.outputUrl };
+    if (prediction.status === "failed" || prediction.status === "canceled") {
+      return { status: "failed", error: prediction.error || `Grok video ${prediction.status}` };
     }
-    if (data.status === "failed") {
-      return { status: "failed", error: data.error || "Hailuo video generation failed" };
-    }
+
+    // starting, processing
     return { status: "processing" };
   } catch (err) {
-    return { status: "failed", error: `Hailuo poll error: ${err instanceof Error ? err.message : String(err)}` };
+    return { status: "failed", error: `Grok poll error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
 // ============= STYLE PROMPTS (from generate-video/index.ts) =============
+
 const STYLE_PROMPTS: Record<string, string> = {
   minimalist: `Minimalist illustration using thin monoline black line art. Clean Scandinavian / modern icon vibe. Large areas of white negative space. Muted pastel palette (sage green, dusty teal, soft gray-blue, warm mustard) with flat fills only (no gradients). Centered composition, crisp edges, airy spacing, high resolution.`,
 
@@ -248,6 +264,8 @@ const STYLE_PROMPTS: Record<string, string> = {
   storybook: `Whimsical storybook hand-drawn ink style. Hand-drawn black ink outlines with visible rough sketch construction lines, slightly uneven strokes, and occasional line overlap (imperfect but intentional). Bold vivid natural color palette. Crosshatching and scribbly pen shading for depth and texture, especially in shadows and on fabric folds. Watercolor + gouache-like washes: layered, semi-opaque paint with soft gradients. Edges slightly loose (not crisp), with gentle paint bleed and dry-brush texture in places. Cartoon-proportioned character design: slightly exaggerated features (large eyes, long limbs, expressive faces), but grounded in believable anatomy and posture. Background detailed but painterly: textured walls, props with sketchy detail, and atmospheric depth. Subtle grain + ink flecks for a handmade print feel. Cinematic framing, shallow depth cues, soft focus in far background. Editorial illustration / indie animation concept art aesthetic. Charming, cozy, slightly messy, richly textured, high detail, UHD. No 3D render, no clean vector, no flat icon style, no anime/manga linework, no glossy neon gradients, no photorealism.`,
 
   crayon: `Cute childlike crayon illustration on clean white paper background. Waxy crayon / oil pastel scribble texture with visible stroke marks and uneven fill (messy on purpose). Simple rounded shapes, thick hand-drawn outlines, minimal details, playful proportions (big head, small body). Bright limited palette like orange + blue + yellow, rough shading and light smudges like real crayons on paper. Simple cheerful scene, lots of white space, friendly smiley faces. Looks like kindergarten drawing scanned into computer. High resolution. No vector, no clean digital painting, no 3D, no realism, no gradients, no sharp edges.`,
+
+  painterly: `Lush impressionistic oil-painting style with visible thick impasto brush strokes and rich, saturated colors. Romantic landscape aesthetic with dreamy, atmospheric backgrounds. Characters have a soft, story-illustration quality with gentle features and warm skin tones. Cinematic golden-hour lighting with dramatic light rays filtering through. Rich textures throughout – canvas weave visible in flat areas, heavy paint buildup on highlights. Palette: warm golds, deep blues, forest greens, and burnt sienna. Think Studio Ghibli backgrounds meet classical oil painting. UHD quality.`,
 
   chalkboard: `A hand-drawn chalkboard illustration style characterized by voluntarily imperfect, organic lines that capture the authentic vibe of human handwriting. Unlike rigid digital art, the strokes feature subtle wobbles, varying pressure, and natural endpoints, mimicking the tactile feel of chalk held by a steady hand. The background is a deep, dark slate grey, almost black, with a very subtle, fine-grain slate texture that suggests a fresh, clean surface rather than a dusty one. The line work features crisp, monoline chalk outlines that possess the dry, slightly grainy texture of real chalk and are drawn with authentic vibe of hand-drawing, yet ensuring a confident and legible look. The color palette utilizes high-contrast stark white. The rendering is flat and illustrative, with solid chalk fills textured via diagonal hatching or stippling to let the dark background show through slightly, creating a vibe that is smart, academic, and hand-crafted yet thoroughly professional. No other colors than white.`,
 };
@@ -766,7 +784,7 @@ QUALITY REQUIREMENTS:
   throw new Error(`Image generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
 }
 
-// Grok/Replicate functions removed — all video generation now uses Hailuo 02 I2V via Hypereal
+// Hailuo/Replicate video functions removed — all video generation now uses Grok Imagine Video via Replicate
 
 async function readGenerationOwned(
   supabase: ReturnType<typeof createClient>,
@@ -1099,7 +1117,7 @@ serve(async (req) => {
       return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
     }
 
-    // =============== PHASE 4: VIDEO ===============
+    // =============== PHASE 4: VIDEO (Grok Imagine Video via Replicate) ===============
     if (phase === "video") {
       const idx = requireNumber(sceneIndex, "sceneIndex");
       const scene = scenes[idx];
@@ -1127,9 +1145,6 @@ serve(async (req) => {
 
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
-      const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-      if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
-
       if (!scene.videoPredictionId) {
         // DEDUP: Re-read scene from DB to avoid race condition with parallel batch polling
         const { data: freshGen } = await supabase
@@ -1147,15 +1162,15 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: freshScenes[idx] });
         }
 
-        // Use Hailuo 02 I2V for video generation — 10s to match audio duration
-        const jobId = await startHailuo(scene, scene.imageUrl!, format, scene.duration || 10, hyperealApiKey);
-        const updatedScene = { ...scene, videoPredictionId: jobId, videoProvider: "hypereal" as const };
+        // Use Grok Imagine Video via Replicate for video generation
+        const predictionId = await startGrokVideo(scene, scene.imageUrl!, format, replicateToken);
+        const updatedScene = { ...scene, videoPredictionId: predictionId, videoProvider: "replicate" as const };
         await updateSingleScene(supabase, generationId, idx, () => updatedScene);
         return jsonResponse({ success: true, status: "processing", scene: updatedScene });
       }
 
-      // Poll Hailuo
-      const pollResult = await pollHailuo(scene.videoPredictionId, hyperealApiKey);
+      // Poll Grok video
+      const pollResult = await pollGrokVideo(scene.videoPredictionId, replicateToken);
       
       if (pollResult.status === "failed") {
         // Clear prediction and let client retry
@@ -1167,7 +1182,7 @@ serve(async (req) => {
       if (pollResult.status === "completed") {
         // Download and upload to our storage
         const videoResponse = await fetch(pollResult.outputUrl);
-        if (!videoResponse.ok) throw new Error(`Failed to download Hailuo video: ${videoResponse.status}`);
+        if (!videoResponse.ok) throw new Error(`Failed to download Grok video: ${videoResponse.status}`);
         const videoBuffer = new Uint8Array(await videoResponse.arrayBuffer());
         
         const fileName = `cinematic-video-${Date.now()}-${scene.number}.mp4`;
@@ -1316,19 +1331,17 @@ CRITICAL RULES:
 
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
-      // Now regenerate video with the new image using Hailuo 02 I2V
-      const hailVideoKey = Deno.env.get("HYPEREAL_API_KEY");
-      if (!hailVideoKey) throw new Error("HYPEREAL_API_KEY not configured");
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Hailuo 02 I2V`);
+      // Now regenerate video with the new image using Grok Imagine Video via Replicate
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       let videoUrl: string | null = null;
 
-      const hailJobId = await startHailuo(scene, newImageUrl, format, scene.duration || 10, hailVideoKey);
+      const grokPredictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       // Poll until complete
       for (let i = 0; i < 120; i++) {
         await sleep(3000);
-        const result = await pollHailuo(hailJobId, hailVideoKey);
+        const result = await pollGrokVideo(grokPredictionId, replicateToken);
         if (result.status === "failed") {
-          console.warn(`[IMG-EDIT] Hailuo failed for scene ${scene.number}: ${result.error}`);
+          console.warn(`[IMG-EDIT] Grok video failed for scene ${scene.number}: ${result.error}`);
           break;
         }
         if (result.status === "completed") {
@@ -1340,7 +1353,7 @@ CRITICAL RULES:
             await supabase.storage.from("scene-videos").upload(fn, vidBuf, { contentType: "video/mp4", upsert: true });
             const { data: u } = supabase.storage.from("scene-videos").getPublicUrl(fn);
             videoUrl = u.publicUrl;
-            console.log(`[IMG-EDIT] Hailuo video success for scene ${scene.number}`);
+            console.log(`[IMG-EDIT] Grok video success for scene ${scene.number}`);
           }
           break;
         }
@@ -1379,18 +1392,17 @@ CRITICAL RULES:
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, hyperealApiKey || undefined);
 
-      const hailVideoKey2 = Deno.env.get("HYPEREAL_API_KEY");
-      if (!hailVideoKey2) throw new Error("HYPEREAL_API_KEY not configured");
-      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Hailuo 02 I2V`);
+      // Now regenerate video with the new image using Grok Imagine Video via Replicate
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       let videoUrl: string | null = null;
 
-      const hailJobId2 = await startHailuo(scene, newImageUrl, format, scene.duration || 10, hailVideoKey2);
+      const grokPredictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       // Poll until complete
       for (let i = 0; i < 120; i++) {
         await sleep(3000);
-        const result = await pollHailuo(hailJobId2, hailVideoKey2);
+        const result = await pollGrokVideo(grokPredictionId, replicateToken);
         if (result.status === "failed") {
-          console.warn(`[IMG-REGEN] Hailuo failed for scene ${scene.number}: ${result.error}`);
+          console.warn(`[IMG-REGEN] Grok video failed for scene ${scene.number}: ${result.error}`);
           break;
         }
         if (result.status === "completed") {
@@ -1402,7 +1414,7 @@ CRITICAL RULES:
             await supabase.storage.from("scene-videos").upload(fn, vidBuf, { contentType: "video/mp4", upsert: true });
             const { data: u } = supabase.storage.from("scene-videos").getPublicUrl(fn);
             videoUrl = u.publicUrl;
-            console.log(`[IMG-REGEN] Hailuo video success for scene ${scene.number}`);
+            console.log(`[IMG-REGEN] Grok video success for scene ${scene.number}`);
           }
           break;
         }
