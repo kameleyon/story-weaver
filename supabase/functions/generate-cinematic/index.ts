@@ -954,22 +954,21 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify user via getClaims (works even when session row is purged)
-    const token = sanitizeBearer(authHeader);
+    // Verify user via getUser
     const supabaseAuth = createClient(
       supabaseUrl,
       Deno.env.get("SUPABASE_ANON_KEY") ?? supabaseKey,
       { global: { headers: { Authorization: authHeader } } }
     );
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      const msg = claimsError?.message?.toLowerCase() || "";
+    const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !authUser) {
+      const msg = authError?.message?.toLowerCase() || "";
       if (msg.includes("expired") || msg.includes("jwt")) {
         return jsonResponse({ error: "Token expired", code: "TOKEN_EXPIRED" }, { status: 401 });
       }
       return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
     }
-    const user = { id: claimsData.claims.sub as string, email: claimsData.claims.email as string };
+    const user = { id: authUser.id, email: authUser.email || "" };
 
     // Verify plan access: Professional, Enterprise, or Admin
     const { data: isAdmin } = await supabase.rpc("is_admin", { _user_id: user.id });
@@ -1327,14 +1326,14 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
       const style = project.style || "realistic";
 
-      // Build edit prompt
-      const fullStylePrompt = getStylePrompt(style);
-      const editPrompt = `Edit this image: ${modification}
+      // Build edit prompt — focused on MODIFYING the existing image, not regenerating
+      const editPrompt = `Edit this existing image with the following modification: ${modification}
 
-IMPORTANT: Preserve the overall composition, lighting, and style of the original image.
-Apply the following style: ${fullStylePrompt}
-
-Make only the requested changes while keeping everything else consistent.`;
+CRITICAL RULES:
+- ONLY change what is explicitly requested above
+- PRESERVE everything else: composition, style, characters, background, lighting, colors
+- This is an IMAGE EDIT, not a regeneration — keep the original image as close as possible
+- Do NOT change the art style or overall look unless explicitly asked`;
 
       let newImageUrl: string | null = null;
 
