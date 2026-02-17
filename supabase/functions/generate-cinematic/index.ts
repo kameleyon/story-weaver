@@ -121,65 +121,93 @@ async function generateImageWithHypereal(
   }
 }
 
-async function startHyperealVideo(
-  prompt: string,
+async function startHailuo(
+  scene: Scene,
   imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  _duration: number,
+  duration: number,
   apiKey: string,
-): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
-  console.log(`[HYPEREAL-VID] Starting kling-2-5-i2v generation (duration=5)...`);
+): Promise<string> {
+  const clampedDuration = duration <= 7 ? 5 : 10; // Hailuo supports 5 or 10
+  // 1080p only supports 5s; use 768p for 10s
+  const resolution = clampedDuration === 10 ? "768p" : "1080p";
+  console.log(`[HAILUO] Starting hailuo-02-i2v generation (duration=${clampedDuration}, resolution=${resolution})...`);
 
-  try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "kling-2-5-i2v",
-        input: {
-          prompt,
-          image: imageUrl,
-          negative_prompt: "blurry, low quality, watermark, multiple limbs, talking animation",
-          duration: 5,
-          guidance_scale: 0.5,
+  const videoPrompt = `${scene.visualPrompt}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          model: "hailuo-02-i2v",
+          input: {
+            prompt: videoPrompt,
+            image: imageUrl,
+            duration: clampedDuration,
+            resolution,
+          },
+        }),
+      });
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      console.error(`[HYPEREAL-VID] Request failed (${response.status}): ${errText.substring(0, 300)}`);
-      return { ok: false, error: `Hypereal video failed (${response.status}): ${errText.substring(0, 200)}` };
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        const status = response.status;
+        if ((status === 429 || status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[HAILUO] Rate limited (${status}) attempt ${attempt}, retrying in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new Error(`Hailuo video failed (${status}): ${errText.substring(0, 200)}`);
+      }
+
+      const data = await response.json();
+      console.log(`[HAILUO] Response:`, JSON.stringify(data).substring(0, 300));
+      if (!data.jobId) {
+        throw new Error(`No jobId in Hailuo response: ${JSON.stringify(data).substring(0, 200)}`);
+      }
+
+      console.log(`[HAILUO] Job started: ${data.jobId}`);
+      return data.jobId as string;
+    } catch (err: any) {
+      if (attempt < MAX_RETRIES && (err?.message?.includes("429") || err?.message?.includes("500"))) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1);
+        console.warn(`[HAILUO] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
     }
-
-    const data = await response.json();
-    console.log(`[HYPEREAL-VID] Response:`, JSON.stringify(data).substring(0, 300));
-    if (!data.jobId) {
-      return { ok: false, error: `No jobId in Hypereal video response: ${JSON.stringify(data).substring(0, 200)}` };
-    }
-
-    console.log(`[HYPEREAL-VID] Job started: ${data.jobId}`);
-    return { ok: true, jobId: data.jobId };
-  } catch (err) {
-    return { ok: false, error: `Hypereal video error: ${err instanceof Error ? err.message : String(err)}` };
   }
+  throw new Error("Hailuo video prediction failed after retries");
 }
 
-async function pollHyperealVideo(
+async function pollHailuo(
   jobId: string,
   apiKey: string,
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=kling-2-5-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=hailuo-02-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
     if (!response.ok) {
-      return { status: "failed", error: `Hypereal poll failed (${response.status})` };
+      return { status: "failed", error: `Hailuo poll failed (${response.status})` };
     }
 
     const data = await response.json();
@@ -187,11 +215,11 @@ async function pollHyperealVideo(
       return { status: "completed", outputUrl: data.outputUrl };
     }
     if (data.status === "failed") {
-      return { status: "failed", error: data.error || "Hypereal video generation failed" };
+      return { status: "failed", error: data.error || "Hailuo video generation failed" };
     }
     return { status: "processing" };
   } catch (err) {
-    return { status: "failed", error: `Hypereal poll error: ${err instanceof Error ? err.message : String(err)}` };
+    return { status: "failed", error: `Hailuo poll error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -738,143 +766,7 @@ QUALITY REQUIREMENTS:
   throw new Error(`Image generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
 }
 
-// ============================================
-// STEP 4: Video Generation with Replicate Grok (phased)
-// ============================================
-async function startGrok(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
-  // Fetch latest version dynamically
-  const version = await getLatestModelVersion(GROK_VIDEO_MODEL, replicateToken);
-  
-  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
-  // Build video prompt with anti-lip-sync instructions
-  // We want expressions (surprised, screaming) but NOT talking/lip-sync animation
-  const videoPrompt = `${scene.visualPrompt}
-
-ANIMATION RULES (CRITICAL):
-- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
-- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
-- Body movement IS allowed: walking, running, gesturing, pointing, reacting
-- Environment animation IS allowed: wind, particles, camera movement, lighting changes
-- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
-- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
-
-  const MAX_GROK_RETRIES = 4;
-  for (let attempt = 1; attempt <= MAX_GROK_RETRIES; attempt++) {
-    try {
-      const prediction = await createReplicatePrediction(
-        version,
-        {
-          prompt: videoPrompt,
-          image: imageUrl,
-          duration: Math.min(scene.duration, 15),
-          resolution: "720p",
-          aspect_ratio: aspectRatio,
-        },
-        replicateToken,
-      );
-      console.log(`Grok prediction started: ${prediction.id}`);
-      return prediction.id as string;
-    } catch (err: any) {
-      const errMsg = err?.message || "";
-      if ((errMsg.includes("429") || errMsg.includes("500")) && attempt < MAX_GROK_RETRIES) {
-        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[Grok] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
-        await sleep(delayMs);
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error("Grok video prediction failed after retries");
-}
-
-// Special return value indicating a timeout that should trigger a retry
-const GROK_TIMEOUT_RETRY = "__TIMEOUT_RETRY__";
-
-async function resolveGrok(
-  predictionId: string,
-  replicateToken: string,
-  supabase: ReturnType<typeof createClient>,
-  sceneNumber: number,
-): Promise<string | null> {
-  const result = await getReplicatePrediction(predictionId, replicateToken);
-
-  if (result.status !== "succeeded") {
-    if (result.status === "failed" || result.status === "canceled") {
-      const errorMsg = result.error || "Video generation failed";
-      console.error("Grok failed:", errorMsg);
-      
-      // Surface user-friendly error messages for common issues
-      if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
-        throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
-      }
-      if (errorMsg.includes("rate limit") || errorMsg.includes("429")) {
-        throw new Error("Video API rate limited. Please wait a moment and try again.");
-      }
-      
-      // Detect timeout errors — these are retryable
-      if (errorMsg.includes("timed out") || errorMsg.includes("timeout") || errorMsg.includes("deadline exceeded")) {
-        console.warn(`[Grok] Scene ${sceneNumber}: Video timed out (prediction ${predictionId}), will retry with new prediction`);
-        return GROK_TIMEOUT_RETRY;
-      }
-      
-      throw new Error(`Video generation failed: ${errorMsg}`);
-    }
-    return null;
-  }
-
-  // Handle different Replicate output formats: string, array, or object
-  const output = result.output;
-  let videoUrl: string | null = null;
-
-  if (typeof output === "string" && output) {
-    videoUrl = output;
-  } else if (Array.isArray(output) && output.length > 0) {
-    // Handle array output like ["https://...mp4"]
-    videoUrl = typeof output[0] === "string" ? output[0] : null;
-  } else if (typeof output === "object" && output !== null) {
-    // Handle object output like { url: "..." } or { video: "..." }
-    const obj = output as Record<string, unknown>;
-    videoUrl = (obj.url || obj.video || obj.output) as string | null;
-  }
-
-  if (!videoUrl) {
-    console.error("[Grok] Succeeded but no video URL found. Output:", JSON.stringify(output));
-    throw new Error("Replicate succeeded but returned no video URL");
-  }
-
-  // Download the video from Replicate and upload to Supabase storage for persistence
-  console.log(`[Grok] Downloading video for scene ${sceneNumber} from Replicate: ${videoUrl}`);
-  const videoResponse = await fetch(videoUrl);
-  if (!videoResponse.ok) {
-    throw new Error(`Failed to download generated video from Replicate: ${videoResponse.status}`);
-  }
-  const videoBuffer = await videoResponse.arrayBuffer();
-
-  const fileName = `cinematic-video-${Date.now()}-${sceneNumber}.mp4`;
-  const upload = await supabase.storage
-    .from("scene-videos")
-    .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
-
-  if (upload.error) {
-    // Try create bucket if missing
-    try {
-      await supabase.storage.createBucket("scene-videos", { public: true });
-      const retry = await supabase.storage
-        .from("scene-videos")
-        .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
-      if (retry.error) throw retry.error;
-    } catch (e) {
-      console.error("Video upload error:", upload.error);
-      throw new Error("Failed to upload video to storage");
-    }
-  }
-
-  const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-  console.log(`[Grok] Video uploaded: ${urlData.publicUrl}`);
-  return urlData.publicUrl;
-}
+// Grok/Replicate functions removed — all video generation now uses Hailuo 02 I2V via Hypereal
 
 async function readGenerationOwned(
   supabase: ReturnType<typeof createClient>,
@@ -1236,6 +1128,7 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+      if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
 
       if (!scene.videoPredictionId) {
         // DEDUP: Re-read scene from DB to avoid race condition with parallel batch polling
@@ -1254,26 +1147,42 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: freshScenes[idx] });
         }
 
-        // Use Replicate/Grok for video regeneration
-        const grokPredId = await startGrok(scene, scene.imageUrl!, format, replicateToken);
-        const updatedScene = { ...scene, videoPredictionId: grokPredId, videoProvider: "replicate" as const };
+        // Use Hailuo 02 I2V for video generation — 10s to match audio duration
+        const jobId = await startHailuo(scene, scene.imageUrl!, format, scene.duration || 10, hyperealApiKey);
+        const updatedScene = { ...scene, videoPredictionId: jobId, videoProvider: "hypereal" as const };
         await updateSingleScene(supabase, generationId, idx, () => updatedScene);
         return jsonResponse({ success: true, status: "processing", scene: updatedScene });
       }
 
-      // Poll Replicate/Grok
-      const grokResult = await resolveGrok(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      // Poll Hailuo
+      const pollResult = await pollHailuo(scene.videoPredictionId, hyperealApiKey);
       
-      if (grokResult === GROK_TIMEOUT_RETRY) {
-        // Timeout — clear prediction and let client retry
+      if (pollResult.status === "failed") {
+        // Clear prediction and let client retry
         const failedScene = { ...scene, videoPredictionId: undefined };
         await updateSingleScene(supabase, generationId, idx, () => failedScene);
-        throw new Error(`Video generation timed out for scene ${scene.number}, please retry`);
+        throw new Error(`Video generation failed for scene ${scene.number}: ${pollResult.error}`);
       }
       
-      if (grokResult) {
-        // grokResult is already a public URL from resolveGrok
-        const completedScene = { ...scene, videoUrl: grokResult, videoPredictionId: undefined };
+      if (pollResult.status === "completed") {
+        // Download and upload to our storage
+        const videoResponse = await fetch(pollResult.outputUrl);
+        if (!videoResponse.ok) throw new Error(`Failed to download Hailuo video: ${videoResponse.status}`);
+        const videoBuffer = new Uint8Array(await videoResponse.arrayBuffer());
+        
+        const fileName = `cinematic-video-${Date.now()}-${scene.number}.mp4`;
+        const upload = await supabase.storage
+          .from("scene-videos")
+          .upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
+        if (upload.error) {
+          try {
+            await supabase.storage.createBucket("scene-videos", { public: true });
+            await supabase.storage.from("scene-videos").upload(fileName, videoBuffer, { contentType: "video/mp4", upsert: true });
+          } catch (_e) { /* ignore */ }
+        }
+        const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
+        
+        const completedScene = { ...scene, videoUrl: urlData.publicUrl, videoPredictionId: undefined };
         await updateSingleScene(supabase, generationId, idx, () => completedScene);
         return jsonResponse({ success: true, status: "complete", scene: completedScene });
       }
@@ -1407,32 +1316,38 @@ CRITICAL RULES:
 
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
-      // Now regenerate video with the new image using Replicate/Grok
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Replicate/Grok`);
+      // Now regenerate video with the new image using Hailuo 02 I2V
+      const hailVideoKey = Deno.env.get("HYPEREAL_API_KEY");
+      if (!hailVideoKey) throw new Error("HYPEREAL_API_KEY not configured");
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Hailuo 02 I2V`);
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      const hailJobId = await startHailuo(scene, newImageUrl, format, scene.duration || 10, hailVideoKey);
       // Poll until complete
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 120; i++) {
         await sleep(3000);
-        const result = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
-        if (result === GROK_TIMEOUT_RETRY) {
-          console.warn(`[IMG-EDIT] Grok timed out for scene ${scene.number}, retrying...`);
+        const result = await pollHailuo(hailJobId, hailVideoKey);
+        if (result.status === "failed") {
+          console.warn(`[IMG-EDIT] Hailuo failed for scene ${scene.number}: ${result.error}`);
           break;
         }
-        if (result) {
-          videoUrl = result;
-          console.log(`[IMG-EDIT] Grok video success for scene ${scene.number}`);
+        if (result.status === "completed") {
+          // Download and upload to our storage
+          const vidRes = await fetch(result.outputUrl);
+          if (vidRes.ok) {
+            const vidBuf = new Uint8Array(await vidRes.arrayBuffer());
+            const fn = `cinematic-video-edit-${Date.now()}-${scene.number}.mp4`;
+            await supabase.storage.from("scene-videos").upload(fn, vidBuf, { contentType: "video/mp4", upsert: true });
+            const { data: u } = supabase.storage.from("scene-videos").getPublicUrl(fn);
+            videoUrl = u.publicUrl;
+            console.log(`[IMG-EDIT] Hailuo video success for scene ${scene.number}`);
+          }
           break;
         }
       }
 
       if (!videoUrl) {
         throw new Error(`[IMG-EDIT] Video generation failed for scene ${scene.number}`);
-      }
-
-      if (!videoUrl) {
-        throw new Error("Video generation timed out (all providers)");
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
@@ -1464,31 +1379,37 @@ CRITICAL RULES:
       const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, hyperealApiKey || undefined);
 
-      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Replicate/Grok`);
+      const hailVideoKey2 = Deno.env.get("HYPEREAL_API_KEY");
+      if (!hailVideoKey2) throw new Error("HYPEREAL_API_KEY not configured");
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Hailuo 02 I2V`);
       let videoUrl: string | null = null;
 
-      const grokPredictionId = await startGrok(scene, newImageUrl, format, replicateToken);
+      const hailJobId2 = await startHailuo(scene, newImageUrl, format, scene.duration || 10, hailVideoKey2);
       // Poll until complete
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 120; i++) {
         await sleep(3000);
-        const result = await resolveGrok(grokPredictionId, replicateToken, supabase, scene.number);
-        if (result === GROK_TIMEOUT_RETRY) {
-          console.warn(`[IMG-REGEN] Grok timed out for scene ${scene.number}, retrying...`);
+        const result = await pollHailuo(hailJobId2, hailVideoKey2);
+        if (result.status === "failed") {
+          console.warn(`[IMG-REGEN] Hailuo failed for scene ${scene.number}: ${result.error}`);
           break;
         }
-        if (result) {
-          videoUrl = result;
-          console.log(`[IMG-REGEN] Grok video success for scene ${scene.number}`);
+        if (result.status === "completed") {
+          // Download and upload to our storage
+          const vidRes = await fetch(result.outputUrl);
+          if (vidRes.ok) {
+            const vidBuf = new Uint8Array(await vidRes.arrayBuffer());
+            const fn = `cinematic-video-regen-${Date.now()}-${scene.number}.mp4`;
+            await supabase.storage.from("scene-videos").upload(fn, vidBuf, { contentType: "video/mp4", upsert: true });
+            const { data: u } = supabase.storage.from("scene-videos").getPublicUrl(fn);
+            videoUrl = u.publicUrl;
+            console.log(`[IMG-REGEN] Hailuo video success for scene ${scene.number}`);
+          }
           break;
         }
       }
 
       if (!videoUrl) {
         throw new Error(`[IMG-REGEN] Video generation failed for scene ${scene.number}`);
-      }
-
-      if (!videoUrl) {
-        throw new Error("Video generation timed out (all providers)");
       }
 
       scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
