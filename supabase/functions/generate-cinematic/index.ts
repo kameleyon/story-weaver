@@ -80,12 +80,11 @@ async function generateImageWithHypereal(
   console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i ${mode} generation...`);
 
   try {
-    const model = "nano-banana-pro-t2i"; // Always use Pro
     const body: Record<string, unknown> = {
-      model,
       prompt,
-      resolution: "1K",
+      resolution: "1k",
       aspect_ratio: aspectRatio,
+      output_format: "png",
     };
 
     // If a source image is provided, this becomes an img2img / edit request
