@@ -774,7 +774,7 @@ ANIMATION RULES (CRITICAL):
           prompt: videoPrompt,
           image: imageUrl,
           duration: 10,
-          resolution: "1080p",
+          resolution: "720p",
           aspect_ratio: aspectRatio,
           fps: 24,
         },
