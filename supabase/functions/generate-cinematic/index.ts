@@ -85,7 +85,7 @@ async function generateImageWithHypereal(
       resolution: "1k",
       aspect_ratio: aspectRatio,
       output_format: "png",
-      model: "nano-banana-t2i",
+      model: "nano-banana-pro-t2i",
     };
 
     // If a source image is provided, this becomes an img2img / edit request
