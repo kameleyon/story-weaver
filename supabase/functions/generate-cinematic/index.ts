@@ -67,7 +67,7 @@ const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 const NANO_BANANA_MODEL = "google/nano-banana";
 
 // ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://hypereal.tech";
+const HYPEREAL_API_BASE = "https://api.hypereal.tech";
 
 async function generateImageWithHypereal(
   prompt: string,
@@ -173,7 +173,7 @@ async function pollHyperealVideo(
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=kling-2-5-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/api/v1/jobs/${jobId}?model=kling-2-5-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
