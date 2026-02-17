@@ -415,7 +415,7 @@ export function useGenerationPipeline() {
           }));
 
           // Phase 4: Video clips (parallel batches for faster generation)
-          const VIDEO_BATCH_SIZE = 3;
+          const VIDEO_BATCH_SIZE = 2;
 
           for (let i = 0; i < cSceneCount; i += VIDEO_BATCH_SIZE) {
             const batchEnd = Math.min(i + VIDEO_BATCH_SIZE, cSceneCount);
@@ -441,7 +441,7 @@ export function useGenerationPipeline() {
                   if (vidRes.status === "complete") {
                     videoComplete = true;
                   } else {
-                    await sleep(3000);
+                    await sleep(5000);
                   }
                 }
               })());

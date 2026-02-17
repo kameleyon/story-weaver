@@ -156,7 +156,7 @@ ANIMATION RULES (CRITICAL):
 
   console.log(`[GROK-VIDEO] Starting xai/grok-imagine-video for scene ${scene.number} (format=${format})...`);
 
-  const MAX_RETRIES = 6;
+  const MAX_RETRIES = 8;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(`${REPLICATE_MODELS_URL}/${GROK_VIDEO_MODEL}/predictions`, {
@@ -175,8 +175,8 @@ ANIMATION RULES (CRITICAL):
 
         // Handle Queue Full (429) or Server Errors (5xx) with exponential backoff
         if ((status === 422 || status === 429 || status >= 500) && attempt < MAX_RETRIES) {
-          const baseDelay = status === 429 ? 5000 : 3000;
-          const delayMs = baseDelay * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 2000);
+          const baseDelay = status === 429 ? 8000 : 3000;
+          const delayMs = baseDelay * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 3000);
           console.warn(`[GROK-VIDEO] Queue full or retryable error (${status}) attempt ${attempt}/${MAX_RETRIES}, retrying in ${delayMs}ms...`);
           await sleep(delayMs);
           continue;
@@ -1179,6 +1179,14 @@ serve(async (req) => {
       const pollResult = await pollGrokVideo(scene.videoPredictionId, replicateToken);
       
       if (pollResult.status === "failed") {
+        const isQueueFull = pollResult.error?.includes("Queue is full") || pollResult.error?.includes("queue");
+        if (isQueueFull) {
+          // Queue full is transient — clear prediction so client can retry on next poll
+          const retryScene = { ...scene, videoPredictionId: undefined };
+          await updateSingleScene(supabase, generationId, idx, () => retryScene);
+          console.warn(`[VIDEO] Scene ${scene.number}: Queue full, cleared prediction for retry`);
+          return jsonResponse({ success: true, status: "processing", scene: retryScene });
+        }
         // Clear prediction and let client retry
         const failedScene = { ...scene, videoPredictionId: undefined };
         await updateSingleScene(supabase, generationId, idx, () => failedScene);
