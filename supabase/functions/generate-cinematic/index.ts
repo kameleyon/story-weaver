@@ -156,10 +156,9 @@ ANIMATION RULES (CRITICAL):
 
   console.log(`[GROK-VIDEO] Starting xai/grok-imagine-video for scene ${scene.number} (format=${format})...`);
 
-  const MAX_RETRIES = 4;
+  const MAX_RETRIES = 6;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // Use the model-specific predictions endpoint (no version ID needed)
       const response = await fetch(`${REPLICATE_MODELS_URL}/${GROK_VIDEO_MODEL}/predictions`, {
         method: "POST",
         headers: {
@@ -173,13 +172,20 @@ ANIMATION RULES (CRITICAL):
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
         const status = response.status;
+
+        // Handle Queue Full (429) or Server Errors (5xx) with exponential backoff
         if ((status === 422 || status === 429 || status >= 500) && attempt < MAX_RETRIES) {
-          const delayMs = 3000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-          console.warn(`[GROK-VIDEO] Retryable error (${status}) attempt ${attempt}, retrying in ${delayMs}ms`);
+          const baseDelay = status === 429 ? 5000 : 3000;
+          const delayMs = baseDelay * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 2000);
+          console.warn(`[GROK-VIDEO] Queue full or retryable error (${status}) attempt ${attempt}/${MAX_RETRIES}, retrying in ${delayMs}ms...`);
           await sleep(delayMs);
           continue;
         }
-        throw new Error(`Grok video start failed (${status}): ${errText.substring(0, 300)}`);
+
+        const errorMessage = errText.includes("Queue is full")
+          ? "The video generation queue is currently at capacity. Please try again in a few minutes."
+          : `Grok video start failed (${status}): ${errText.substring(0, 300)}`;
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -190,9 +196,9 @@ ANIMATION RULES (CRITICAL):
       console.log(`[GROK-VIDEO] Prediction started: ${data.id}, status: ${data.status}`);
       return data.id as string;
     } catch (err: any) {
-      if (attempt < MAX_RETRIES && (err?.message?.includes("422") || err?.message?.includes("429") || err?.message?.includes("500"))) {
-        const delayMs = 3000 * Math.pow(2, attempt - 1);
-        console.warn(`[GROK-VIDEO] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+      if (attempt < MAX_RETRIES) {
+        const delayMs = 4000 * Math.pow(2, attempt - 1);
+        console.warn(`[GROK-VIDEO] Network/Request error on attempt ${attempt}, retrying in ${delayMs}ms: ${err.message}`);
         await sleep(delayMs);
         continue;
       }
