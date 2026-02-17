@@ -954,11 +954,22 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify user
+    // Verify user via getClaims (works even when session row is purged)
     const token = sanitizeBearer(authHeader);
-    const { data: authData, error: authError } = await supabase.auth.getUser(token);
-    const user = authData?.user;
-    if (authError || !user) return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
+    const supabaseAuth = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_ANON_KEY") ?? supabaseKey,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      const msg = claimsError?.message?.toLowerCase() || "";
+      if (msg.includes("expired") || msg.includes("jwt")) {
+        return jsonResponse({ error: "Token expired", code: "TOKEN_EXPIRED" }, { status: 401 });
+      }
+      return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
+    }
+    const user = { id: claimsData.claims.sub as string, email: claimsData.claims.email as string };
 
     // Verify plan access: Professional, Enterprise, or Admin
     const { data: isAdmin } = await supabase.rpc("is_admin", { _user_id: user.id });
