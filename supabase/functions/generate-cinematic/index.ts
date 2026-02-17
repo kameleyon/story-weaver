@@ -67,7 +67,7 @@ const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 const NANO_BANANA_MODEL = "google/nano-banana";
 
 // ============= HYPEREAL API HELPERS =============
-const HYPEREAL_API_BASE = "https://hypereal.tech";
+const HYPEREAL_API_BASE = "https://api.hypereal.tech";
 
 async function generateImageWithHypereal(
   prompt: string,
@@ -77,10 +77,10 @@ async function generateImageWithHypereal(
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
   const mode = sourceImageUrl ? "img2img" : "t2i";
-  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro-t2i ${mode} generation...`);
+  console.log(`[HYPEREAL-IMG] Starting nano-banana-pro ${mode} generation...`);
 
   try {
-    const model = "nano-banana-pro-t2i"; // Always use Pro
+    const model = sourceImageUrl ? "nano-banana-pro-t2i" : "nano-banana-pro-t2i";
     const body: Record<string, unknown> = {
       model,
       prompt,
@@ -93,7 +93,7 @@ async function generateImageWithHypereal(
       body.image = sourceImageUrl;
     }
 
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/images/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -130,7 +130,7 @@ async function startHyperealVideo(
   console.log(`[HYPEREAL-VID] Starting veo-3-1-i2v generation...`);
 
   try {
-    const response = await fetch(`${HYPEREAL_API_BASE}/api/v1/videos/generate`, {
+    const response = await fetch(`${HYPEREAL_API_BASE}/v1/videos/generate`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -143,20 +143,19 @@ async function startHyperealVideo(
           image: imageUrl,
           duration: Math.min(duration, 8),
           aspect_ratio: format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9",
+          generate_audio: false,
         },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
-      console.error(`[HYPEREAL-VID] Request failed (${response.status}): ${errText.substring(0, 300)}`);
       return { ok: false, error: `Hypereal video failed (${response.status}): ${errText.substring(0, 200)}` };
     }
 
     const data = await response.json();
-    console.log(`[HYPEREAL-VID] Response:`, JSON.stringify(data).substring(0, 300));
     if (!data.jobId) {
-      return { ok: false, error: `No jobId in Hypereal video response: ${JSON.stringify(data).substring(0, 200)}` };
+      return { ok: false, error: "No jobId in Hypereal video response" };
     }
 
     console.log(`[HYPEREAL-VID] Job started: ${data.jobId}`);
@@ -172,7 +171,7 @@ async function pollHyperealVideo(
 ): Promise<{ status: "completed"; outputUrl: string } | { status: "processing" } | { status: "failed"; error: string }> {
   try {
     const response = await fetch(
-      `${HYPEREAL_API_BASE}/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
+      `${HYPEREAL_API_BASE}/api/v1/jobs/${jobId}?model=veo-3-1-i2v&type=video`,
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
 
@@ -1279,8 +1278,8 @@ serve(async (req) => {
           console.warn(`[VIDEO] Hypereal failed for scene ${scene.number}: ${hrResult.error}, falling back to Replicate`);
         }
 
-        // Replicate fallback disabled — Hypereal-only for debugging
-        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed. Replicate fallback disabled for debugging.`);
+        // COMMENTED OUT for Hypereal debugging — no Replicate fallback
+        throw new Error(`Video generation failed for scene ${scene.number}: Hypereal failed and Replicate fallback is disabled for debugging`);
       }
 
       // Poll based on provider
@@ -1314,17 +1313,14 @@ serve(async (req) => {
           return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
         }
         if (pollResult.status === "failed") {
-          console.warn(`[VIDEO] Hypereal poll failed for scene ${scene.number}: ${pollResult.error}`);
-          // Clear prediction so next poll attempt starts a fresh Hypereal job
-          scenes[idx] = { ...scene, videoPredictionId: undefined, videoProvider: "hypereal" };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+          // COMMENTED OUT Replicate fallback for debugging — throw instead
+          throw new Error(`Hypereal video failed for scene ${scene.number}: ${pollResult.error}. Replicate fallback disabled for debugging.`);
         }
         return jsonResponse({ success: true, status: "processing", scene });
       }
 
-      // Replicate polling disabled — Hypereal only
-      throw new Error(`Unknown video provider for scene ${scene.number}: ${provider}`);
+      // Replicate polling — COMMENTED OUT for Hypereal debugging
+      throw new Error(`Video polling failed for scene ${scene.number}: Replicate polling is disabled for debugging. Provider was: ${provider}`);
     }
 
     // =============== IMAGE-EDIT PHASE (Apply modification then regenerate video) ===============

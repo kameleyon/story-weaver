@@ -121,9 +121,6 @@ const normalizeScenes = (raw: unknown): Scene[] | undefined => {
     imageUrl: s?.imageUrl ?? s?.image_url,
     imageUrls: Array.isArray(s?.imageUrls) ? s.imageUrls : undefined,
     audioUrl: s?.audioUrl ?? s?.audio_url,
-    videoUrl: s?.videoUrl ?? s?.video_url,
-    videoPredictionId: s?.videoPredictionId,
-    videoProvider: s?.videoProvider,
     title: s?.title,
     subtitle: s?.subtitle,
   }));
@@ -422,8 +419,8 @@ export function useGenerationPipeline() {
             statusMessage: "Images complete. Generating video clips...",
           }));
 
-          // Phase 4: Video clips (parallel batches for faster generation)
-          const VIDEO_BATCH_SIZE = 5;
+          // Phase 4: Video clips (sequential to prevent double-spending on providers)
+          const VIDEO_BATCH_SIZE = 1;
 
           for (let i = 0; i < cSceneCount; i += VIDEO_BATCH_SIZE) {
             const batchEnd = Math.min(i + VIDEO_BATCH_SIZE, cSceneCount);
