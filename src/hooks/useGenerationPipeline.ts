@@ -408,28 +408,33 @@ export function useGenerationPipeline() {
             }));
           }
 
-          // Phase 4: Video clips (scene-by-scene with polling)
+          // Phase 4: Video clips (concurrent batches of 3 for speed)
           setState((prev) => ({
             ...prev,
             progress: 60,
             statusMessage: "Images complete. Generating video clips...",
           }));
 
-          for (let i = 0; i < cSceneCount; i++) {
-            setState((prev) => ({
-              ...prev,
-              statusMessage: `Generating clips (${i + 1}/${cSceneCount})...`,
-              progress: 60 + Math.floor(((i + 0.25) / cSceneCount) * 35),
-            }));
+          const VIDEO_CONCURRENCY = 3;
+          let completedVideos = 0;
 
+          const generateVideoForScene = async (sceneIdx: number) => {
             let videoComplete = false;
+            let pollAttempts = 0;
+            const MAX_POLL_ATTEMPTS = 90; // ~3 min max per scene
+
             while (!videoComplete) {
+              pollAttempts++;
+              if (pollAttempts > MAX_POLL_ATTEMPTS) {
+                throw new Error(`Video generation timed out for scene ${sceneIdx + 1} after ${MAX_POLL_ATTEMPTS} attempts`);
+              }
+
               const vidRes = await callPhase(
-                { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
+                { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: sceneIdx },
                 480000,
                 cinematicEndpoint
               );
-              if (!vidRes.success) throw new Error(vidRes.error || "Video generation failed");
+              if (!vidRes.success) throw new Error(vidRes.error || `Video generation failed for scene ${sceneIdx + 1}`);
               if (vidRes.status === "complete") {
                 videoComplete = true;
               } else {
@@ -437,10 +442,22 @@ export function useGenerationPipeline() {
               }
             }
 
+            completedVideos++;
             setState((prev) => ({
               ...prev,
-              progress: 60 + Math.floor(((i + 1) / cSceneCount) * 35),
+              statusMessage: `Generating clips (${completedVideos}/${cSceneCount})...`,
+              progress: 60 + Math.floor((completedVideos / cSceneCount) * 35),
             }));
+          };
+
+          // Process in concurrent batches
+          for (let batchStart = 0; batchStart < cSceneCount; batchStart += VIDEO_CONCURRENCY) {
+            const batchEnd = Math.min(batchStart + VIDEO_CONCURRENCY, cSceneCount);
+            const batch = [];
+            for (let i = batchStart; i < batchEnd; i++) {
+              batch.push(generateVideoForScene(i));
+            }
+            await Promise.all(batch);
           }
 
           // Phase 5: Finalize
