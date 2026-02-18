@@ -89,7 +89,8 @@ export function useCinematicRegeneration(
           projectId,
           generationId,
           sceneIndex: idx,
-          ...(type === "video" ? { regenerate: true } : {}),
+          // Only send regenerate on the FIRST poll to clear existing prediction once
+          ...(type === "video" && polls === 1 ? { regenerate: true } : {}),
         });
 
         const nextScene = result.scene as Partial<CinematicScene>;
