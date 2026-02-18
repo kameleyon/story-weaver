@@ -55,6 +55,7 @@ interface Scene {
   videoPredictionId?: string;
   videoRetryCount?: number;
   videoRetryAfter?: string;
+  videoProvider?: "replicate" | "hypereal";
 }
 
 const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
@@ -813,13 +814,16 @@ QUALITY REQUIREMENTS:
 }
 
 // ============================================
-// STEP 4: Video Generation with Seedance (Replicate)
+// STEP 4: Video Generation with Hypereal Seedance 1.5 Pro I2V
 // ============================================
-async function startSeedance(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
-  const version = await getLatestModelVersion(SEEDANCE_VIDEO_MODEL, replicateToken);
-  
+const HYPEREAL_VIDEO_URL = "https://hypereal.tech/api/v1/videos/generate";
+
+async function startSeedance(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", _replicateToken: string) {
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
+
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
+
   const videoPrompt = `${scene.visualPrompt}
 
 ANIMATION RULES (CRITICAL):
@@ -833,37 +837,133 @@ ANIMATION RULES (CRITICAL):
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const prediction = await createReplicatePrediction(
-        version,
-        {
-          prompt: videoPrompt,
-          image: imageUrl,
-          duration: 10,
-          resolution: "720p",
-          aspect_ratio: aspectRatio,
-          fps: 24,
+      const response = await fetch(HYPEREAL_VIDEO_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${hyperealApiKey}`,
+          "Content-Type": "application/json",
         },
-        replicateToken,
-      );
-      console.log(`[Seedance] Prediction started: ${prediction.id}`);
-      return prediction.id as string;
+        body: JSON.stringify({
+          model: "seedance-1-5-i2v",
+          input: {
+            prompt: videoPrompt,
+            image: imageUrl,
+            duration: 10,
+            resolution: "720p",
+            aspect_ratio: aspectRatio,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Seedance-Hypereal] Start failed (attempt ${attempt}): ${response.status} - ${errText}`);
+        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[Seedance-Hypereal] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new Error(`Hypereal Seedance 1.5 I2V failed: ${response.status} - ${errText}`);
+      }
+
+      const data = await response.json();
+      const jobId = data.jobId || data.id || data.task_id || data.prediction_id;
+      if (!jobId) {
+        console.error(`[Seedance-Hypereal] No jobId in response:`, JSON.stringify(data).substring(0, 300));
+        throw new Error("Hypereal Seedance 1.5 returned no jobId");
+      }
+      console.log(`[Seedance-Hypereal] Job started: ${jobId}, credits: ${data.creditsUsed}`);
+      return jobId as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
       if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[Seedance] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Seedance-Hypereal] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
       throw err;
     }
   }
-  throw new Error("Seedance video prediction failed after retries");
+  throw new Error("Hypereal Seedance 1.5 I2V prediction failed after retries");
 }
 
 // ============================================
-// Video Regeneration with Grok Imagine Video (xai/grok-imagine-video)
+// Hypereal Video Job Polling
 // ============================================
+const HYPEREAL_JOB_POLL_URL = "https://hypereal.tech/api/v1/jobs";
+
+async function resolveHyperealVideo(
+  jobId: string,
+  supabase: ReturnType<typeof createClient>,
+  sceneNumber: number,
+): Promise<string | null> {
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
+
+  const response = await fetch(`${HYPEREAL_JOB_POLL_URL}/${jobId}?model=seedance-1-5-i2v&type=video`, {
+    headers: { Authorization: `Bearer ${hyperealApiKey}` },
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error(`[Seedance-Hypereal] Poll failed for job ${jobId}: ${response.status} - ${errText}`);
+    if (response.status === 429 || response.status >= 500) return null; // Treat as still processing
+    throw new Error(`Hypereal poll failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log(`[Seedance-Hypereal] Poll job ${jobId}: status=${data.status}`);
+
+  if (data.status === "completed") {
+    const videoUrl = data.outputUrl || data.output_url || data.url;
+    if (!videoUrl) {
+      console.error(`[Seedance-Hypereal] Completed but no outputUrl:`, JSON.stringify(data).substring(0, 300));
+      throw new Error("Hypereal completed but returned no video URL");
+    }
+
+    // Download and upload to our storage
+    console.log(`[Seedance-Hypereal] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) throw new Error(`Failed to download Hypereal video: ${videoResponse.status}`);
+    const videoBuffer = await videoResponse.arrayBuffer();
+
+    const fileName = `cinematic-video-${Date.now()}-${sceneNumber}.mp4`;
+    const upload = await supabase.storage
+      .from("scene-videos")
+      .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
+
+    if (upload.error) {
+      try {
+        await supabase.storage.createBucket("scene-videos", { public: true });
+        await supabase.storage
+          .from("scene-videos")
+          .upload(fileName, new Uint8Array(videoBuffer), { contentType: "video/mp4", upsert: true });
+      } catch (e) {
+        throw new Error("Failed to upload Hypereal video to storage");
+      }
+    }
+
+    const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
+    console.log(`[Seedance-Hypereal] Video uploaded: ${urlData.publicUrl}`);
+    return urlData.publicUrl;
+  }
+
+  if (data.status === "failed") {
+    const errorMsg = data.error || "Hypereal video generation failed";
+    console.error(`[Seedance-Hypereal] Job ${jobId} failed: ${errorMsg}`);
+    if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
+      throw new Error("Content flagged as sensitive. Please try different visual descriptions.");
+    }
+    return SEEDANCE_TIMEOUT_RETRY;
+  }
+
+  // Still processing
+  return null;
+}
+
+
 async function startGrokVideo(
   scene: Scene,
   imageUrl: string,
@@ -1177,6 +1277,7 @@ serve(async (req) => {
       videoPredictionId: s?.videoPredictionId,
       videoRetryCount: s?.videoRetryCount ?? 0,
       videoRetryAfter: s?.videoRetryAfter,
+      videoProvider: s?.videoProvider,
     }));
 
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
@@ -1326,37 +1427,42 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        // Use Grok Imagine Video for regeneration, Seedance for initial pipeline
-        const predictionId = isRegeneration
+        // Use Grok Imagine Video for regeneration, Hypereal Seedance 1.5 for initial pipeline
+        const isGrok = isRegeneration;
+        const predictionId = isGrok
           ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
           : await startSeedance(scene, scene.imageUrl, format, replicateToken);
-        scenes[idx] = { ...scene, videoPredictionId: predictionId, videoRetryAfter: undefined };
+        const provider = isGrok ? "replicate" : "hypereal";
+        scenes[idx] = { ...scene, videoPredictionId: predictionId, videoRetryAfter: undefined, videoProvider: provider };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      const videoUrl = await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      // Route to the correct resolver based on provider
+      const videoUrl = scene.videoProvider === "hypereal"
+        ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number)
+        : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
       
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
         // Track retry count for Grok failures
         const retryCount = (scene.videoRetryCount || 0) + 1;
-        const MAX_VIDEO_RETRIES = 3;
+        const MAX_VIDEO_RETRIES = 2;
 
-        // After 3 failed attempts, fall back to Seedance immediately
+        // After 2 failed Grok attempts, fall back to Hypereal Seedance 1.5
         if (retryCount >= MAX_VIDEO_RETRIES) {
-          console.log(`[VIDEO] Scene ${scene.number}: Failed ${retryCount} times (Queue Full/Timeout), falling back to Seedance`);
+          console.log(`[VIDEO] Scene ${scene.number}: Failed ${retryCount} times, falling back to Hypereal Seedance 1.5`);
           try {
             const seedancePredictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
-            scenes[idx] = { ...scene, videoPredictionId: seedancePredictionId, videoUrl: undefined, videoRetryAfter: undefined, videoRetryCount: 0 };
+            scenes[idx] = { ...scene, videoPredictionId: seedancePredictionId, videoUrl: undefined, videoRetryAfter: undefined, videoRetryCount: 0, videoProvider: "hypereal" };
             await updateScenes(supabase, generationId, scenes);
             return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
           } catch (seedanceErr) {
-            console.error(`[VIDEO] Scene ${scene.number}: Seedance fallback also failed:`, seedanceErr);
+            console.error(`[VIDEO] Scene ${scene.number}: Hypereal Seedance fallback also failed:`, seedanceErr);
             return jsonResponse({ success: false, error: "Video generation service is busy. Please try again later." }, { status: 500 });
           }
         }
 
-        // Under retry limit — clear prediction and retry on next poll (no cooldown, just retry)
+        // Under retry limit — clear prediction and retry on next poll
         console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry.`);
         scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
@@ -1485,7 +1591,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined };
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined, videoProvider: "replicate" };
       await updateScenes(supabase, generationId, scenes);
 
       // Return processing status immediately to avoid Edge Function timeout
@@ -1519,7 +1625,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined };
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined, videoProvider: "replicate" };
       await updateScenes(supabase, generationId, scenes);
 
       // Return processing status immediately to avoid Edge Function timeout
