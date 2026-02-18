@@ -18,9 +18,12 @@ import {
   Volume2,
   VolumeX,
   Pencil,
+  Copy,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,8 +51,15 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useCinematicRegeneration } from "@/hooks/useCinematicRegeneration";
+import { useVideoExport } from "@/hooks/useVideoExport";
 import { cn } from "@/lib/utils";
 import { CinematicEditModal } from "./CinematicEditModal";
+import {
+  appendVideoExportLog,
+  clearVideoExportLogs,
+  formatVideoExportLogs,
+  getVideoExportLogs,
+} from "@/lib/videoExportDebug";
 import JSZip from "jszip";
 
 interface CinematicScene {
@@ -58,6 +68,7 @@ interface CinematicScene {
   visualPrompt: string;
   videoUrl?: string;
   audioUrl?: string;
+  imageUrl?: string;
   duration: number;
 }
 
@@ -131,7 +142,18 @@ export function CinematicResult({
 
   // Download states
   const [isDownloadingClipsZip, setIsDownloadingClipsZip] = useState(false);
-  const [isDirectDownloading, setIsDirectDownloading] = useState(false);
+
+  // Video export (same engine as explainer)
+  const { state: exportState, exportVideo, downloadVideo, reset: resetExport } = useVideoExport();
+  const shouldAutoDownloadRef2 = useRef(false);
+  const lastAutoDownloadedUrlRef = useRef<string | null>(null);
+  const [showExportLogs, setShowExportLogs] = useState(false);
+  const [exportLogsVersion, setExportLogsVersion] = useState(0);
+
+  const exportLogText = (() => {
+    void exportLogsVersion;
+    return formatVideoExportLogs(getVideoExportLogs());
+  })();
 
   // Edit dialog
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -160,72 +182,29 @@ export function CinematicResult({
     setLocalScenes(scenes);
   }, [scenes]);
 
-  // Background recovery: poll for scenes that have a videoPredictionId but no videoUrl
+  // Auto-download when export completes (same as explainer)
   useEffect(() => {
-    if (!generationId || !projectId) return;
+    if (!shouldAutoDownloadRef2.current) return;
+    if (exportState.status !== "complete" || !exportState.videoUrl) return;
+    if (lastAutoDownloadedUrlRef.current === exportState.videoUrl) return;
 
-    const scenesNeedingRecovery = localScenes
-      .map((s, idx) => ({ scene: s, idx }))
-      .filter((item) => !item.scene.videoUrl);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      shouldAutoDownloadRef2.current = false;
+      lastAutoDownloadedUrlRef.current = exportState.videoUrl;
+      return;
+    }
 
-    if (scenesNeedingRecovery.length === 0) return;
+    lastAutoDownloadedUrlRef.current = exportState.videoUrl;
+    shouldAutoDownloadRef2.current = false;
 
-    let cancelled = false;
-    const recoverScenes = async () => {
-      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-      const MAX_RECOVERY_POLLS = 120; // ~4 min
+    const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "cinematic";
+    downloadVideo(exportState.videoUrl, `${safeName}.mp4`);
+  }, [downloadVideo, exportState.status, exportState.videoUrl, title]);
 
-      for (const { idx } of scenesNeedingRecovery) {
-        if (cancelled) return;
-        let attempts = 0;
+  const isExporting = exportState.status === "loading" || exportState.status === "rendering" || exportState.status === "encoding";
 
-        while (!cancelled && attempts < MAX_RECOVERY_POLLS) {
-          attempts++;
-          try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const token = sessionData?.session?.access_token;
-            if (!token) break;
 
-            const res = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cinematic`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                },
-                body: JSON.stringify({
-                  phase: "video",
-                  projectId,
-                  generationId,
-                  sceneIndex: idx,
-                }),
-              }
-            );
-            const data = await res.json();
-            if (data.status === "complete" && data.scene?.videoUrl) {
-              setLocalScenes((prev) => {
-                const updated = [...prev];
-                updated[idx] = { ...updated[idx], videoUrl: data.scene.videoUrl };
-                return updated;
-              });
-              break;
-            }
-            if (!data.success) break; // error, stop trying
-          } catch {
-            break;
-          }
-          await sleep(2000);
-        }
-      }
-    };
-
-    recoverScenes();
-    return () => { cancelled = true; };
-    // Only run on mount / generationId change, not on every localScenes update
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generationId, projectId]);
 
   const currentScene = localScenes[currentSceneIndex];
 
@@ -453,20 +432,34 @@ export function CinematicResult({
     URL.revokeObjectURL(objectUrl);
   }, []);
 
-  // Primary export handler: simple direct download only (no client-side rendering)
-  const handleExportVideo = useCallback(async () => {
-    if (!finalVideoUrl) return; // Button is disabled when missing
-    setIsDirectDownloading(true);
-    try {
-      await downloadFromUrl(finalVideoUrl, `${safeFileBase(title)}.mp4`);
-      toast({ title: "Download complete", description: "Video saved to your device." });
-    } catch (e) {
-      console.error("[CinematicResult] Direct download failed", e);
-      toast({ variant: "destructive", title: "Download failed", description: "Please try again." });
-    } finally {
-      setIsDirectDownloading(false);
+  // Primary export handler: client-side rendering (same engine as explainer)
+  const handleExportVideo = useCallback(() => {
+    const hasVideos = localScenes.some((s) => !!s.videoUrl);
+    if (!hasVideos) {
+      toast({ variant: "destructive", title: "No videos", description: "Generate video clips first." });
+      return;
     }
-  }, [finalVideoUrl, title, downloadFromUrl]);
+    clearVideoExportLogs();
+    appendVideoExportLog("log", [
+      "[UI] Cinematic export started",
+      { scenes: localScenes.length, format },
+    ]);
+    setExportLogsVersion((v) => v + 1);
+    shouldAutoDownloadRef2.current = true;
+    // Map CinematicScene to the Scene type expected by useVideoExport
+    const exportScenes = localScenes.map((s) => ({
+      number: s.number,
+      voiceover: s.voiceover,
+      visualPrompt: s.visualPrompt,
+      duration: s.duration,
+      videoUrl: s.videoUrl,
+      audioUrl: s.audioUrl,
+      imageUrl: s.imageUrl,
+    }));
+    void exportVideo(exportScenes, format).catch(() => {
+      setExportLogsVersion((v) => v + 1);
+    });
+  }, [localScenes, format, exportVideo]);
 
   const handleDownloadClipsZip = useCallback(async () => {
     if (scenesWithVideo.length === 0) return;
@@ -797,27 +790,103 @@ export function CinematicResult({
         </div>
       </div>
 
+      {/* Export Progress */}
+      {isExporting && (
+        <div className="max-w-3xl mx-auto">
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">
+                {exportState.status === "loading" && "Loading scenes..."}
+                {exportState.status === "rendering" && "Rendering video..."}
+                {exportState.status === "encoding" && "Finalizing..."}
+              </span>
+              <span className="text-sm text-muted-foreground">{exportState.progress}%</span>
+            </div>
+            <Progress value={exportState.progress} className="h-2" />
+            {exportState.warning && (
+              <p className="text-xs text-muted-foreground">{exportState.warning}</p>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Export Complete */}
+      {exportState.status === "complete" && exportState.videoUrl && (
+        <div className="max-w-3xl mx-auto">
+          <Card className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-primary">Video ready!</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const safeName = title.replace(/[^a-z0-9]/gi, "_").slice(0, 50) || "cinematic";
+                    downloadVideo(exportState.videoUrl!, `${safeName}.mp4`);
+                  }}
+                  className="gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowExportLogs(true)}
+                >
+                  Logs
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Export Error */}
+      {exportState.status === "error" && (
+        <div className="max-w-3xl mx-auto">
+          <Card className="p-4 border-destructive/50">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-destructive">Export failed: {exportState.error}</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowExportLogs(true)}>
+                  Logs
+                </Button>
+                <Button variant="outline" size="sm" onClick={resetExport}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Action Bar */}
       <TooltipProvider delayDuration={300}>
         <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-3 max-w-3xl mx-auto">
           <div className="flex items-center justify-center gap-2">
-            {/* Export Video — direct download only */}
+            {/* Export Video — client-side rendering (same as explainer) */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
                   onClick={handleExportVideo}
-                  disabled={isDirectDownloading || !finalVideoUrl}
+                  disabled={isExporting || !scenesWithVideo.length}
                   className="h-10 w-10"
                 >
-                  {isDirectDownloading ? (
+                  {isExporting ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Download className="h-5 w-5" />
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{finalVideoUrl ? "Download Video" : "Video processing..."}</TooltipContent>
+              <TooltipContent>
+                {isExporting
+                  ? `Rendering ${exportState.progress}%...`
+                  : scenesWithVideo.length
+                    ? "Export Video"
+                    : "No video clips available"}
+              </TooltipContent>
             </Tooltip>
 
             {/* Download Clips ZIP */}
@@ -979,6 +1048,46 @@ export function CinematicResult({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Export Logs Modal */}
+      {showExportLogs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">Export Logs</h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowExportLogs(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(exportLogText || ""); } catch {}
+                }}
+                disabled={!exportLogText}
+              >
+                <Copy className="h-4 w-4" />
+                Copy
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => { clearVideoExportLogs(); setExportLogsVersion((v) => v + 1); }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Clear
+              </Button>
+            </div>
+            <div className="rounded-md border border-border bg-muted/30 p-3 max-h-[60vh] overflow-auto">
+              <pre className="text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                {exportLogText || "No export logs captured yet."}
+              </pre>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
