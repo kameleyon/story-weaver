@@ -845,13 +845,12 @@ ANIMATION RULES (CRITICAL):
         },
         body: JSON.stringify({
           model: "seedance-1-5-i2v",
-          input: {
-            prompt: videoPrompt,
-            image: imageUrl,
-            duration: 10,
-            resolution: "720p",
-            aspect_ratio: aspectRatio,
-          },
+          prompt: videoPrompt,
+          image: imageUrl,
+          duration: 10,
+          resolution: "720p",
+          aspect_ratio: aspectRatio,
+          generate_audio: false,
         }),
       });
 
