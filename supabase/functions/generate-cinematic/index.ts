@@ -61,6 +61,7 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 // Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
 const SEEDANCE_VIDEO_MODEL = "bytedance/seedance-1-pro-fast";
+const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
 // Nano Banana models for image generation (Replicate)
 const NANO_BANANA_MODEL = "google/nano-banana";
@@ -796,6 +797,76 @@ ANIMATION RULES (CRITICAL):
   throw new Error("Seedance video prediction failed after retries");
 }
 
+// ============================================
+// Video Regeneration with Grok Imagine Video (xai/grok-imagine-video)
+// ============================================
+async function startGrokVideo(
+  scene: Scene,
+  imageUrl: string,
+  format: "landscape" | "portrait" | "square",
+  replicateToken: string,
+) {
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
+  const videoPrompt = `${scene.visualPrompt}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(`https://api.replicate.com/v1/models/${GROK_VIDEO_MODEL}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: {
+            prompt: videoPrompt,
+            image: imageUrl,
+            duration: 10,
+            resolution: "720p",
+            aspect_ratio: aspectRatio,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[GrokVideo] Create prediction error (attempt ${attempt}): ${response.status} - ${errorText}`);
+        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[GrokVideo] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new Error(`Grok video prediction start failed (${response.status}): ${errorText}`);
+      }
+
+      const prediction = await response.json();
+      console.log(`[GrokVideo] Prediction started: ${prediction.id}`);
+      return prediction.id as string;
+    } catch (err: any) {
+      const errMsg = err?.message || "";
+      if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) && attempt < MAX_RETRIES) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        console.warn(`[GrokVideo] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Grok video prediction failed after retries");
+}
+
 const SEEDANCE_TIMEOUT_RETRY = "__TIMEOUT_RETRY__";
 
 async function resolveSeedance(
@@ -1175,7 +1246,7 @@ serve(async (req) => {
       // treat it as a regeneration request: clear old video to force re-generation
       const isRegeneration = typeof body.sceneIndex === "number" && !!scene.videoUrl;
       if (isRegeneration) {
-        console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration`);
+        console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`);
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
         scenes[idx] = scene;
@@ -1195,7 +1266,10 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
+        // Use Grok Imagine Video for regeneration, Seedance for initial pipeline
+        const predictionId = isRegeneration
+          ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
+          : await startSeedance(scene, scene.imageUrl, format, replicateToken);
         scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
@@ -1311,8 +1385,8 @@ Make only the requested changes while keeping everything else consistent.`;
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
       // Now regenerate video with the new image
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startSeedance(scene, newImageUrl, format, replicateToken);
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
+      const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
@@ -1353,8 +1427,8 @@ Make only the requested changes while keeping everything else consistent.`;
       // Generate new image
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
-      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startSeedance(scene, newImageUrl, format, replicateToken);
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
+      const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
