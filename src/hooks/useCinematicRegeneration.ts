@@ -86,6 +86,7 @@ export function useCinematicRegeneration(
           projectId,
           generationId,
           sceneIndex: idx,
+          ...(type === "video" ? { regenerate: true } : {}),
         });
 
         const nextScene = result.scene as Partial<CinematicScene>;

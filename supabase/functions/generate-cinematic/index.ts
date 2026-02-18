@@ -1304,9 +1304,8 @@ serve(async (req) => {
       const scene = scenes[idx];
       if (!scene) throw new Error("Scene not found");
 
-      // If sceneIndex is provided as a single-scene call and video already exists,
-      // treat it as a regeneration request: clear old video to force re-generation
-      const isRegeneration = typeof body.sceneIndex === "number" && !!scene.videoUrl;
+      // Explicit regeneration flag from frontend
+      const isRegeneration = !!body.regenerate;
       if (isRegeneration) {
         console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`);
         scene.videoUrl = undefined;
