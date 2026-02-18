@@ -1466,21 +1466,13 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
-      let videoUrl: string | null = null;
-      for (let i = 0; i < 60; i++) {
-        await sleep(3000);
-        videoUrl = await resolveSeedance(predictionId, replicateToken, supabase, scene.number);
-        if (videoUrl && videoUrl !== SEEDANCE_TIMEOUT_RETRY) break;
-      }
-
-      if (!videoUrl) {
-        throw new Error("Video generation timed out");
-      }
-
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
+      // Save prediction ID so the "video" phase can pick it up on subsequent polls
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined };
       await updateScenes(supabase, generationId, scenes);
 
-      return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+      // Return processing status immediately to avoid Edge Function timeout
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Returning processing status, frontend will poll video phase`);
+      return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
     }
 
     // =============== IMAGE-REGEN PHASE (Full regenerate image then video) ===============
@@ -1508,21 +1500,13 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
-      let videoUrl: string | null = null;
-      for (let i = 0; i < 60; i++) {
-        await sleep(3000);
-        videoUrl = await resolveSeedance(predictionId, replicateToken, supabase, scene.number);
-        if (videoUrl && videoUrl !== SEEDANCE_TIMEOUT_RETRY) break;
-      }
-
-      if (!videoUrl) {
-        throw new Error("Video generation timed out");
-      }
-
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoUrl, videoPredictionId: undefined };
+      // Save prediction ID so the "video" phase can pick it up on subsequent polls
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined };
       await updateScenes(supabase, generationId, scenes);
 
-      return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
+      // Return processing status immediately to avoid Edge Function timeout
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Returning processing status, frontend will poll video phase`);
+      return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
     }
 
     // =============== PHASE 5: FINALIZE ===============
