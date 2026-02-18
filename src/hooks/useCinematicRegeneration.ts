@@ -84,13 +84,13 @@ export function useCinematicRegeneration(
       let polls = 0;
       while (polls < MAX_POLLS) {
         polls++;
+        // NEVER send regenerate during polling — regenerate is only sent
+        // by the initial explicit call in regenerateVideo()
         const result = await authenticatedFetch("generate-cinematic", {
           phase: type,
           projectId,
           generationId,
           sceneIndex: idx,
-          // Only send regenerate on the FIRST poll to clear existing prediction once
-          ...(type === "video" && polls === 1 ? { regenerate: true } : {}),
         });
 
         const nextScene = result.scene as Partial<CinematicScene>;
@@ -99,8 +99,8 @@ export function useCinematicRegeneration(
         );
 
         if (result.status === "complete") break;
-        // Use longer interval for video to avoid hammering the API and spawning excess predictions
-        await sleep(type === "audio" ? 1200 : 5000);
+        // Use longer interval for video to avoid hammering the API
+        await sleep(type === "audio" ? 1200 : 3000);
       }
       if (polls >= MAX_POLLS) {
         throw new Error("Generation timed out after maximum retries. Please try again.");
@@ -156,6 +156,16 @@ export function useCinematicRegeneration(
       setState({ isRegenerating: true, sceneIndex: idx, type: "video" });
 
       try {
+        // Step 1: Send ONE explicit call with regenerate=true to start a new prediction
+        await authenticatedFetch("generate-cinematic", {
+          phase: "video",
+          projectId,
+          generationId,
+          sceneIndex: idx,
+          regenerate: true,
+        });
+
+        // Step 2: Poll for completion (never sends regenerate)
         await pollUntilComplete(idx, "video");
         toast({ title: "Video Regenerated", description: `Scene ${idx + 1} video has been updated.` });
       } catch (error) {
