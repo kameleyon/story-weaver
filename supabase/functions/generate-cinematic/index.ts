@@ -725,7 +725,9 @@ QUALITY REQUIREMENTS:
           body: JSON.stringify({
             prompt: imagePrompt,
             model: "nano-banana-pro-t2i",
+            resolution: "1k",
             aspect_ratio: aspectRatio,
+            output_format: "png",
           }),
         });
 
@@ -1142,6 +1144,86 @@ ANIMATION RULES (CRITICAL):
     }
   }
   throw new Error("Hypereal Seedance 1.5 T2V prediction failed after retries");
+}
+
+// Replicate bytedance/seedance-1-pro-fast — fallback for initial T2V generation
+async function startSeedanceReplicate(
+  scene: Scene,
+  format: "landscape" | "portrait" | "square",
+  replicateToken: string,
+) {
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
+  const visualPrompt =
+    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+
+  const videoPrompt = `${visualPrompt}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+
+  console.log(
+    `[Seedance-Replicate] Starting scene ${scene.number} | model: ${SEEDANCE_VIDEO_MODEL} | prompt: ${videoPrompt.substring(0, 100)}...`,
+  );
+
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(`https://api.replicate.com/v1/models/${SEEDANCE_VIDEO_MODEL}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: {
+            prompt: videoPrompt,
+            duration: 5,
+            aspect_ratio: aspectRatio,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Seedance-Replicate] Start failed (attempt ${attempt}): ${response.status} - ${errText}`);
+        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[Seedance-Replicate] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new Error(`Replicate seedance-1-pro-fast failed: ${response.status} - ${errText}`);
+      }
+
+      const prediction = await response.json();
+      const predictionId = prediction.id;
+      if (!predictionId) {
+        console.error(`[Seedance-Replicate] No prediction ID in response:`, JSON.stringify(prediction).substring(0, 300));
+        throw new Error("Replicate seedance-1-pro-fast returned no prediction ID");
+      }
+      console.log(`[Seedance-Replicate] Prediction started: ${predictionId}`);
+      return predictionId as string;
+    } catch (err: any) {
+      const errMsg = err?.message || "";
+      if (
+        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
+        attempt < MAX_RETRIES
+      ) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        console.warn(`[Seedance-Replicate] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Replicate seedance-1-pro-fast prediction failed after retries");
 }
 
 async function startGrokVideo(
@@ -1621,20 +1703,44 @@ serve(async (req) => {
       if (!scene.videoPredictionId) {
         // Both initial gen and regen use Hypereal Seedance 1.5
         // Initial = T2V (text-to-video, no image, 5s), Regen = I2V (image-to-video)
-        const isT2V = !isRegeneration;
-        const predictionId = isRegeneration
-          ? await startSeedance(scene, scene.imageUrl, format, replicateToken)
-          : await startSeedanceT2V(scene, format);
-        const model = isT2V ? "seedance-1-5-t2v" : "seedance-1-5-i2v";
-        scenes[idx] = {
-          ...scene,
-          videoPredictionId: predictionId,
-          videoRetryAfter: undefined,
-          videoProvider: "hypereal",
-          videoModel: model,
-        };
-        await updateScenes(supabase, generationId, scenes);
-        return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        if (isRegeneration) {
+          const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
+          scenes[idx] = {
+            ...scene,
+            videoPredictionId: predictionId,
+            videoRetryAfter: undefined,
+            videoProvider: "hypereal",
+            videoModel: "seedance-1-5-i2v",
+          };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        }
+
+        // Initial generation: Hypereal T2V primary, Replicate seedance-1-pro-fast fallback
+        try {
+          const predictionId = await startSeedanceT2V(scene, format);
+          scenes[idx] = {
+            ...scene,
+            videoPredictionId: predictionId,
+            videoRetryAfter: undefined,
+            videoProvider: "hypereal",
+            videoModel: "seedance-1-5-t2v",
+          };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        } catch (t2vErr) {
+          console.warn(`[VIDEO] Scene ${scene.number}: Hypereal T2V failed, falling back to Replicate seedance-1-pro-fast: ${t2vErr}`);
+          const predictionId = await startSeedanceReplicate(scene, format, replicateToken);
+          scenes[idx] = {
+            ...scene,
+            videoPredictionId: predictionId,
+            videoRetryAfter: undefined,
+            videoProvider: "replicate",
+            videoModel: "seedance-1-pro-fast",
+          };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        }
       }
 
       // Route to the correct resolver based on provider
