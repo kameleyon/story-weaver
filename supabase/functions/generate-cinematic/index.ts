@@ -60,7 +60,7 @@ const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
 // Use chatterbox-turbo with voice parameter (Marisol/Ethan) like the main pipeline
 const CHATTERBOX_TURBO_URL = "https://api.replicate.com/v1/models/resemble-ai/chatterbox-turbo/predictions";
-const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
+const SEEDANCE_VIDEO_MODEL = "bytedance/seedance-1-pro-fast";
 
 // Nano Banana models for image generation (Replicate)
 const NANO_BANANA_MODEL = "google/nano-banana";
@@ -748,9 +748,11 @@ QUALITY REQUIREMENTS:
 }
 
 // ============================================
-// STEP 4: Video Generation with Grok Imagine Video (Replicate)
+// STEP 4: Video Generation with Seedance (Replicate)
 // ============================================
-async function startGrokVideo(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
+async function startSeedance(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", replicateToken: string) {
+  const version = await getLatestModelVersion(SEEDANCE_VIDEO_MODEL, replicateToken);
+  
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
   
   const videoPrompt = `${scene.visualPrompt}
@@ -766,50 +768,37 @@ ANIMATION RULES (CRITICAL):
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // Use the Replicate models API endpoint for official models
-      const response = await fetch(`https://api.replicate.com/v1/models/${GROK_VIDEO_MODEL}/predictions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${replicateToken}`,
-          "Content-Type": "application/json",
+      const prediction = await createReplicatePrediction(
+        version,
+        {
+          prompt: videoPrompt,
+          image: imageUrl,
+          duration: 10,
+          resolution: "720p",
+          aspect_ratio: aspectRatio,
+          fps: 24,
         },
-        body: JSON.stringify({
-          input: {
-            prompt: videoPrompt,
-            image: imageUrl,
-            duration: 10,
-            resolution: "720p",
-            aspect_ratio: aspectRatio,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[GrokVideo] create prediction error:", errorText);
-        throw new Error(`Grok video prediction start failed (${response.status}): ${errorText}`);
-      }
-
-      const prediction = await response.json();
-      console.log(`[GrokVideo] Prediction started: ${prediction.id}`);
+        replicateToken,
+      );
+      console.log(`[Seedance] Prediction started: ${prediction.id}`);
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
       if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[GrokVideo] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Seedance] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
       throw err;
     }
   }
-  throw new Error("Grok video prediction failed after retries");
+  throw new Error("Seedance video prediction failed after retries");
 }
 
-const GROK_TIMEOUT_RETRY = "__TIMEOUT_RETRY__";
+const SEEDANCE_TIMEOUT_RETRY = "__TIMEOUT_RETRY__";
 
-async function resolveGrokVideo(
+async function resolveSeedance(
   predictionId: string,
   replicateToken: string,
   supabase: ReturnType<typeof createClient>,
@@ -820,18 +809,18 @@ async function resolveGrokVideo(
   if (result.status !== "succeeded") {
     if (result.status === "failed" || result.status === "canceled") {
       const errorMsg = result.error || "Video generation failed";
-      console.error("[GrokVideo] failed:", errorMsg);
+      console.error("[Seedance] failed:", errorMsg);
       
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
       }
       if (errorMsg.includes("rate limit") || errorMsg.includes("429") || errorMsg.includes("Queue is full")) {
-        console.warn(`[GrokVideo] Scene ${sceneNumber}: Queue full / rate limited (prediction ${predictionId}), will retry`);
-        return GROK_TIMEOUT_RETRY;
+        console.warn(`[Seedance] Scene ${sceneNumber}: Queue full / rate limited (prediction ${predictionId}), will retry`);
+        return SEEDANCE_TIMEOUT_RETRY;
       }
       if (errorMsg.includes("timed out") || errorMsg.includes("timeout") || errorMsg.includes("deadline exceeded")) {
-        console.warn(`[GrokVideo] Scene ${sceneNumber}: Timed out (prediction ${predictionId}), will retry`);
-        return GROK_TIMEOUT_RETRY;
+        console.warn(`[Seedance] Scene ${sceneNumber}: Timed out (prediction ${predictionId}), will retry`);
+        return SEEDANCE_TIMEOUT_RETRY;
       }
       
       throw new Error(`Video generation failed: ${errorMsg}`);
@@ -852,11 +841,11 @@ async function resolveGrokVideo(
   }
 
   if (!videoUrl) {
-    console.error("[GrokVideo] Succeeded but no video URL found. Output:", JSON.stringify(output));
+    console.error("[Seedance] Succeeded but no video URL found. Output:", JSON.stringify(output));
     throw new Error("Replicate succeeded but returned no video URL");
   }
 
-  console.log(`[GrokVideo] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
+  console.log(`[Seedance] Downloading video for scene ${sceneNumber}: ${videoUrl}`);
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
     throw new Error(`Failed to download generated video: ${videoResponse.status}`);
@@ -882,7 +871,7 @@ async function resolveGrokVideo(
   }
 
   const { data: urlData } = supabase.storage.from("scene-videos").getPublicUrl(fileName);
-  console.log(`[GrokVideo] Video uploaded: ${urlData.publicUrl}`);
+  console.log(`[Seedance] Video uploaded: ${urlData.publicUrl}`);
   return urlData.publicUrl;
 }
 
@@ -1206,15 +1195,15 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        const predictionId = await startGrokVideo(scene, scene.imageUrl, format, replicateToken);
+        const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
         scenes[idx] = { ...scene, videoPredictionId: predictionId };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
-      const videoUrl = await resolveGrokVideo(scene.videoPredictionId, replicateToken, supabase, scene.number);
+      const videoUrl = await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
       
-      if (videoUrl === GROK_TIMEOUT_RETRY) {
+      if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
         console.log(`[VIDEO] Scene ${scene.number}: Timeout detected, clearing prediction for auto-retry`);
         scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined };
         await updateScenes(supabase, generationId, scenes);
@@ -1323,13 +1312,13 @@ Make only the requested changes while keeping everything else consistent.`;
 
       // Now regenerate video with the new image
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startSeedance(scene, newImageUrl, format, replicateToken);
       
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveGrokVideo(predictionId, replicateToken, supabase, scene.number);
-        if (videoUrl && videoUrl !== GROK_TIMEOUT_RETRY) break;
+        videoUrl = await resolveSeedance(predictionId, replicateToken, supabase, scene.number);
+        if (videoUrl && videoUrl !== SEEDANCE_TIMEOUT_RETRY) break;
       }
 
       if (!videoUrl) {
@@ -1365,13 +1354,13 @@ Make only the requested changes while keeping everything else consistent.`;
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration`);
-      const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
+      const predictionId = await startSeedance(scene, newImageUrl, format, replicateToken);
       
       let videoUrl: string | null = null;
       for (let i = 0; i < 60; i++) {
         await sleep(3000);
-        videoUrl = await resolveGrokVideo(predictionId, replicateToken, supabase, scene.number);
-        if (videoUrl && videoUrl !== GROK_TIMEOUT_RETRY) break;
+        videoUrl = await resolveSeedance(predictionId, replicateToken, supabase, scene.number);
+        if (videoUrl && videoUrl !== SEEDANCE_TIMEOUT_RETRY) break;
       }
 
       if (!videoUrl) {
