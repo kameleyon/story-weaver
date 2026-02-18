@@ -425,13 +425,30 @@ export function useVideoExport() {
             video.playsInline = true;
             video.preload = "auto";
 
-            // Load video with timeout
-            await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new Error("Video load timeout (60s)")), 60000);
-              video.onloadeddata = () => { clearTimeout(timeout); resolve(); };
-              video.onerror = () => { clearTimeout(timeout); reject(new Error("Failed to load video")); };
-              video.src = scene.videoUrl!;
-            });
+            // Load video with timeout + retry
+            const loadVideoWithRetry = async (url: string, maxRetries = 2) => {
+              for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                  await new Promise<void>((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                      video.src = ""; // abort current load
+                      reject(new Error(`Video load timeout (120s), attempt ${attempt + 1}`));
+                    }, 120000);
+                    video.onloadeddata = () => { clearTimeout(timeout); resolve(); };
+                    video.onerror = () => { clearTimeout(timeout); reject(new Error("Failed to load video")); };
+                    // Cache-bust on retry to avoid stale/hung connections
+                    video.src = attempt > 0 ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : url;
+                  });
+                  return; // success
+                } catch (err) {
+                  log("Run", runId, `Scene ${i + 1}: Video load attempt ${attempt + 1} failed`, { error: (err as Error).message });
+                  if (attempt >= maxRetries) throw err;
+                  // Brief pause before retry
+                  await new Promise(r => setTimeout(r, 2000));
+                }
+              }
+            };
+            await loadVideoWithRetry(scene.videoUrl!);
 
             const sourceDuration = video.duration || 5;
             log("Run", runId, `Scene ${i + 1}: Source video duration=${sourceDuration}s, target=${sceneDuration}s`);
