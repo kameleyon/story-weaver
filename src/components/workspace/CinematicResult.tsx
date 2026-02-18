@@ -160,6 +160,73 @@ export function CinematicResult({
     setLocalScenes(scenes);
   }, [scenes]);
 
+  // Background recovery: poll for scenes that have a videoPredictionId but no videoUrl
+  useEffect(() => {
+    if (!generationId || !projectId) return;
+
+    const scenesNeedingRecovery = localScenes
+      .map((s, idx) => ({ scene: s, idx }))
+      .filter((item) => !item.scene.videoUrl);
+
+    if (scenesNeedingRecovery.length === 0) return;
+
+    let cancelled = false;
+    const recoverScenes = async () => {
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const MAX_RECOVERY_POLLS = 120; // ~4 min
+
+      for (const { idx } of scenesNeedingRecovery) {
+        if (cancelled) return;
+        let attempts = 0;
+
+        while (!cancelled && attempts < MAX_RECOVERY_POLLS) {
+          attempts++;
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+            if (!token) break;
+
+            const res = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cinematic`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                },
+                body: JSON.stringify({
+                  phase: "video",
+                  projectId,
+                  generationId,
+                  sceneIndex: idx,
+                }),
+              }
+            );
+            const data = await res.json();
+            if (data.status === "complete" && data.scene?.videoUrl) {
+              setLocalScenes((prev) => {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], videoUrl: data.scene.videoUrl };
+                return updated;
+              });
+              break;
+            }
+            if (!data.success) break; // error, stop trying
+          } catch {
+            break;
+          }
+          await sleep(2000);
+        }
+      }
+    };
+
+    recoverScenes();
+    return () => { cancelled = true; };
+    // Only run on mount / generationId change, not on every localScenes update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generationId, projectId]);
+
   const currentScene = localScenes[currentSceneIndex];
 
   const scenesWithVideo = useMemo(

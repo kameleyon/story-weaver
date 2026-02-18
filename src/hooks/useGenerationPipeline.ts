@@ -421,7 +421,7 @@ export function useGenerationPipeline() {
           const generateVideoForScene = async (sceneIdx: number) => {
             let videoComplete = false;
             let pollAttempts = 0;
-            const MAX_POLL_ATTEMPTS = 90; // ~3 min max per scene
+            const MAX_POLL_ATTEMPTS = 180; // ~6 min max per scene (Hypereal can take 5-8 min)
 
             while (!videoComplete) {
               pollAttempts++;
