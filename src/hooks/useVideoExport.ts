@@ -414,103 +414,14 @@ export function useVideoExport() {
              }
           }
 
-          // D. Render Video Frames
-          // Check if this scene has a video clip — use Smart Boomerang Looping
-          if (scene.videoUrl) {
-            log("Run", runId, `Scene ${i + 1}: Using Slow-Motion Stretch`, { videoUrl: scene.videoUrl, sceneDuration });
-            
-            const video = document.createElement("video");
-            video.crossOrigin = "anonymous";
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = "auto";
-
-            // Load video with timeout + retry
-            const loadVideoWithRetry = async (url: string, maxRetries = 2) => {
-              for (let attempt = 0; attempt <= maxRetries; attempt++) {
-                try {
-                  await new Promise<void>((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                      video.src = ""; // abort current load
-                      reject(new Error(`Video load timeout (120s), attempt ${attempt + 1}`));
-                    }, 120000);
-                    video.onloadeddata = () => { clearTimeout(timeout); resolve(); };
-                    video.onerror = () => { clearTimeout(timeout); reject(new Error("Failed to load video")); };
-                    // Cache-bust on retry to avoid stale/hung connections
-                    video.src = attempt > 0 ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : url;
-                  });
-                  return; // success
-                } catch (err) {
-                  log("Run", runId, `Scene ${i + 1}: Video load attempt ${attempt + 1} failed`, { error: (err as Error).message });
-                  if (attempt >= maxRetries) throw err;
-                  // Brief pause before retry
-                  await new Promise(r => setTimeout(r, 2000));
-                }
-              }
-            };
-            await loadVideoWithRetry(scene.videoUrl!);
-
-            const sourceDuration = video.duration || 5;
-            log("Run", runId, `Scene ${i + 1}: Source video duration=${sourceDuration}s, target=${sceneDuration}s`);
-
-            // Seek to start
-            video.currentTime = 0;
-            await new Promise<void>(r => { video.onseeked = () => r(); });
-
-            for (let f = 0; f < sceneFrames; f++) {
-              if (abortRef.current) break;
-
-              const timeInScene = f / fps;
-
-               // --- SLOW-MOTION STRETCH ---
-               // Maps linear time (0..sceneDuration) into source video (0..sourceDuration)
-               // Video plays forward once at reduced speed to fill the full audio duration.
-               // If sceneDuration > sourceDuration, speed < 1x (slow motion).
-               // Final frame freezes if we reach the end.
-               const progress = Math.min(timeInScene / sceneDuration, 1);
-               let playbackTime = progress * sourceDuration;
-               // Clamp to valid range
-               playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
-
-              video.currentTime = playbackTime;
-              await new Promise<void>(r => { video.onseeked = () => r(); });
-
-              // Draw video frame scaled to canvas
-              ctx.fillStyle = "#000";
-              ctx.fillRect(0, 0, dim.w, dim.h);
-              const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
-              const vw = video.videoWidth * vScale;
-              const vh = video.videoHeight * vScale;
-              ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
-
-              // Brand watermark
-              if (brandMark && brandMark.trim()) {
-                drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
-              }
-
-              await waitForEncoderDrain(videoEncoder, 10);
-
-              const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
-              const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
-              const keyFrame = globalFrameCount % (fps * 2) === 0;
-              videoEncoder.encode(frame, { keyFrame });
-              frame.close();
-              globalFrameCount++;
-
-              if (globalFrameCount % 5 === 0) await yieldToUI();
-              if (globalFrameCount % 30 === 0) await longYield();
-            }
-
-            // Cleanup video element
-            video.removeAttribute("src");
-            video.load();
-
-          } else {
-            // E. Render Static Images with Fade Transitions (existing logic)
+          // D. Render Video Frames — UNIFIED image-based rendering for ALL project types
+          // Both Explainer and Cinematic use the same reliable image-based approach.
+          // This avoids video-load timeouts, is faster, and works consistently on mobile.
+          {
             const imagesPerScene = Math.max(1, loadedImages.length);
             const framesPerImage = Math.ceil(sceneFrames / imagesPerScene);
             const fadeFrames = Math.min(Math.floor(fps * 0.5), Math.floor(framesPerImage * 0.2));
-            const sceneCrossfadeFrames = Math.floor(fps * 0.3);
+            const sceneCrossfadeFrames = Math.floor(fps * 0.5); // 0.5s crossfade between scenes
 
             // Pre-render static frames for each image as bitmaps
             const cachedBitmaps: Map<number, ImageBitmap> = new Map();

@@ -45,9 +45,8 @@
     <meta name="twitter:image:alt" content="MotionMax — Turn text into engaging visual contents" />
     <meta name="twitter:creator" content="@MotionMax" />
 
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Removed apple-mobile-web-app-capable to prevent iOS from hijacking audio sessions -->
+    <!-- This was causing active phone/WhatsApp calls to disconnect when opening the app -->
     <meta name="apple-mobile-web-app-title" content="MotionMax" />
     <meta name="application-name" content="MotionMax" />
     <meta name="format-detection" content="telephone=no" />
