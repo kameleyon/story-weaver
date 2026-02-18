@@ -95,7 +95,8 @@ export function useCinematicRegeneration(
         );
 
         if (result.status === "complete") break;
-        await sleep(type === "audio" ? 1200 : 2000);
+        // Use longer interval for video to avoid hammering the API and spawning excess predictions
+        await sleep(type === "audio" ? 1200 : 5000);
       }
     },
     [generationId, projectId, scenes, onScenesUpdate]
