@@ -53,6 +53,8 @@ interface Scene {
   videoUrl?: string;
   audioPredictionId?: string;
   videoPredictionId?: string;
+  videoRetryCount?: number;
+  videoRetryAfter?: string;
 }
 
 const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
@@ -1180,6 +1182,8 @@ serve(async (req) => {
       videoUrl: s?.videoUrl,
       audioPredictionId: s?.audioPredictionId,
       videoPredictionId: s?.videoPredictionId,
+      videoRetryCount: s?.videoRetryCount ?? 0,
+      videoRetryAfter: s?.videoRetryAfter,
     }));
 
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
@@ -1310,6 +1314,8 @@ serve(async (req) => {
         console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`);
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
+        scene.videoRetryCount = 0; // Reset retry counter on explicit regen
+        scene.videoRetryAfter = undefined;
         scenes[idx] = scene;
         await updateScenes(supabase, generationId, scenes);
       }
@@ -1341,27 +1347,25 @@ serve(async (req) => {
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
         // Track retry count for Grok failures
         const retryCount = (scene.videoRetryCount || 0) + 1;
-        const now = Date.now();
+        const MAX_VIDEO_RETRIES = 3;
 
-        // After 3 failed Grok attempts, fall back to Seedance
-        if (retryCount >= 3) {
-          console.log(`[VIDEO] Scene ${scene.number}: Grok failed ${retryCount} times, falling back to Seedance`);
-          const seedancePredictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
-          scenes[idx] = { ...scene, videoPredictionId: seedancePredictionId, videoUrl: undefined, videoRetryAfter: undefined, videoRetryCount: 0 };
-          await updateScenes(supabase, generationId, scenes);
-          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        // After 3 failed attempts, fall back to Seedance immediately
+        if (retryCount >= MAX_VIDEO_RETRIES) {
+          console.log(`[VIDEO] Scene ${scene.number}: Failed ${retryCount} times (Queue Full/Timeout), falling back to Seedance`);
+          try {
+            const seedancePredictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
+            scenes[idx] = { ...scene, videoPredictionId: seedancePredictionId, videoUrl: undefined, videoRetryAfter: undefined, videoRetryCount: 0 };
+            await updateScenes(supabase, generationId, scenes);
+            return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+          } catch (seedanceErr) {
+            console.error(`[VIDEO] Scene ${scene.number}: Seedance fallback also failed:`, seedanceErr);
+            return jsonResponse({ success: false, error: "Video generation service is busy. Please try again later." }, { status: 500 });
+          }
         }
 
-        // Check cooldown: don't spawn a new prediction if we retried recently
-        const retryAfter = scene.videoRetryAfter ? new Date(scene.videoRetryAfter).getTime() : 0;
-        if (retryAfter > now) {
-          console.log(`[VIDEO] Scene ${scene.number}: In cooldown until ${new Date(retryAfter).toISOString()}, waiting... (attempt ${retryCount}/3)`);
-          return jsonResponse({ success: true, status: "processing", scene });
-        }
-        // Cooldown expired or not set — clear prediction and set a 45s cooldown before next retry
-        const cooldownMs = 45_000;
-        console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/3). Next retry after ${cooldownMs / 1000}s cooldown.`);
-        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryAfter: new Date(now + cooldownMs).toISOString(), videoRetryCount: retryCount };
+        // Under retry limit — clear prediction and retry on next poll (no cooldown, just retry)
+        console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry.`);
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
@@ -1488,7 +1492,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined };
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined };
       await updateScenes(supabase, generationId, scenes);
 
       // Return processing status immediately to avoid Edge Function timeout
@@ -1522,7 +1526,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
       
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined };
+      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined };
       await updateScenes(supabase, generationId, scenes);
 
       // Return processing status immediately to avoid Edge Function timeout
