@@ -104,14 +104,67 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 function isHaitianCreole(text: string): boolean {
   const lowerText = text.toLowerCase();
   const creoleIndicators = [
-    "mwen", "ou", "li", "nou", "yo", "sa", "ki", "nan", "pou", "ak",
-    "pa", "se", "te", "ap", "gen", "fè", "di", "ale", "vin", "bay",
-    "konnen", "wè", "pran", "mete", "vle", "kapab", "dwe", "bezwen",
-    "tankou", "paske", "men", "lè", "si", "kote", "kouman", "poukisa",
-    "anpil", "tout", "chak", "yon", "de", "twa", "kat", "senk",
-    "ayiti", "kreyòl", "kreyol", "bondye", "mèsi", "bonjou", "bonswa",
-    "kijan", "eske", "kounye", "toujou", "jamè", "anvan", "apre",
-    "t ap", "pral", "ta",
+    "mwen",
+    "ou",
+    "li",
+    "nou",
+    "yo",
+    "sa",
+    "ki",
+    "nan",
+    "pou",
+    "ak",
+    "pa",
+    "se",
+    "te",
+    "ap",
+    "gen",
+    "fè",
+    "di",
+    "ale",
+    "vin",
+    "bay",
+    "konnen",
+    "wè",
+    "pran",
+    "mete",
+    "vle",
+    "kapab",
+    "dwe",
+    "bezwen",
+    "tankou",
+    "paske",
+    "men",
+    "lè",
+    "si",
+    "kote",
+    "kouman",
+    "poukisa",
+    "anpil",
+    "tout",
+    "chak",
+    "yon",
+    "de",
+    "twa",
+    "kat",
+    "senk",
+    "ayiti",
+    "kreyòl",
+    "kreyol",
+    "bondye",
+    "mèsi",
+    "bonjou",
+    "bonswa",
+    "kijan",
+    "eske",
+    "kounye",
+    "toujou",
+    "jamè",
+    "anvan",
+    "apre",
+    "t ap",
+    "pral",
+    "ta",
   ];
 
   let matchCount = 0;
@@ -141,12 +194,21 @@ function pcmToWav(
   const view = new DataView(buffer);
 
   // RIFF header
-  view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+  view.setUint8(0, 0x52);
+  view.setUint8(1, 0x49);
+  view.setUint8(2, 0x46);
+  view.setUint8(3, 0x46);
   view.setUint32(4, totalSize - 8, true);
-  view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
+  view.setUint8(8, 0x57);
+  view.setUint8(9, 0x41);
+  view.setUint8(10, 0x56);
+  view.setUint8(11, 0x45);
 
   // fmt subchunk
-  view.setUint8(12, 0x66); view.setUint8(13, 0x6d); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+  view.setUint8(12, 0x66);
+  view.setUint8(13, 0x6d);
+  view.setUint8(14, 0x74);
+  view.setUint8(15, 0x20);
   view.setUint32(16, 16, true);
   view.setUint16(20, audioFormat, true);
   view.setUint16(22, numChannels, true);
@@ -156,7 +218,10 @@ function pcmToWav(
   view.setUint16(34, bitsPerSample, true);
 
   // data subchunk
-  view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+  view.setUint8(36, 0x64);
+  view.setUint8(37, 0x61);
+  view.setUint8(38, 0x74);
+  view.setUint8(39, 0x61);
   view.setUint32(40, dataSize, true);
 
   const result = new Uint8Array(buffer);
@@ -210,11 +275,7 @@ async function getLatestModelVersion(model: string, replicateToken: string): Pro
   return latestVersion;
 }
 
-async function createReplicatePrediction(
-  version: string,
-  input: Record<string, unknown>,
-  replicateToken: string,
-) {
+async function createReplicatePrediction(version: string, input: Record<string, unknown>, replicateToken: string) {
   // Use the standard predictions endpoint with a version ID
   const response = await fetch(REPLICATE_PREDICTIONS_URL, {
     method: "POST",
@@ -270,31 +331,37 @@ function getStylePrompt(style: string, customStyle?: string): string {
 async function generateScriptWithGemini(
   content: string,
   params: Required<Pick<CinematicRequest, "format" | "length" | "style">> &
-    Partial<Pick<
-      CinematicRequest,
-      | "customStyle"
-      | "brandMark"
-      | "presenterFocus"
-      | "characterDescription"
-      | "disableExpressions"
-      | "characterConsistencyEnabled"
-      | "voiceType"
-      | "voiceId"
-      | "voiceName"
-    >>,
+    Partial<
+      Pick<
+        CinematicRequest,
+        | "customStyle"
+        | "brandMark"
+        | "presenterFocus"
+        | "characterDescription"
+        | "disableExpressions"
+        | "characterConsistencyEnabled"
+        | "voiceType"
+        | "voiceId"
+        | "voiceName"
+      >
+    >,
   openrouterApiKey: string,
 ): Promise<{ title: string; scenes: Scene[]; characters?: Record<string, string> }> {
   console.log("Step 1: Generating script with Gemini 3 Preview...");
 
   // Get dimensions based on format
-  const dimensions = params.format === "portrait" 
-    ? { width: 1080, height: 1920 }
-    : params.format === "square" 
-      ? { width: 1080, height: 1080 }
-      : { width: 1920, height: 1080 };
+  const dimensions =
+    params.format === "portrait"
+      ? { width: 1080, height: 1920 }
+      : params.format === "square"
+        ? { width: 1080, height: 1080 }
+        : { width: 1920, height: 1080 };
 
   // Length configuration - dynamic scene count ranges
-  const lengthConfig: Record<string, { minScenes: number; maxScenes: number; targetDuration: number; maxSceneDuration: number }> = {
+  const lengthConfig: Record<
+    string,
+    { minScenes: number; maxScenes: number; targetDuration: number; maxSceneDuration: number }
+  > = {
     short: { minScenes: 11, maxScenes: 17, targetDuration: 165, maxSceneDuration: 10 },
     brief: { minScenes: 6, maxScenes: 10, targetDuration: 150, maxSceneDuration: 10 },
     presentation: { minScenes: 8, maxScenes: 12, targetDuration: 180, maxSceneDuration: 10 },
@@ -304,9 +371,7 @@ async function generateScriptWithGemini(
   const styleDescription = getStylePrompt(params.style, params.customStyle);
 
   // Build optional guidance sections
-  const presenterGuidance = params.presenterFocus
-    ? `\n**Presenter/Focus Guidance:** ${params.presenterFocus}`
-    : "";
+  const presenterGuidance = params.presenterFocus ? `\n**Presenter/Focus Guidance:** ${params.presenterFocus}` : "";
 
   const characterGuidance = params.characterDescription
     ? `\n**Character Appearance:** All human characters MUST match: ${params.characterDescription}`
@@ -321,7 +386,9 @@ async function generateScriptWithGemini(
     presenterFocusLower.includes("kreyol") ||
     presenterFocusLower.includes("creole");
   const isCreoleProject = inputIsCreole || forceCreoleFromPresenter;
-  console.log(`[Script] Haitian Creole detection: content=${inputIsCreole}, presenterFocus=${forceCreoleFromPresenter}, final=${isCreoleProject}`);
+  console.log(
+    `[Script] Haitian Creole detection: content=${inputIsCreole}, presenterFocus=${forceCreoleFromPresenter}, final=${isCreoleProject}`,
+  );
 
   const languageInstruction = isCreoleProject
     ? `### LANGUAGE REQUIREMENT
@@ -618,10 +685,10 @@ async function generateSceneImage(
   supabase: ReturnType<typeof createClient>,
 ): Promise<string> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  
+
   const styleKey = style.toLowerCase();
   const fullStylePrompt = STYLE_PROMPTS[styleKey] || STYLE_PROMPTS[style] || style;
-  
+
   const imagePrompt = `${fullStylePrompt}
 
 SCENE DESCRIPTION: ${scene.visualPrompt}
@@ -642,7 +709,9 @@ QUALITY REQUIREMENTS:
 
   // Prefer Hypereal nano-banana-pro-t2i
   if (hyperealApiKey) {
-    console.log(`[IMG] Generating scene ${scene.number} with Hypereal nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`);
+    console.log(
+      `[IMG] Generating scene ${scene.number} with Hypereal nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
+    );
 
     for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
       try {
@@ -665,7 +734,9 @@ QUALITY REQUIREMENTS:
 
           if ((response.status === 429 || response.status >= 500) && attempt < MAX_IMG_RETRIES) {
             const retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-            console.warn(`[IMG] Scene ${scene.number}: Rate limited (${response.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`);
+            console.warn(
+              `[IMG] Scene ${scene.number}: Rate limited (${response.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`,
+            );
             await sleep(retryAfterMs);
             continue;
           }
@@ -675,16 +746,21 @@ QUALITY REQUIREMENTS:
 
         const data = await response.json();
         console.log(`[IMG] Hypereal raw response keys:`, Object.keys(data), `data array length:`, data.data?.length);
-        
+
         // Handle response - Hypereal returns { data: [{ url: "..." }] }
-        const imageUrl = data.data?.[0]?.url || data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
+        const imageUrl =
+          data.data?.[0]?.url ||
+          data.output?.url ||
+          data.url ||
+          data.image_url ||
+          (Array.isArray(data.output) ? data.output[0] : null);
         const imageBase64 = data.output?.base64 || data.base64 || data.image;
-        
+
         let imageBuffer: Uint8Array;
 
         if (imageBase64) {
           const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-          imageBuffer = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0));
+          imageBuffer = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
           console.log(`[IMG] Hypereal success (base64): ${imageBuffer.length} bytes`);
         } else if (imageUrl) {
           console.log(`[IMG] Hypereal success, downloading from: ${imageUrl.substring(0, 80)}...`);
@@ -753,7 +829,9 @@ QUALITY REQUIREMENTS:
 
       if (!createResponse.ok) {
         const errText = await createResponse.text();
-        console.error(`[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`);
+        console.error(
+          `[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`,
+        );
 
         if ((createResponse.status === 429 || createResponse.status >= 500) && attempt < MAX_IMG_RETRIES) {
           const retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
@@ -818,15 +896,23 @@ QUALITY REQUIREMENTS:
 // ============================================
 const HYPEREAL_VIDEO_URL = "https://hypereal.tech/api/v1/videos/generate";
 
-async function startSeedance(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", _replicateToken: string) {
+async function startSeedance(
+  scene: Scene,
+  imageUrl: string,
+  format: "landscape" | "portrait" | "square",
+  _replicateToken: string,
+) {
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
   if (!imageUrl) throw new Error(`Hypereal Seedance 1.5: No imageUrl for scene ${scene.number}`);
 
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
-  const visualPrompt = scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
-  console.log(`[Seedance-Hypereal] Starting scene ${scene.number} | image: ${imageUrl.substring(0, 80)}... | prompt: ${visualPrompt.substring(0, 100)}...`);
+  const visualPrompt =
+    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+  console.log(
+    `[Seedance-Hypereal] Starting scene ${scene.number} | image: ${imageUrl.substring(0, 80)}... | prompt: ${visualPrompt.substring(0, 100)}...`,
+  );
 
   const videoPrompt = `${visualPrompt}
 
@@ -851,7 +937,7 @@ ANIMATION RULES (CRITICAL):
           model: "seedance-1-5-i2v",
           prompt: videoPrompt,
           image: imageUrl,
-          duration: 10,
+          duration: 5,
           resolution: "720p",
           aspect_ratio: aspectRatio,
           generate_audio: false,
@@ -880,7 +966,10 @@ ANIMATION RULES (CRITICAL):
       return jobId as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) && attempt < MAX_RETRIES) {
+      if (
+        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
+        attempt < MAX_RETRIES
+      ) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[Seedance-Hypereal] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
@@ -966,7 +1055,6 @@ async function resolveHyperealVideo(
   return null;
 }
 
-
 async function startGrokVideo(
   scene: Scene,
   imageUrl: string,
@@ -1022,7 +1110,10 @@ ANIMATION RULES (CRITICAL):
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if ((errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) && attempt < MAX_RETRIES) {
+      if (
+        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
+        attempt < MAX_RETRIES
+      ) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[GrokVideo] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
@@ -1048,12 +1139,14 @@ async function resolveSeedance(
     if (result.status === "failed" || result.status === "canceled") {
       const errorMsg = result.error || "Video generation failed";
       console.error("[Video] failed:", errorMsg, `(prediction ${predictionId})`);
-      
+
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
       }
       // ALL other failures (Queue full, timeout, generic Grok failures) → retryable
-      console.warn(`[Video] Scene ${sceneNumber}: Failed (prediction ${predictionId}), marking as retryable. Error: ${errorMsg}`);
+      console.warn(
+        `[Video] Scene ${sceneNumber}: Failed (prediction ${predictionId}), marking as retryable. Error: ${errorMsg}`,
+      );
       return SEEDANCE_TIMEOUT_RETRY;
     }
     return null;
@@ -1106,11 +1199,7 @@ async function resolveSeedance(
   return urlData.publicUrl;
 }
 
-async function readGenerationOwned(
-  supabase: ReturnType<typeof createClient>,
-  generationId: string,
-  userId: string,
-) {
+async function readGenerationOwned(supabase: ReturnType<typeof createClient>, generationId: string, userId: string) {
   const { data, error } = await supabase
     .from("generations")
     .select("id, user_id, project_id, status, progress, scenes")
@@ -1164,7 +1253,7 @@ serve(async (req) => {
 
     // Verify plan access: Professional, Enterprise, or Admin
     const { data: isAdmin } = await supabase.rpc("is_admin", { _user_id: user.id });
-    
+
     // Check subscription plan if not admin
     if (!isAdmin) {
       const { data: subData } = await supabase
@@ -1173,10 +1262,13 @@ serve(async (req) => {
         .eq("user_id", user.id)
         .in("status", ["active"])
         .single();
-      
+
       const userPlan = subData?.plan_name || "free";
       if (userPlan !== "professional" && userPlan !== "enterprise") {
-        return jsonResponse({ error: "Cinematic generation requires a Professional or Enterprise plan." }, { status: 403 });
+        return jsonResponse(
+          { error: "Cinematic generation requires a Professional or Enterprise plan." },
+          { status: 403 },
+        );
       }
     }
 
@@ -1312,7 +1404,7 @@ serve(async (req) => {
         .select("voice_name, voice_type, voice_id, presenter_focus")
         .eq("id", generation.project_id)
         .maybeSingle();
-      
+
       const voiceGender = project?.voice_name === "male" ? "male" : "female";
       const customVoiceId = project?.voice_type === "custom" ? project?.voice_id : undefined;
 
@@ -1323,8 +1415,10 @@ serve(async (req) => {
         presenterFocusLower.includes("kreyòl") ||
         presenterFocusLower.includes("kreyol") ||
         presenterFocusLower.includes("creole");
-      console.log(`[AUDIO] Scene ${scene.number}: presenterFocus="${project?.presenter_focus || "none"}", forceHaitianCreole=${forceHaitianCreole}`);
-      
+      console.log(
+        `[AUDIO] Scene ${scene.number}: presenterFocus="${project?.presenter_focus || "none"}", forceHaitianCreole=${forceHaitianCreole}`,
+      );
+
       // Build Google API keys array (reverse order for failover)
       const googleApiKeys: string[] = [];
       const gk1 = Deno.env.get("GOOGLE_TTS_API_KEY");
@@ -1365,7 +1459,10 @@ serve(async (req) => {
 
       // Audio generation failed
       console.error(`[AUDIO] Scene ${scene.number}: TTS failed: ${result.error}`);
-      return jsonResponse({ success: false, error: result.error || "Audio generation failed. Please try again later." }, { status: 500 });
+      return jsonResponse(
+        { success: false, error: result.error || "Audio generation failed. Please try again later." },
+        { status: 500 },
+      );
     }
 
     // =============== PHASE 3: IMAGES ===============
@@ -1408,7 +1505,9 @@ serve(async (req) => {
       // Explicit regeneration flag from frontend
       const isRegeneration = !!body.regenerate;
       if (isRegeneration) {
-        console.log(`[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`);
+        console.log(
+          `[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`,
+        );
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
         scene.videoRetryCount = 0; // Reset retry counter on explicit regen
@@ -1436,16 +1535,22 @@ serve(async (req) => {
           ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
           : await startSeedance(scene, scene.imageUrl, format, replicateToken);
         const provider = isGrok ? "replicate" : "hypereal";
-        scenes[idx] = { ...scene, videoPredictionId: predictionId, videoRetryAfter: undefined, videoProvider: provider };
+        scenes[idx] = {
+          ...scene,
+          videoPredictionId: predictionId,
+          videoRetryAfter: undefined,
+          videoProvider: provider,
+        };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
 
       // Route to the correct resolver based on provider
-      const videoUrl = scene.videoProvider === "hypereal"
-        ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number)
-        : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
-      
+      const videoUrl =
+        scene.videoProvider === "hypereal"
+          ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number)
+          : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
+
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
         // Track retry count for Grok failures
         const retryCount = (scene.videoRetryCount || 0) + 1;
@@ -1453,25 +1558,39 @@ serve(async (req) => {
 
         // After 2 failed Grok attempts, fall back to Hypereal Seedance 1.5
         if (retryCount >= MAX_VIDEO_RETRIES) {
-          console.log(`[VIDEO] Scene ${scene.number}: Failed ${retryCount} times, falling back to Hypereal Seedance 1.5`);
+          console.log(
+            `[VIDEO] Scene ${scene.number}: Failed ${retryCount} times, falling back to Hypereal Seedance 1.5`,
+          );
           try {
             const seedancePredictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
-            scenes[idx] = { ...scene, videoPredictionId: seedancePredictionId, videoUrl: undefined, videoRetryAfter: undefined, videoRetryCount: 0, videoProvider: "hypereal" };
+            scenes[idx] = {
+              ...scene,
+              videoPredictionId: seedancePredictionId,
+              videoUrl: undefined,
+              videoRetryAfter: undefined,
+              videoRetryCount: 0,
+              videoProvider: "hypereal",
+            };
             await updateScenes(supabase, generationId, scenes);
             return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
           } catch (seedanceErr) {
             console.error(`[VIDEO] Scene ${scene.number}: Hypereal Seedance fallback also failed:`, seedanceErr);
-            return jsonResponse({ success: false, error: "Video generation service is busy. Please try again later." }, { status: 500 });
+            return jsonResponse(
+              { success: false, error: "Video generation service is busy. Please try again later." },
+              { status: 500 },
+            );
           }
         }
 
         // Under retry limit — clear prediction and retry on next poll
-        console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry.`);
+        console.log(
+          `[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry.`,
+        );
         scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
-      
+
       if (!videoUrl) {
         return jsonResponse({ success: true, status: "processing", scene });
       }
@@ -1542,7 +1661,9 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       }
 
       let editPrediction = await editResponse.json();
-      console.log(`[IMG-EDIT] Nano Banana Pro prediction started: ${editPrediction.id}, status: ${editPrediction.status}`);
+      console.log(
+        `[IMG-EDIT] Nano Banana Pro prediction started: ${editPrediction.id}, status: ${editPrediction.status}`,
+      );
 
       // Poll for completion if not finished
       while (editPrediction.status !== "succeeded" && editPrediction.status !== "failed") {
@@ -1570,7 +1691,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       const editedImgResponse = await fetch(editedImageUrl);
       if (!editedImgResponse.ok) throw new Error("Failed to download edited image");
       const imageBuffer = new Uint8Array(await editedImgResponse.arrayBuffer());
-      
+
       const fileName = `cinematic-scene-edited-${Date.now()}-${scene.number}.png`;
       const upload = await supabase.storage
         .from("scene-images")
@@ -1579,7 +1700,9 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       if (upload.error) {
         try {
           await supabase.storage.createBucket("scene-images", { public: true });
-          await supabase.storage.from("scene-images").upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+          await supabase.storage
+            .from("scene-images")
+            .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
         } catch (e) {
           throw new Error("Failed to upload edited image");
         }
@@ -1592,9 +1715,17 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       // Now regenerate video with the new image
       console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
-      
+
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined, videoProvider: "replicate" };
+      scenes[idx] = {
+        ...scene,
+        imageUrl: newImageUrl,
+        videoPredictionId: predictionId,
+        videoUrl: undefined,
+        videoRetryCount: 0,
+        videoRetryAfter: undefined,
+        videoProvider: "replicate",
+      };
       await updateScenes(supabase, generationId, scenes);
 
       // Return processing status immediately to avoid Edge Function timeout
@@ -1626,9 +1757,17 @@ STYLE CONTEXT: ${fullStylePrompt}`;
 
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
       const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
-      
+
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
-      scenes[idx] = { ...scene, imageUrl: newImageUrl, videoPredictionId: predictionId, videoUrl: undefined, videoRetryCount: 0, videoRetryAfter: undefined, videoProvider: "replicate" };
+      scenes[idx] = {
+        ...scene,
+        imageUrl: newImageUrl,
+        videoPredictionId: predictionId,
+        videoUrl: undefined,
+        videoRetryCount: 0,
+        videoRetryAfter: undefined,
+        videoProvider: "replicate",
+      };
       await updateScenes(supabase, generationId, scenes);
 
       // Return processing status immediately to avoid Edge Function timeout
@@ -1688,17 +1827,16 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (supabaseUrl && supabaseKey) {
           const sb = createClient(supabaseUrl, supabaseKey);
-          const { data: gen } = await sb
+          const { data: gen } = await sb.from("generations").select("project_id").eq("id", genId).maybeSingle();
+
+          await sb
             .from("generations")
-            .select("project_id")
-            .eq("id", genId)
-            .maybeSingle();
-          
-          await sb.from("generations").update({
-            status: "error",
-            error_message: errorMessage,
-          }).eq("id", genId);
-          
+            .update({
+              status: "error",
+              error_message: errorMessage,
+            })
+            .eq("id", genId);
+
           if (gen?.project_id) {
             await sb.from("projects").update({ status: "error" }).eq("id", gen.project_id);
           }
