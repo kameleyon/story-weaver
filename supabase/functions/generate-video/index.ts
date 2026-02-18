@@ -631,8 +631,8 @@ async function isProOrEnterpriseTier(supabase: any, userId: string): Promise<boo
   }
 }
 
-// ============= IMAGE GENERATION WITH HYPEREAL (nano-banana-pro-t2i via https://hypereal.tech/api/v1/images/generate) =============
-const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
+// ============= IMAGE GENERATION WITH HYPEREAL (nano-banana-pro-t2i via https://api.hypereal.tech/v1/images/generate) =============
+const HYPEREAL_API_URL = "https://api.hypereal.tech/v1/images/generate";
 const HYPEREAL_IMAGE_RETRIES = 4;
 
 async function generateImageWithHypereal(
