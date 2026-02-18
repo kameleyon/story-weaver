@@ -188,6 +188,9 @@ export function useCinematicRegeneration(
           scenes.map((s, i) => (i === idx ? { ...s, ...nextScene } : s))
         );
 
+        // Step 2: Poll video phase until Grok completes (handles timeouts/retries)
+        await pollUntilComplete(idx, "video");
+
         toast({ title: "Image Edited", description: `Scene ${idx + 1} image edited and video regenerated.` });
       } catch (error) {
         console.error("Image edit error:", error);
@@ -200,7 +203,7 @@ export function useCinematicRegeneration(
         setState({ isRegenerating: false, sceneIndex: null, type: null });
       }
     },
-    [generationId, projectId, scenes, onScenesUpdate, onStopPlayback, toast]
+    [generationId, projectId, scenes, onScenesUpdate, onStopPlayback, toast, pollUntilComplete]
   );
 
   const regenerateImage = useCallback(
@@ -226,6 +229,9 @@ export function useCinematicRegeneration(
           scenes.map((s, i) => (i === idx ? { ...s, ...nextScene } : s))
         );
 
+        // Step 2: Poll video phase until Grok completes
+        await pollUntilComplete(idx, "video");
+
         toast({ title: "Image Regenerated", description: `Scene ${idx + 1} image and video regenerated.` });
       } catch (error) {
         console.error("Image regeneration error:", error);
@@ -238,7 +244,7 @@ export function useCinematicRegeneration(
         setState({ isRegenerating: false, sceneIndex: null, type: null });
       }
     },
-    [generationId, projectId, scenes, onScenesUpdate, onStopPlayback, toast]
+    [generationId, projectId, scenes, onScenesUpdate, onStopPlayback, toast, pollUntilComplete]
   );
 
   return {
