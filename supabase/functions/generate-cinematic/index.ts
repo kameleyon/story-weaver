@@ -1529,12 +1529,14 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        // Use Grok Imagine Video for regeneration, Hypereal Seedance 1.5 for initial pipeline
-        const isGrok = isRegeneration;
-        const predictionId = isGrok
-          ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
-          : await startSeedance(scene, scene.imageUrl, format, replicateToken);
-        const provider = isGrok ? "replicate" : "hypereal";
+        // Grok commented out for testing — always use Hypereal Seedance 1.5
+        // const isGrok = isRegeneration;
+        // const predictionId = isGrok
+        //   ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
+        //   : await startSeedance(scene, scene.imageUrl, format, replicateToken);
+        // const provider = isGrok ? "replicate" : "hypereal";
+        const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
+        const provider = "hypereal";
         scenes[idx] = {
           ...scene,
           videoPredictionId: predictionId,
@@ -1713,8 +1715,9 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       console.log(`[IMG-EDIT] Scene ${scene.number} edited image uploaded: ${newImageUrl}`);
 
       // Now regenerate video with the new image
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
-      const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
+      // Grok commented out for testing — use Hypereal Seedance 1.5
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Starting video regeneration with Hypereal Seedance 1.5`);
+      const predictionId = await startSeedance(scene, newImageUrl, format, replicateToken);
 
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
       scenes[idx] = {
@@ -1724,7 +1727,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoUrl: undefined,
         videoRetryCount: 0,
         videoRetryAfter: undefined,
-        videoProvider: "replicate",
+        videoProvider: "hypereal",
       };
       await updateScenes(supabase, generationId, scenes);
 
@@ -1755,8 +1758,9 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       // Generate new image
       const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
 
-      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Grok Imagine Video`);
-      const predictionId = await startGrokVideo(scene, newImageUrl, format, replicateToken);
+      // Grok commented out for testing — use Hypereal Seedance 1.5
+      console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Hypereal Seedance 1.5`);
+      const predictionId = await startSeedance(scene, newImageUrl, format, replicateToken);
 
       // Save prediction ID so the "video" phase can pick it up on subsequent polls
       scenes[idx] = {
@@ -1766,7 +1770,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoUrl: undefined,
         videoRetryCount: 0,
         videoRetryAfter: undefined,
-        videoProvider: "replicate",
+        videoProvider: "hypereal",
       };
       await updateScenes(supabase, generationId, scenes);
 
