@@ -656,11 +656,9 @@ async function generateImageWithHypereal(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "nano-banana-pro-t2i",
           prompt,
-          resolution: "1k",
+          model: "nano-banana-pro-t2i",
           aspect_ratio: aspectRatio,
-          output_format: "png",
         }),
       });
 
@@ -682,8 +680,9 @@ async function generateImageWithHypereal(
       }
 
       const data = await response.json();
+      console.log(`[HYPEREAL-IMG] Raw response keys:`, Object.keys(data), `data array length:`, data.data?.length);
       
-      // Hypereal returns { data: [{ url: "..." }] } format per their API docs
+      // Hypereal returns { data: [{ url: "..." }] }
       const imageUrl = data.data?.[0]?.url || data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
       const imageBase64 = data.output?.base64 || data.base64 || data.image;
 
