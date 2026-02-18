@@ -675,7 +675,7 @@ QUALITY REQUIREMENTS:
         const data = await response.json();
         
         // Handle response - could be URL or base64
-        const imageUrl = data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
+        const imageUrl = data.data?.[0]?.url || data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
         const imageBase64 = data.output?.base64 || data.base64 || data.image;
         
         let imageBuffer: Uint8Array;
