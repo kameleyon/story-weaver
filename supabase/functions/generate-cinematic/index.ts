@@ -1339,17 +1339,29 @@ serve(async (req) => {
       const videoUrl = await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
       
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
+        // Track retry count for Grok failures
+        const retryCount = (scene.videoRetryCount || 0) + 1;
+        const now = Date.now();
+
+        // After 3 failed Grok attempts, fall back to Seedance
+        if (retryCount >= 3) {
+          console.log(`[VIDEO] Scene ${scene.number}: Grok failed ${retryCount} times, falling back to Seedance`);
+          const seedancePredictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
+          scenes[idx] = { ...scene, videoPredictionId: seedancePredictionId, videoUrl: undefined, videoRetryAfter: undefined, videoRetryCount: 0 };
+          await updateScenes(supabase, generationId, scenes);
+          return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        }
+
         // Check cooldown: don't spawn a new prediction if we retried recently
         const retryAfter = scene.videoRetryAfter ? new Date(scene.videoRetryAfter).getTime() : 0;
-        const now = Date.now();
         if (retryAfter > now) {
-          console.log(`[VIDEO] Scene ${scene.number}: In cooldown until ${new Date(retryAfter).toISOString()}, waiting...`);
+          console.log(`[VIDEO] Scene ${scene.number}: In cooldown until ${new Date(retryAfter).toISOString()}, waiting... (attempt ${retryCount}/3)`);
           return jsonResponse({ success: true, status: "processing", scene });
         }
         // Cooldown expired or not set — clear prediction and set a 45s cooldown before next retry
         const cooldownMs = 45_000;
-        console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout, clearing prediction. Next retry after ${cooldownMs / 1000}s cooldown.`);
-        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryAfter: new Date(now + cooldownMs).toISOString() };
+        console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/3). Next retry after ${cooldownMs / 1000}s cooldown.`);
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryAfter: new Date(now + cooldownMs).toISOString(), videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
