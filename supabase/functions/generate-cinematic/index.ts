@@ -603,8 +603,10 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 // resolveChatterbox removed — shared engine handles Chatterbox synchronously
 
 // ============================================
-// STEP 3: Image Generation with Replicate Nano Banana
+// STEP 3: Image Generation with Hypereal nano-banana-pro-t2i
 // ============================================
+const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
+
 async function generateSceneImage(
   scene: Scene,
   style: string,
@@ -612,14 +614,11 @@ async function generateSceneImage(
   replicateToken: string,
   supabase: ReturnType<typeof createClient>,
 ): Promise<string> {
-  // Map format to aspect ratio
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
   
-  // Get the full style prompt from STYLE_PROMPTS, fallback to style name if not found
   const styleKey = style.toLowerCase();
   const fullStylePrompt = STYLE_PROMPTS[styleKey] || STYLE_PROMPTS[style] || style;
   
-  // Build comprehensive image prompt with STYLE_PROMPTS
   const imagePrompt = `${fullStylePrompt}
 
 SCENE DESCRIPTION: ${scene.visualPrompt}
@@ -635,115 +634,179 @@ QUALITY REQUIREMENTS:
 - Ultra high resolution
 - Professional illustration with dynamic composition and clear visual hierarchy`;
 
-  console.log(`[IMG] Generating scene ${scene.number} with Replicate nano-banana, format: ${format}, aspect_ratio: ${aspectRatio}`);
-
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   const MAX_IMG_RETRIES = 4;
 
-  for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
-  try {
-    const createResponse = await fetch(`https://api.replicate.com/v1/models/${NANO_BANANA_MODEL}/predictions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${replicateToken}`,
-        "Content-Type": "application/json",
-        Prefer: "wait",
-      },
-      body: JSON.stringify({
-        input: {
-          prompt: imagePrompt,
-          aspect_ratio: aspectRatio,
-          output_format: "png",
-        },
-      }),
-    });
+  // Prefer Hypereal nano-banana-pro-t2i
+  if (hyperealApiKey) {
+    console.log(`[IMG] Generating scene ${scene.number} with Hypereal nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`);
 
-    if (!createResponse.ok) {
-      const errText = await createResponse.text();
-      console.error(`[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`);
-
-      // Retry on 429 rate limit or 5xx server errors
-      if ((createResponse.status === 429 || createResponse.status >= 500) && attempt < MAX_IMG_RETRIES) {
-        // Parse retry_after from response if available
-        let retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        try {
-          const errJson = JSON.parse(errText);
-          if (errJson.retry_after) retryAfterMs = Math.max(retryAfterMs, errJson.retry_after * 1000);
-        } catch {}
-        console.warn(`[IMG] Scene ${scene.number}: Rate limited (${createResponse.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`);
-        await sleep(retryAfterMs);
-        continue;
-      }
-
-      throw new Error(`Replicate nano-banana failed: ${createResponse.status}`);
-    }
-
-    let prediction = await createResponse.json();
-    console.log(`[IMG] Nano-banana prediction started: ${prediction.id}, status: ${prediction.status}`);
-
-    // Poll for completion if not finished
-    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-      await sleep(2000);
-      const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
-        headers: { Authorization: `Bearer ${replicateToken}` },
-      });
-      prediction = await pollResponse.json();
-    }
-
-    if (prediction.status === "failed") {
-      console.error(`[IMG] Nano-banana prediction failed: ${prediction.error}`);
-      throw new Error(prediction.error || "Image generation failed");
-    }
-
-    // Get image URL from output
-    const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-    const imageUrl = typeof first === "string" ? first : first?.url || null;
-
-    if (!imageUrl) {
-      throw new Error("No image URL returned from Replicate");
-    }
-
-    console.log(`[IMG] Nano-banana success, downloading from: ${imageUrl.substring(0, 80)}...`);
-
-    // Download and upload to Supabase storage
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) throw new Error("Failed to download image");
-
-    const imageBuffer = new Uint8Array(await imgResponse.arrayBuffer());
-    console.log(`[IMG] Scene ${scene.number} image downloaded: ${imageBuffer.length} bytes`);
-
-    const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
-    const upload = await supabase.storage
-      .from("scene-images")
-      .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
-
-    if (upload.error) {
+    for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
       try {
-        await supabase.storage.createBucket("scene-images", { public: true });
-        const retry = await supabase.storage
+        const response = await fetch(HYPEREAL_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${hyperealApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "nano-banana-pro-t2i",
+            prompt: imagePrompt,
+            resolution: "1k",
+            aspect_ratio: aspectRatio,
+            output_format: "png",
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(`[IMG] Hypereal create failed (attempt ${attempt}): ${response.status} - ${errText}`);
+
+          if ((response.status === 429 || response.status >= 500) && attempt < MAX_IMG_RETRIES) {
+            const retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+            console.warn(`[IMG] Scene ${scene.number}: Rate limited (${response.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`);
+            await sleep(retryAfterMs);
+            continue;
+          }
+
+          throw new Error(`Hypereal nano-banana-pro-t2i failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Handle response - could be URL or base64
+        const imageUrl = data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
+        const imageBase64 = data.output?.base64 || data.base64 || data.image;
+        
+        let imageBuffer: Uint8Array;
+
+        if (imageBase64) {
+          const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+          imageBuffer = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0));
+          console.log(`[IMG] Hypereal success (base64): ${imageBuffer.length} bytes`);
+        } else if (imageUrl) {
+          console.log(`[IMG] Hypereal success, downloading from: ${imageUrl.substring(0, 80)}...`);
+          const imgResponse = await fetch(imageUrl);
+          if (!imgResponse.ok) throw new Error("Failed to download Hypereal image");
+          imageBuffer = new Uint8Array(await imgResponse.arrayBuffer());
+          console.log(`[IMG] Scene ${scene.number} image downloaded: ${imageBuffer.length} bytes`);
+        } else {
+          console.error(`[IMG] No image data in Hypereal response:`, JSON.stringify(data).substring(0, 300));
+          throw new Error("No image data returned from Hypereal");
+        }
+
+        const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
+        const upload = await supabase.storage
           .from("scene-images")
           .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
-        if (retry.error) throw retry.error;
-      } catch (e) {
-        console.error("Image upload error:", upload.error);
-        throw new Error("Failed to upload scene image");
+
+        if (upload.error) {
+          try {
+            await supabase.storage.createBucket("scene-images", { public: true });
+            const retry = await supabase.storage
+              .from("scene-images")
+              .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+            if (retry.error) throw retry.error;
+          } catch (e) {
+            console.error("Image upload error:", upload.error);
+            throw new Error("Failed to upload scene image");
+          }
+        }
+
+        const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+        console.log(`[IMG] Scene ${scene.number} image uploaded: ${urlData.publicUrl}`);
+        return urlData.publicUrl;
+      } catch (err) {
+        if (attempt >= MAX_IMG_RETRIES) {
+          console.error(`[IMG] Scene ${scene.number} Hypereal error after ${MAX_IMG_RETRIES} attempts:`, err);
+          throw err;
+        }
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        console.warn(`[IMG] Scene ${scene.number}: Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
       }
     }
-
-    const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
-    console.log(`[IMG] Scene ${scene.number} image uploaded: ${urlData.publicUrl}`);
-    return urlData.publicUrl;
-  } catch (err) {
-    // If it's a rate limit or server error and we have retries left, the loop continue above handles it
-    // For other errors, throw immediately
-    if (attempt >= MAX_IMG_RETRIES) {
-      console.error(`[IMG] Scene ${scene.number} error after ${MAX_IMG_RETRIES} attempts:`, err);
-      throw err;
-    }
-    const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-    console.warn(`[IMG] Scene ${scene.number}: Error on attempt ${attempt}, retrying in ${delayMs}ms`);
-    await sleep(delayMs);
   }
-  } // end retry loop
+
+  // Fallback to Replicate nano-banana if Hypereal key not available
+  console.log(`[IMG] HYPEREAL_API_KEY not set, falling back to Replicate nano-banana for scene ${scene.number}`);
+
+  for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
+    try {
+      const createResponse = await fetch(`https://api.replicate.com/v1/models/${NANO_BANANA_MODEL}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
+          Prefer: "wait",
+        },
+        body: JSON.stringify({
+          input: {
+            prompt: imagePrompt,
+            aspect_ratio: aspectRatio,
+            output_format: "png",
+          },
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const errText = await createResponse.text();
+        console.error(`[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`);
+
+        if ((createResponse.status === 429 || createResponse.status >= 500) && attempt < MAX_IMG_RETRIES) {
+          const retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          await sleep(retryAfterMs);
+          continue;
+        }
+        throw new Error(`Replicate nano-banana failed: ${createResponse.status}`);
+      }
+
+      let prediction = await createResponse.json();
+
+      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+        await sleep(2000);
+        const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
+          headers: { Authorization: `Bearer ${replicateToken}` },
+        });
+        prediction = await pollResponse.json();
+      }
+
+      if (prediction.status === "failed") {
+        throw new Error(prediction.error || "Image generation failed");
+      }
+
+      const first = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+      const imageUrl = typeof first === "string" ? first : first?.url || null;
+      if (!imageUrl) throw new Error("No image URL returned from Replicate");
+
+      const imgResponse = await fetch(imageUrl);
+      if (!imgResponse.ok) throw new Error("Failed to download image");
+
+      const imageBuffer = new Uint8Array(await imgResponse.arrayBuffer());
+      const fileName = `cinematic-scene-${Date.now()}-${scene.number}.png`;
+      const upload = await supabase.storage
+        .from("scene-images")
+        .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+
+      if (upload.error) {
+        try {
+          await supabase.storage.createBucket("scene-images", { public: true });
+          const retry = await supabase.storage
+            .from("scene-images")
+            .upload(fileName, imageBuffer, { contentType: "image/png", upsert: true });
+          if (retry.error) throw retry.error;
+        } catch (e) {
+          throw new Error("Failed to upload scene image");
+        }
+      }
+
+      const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
+      return urlData.publicUrl;
+    } catch (err) {
+      if (attempt >= MAX_IMG_RETRIES) throw err;
+      await sleep(2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000));
+    }
+  }
 
   throw new Error(`Image generation failed for scene ${scene.number} after ${MAX_IMG_RETRIES} retries`);
 }
@@ -1314,57 +1377,74 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
       const style = project.style || "realistic";
 
-      // Use OpenRouter directly for image editing
-      const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
-      if (!openrouterKey) throw new Error("OPENROUTER_API_KEY not configured");
+      // Use Replicate nano-banana-pro for image editing (img2img)
+      const replicateApiToken = Deno.env.get("REPLICATE_API_TOKEN") || replicateToken;
 
       const fullStylePrompt = getStylePrompt(style);
-      const editPrompt = `Edit this image: ${modification}
+      const editPrompt = `Edit this image with the following modification: ${modification}
 
-IMPORTANT: Preserve the overall composition, lighting, and style of the original image.
-Apply the following style: ${fullStylePrompt}
+IMPORTANT REQUIREMENTS:
+- Preserve the overall composition, lighting, and style of the original image
+- Apply ONLY the requested modification while keeping everything else intact
+- Maintain the same artistic style and color palette
 
-Make only the requested changes while keeping everything else consistent.`;
+STYLE CONTEXT: ${fullStylePrompt}`;
 
-      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via OpenRouter`);
+      console.log(`[IMG-EDIT] Scene ${scene.number}: Applying edit via Replicate nano-banana-pro`);
 
-      const editResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const editInput: Record<string, unknown> = {
+        prompt: editPrompt,
+        image_input: [scene.imageUrl],
+        aspect_ratio: format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9",
+        output_format: "png",
+        resolution: "1K",
+      };
+
+      const editResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana-pro/predictions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${openrouterKey}`,
+          Authorization: `Bearer ${replicateApiToken}`,
           "Content-Type": "application/json",
+          Prefer: "wait",
         },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-image-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: editPrompt },
-                { type: "image_url", image_url: { url: scene.imageUrl } },
-              ],
-            },
-          ],
-          modalities: ["image", "text"],
-        }),
+        body: JSON.stringify({ input: editInput }),
       });
 
       if (!editResponse.ok) {
         const errText = await editResponse.text();
-        console.error(`[IMG-EDIT] OpenRouter failed: ${errText}`);
+        console.error(`[IMG-EDIT] Replicate nano-banana-pro failed: ${editResponse.status} - ${errText}`);
         throw new Error("Image editing failed");
       }
 
-      const editData = await editResponse.json();
-      const editedImageBase64 = editData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      
-      if (!editedImageBase64) {
-        throw new Error("No edited image returned from OpenRouter");
+      let editPrediction = await editResponse.json();
+      console.log(`[IMG-EDIT] Nano Banana Pro prediction started: ${editPrediction.id}, status: ${editPrediction.status}`);
+
+      // Poll for completion if not finished
+      while (editPrediction.status !== "succeeded" && editPrediction.status !== "failed") {
+        await sleep(2000);
+        const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${editPrediction.id}`, {
+          headers: { Authorization: `Bearer ${replicateApiToken}` },
+        });
+        editPrediction = await pollResponse.json();
       }
 
-      // Upload base64 image to storage
-      const base64Data = editedImageBase64.replace(/^data:image\/\w+;base64,/, "");
-      const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      if (editPrediction.status === "failed") {
+        console.error(`[IMG-EDIT] Nano Banana Pro prediction failed: ${editPrediction.error}`);
+        throw new Error(editPrediction.error || "Image edit failed");
+      }
+
+      // Get image URL from output
+      const editFirst = Array.isArray(editPrediction.output) ? editPrediction.output[0] : editPrediction.output;
+      const editedImageUrl = typeof editFirst === "string" ? editFirst : editFirst?.url || null;
+
+      if (!editedImageUrl) {
+        throw new Error("No edited image returned from Replicate");
+      }
+
+      // Download and upload to storage
+      const editedImgResponse = await fetch(editedImageUrl);
+      if (!editedImgResponse.ok) throw new Error("Failed to download edited image");
+      const imageBuffer = new Uint8Array(await editedImgResponse.arrayBuffer());
       
       const fileName = `cinematic-scene-edited-${Date.now()}-${scene.number}.png`;
       const upload = await supabase.storage
