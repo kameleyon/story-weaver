@@ -56,6 +56,7 @@ interface Scene {
   videoRetryCount?: number;
   videoRetryAfter?: string;
   videoProvider?: "replicate" | "hypereal";
+  videoModel?: string;
 }
 
 const REPLICATE_MODELS_URL = "https://api.replicate.com/v1/models";
@@ -992,11 +993,12 @@ async function resolveHyperealVideo(
   jobId: string,
   supabase: ReturnType<typeof createClient>,
   sceneNumber: number,
+  model: string = "seedance-1-5-i2v",
 ): Promise<string | null> {
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
 
-  const response = await fetch(`${HYPEREAL_JOB_POLL_URL}/${jobId}?model=seedance-1-5-i2v&type=video`, {
+  const response = await fetch(`${HYPEREAL_JOB_POLL_URL}/${jobId}?model=${model}&type=video`, {
     headers: { Authorization: `Bearer ${hyperealApiKey}` },
   });
 
@@ -1057,16 +1059,20 @@ async function resolveHyperealVideo(
   return null;
 }
 
-// Replicate Seedance 1 Pro Fast — used for INITIAL generation only
-async function startSeedanceReplicate(
+// Hypereal Seedance 1.5 Pro T2V — used for INITIAL generation (text-to-video, no image)
+async function startSeedanceT2V(
   scene: Scene,
-  imageUrl: string,
   format: "landscape" | "portrait" | "square",
-  replicateToken: string,
 ) {
+  const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+  if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
+
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
-  const videoPrompt = `${scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting"}
+  const visualPrompt =
+    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+
+  const videoPrompt = `${visualPrompt}
 
 ANIMATION RULES (CRITICAL):
 - NO lip-sync talking animation - characters should NOT move their mouths as if speaking
@@ -1076,53 +1082,66 @@ ANIMATION RULES (CRITICAL):
 - Static poses with subtle breathing/idle movement are preferred for dialogue scenes
 - Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
 
-  console.log(`[SeedanceReplicate] Starting scene ${scene.number} | model: ${SEEDANCE_VIDEO_MODEL} | image: ${imageUrl.substring(0, 80)}...`);
+  console.log(
+    `[Seedance-T2V] Starting scene ${scene.number} | model: seedance-1-5-t2v | prompt: ${videoPrompt.substring(0, 100)}...`,
+  );
 
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(`https://api.replicate.com/v1/models/${SEEDANCE_VIDEO_MODEL}/predictions`, {
+      const response = await fetch(HYPEREAL_VIDEO_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${replicateToken}`,
+          Authorization: `Bearer ${hyperealApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          model: "seedance-1-5-t2v",
           input: {
             prompt: videoPrompt,
-            image: imageUrl,
-            duration: 10,
+            duration: 5,
             resolution: "720p",
             aspect_ratio: aspectRatio,
           },
+          generate_audio: false,
         }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[SeedanceReplicate] Create prediction error (attempt ${attempt}): ${response.status} - ${errorText}`);
+        const errText = await response.text();
+        console.error(`[Seedance-T2V] Start failed (attempt ${attempt}): ${response.status} - ${errText}`);
         if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
           const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[Seedance-T2V] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
           await sleep(delayMs);
           continue;
         }
-        throw new Error(`Seedance Replicate prediction start failed (${response.status}): ${errorText}`);
+        throw new Error(`Hypereal Seedance 1.5 T2V failed: ${response.status} - ${errText}`);
       }
 
-      const prediction = await response.json();
-      console.log(`[SeedanceReplicate] Prediction started: ${prediction.id}`);
-      return prediction.id as string;
+      const data = await response.json();
+      const jobId = data.jobId || data.id || data.task_id || data.prediction_id;
+      if (!jobId) {
+        console.error(`[Seedance-T2V] No jobId in response:`, JSON.stringify(data).substring(0, 300));
+        throw new Error("Hypereal Seedance 1.5 T2V returned no jobId");
+      }
+      console.log(`[Seedance-T2V] Job started: ${jobId}, credits: ${data.creditsUsed}`);
+      return jobId as string;
     } catch (err: any) {
-      if (attempt < MAX_RETRIES) {
+      const errMsg = err?.message || "";
+      if (
+        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
+        attempt < MAX_RETRIES
+      ) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[SeedanceReplicate] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+        console.warn(`[Seedance-T2V] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
         continue;
       }
       throw err;
     }
   }
-  throw new Error("Seedance Replicate: All retry attempts exhausted");
+  throw new Error("Hypereal Seedance 1.5 T2V prediction failed after retries");
 }
 
 async function startGrokVideo(
@@ -1443,6 +1462,7 @@ serve(async (req) => {
       videoRetryCount: s?.videoRetryCount ?? 0,
       videoRetryAfter: s?.videoRetryAfter,
       videoProvider: s?.videoProvider,
+      videoModel: s?.videoModel,
     }));
 
     const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : undefined;
@@ -1599,16 +1619,19 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        // Initial gen = Replicate Seedance Pro Fast, Regeneration = Hypereal Seedance 1.5 (Grok bypassed for testing)
+        // Both initial gen and regen use Hypereal Seedance 1.5
+        // Initial = T2V (text-to-video, no image, 5s), Regen = I2V (image-to-video)
+        const isT2V = !isRegeneration;
         const predictionId = isRegeneration
           ? await startSeedance(scene, scene.imageUrl, format, replicateToken)
-          : await startSeedanceReplicate(scene, scene.imageUrl, format, replicateToken);
-        const provider = isRegeneration ? "hypereal" : "replicate";
+          : await startSeedanceT2V(scene, format);
+        const model = isT2V ? "seedance-1-5-t2v" : "seedance-1-5-i2v";
         scenes[idx] = {
           ...scene,
           videoPredictionId: predictionId,
           videoRetryAfter: undefined,
-          videoProvider: provider,
+          videoProvider: "hypereal",
+          videoModel: model,
         };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
@@ -1617,7 +1640,7 @@ serve(async (req) => {
       // Route to the correct resolver based on provider
       const videoUrl =
         scene.videoProvider === "hypereal"
-          ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number)
+          ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number, scene.videoModel || "seedance-1-5-i2v")
           : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
 
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
