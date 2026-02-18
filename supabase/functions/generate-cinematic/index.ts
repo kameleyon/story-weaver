@@ -675,7 +675,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 // ============================================
 // STEP 3: Image Generation with Hypereal nano-banana-pro-t2i
 // ============================================
-const HYPEREAL_API_URL = "https://api.hypereal.tech/v1/images/generate";
+const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
 
 async function generateSceneImage(
   scene: Scene,
@@ -894,7 +894,7 @@ QUALITY REQUIREMENTS:
 // ============================================
 // STEP 4: Video Generation with Hypereal Seedance 1.5 Pro I2V
 // ============================================
-const HYPEREAL_VIDEO_URL = "https://api.hypereal.tech/v1/videos/generate";
+const HYPEREAL_VIDEO_URL = "https://hypereal.tech/api/v1/videos/generate";
 
 async function startSeedance(
   scene: Scene,
@@ -986,7 +986,7 @@ ANIMATION RULES (CRITICAL):
 // ============================================
 // Hypereal Video Job Polling
 // ============================================
-const HYPEREAL_JOB_POLL_URL = "https://api.hypereal.tech/v1/jobs";
+const HYPEREAL_JOB_POLL_URL = "https://hypereal.tech/api/v1/jobs";
 
 async function resolveHyperealVideo(
   jobId: string,
