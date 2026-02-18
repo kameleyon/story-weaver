@@ -417,7 +417,7 @@ export function useVideoExport() {
           // D. Render Video Frames
           // Check if this scene has a video clip — use Smart Boomerang Looping
           if (scene.videoUrl) {
-            log("Run", runId, `Scene ${i + 1}: Using Smart Boomerang video loop`, { videoUrl: scene.videoUrl, sceneDuration });
+            log("Run", runId, `Scene ${i + 1}: Using Slow-Motion Stretch`, { videoUrl: scene.videoUrl, sceneDuration });
             
             const video = document.createElement("video");
             video.crossOrigin = "anonymous";
@@ -445,17 +445,15 @@ export function useVideoExport() {
 
               const timeInScene = f / fps;
 
-              // --- SMART BOOMERANG LOGIC ---
-              // Maps linear time (0..sceneDuration) into the source video loop
-              // Forward → Backward → Forward → ...
-              const cycleDuration = sourceDuration * 2;
-              let playbackTime = timeInScene % cycleDuration;
-              if (playbackTime > sourceDuration) {
-                // Backward phase
-                playbackTime = sourceDuration - (playbackTime - sourceDuration);
-              }
-              // Clamp to valid range
-              playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
+               // --- SLOW-MOTION STRETCH ---
+               // Maps linear time (0..sceneDuration) into source video (0..sourceDuration)
+               // Video plays forward once at reduced speed to fill the full audio duration.
+               // If sceneDuration > sourceDuration, speed < 1x (slow motion).
+               // Final frame freezes if we reach the end.
+               const progress = Math.min(timeInScene / sceneDuration, 1);
+               let playbackTime = progress * sourceDuration;
+               // Clamp to valid range
+               playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
 
               video.currentTime = playbackTime;
               await new Promise<void>(r => { video.onseeked = () => r(); });
