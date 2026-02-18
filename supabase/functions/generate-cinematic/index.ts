@@ -1331,7 +1331,7 @@ serve(async (req) => {
         const predictionId = isRegeneration
           ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
           : await startSeedance(scene, scene.imageUrl, format, replicateToken);
-        scenes[idx] = { ...scene, videoPredictionId: predictionId };
+        scenes[idx] = { ...scene, videoPredictionId: predictionId, videoRetryAfter: undefined };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
@@ -1339,8 +1339,17 @@ serve(async (req) => {
       const videoUrl = await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
       
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
-        console.log(`[VIDEO] Scene ${scene.number}: Timeout detected, clearing prediction for auto-retry`);
-        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined };
+        // Check cooldown: don't spawn a new prediction if we retried recently
+        const retryAfter = scene.videoRetryAfter ? new Date(scene.videoRetryAfter).getTime() : 0;
+        const now = Date.now();
+        if (retryAfter > now) {
+          console.log(`[VIDEO] Scene ${scene.number}: In cooldown until ${new Date(retryAfter).toISOString()}, waiting...`);
+          return jsonResponse({ success: true, status: "processing", scene });
+        }
+        // Cooldown expired or not set — clear prediction and set a 30s cooldown before next retry
+        const cooldownMs = 30_000;
+        console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout, clearing prediction. Next retry after ${cooldownMs / 1000}s cooldown.`);
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryAfter: new Date(now + cooldownMs).toISOString() };
         await updateScenes(supabase, generationId, scenes);
         return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
       }
