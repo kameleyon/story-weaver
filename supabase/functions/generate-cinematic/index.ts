@@ -821,10 +821,14 @@ const HYPEREAL_VIDEO_URL = "https://hypereal.tech/api/v1/videos/generate";
 async function startSeedance(scene: Scene, imageUrl: string, format: "landscape" | "portrait" | "square", _replicateToken: string) {
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
+  if (!imageUrl) throw new Error(`Hypereal Seedance 1.5: No imageUrl for scene ${scene.number}`);
 
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
-  const videoPrompt = `${scene.visualPrompt}
+  const visualPrompt = scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+  console.log(`[Seedance-Hypereal] Starting scene ${scene.number} | image: ${imageUrl.substring(0, 80)}... | prompt: ${visualPrompt.substring(0, 100)}...`);
+
+  const videoPrompt = `${visualPrompt}
 
 ANIMATION RULES (CRITICAL):
 - NO lip-sync talking animation - characters should NOT move their mouths as if speaking
