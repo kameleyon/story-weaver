@@ -683,8 +683,8 @@ async function generateImageWithHypereal(
 
       const data = await response.json();
       
-      // Hypereal returns image URL or base64 data
-      const imageUrl = data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
+      // Hypereal returns { data: [{ url: "..." }] } format per their API docs
+      const imageUrl = data.data?.[0]?.url || data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
       const imageBase64 = data.output?.base64 || data.base64 || data.image;
 
       if (imageBase64) {
