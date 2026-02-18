@@ -650,11 +650,9 @@ QUALITY REQUIREMENTS:
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "nano-banana-pro-t2i",
             prompt: imagePrompt,
-            resolution: "1k",
+            model: "nano-banana-pro-t2i",
             aspect_ratio: aspectRatio,
-            output_format: "png",
           }),
         });
 
@@ -673,8 +671,9 @@ QUALITY REQUIREMENTS:
         }
 
         const data = await response.json();
+        console.log(`[IMG] Hypereal raw response keys:`, Object.keys(data), `data array length:`, data.data?.length);
         
-        // Handle response - could be URL or base64
+        // Handle response - Hypereal returns { data: [{ url: "..." }] }
         const imageUrl = data.data?.[0]?.url || data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
         const imageBase64 = data.output?.base64 || data.base64 || data.image;
         
