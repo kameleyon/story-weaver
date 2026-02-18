@@ -1346,8 +1346,8 @@ serve(async (req) => {
           console.log(`[VIDEO] Scene ${scene.number}: In cooldown until ${new Date(retryAfter).toISOString()}, waiting...`);
           return jsonResponse({ success: true, status: "processing", scene });
         }
-        // Cooldown expired or not set — clear prediction and set a 30s cooldown before next retry
-        const cooldownMs = 30_000;
+        // Cooldown expired or not set — clear prediction and set a 45s cooldown before next retry
+        const cooldownMs = 45_000;
         console.log(`[VIDEO] Scene ${scene.number}: Queue full/timeout, clearing prediction. Next retry after ${cooldownMs / 1000}s cooldown.`);
         scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryAfter: new Date(now + cooldownMs).toISOString() };
         await updateScenes(supabase, generationId, scenes);
