@@ -944,21 +944,14 @@ async function resolveSeedance(
   if (result.status !== "succeeded") {
     if (result.status === "failed" || result.status === "canceled") {
       const errorMsg = result.error || "Video generation failed";
-      console.error("[Seedance] failed:", errorMsg);
+      console.error("[Video] failed:", errorMsg, `(prediction ${predictionId})`);
       
       if (errorMsg.includes("flagged as sensitive") || errorMsg.includes("E005")) {
         throw new Error("Content flagged as sensitive. Please try different visual descriptions or a different topic.");
       }
-      if (errorMsg.includes("rate limit") || errorMsg.includes("429") || errorMsg.includes("Queue is full")) {
-        console.warn(`[Seedance] Scene ${sceneNumber}: Queue full / rate limited (prediction ${predictionId}), will retry`);
-        return SEEDANCE_TIMEOUT_RETRY;
-      }
-      if (errorMsg.includes("timed out") || errorMsg.includes("timeout") || errorMsg.includes("deadline exceeded")) {
-        console.warn(`[Seedance] Scene ${sceneNumber}: Timed out (prediction ${predictionId}), will retry`);
-        return SEEDANCE_TIMEOUT_RETRY;
-      }
-      
-      throw new Error(`Video generation failed: ${errorMsg}`);
+      // ALL other failures (Queue full, timeout, generic Grok failures) → retryable
+      console.warn(`[Video] Scene ${sceneNumber}: Failed (prediction ${predictionId}), marking as retryable. Error: ${errorMsg}`);
+      return SEEDANCE_TIMEOUT_RETRY;
     }
     return null;
   }

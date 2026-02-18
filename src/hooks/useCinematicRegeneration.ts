@@ -80,12 +80,10 @@ export function useCinematicRegeneration(
 
       const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-      const MAX_POLLS = 90;
+      const MAX_POLLS = 120;
       let polls = 0;
       while (polls < MAX_POLLS) {
         polls++;
-        // NEVER send regenerate during polling — regenerate is only sent
-        // by the initial explicit call in regenerateVideo()
         const result = await authenticatedFetch("generate-cinematic", {
           phase: type,
           projectId,
@@ -99,8 +97,8 @@ export function useCinematicRegeneration(
         );
 
         if (result.status === "complete") break;
-        // Use longer interval for video to avoid hammering the API
-        await sleep(type === "audio" ? 1200 : 3000);
+        // 5s for video (120×5=10min coverage), 1.2s for audio
+        await sleep(type === "audio" ? 1200 : 5000);
       }
       if (polls >= MAX_POLLS) {
         throw new Error("Generation timed out after maximum retries. Please try again.");
