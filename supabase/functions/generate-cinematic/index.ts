@@ -1529,12 +1529,7 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        // Grok commented out for testing — always use Hypereal Seedance 1.5
-        // const isGrok = isRegeneration;
-        // const predictionId = isGrok
-        //   ? await startGrokVideo(scene, scene.imageUrl, format, replicateToken)
-        //   : await startSeedance(scene, scene.imageUrl, format, replicateToken);
-        // const provider = isGrok ? "replicate" : "hypereal";
+        // Initial gen & regeneration both use Hypereal Seedance 1.5 (Grok bypassed for testing)
         const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
         const provider = "hypereal";
         scenes[idx] = {
