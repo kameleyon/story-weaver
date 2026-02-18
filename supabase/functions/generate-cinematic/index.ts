@@ -1055,6 +1055,74 @@ async function resolveHyperealVideo(
   return null;
 }
 
+// Replicate Seedance 1 Pro Fast — used for INITIAL generation only
+async function startSeedanceReplicate(
+  scene: Scene,
+  imageUrl: string,
+  format: "landscape" | "portrait" | "square",
+  replicateToken: string,
+) {
+  const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
+
+  const videoPrompt = `${scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting"}
+
+ANIMATION RULES (CRITICAL):
+- NO lip-sync talking animation - characters should NOT move their mouths as if speaking
+- Facial expressions ARE allowed: surprised, shocked, screaming, laughing, crying, angry
+- Body movement IS allowed: walking, running, gesturing, pointing, reacting
+- Environment animation IS allowed: wind, particles, camera movement, lighting changes
+- Static poses with subtle breathing/idle movement are preferred for dialogue scenes
+- Focus on CAMERA MOTION and SCENE DYNAMICS rather than character lip movement`;
+
+  console.log(`[SeedanceReplicate] Starting scene ${scene.number} | model: ${SEEDANCE_VIDEO_MODEL} | image: ${imageUrl.substring(0, 80)}...`);
+
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(`https://api.replicate.com/v1/models/${SEEDANCE_VIDEO_MODEL}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: {
+            prompt: videoPrompt,
+            image: imageUrl,
+            duration: 10,
+            resolution: "720p",
+            aspect_ratio: aspectRatio,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[SeedanceReplicate] Create prediction error (attempt ${attempt}): ${response.status} - ${errorText}`);
+        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new Error(`Seedance Replicate prediction start failed (${response.status}): ${errorText}`);
+      }
+
+      const prediction = await response.json();
+      console.log(`[SeedanceReplicate] Prediction started: ${prediction.id}`);
+      return prediction.id as string;
+    } catch (err: any) {
+      if (attempt < MAX_RETRIES) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+        console.warn(`[SeedanceReplicate] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Seedance Replicate: All retry attempts exhausted");
+}
+
 async function startGrokVideo(
   scene: Scene,
   imageUrl: string,
@@ -1529,9 +1597,11 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
 
       if (!scene.videoPredictionId) {
-        // Initial gen & regeneration both use Hypereal Seedance 1.5 (Grok bypassed for testing)
-        const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
-        const provider = "hypereal";
+        // Initial gen = Replicate Seedance Pro Fast, Regeneration = Hypereal Seedance 1.5 (Grok bypassed for testing)
+        const predictionId = isRegeneration
+          ? await startSeedance(scene, scene.imageUrl, format, replicateToken)
+          : await startSeedanceReplicate(scene, scene.imageUrl, format, replicateToken);
+        const provider = isRegeneration ? "hypereal" : "replicate";
         scenes[idx] = {
           ...scene,
           videoPredictionId: predictionId,
