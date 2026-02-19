@@ -1125,25 +1125,34 @@ export function useGenerationPipeline() {
         });
 
         // Poll DB every 3 seconds until status changes from "generating"
-        const POLL_MAX = 120; // 6 minutes
+        const POLL_MAX = 360; // 18 minutes (3s × 360 = 18 min)
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
           pollCount++;
           console.log(`[loadProject] DB poll #${pollCount} for generationId=${generation.id}`);
           const { data: pollGen } = await supabase
             .from("generations")
-            .select("id,status,progress,scenes,error_message,video_url")
+            .select("id,status,progress,scenes,error_message,video_url,started_at")
             .eq("id", generation.id)
             .maybeSingle();
 
-          console.log(`[loadProject] Poll result: status="${pollGen?.status}", progress=${pollGen?.progress}`);
+          console.log(`[loadProject] Poll result: status="${pollGen?.status}", progress=${pollGen?.progress}, started_at="${pollGen?.started_at}"`);
 
-          if (!pollGen || pollCount >= POLL_MAX) {
+          // Check if the generation is still alive via heartbeat (started_at updated per-scene, within last 3 minutes)
+          const startedAt = pollGen?.started_at ? new Date(pollGen.started_at).getTime() : 0;
+          const isAlive = startedAt > 0 && (Date.now() - startedAt) < 3 * 60 * 1000;
+
+          if (!pollGen || (pollCount >= POLL_MAX && !isAlive)) {
             clearInterval(pollInterval);
             const msg = pollCount >= POLL_MAX ? "Generation timed out. Please try again." : "Could not find generation.";
             console.log(`[loadProject] Poll ended: ${msg}`);
             setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
             return;
+          }
+
+          // If we've hit the max but the heartbeat shows it's still alive, extend gracefully
+          if (pollCount >= POLL_MAX && isAlive) {
+            console.log(`[loadProject] Poll #${pollCount}: hit limit but heartbeat is recent (${Math.round((Date.now() - startedAt) / 1000)}s ago) — waiting more`);
           }
 
           if (pollGen.status === "complete") {
