@@ -419,45 +419,91 @@ export function useGenerationPipeline() {
           let completedVideos = 0;
 
           const generateVideoForScene = async (sceneIdx: number) => {
-            let videoComplete = false;
-            let pollAttempts = 0;
-            const MAX_POLL_ATTEMPTS = 180; // ~6 min max per scene (Hypereal can take 5-8 min)
+            try {
+              let videoComplete = false;
+              let pollAttempts = 0;
+              const MAX_POLL_ATTEMPTS = 180;
 
-            while (!videoComplete) {
-              pollAttempts++;
-              if (pollAttempts > MAX_POLL_ATTEMPTS) {
-                throw new Error(`Video generation timed out for scene ${sceneIdx + 1} after ${MAX_POLL_ATTEMPTS} attempts`);
+              while (!videoComplete) {
+                pollAttempts++;
+                if (pollAttempts > MAX_POLL_ATTEMPTS) {
+                  console.warn(`[VIDEO] Scene ${sceneIdx + 1} timed out after ${MAX_POLL_ATTEMPTS} attempts`);
+                  return; // Don't throw – retry pass will handle it
+                }
+
+                const vidRes = await callPhase(
+                  { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: sceneIdx },
+                  480000,
+                  cinematicEndpoint
+                );
+                if (!vidRes.success) {
+                  console.warn(`[VIDEO] Scene ${sceneIdx + 1} failed: ${vidRes.error}`);
+                  return; // Don't throw – let other scenes continue
+                }
+                if (vidRes.status === "complete") {
+                  videoComplete = true;
+                } else {
+                  await sleep(2000);
+                }
               }
 
-              const vidRes = await callPhase(
-                { phase: "video", projectId: cProjectId, generationId: cGenerationId, sceneIndex: sceneIdx },
-                480000,
-                cinematicEndpoint
-              );
-              if (!vidRes.success) throw new Error(vidRes.error || `Video generation failed for scene ${sceneIdx + 1}`);
-              if (vidRes.status === "complete") {
-                videoComplete = true;
-              } else {
-                await sleep(2000);
-              }
+              completedVideos++;
+              setState((prev) => ({
+                ...prev,
+                statusMessage: `Generating clips (${completedVideos}/${cSceneCount})...`,
+                progress: 60 + Math.floor((completedVideos / cSceneCount) * 35),
+              }));
+            } catch (err) {
+              console.warn(`[VIDEO] Scene ${sceneIdx + 1} failed:`, err);
+              // Don't throw – let other scenes in batch continue
             }
-
-            completedVideos++;
-            setState((prev) => ({
-              ...prev,
-              statusMessage: `Generating clips (${completedVideos}/${cSceneCount})...`,
-              progress: 60 + Math.floor((completedVideos / cSceneCount) * 35),
-            }));
           };
 
-          // Process in concurrent batches
+          // Process in concurrent batches (fault-tolerant)
           for (let batchStart = 0; batchStart < cSceneCount; batchStart += VIDEO_CONCURRENCY) {
             const batchEnd = Math.min(batchStart + VIDEO_CONCURRENCY, cSceneCount);
             const batch = [];
             for (let i = batchStart; i < batchEnd; i++) {
               batch.push(generateVideoForScene(i));
             }
-            await Promise.all(batch);
+            await Promise.allSettled(batch);
+          }
+
+          // Retry pass: re-attempt any scenes that failed (up to 2 rounds)
+          const MAX_RETRY_ROUNDS = 2;
+          for (let round = 0; round < MAX_RETRY_ROUNDS; round++) {
+            const { data: latestGen } = await supabase
+              .from("generations")
+              .select("scenes")
+              .eq("id", cGenerationId)
+              .maybeSingle();
+            const latestScenes = normalizeScenes(latestGen?.scenes) ?? [];
+            const missing = latestScenes
+              .map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1))
+              .filter((i) => i >= 0);
+            if (missing.length === 0) break;
+
+            console.log(`[VIDEO] Retry round ${round + 1}: ${missing.length} scenes missing video`);
+            setState((prev) => ({
+              ...prev,
+              statusMessage: `Retrying ${missing.length} missing clips (round ${round + 1})...`,
+            }));
+
+            for (const idx of missing) {
+              await generateVideoForScene(idx);
+            }
+          }
+
+          // Re-fetch scenes from DB before finalize to pick up async completions
+          const { data: preFinalGen } = await supabase
+            .from("generations")
+            .select("scenes")
+            .eq("id", cGenerationId)
+            .maybeSingle();
+          const preFinalScenes = normalizeScenes(preFinalGen?.scenes) ?? [];
+          const stillMissing = preFinalScenes.filter((s) => !s.videoUrl && s.imageUrl).length;
+          if (stillMissing > 0) {
+            console.warn(`[VIDEO] ${stillMissing} scenes still missing video after retries – proceeding to finalize`);
           }
 
           // Phase 5: Finalize
@@ -779,28 +825,73 @@ export function useGenerationPipeline() {
 
           const generateVideoForScene = async (sceneIdx: number) => {
             if (existingScenes[sceneIdx]?.videoUrl) return; // skip completed
-            let videoComplete = false;
-            let pollAttempts = 0;
-            const MAX_POLL_ATTEMPTS = 180;
-            while (!videoComplete) {
-              pollAttempts++;
-              if (pollAttempts > MAX_POLL_ATTEMPTS) throw new Error(`Video generation timed out for scene ${sceneIdx + 1}`);
-              const vidRes = await callPhase({ phase: "video", projectId: cProjectId, generationId, sceneIndex: sceneIdx }, 480000, cinematicEndpoint);
-              if (!vidRes.success) throw new Error(vidRes.error || `Video failed for scene ${sceneIdx + 1}`);
-              if (vidRes.status === "complete") videoComplete = true;
-              else await sleep(2000);
+            try {
+              let videoComplete = false;
+              let pollAttempts = 0;
+              const MAX_POLL_ATTEMPTS = 180;
+              while (!videoComplete) {
+                pollAttempts++;
+                if (pollAttempts > MAX_POLL_ATTEMPTS) {
+                  console.warn(`[VIDEO] Scene ${sceneIdx + 1} timed out after ${MAX_POLL_ATTEMPTS} attempts`);
+                  return;
+                }
+                const vidRes = await callPhase({ phase: "video", projectId: cProjectId, generationId, sceneIndex: sceneIdx }, 480000, cinematicEndpoint);
+                if (!vidRes.success) {
+                  console.warn(`[VIDEO] Scene ${sceneIdx + 1} failed: ${vidRes.error}`);
+                  return;
+                }
+                if (vidRes.status === "complete") videoComplete = true;
+                else await sleep(2000);
+              }
+              completedVideos++;
+              setState((prev) => ({ ...prev, statusMessage: `Generating clips (${completedVideos}/${cSceneCount})...`, progress: 60 + Math.floor((completedVideos / cSceneCount) * 35) }));
+            } catch (err) {
+              console.warn(`[VIDEO] Scene ${sceneIdx + 1} failed:`, err);
             }
-            completedVideos++;
-            setState((prev) => ({ ...prev, statusMessage: `Generating clips (${completedVideos}/${cSceneCount})...`, progress: 60 + Math.floor((completedVideos / cSceneCount) * 35) }));
           };
 
+          // Process in concurrent batches (fault-tolerant)
           for (let batchStart = 0; batchStart < cSceneCount; batchStart += VIDEO_CONCURRENCY) {
             const batch = [];
             for (let i = batchStart; i < Math.min(batchStart + VIDEO_CONCURRENCY, cSceneCount); i++) {
               batch.push(generateVideoForScene(i));
             }
-            await Promise.all(batch);
+            await Promise.allSettled(batch);
           }
+
+          // Retry pass: re-attempt any scenes that failed (up to 2 rounds)
+          const MAX_RETRY_ROUNDS = 2;
+          for (let round = 0; round < MAX_RETRY_ROUNDS; round++) {
+            const { data: latestGen } = await supabase
+              .from("generations")
+              .select("scenes")
+              .eq("id", generationId)
+              .maybeSingle();
+            const latestScenes = normalizeScenes(latestGen?.scenes) ?? [];
+            const missing = latestScenes
+              .map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1))
+              .filter((i) => i >= 0);
+            if (missing.length === 0) break;
+
+            console.log(`[VIDEO] Resume retry round ${round + 1}: ${missing.length} scenes missing video`);
+            setState((prev) => ({ ...prev, statusMessage: `Retrying ${missing.length} missing clips (round ${round + 1})...` }));
+
+            for (const idx of missing) {
+              await generateVideoForScene(idx);
+            }
+          }
+        }
+
+        // Re-fetch scenes from DB before finalize to pick up async completions
+        const { data: preFinalGen } = await supabase
+          .from("generations")
+          .select("scenes")
+          .eq("id", generationId)
+          .maybeSingle();
+        const preFinalScenes = normalizeScenes(preFinalGen?.scenes) ?? [];
+        const stillMissing = preFinalScenes.filter((s) => !s.videoUrl && s.imageUrl).length;
+        if (stillMissing > 0) {
+          console.warn(`[VIDEO] ${stillMissing} scenes still missing video after retries – proceeding to finalize`);
         }
 
         // Phase 5: Finalize
