@@ -846,12 +846,29 @@ QUALITY REQUIREMENTS:
 
       let prediction = await createResponse.json();
 
-      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      // Bounded polling: max 30 attempts × 2s = 60s cap.
+      // If Replicate gets stuck in "starting" during a cold start, we break
+      // out and let the outer retry loop attempt again rather than holding the
+      // Edge Function open until the runtime kills it with a generic error.
+      const MAX_POLL_ATTEMPTS = 30;
+      let pollAttempts = 0;
+      while (
+        prediction.status !== "succeeded" &&
+        prediction.status !== "failed" &&
+        pollAttempts < MAX_POLL_ATTEMPTS
+      ) {
         await sleep(2000);
+        pollAttempts++;
         const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
           headers: { Authorization: `Bearer ${replicateToken}` },
         });
         prediction = await pollResponse.json();
+      }
+
+      // If we exhausted our poll budget without a terminal status, throw a
+      // descriptive error so the outer retry can try again cleanly.
+      if (prediction.status !== "succeeded" && prediction.status !== "failed") {
+        throw new Error(`Image generation timed out after ${MAX_POLL_ATTEMPTS * 2}s (status: ${prediction.status})`);
       }
 
       if (prediction.status === "failed") {
@@ -1445,10 +1462,46 @@ serve(async (req) => {
 
     // =============== PHASE 1: SCRIPT ===============
     if (phase === "script") {
+      // ---- Input size validation ----
+      // generate-video enforces INPUT_LIMITS; cinematic must do the same to
+      // prevent giant payloads being forwarded to OpenRouter/Gemini at cost.
+      const INPUT_LIMITS = {
+        content: 500_000,        // 500K chars — matches generate-video
+        presenterFocus: 2_000,
+        characterDescription: 5_000,
+        customStyle: 2_000,
+        brandMark: 500,
+        voiceName: 200,
+      };
+
       const content = requireString(body.content, "content");
+      if (content.length > INPUT_LIMITS.content) {
+        return jsonResponse(
+          { error: `content exceeds maximum length of ${INPUT_LIMITS.content.toLocaleString()} characters` },
+          { status: 400 },
+        );
+      }
+
       const format = (body.format || "portrait") as "landscape" | "portrait" | "square";
       const length = requireString(body.length, "length");
       const style = requireString(body.style, "style");
+
+      // Validate optional string fields
+      if (body.presenterFocus && body.presenterFocus.length > INPUT_LIMITS.presenterFocus) {
+        return jsonResponse({ error: `presenterFocus exceeds ${INPUT_LIMITS.presenterFocus} characters` }, { status: 400 });
+      }
+      if (body.characterDescription && body.characterDescription.length > INPUT_LIMITS.characterDescription) {
+        return jsonResponse({ error: `characterDescription exceeds ${INPUT_LIMITS.characterDescription} characters` }, { status: 400 });
+      }
+      if (body.customStyle && body.customStyle.length > INPUT_LIMITS.customStyle) {
+        return jsonResponse({ error: `customStyle exceeds ${INPUT_LIMITS.customStyle} characters` }, { status: 400 });
+      }
+      if (body.brandMark && body.brandMark.length > INPUT_LIMITS.brandMark) {
+        return jsonResponse({ error: `brandMark exceeds ${INPUT_LIMITS.brandMark} characters` }, { status: 400 });
+      }
+      if (body.voiceName && body.voiceName.length > INPUT_LIMITS.voiceName) {
+        return jsonResponse({ error: `voiceName exceeds ${INPUT_LIMITS.voiceName} characters` }, { status: 400 });
+      }
 
       console.log("=== CINEMATIC SCRIPT START ===");
 

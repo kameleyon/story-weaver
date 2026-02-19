@@ -672,12 +672,25 @@ async function callChatterboxChunk(
 
   let prediction = await createResponse.json();
 
-  while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+  // Bounded polling: max 45 attempts × 1s = 45s cap.
+  // Prevents the Edge Function from hanging indefinitely on a cold-start stuck prediction.
+  const MAX_AUDIO_POLL_ATTEMPTS = 45;
+  let audioPollAttempts = 0;
+  while (
+    prediction.status !== "succeeded" &&
+    prediction.status !== "failed" &&
+    audioPollAttempts < MAX_AUDIO_POLL_ATTEMPTS
+  ) {
     await sleep(1000);
+    audioPollAttempts++;
     const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
       headers: { Authorization: `Bearer ${replicateApiKey}` },
     });
     prediction = await pollResponse.json();
+  }
+
+  if (prediction.status !== "succeeded" && prediction.status !== "failed") {
+    throw new Error(`Chatterbox chunk ${chunkIndex + 1} timed out after ${MAX_AUDIO_POLL_ATTEMPTS}s (status: ${prediction.status})`);
   }
 
   if (prediction.status === "failed") {
