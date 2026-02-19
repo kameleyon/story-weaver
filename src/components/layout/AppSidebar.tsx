@@ -74,6 +74,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useSubscription, STRIPE_PLANS } from "@/hooks/useSubscription";
 import { ProjectSearch } from "@/components/layout/ProjectSearch";
 import { useState, useEffect } from "react";
+import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { toast } from "sonner";
 
 // No external props needed — navigation is handled internally
@@ -102,6 +103,8 @@ export function AppSidebar() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [featureUpgradeOpen, setFeatureUpgradeOpen] = useState(false);
+  const [featureUpgradeReason, setFeatureUpgradeReason] = useState("");
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   // Show upgrade modal for free tier or cancelled users (once per session per tier version)
@@ -370,7 +373,14 @@ export function AppSidebar() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton
-                          onClick={() => canAccessSmartFlow && navigate("/app/create?mode=smartflow")}
+                          onClick={() => {
+                            if (canAccessSmartFlow) {
+                              navigate("/app/create?mode=smartflow");
+                            } else {
+                              setFeatureUpgradeReason("Smart Flow requires a Starter plan or higher. Upgrade to create infographic-style videos.");
+                              setFeatureUpgradeOpen(true);
+                            }
+                          }}
                           className={`rounded-lg py-2.5 transition-colors ${
                             !canAccessSmartFlow
                               ? "opacity-40 cursor-not-allowed"
@@ -404,7 +414,14 @@ export function AppSidebar() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton
-                          onClick={() => canAccessCinematic && navigate("/app/create?mode=cinematic")}
+                          onClick={() => {
+                            if (canAccessCinematic) {
+                              navigate("/app/create?mode=cinematic");
+                            } else {
+                              setFeatureUpgradeReason("Cinematic mode requires a Professional plan or higher. Upgrade to create cinematic-quality videos.");
+                              setFeatureUpgradeOpen(true);
+                            }
+                          }}
                           className={`rounded-lg py-2.5 transition-colors ${
                             !canAccessCinematic
                               ? "opacity-40 cursor-not-allowed"
@@ -696,6 +713,14 @@ export function AppSidebar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Feature Upgrade Modal */}
+      <UpgradeRequiredModal
+        open={featureUpgradeOpen}
+        onOpenChange={setFeatureUpgradeOpen}
+        reason={featureUpgradeReason}
+        showCreditsOption={false}
+      />
     </>
   );
 }
