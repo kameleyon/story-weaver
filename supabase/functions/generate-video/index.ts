@@ -409,7 +409,7 @@ async function callLLMWithFallback(
 
   const startTime = Date.now();
   console.log(`[LLM] Calling OpenRouter with ${model}...`);
-  
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -647,7 +647,9 @@ async function generateImageWithHypereal(
 
   for (let attempt = 1; attempt <= HYPEREAL_IMAGE_RETRIES; attempt++) {
     try {
-      console.log(`[HYPEREAL-IMG] Generating image with nano-banana-pro-t2i (attempt ${attempt}/${HYPEREAL_IMAGE_RETRIES}), format: ${format}`);
+      console.log(
+        `[HYPEREAL-IMG] Generating image with nano-banana-pro-t2i (attempt ${attempt}/${HYPEREAL_IMAGE_RETRIES}), format: ${format}`,
+      );
 
       const response = await fetch(HYPEREAL_API_URL, {
         method: "POST",
@@ -681,15 +683,20 @@ async function generateImageWithHypereal(
 
       const data = await response.json();
       console.log(`[HYPEREAL-IMG] Raw response keys:`, Object.keys(data), `data array length:`, data.data?.length);
-      
+
       // Hypereal returns { data: [{ url: "..." }] }
-      const imageUrl = data.data?.[0]?.url || data.output?.url || data.url || data.image_url || (Array.isArray(data.output) ? data.output[0] : null);
+      const imageUrl =
+        data.data?.[0]?.url ||
+        data.output?.url ||
+        data.url ||
+        data.image_url ||
+        (Array.isArray(data.output) ? data.output[0] : null);
       const imageBase64 = data.output?.base64 || data.base64 || data.image;
 
       if (imageBase64) {
         // Handle base64 response
         const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-        const bytes = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0));
+        const bytes = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
         console.log(`[HYPEREAL-IMG] Success (base64): ${bytes.length} bytes`);
         return { ok: true, bytes };
       }
@@ -706,7 +713,7 @@ async function generateImageWithHypereal(
 
       console.error(`[HYPEREAL-IMG] No image URL or base64 in response:`, JSON.stringify(data).substring(0, 300));
       lastError = "No image data returned from Hypereal";
-      
+
       if (attempt < HYPEREAL_IMAGE_RETRIES) {
         await sleep(2000 * Math.pow(2, attempt - 1));
         continue;
@@ -740,13 +747,13 @@ Focus on distinctive features, clothing, and proportions for visual consistency.
 Clean white background, professional character design reference.`;
 
   const result = await generateImageWithHypereal(prompt, hyperealApiKey, "square");
-  
+
   if (!result.ok) {
     return { url: null, error: result.error };
   }
 
   // Upload to storage
-  const fileName = `${userId}/${projectId}/char-ref-${charName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
+  const fileName = `${userId}/${projectId}/char-ref-${charName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.png`;
   const { error: uploadError } = await supabase.storage
     .from("scene-images")
     .upload(fileName, result.bytes, { contentType: "image/png", upsert: true });
@@ -1515,7 +1522,6 @@ async function generateSceneAudioGemini(
   return { url: null, error: "All Gemini TTS models failed" };
 }
 
-
 // ============= OPENROUTER TTS (gpt-audio and gpt-4o-mini-tts) =============
 async function generateSceneAudioOpenRouter(
   scene: Scene,
@@ -1967,13 +1973,17 @@ async function generateSceneAudio(
     for (let round = 0; round < KEY_ROTATION_ROUNDS && !geminiAudioUrl; round++) {
       if (round > 0) {
         const roundDelay = 3000 * round;
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`);
+        console.log(
+          `[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`,
+        );
         await sleep(roundDelay);
       }
-      
+
       for (let keyIdx = 0; keyIdx < googleApiKeys.length && !geminiAudioUrl; keyIdx++) {
         const currentKey = googleApiKeys[keyIdx];
-        console.log(`[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`);
+        console.log(
+          `[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`,
+        );
 
         const geminiResult = await generateSceneAudioGemini(
           scene,
@@ -1988,19 +1998,26 @@ async function generateSceneAudio(
 
         if (geminiResult.url) {
           geminiAudioUrl = geminiResult.url;
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready (key ${keyIdx + 1}, round ${round + 1})`);
+          console.log(
+            `[TTS] Scene ${sceneIndex + 1} - Gemini TTS base audio ready (key ${keyIdx + 1}, round ${round + 1})`,
+          );
           break;
         }
-        
+
         // Check if quota exhausted (429) - cycle to next key
-        if (geminiResult.error?.includes("429") || geminiResult.error?.includes("quota") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) {
-          console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`);
+        if (
+          geminiResult.error?.includes("429") ||
+          geminiResult.error?.includes("quota") ||
+          geminiResult.error?.includes("RESOURCE_EXHAUSTED")
+        ) {
+          console.warn(
+            `[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`,
+          );
           continue;
         }
         console.log(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} failed: ${geminiResult.error}`);
       }
     }
-
 
     if (!geminiAudioUrl) {
       console.error(
@@ -2066,13 +2083,17 @@ async function generateSceneAudio(
       for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
         if (round > 0) {
           const roundDelay = 3000 * round;
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`);
+          console.log(
+            `[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`,
+          );
           await sleep(roundDelay);
         }
-        
+
         for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
           const currentKey = googleApiKeys[keyIdx];
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`);
+          console.log(
+            `[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`,
+          );
 
           const geminiResult = await generateSceneAudioGemini(
             scene,
@@ -2086,13 +2107,21 @@ async function generateSceneAudio(
           );
 
           if (geminiResult.url) {
-            console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1}) on round ${round + 1}`);
+            console.log(
+              `✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1}) on round ${round + 1}`,
+            );
             return { ...geminiResult, provider: "Gemini TTS" };
           }
-          
+
           // Check if quota exhausted - cycle to next key
-          if (geminiResult.error?.includes("429") || geminiResult.error?.includes("quota") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) {
-            console.warn(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`);
+          if (
+            geminiResult.error?.includes("429") ||
+            geminiResult.error?.includes("quota") ||
+            geminiResult.error?.includes("RESOURCE_EXHAUSTED")
+          ) {
+            console.warn(
+              `[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`,
+            );
             continue;
           }
           console.log(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} failed: ${geminiResult.error}`);
@@ -2103,7 +2132,9 @@ async function generateSceneAudio(
     }
 
     // All TTS options failed for Haitian Creole
-    console.error(`[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted after 5 rounds for Haitian Creole`);
+    console.error(
+      `[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted after 5 rounds for Haitian Creole`,
+    );
     return {
       url: null,
       error: "Audio generation failed — all TTS API keys exhausted. Please try again later.",
@@ -2158,7 +2189,9 @@ async function generateImageWithReplicate(
 
   for (let attempt = 1; attempt <= MAX_IMAGE_RETRIES; attempt++) {
     try {
-      console.log(`[IMG] Generating image with ${modelName} (attempt ${attempt}/${MAX_IMAGE_RETRIES}), format: ${format}`);
+      console.log(
+        `[IMG] Generating image with ${modelName} (attempt ${attempt}/${MAX_IMAGE_RETRIES}), format: ${format}`,
+      );
 
       const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
         method: "POST",
@@ -2186,7 +2219,12 @@ async function generateImageWithReplicate(
           continue;
         }
 
-        return { ok: false, error: lastError, status, retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined };
+        return {
+          ok: false,
+          error: lastError,
+          status,
+          retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
+        };
       }
 
       let prediction = await createResponse.json();
@@ -2221,7 +2259,10 @@ async function generateImageWithReplicate(
             : null;
 
       if (!imageUrl) {
-        console.error(`[IMG] ${modelName} no image URL in response:`, JSON.stringify(prediction.output).substring(0, 200));
+        console.error(
+          `[IMG] ${modelName} no image URL in response:`,
+          JSON.stringify(prediction.output).substring(0, 200),
+        );
         return { ok: false, error: `No image URL returned from ${modelName}` };
       }
 
@@ -3772,10 +3813,10 @@ async function handleImagesPhase(
   if (!generation) throw new Error("Generation not found");
 
   const projectStyle = generation.projects.style?.toLowerCase() || "";
-  
+
   // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
   const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
-  
+
   // Check if user is Pro/Enterprise tier (for logging purposes only - all tiers now use nano-banana)
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
@@ -3838,7 +3879,7 @@ async function handleImagesPhase(
 
   const buildImagePrompt = (visualPrompt: string, scene: Scene, subIndex: number, sceneIndex: number): string => {
     let textInstructions = "";
-    
+
     // COVER IMAGE TITLE: For the very first image (scene 0, subIndex 0), add a catchy cover title
     if (sceneIndex === 0 && subIndex === 0 && scene.coverTitle) {
       textInstructions = `
@@ -4063,9 +4104,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
             // Use Hypereal nano-banana-pro-t2i for all T2I image generation
             const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
             if (hyperealApiKey) {
-              console.log(
-                `[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex}`,
-              );
+              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex}`);
               result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
               actualProvider = "hypereal";
               actualModel = "nano-banana-pro-t2i";
@@ -4209,9 +4248,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   // Calculate costs based on Replicate pricing
   const imageCost = newCompletedTotal * (useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana);
   costTracking.estimatedCostUsd =
-    costTracking.scriptTokens * PRICING.scriptPerToken +
-    costTracking.audioSeconds * PRICING.audioPerSecond +
-    imageCost;
+    costTracking.scriptTokens * PRICING.scriptPerToken + costTracking.audioSeconds * PRICING.audioPerSecond + imageCost;
 
   if (!hasMore) {
     phaseTimings.images = (phaseTimings.images || 0) + (Date.now() - phaseStart);
@@ -4657,15 +4694,15 @@ async function handleRegenerateImage(
   const style = generation.projects.style;
   const styleDescription = getStylePrompt(style);
   const scene = scenes[sceneIndex];
-  
+
   const projectStyle = style?.toLowerCase() || "";
-  
+
   // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
   const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
 
   // Check if user is Pro/Enterprise tier (for logging purposes only)
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
-  
+
   // For regeneration without modification (full T2I), use standard nano-banana for all tiers
   // Only premium-required styles get nano-banana-pro for T2I regeneration
   const useProModel = isPremiumRequiredStyle;
@@ -4673,7 +4710,9 @@ async function handleRegenerateImage(
   if (useProModel) {
     console.log(`[regenerate-image] Premium style "${projectStyle}" - will use Replicate nano-banana-pro (1K) for T2I`);
   } else {
-    console.log(`[regenerate-image] Using Replicate nano-banana for T2I regeneration (Apply Edit always uses nano-banana-pro)`);
+    console.log(
+      `[regenerate-image] Using Replicate nano-banana for T2I regeneration (Apply Edit always uses nano-banana-pro)`,
+    );
   }
 
   // Get existing imageUrls or create from single imageUrl
@@ -4696,7 +4735,7 @@ async function handleRegenerateImage(
     // Image 1 = subVisuals[0] (first sub-visual)
     // Image 2 = subVisuals[1] (second sub-visual)
     let basePrompt = scene.visualPrompt;
-    
+
     if (targetImageIndex > 0 && scene.subVisuals && scene.subVisuals.length > 0) {
       const subVisualIndex = targetImageIndex - 1; // Image 1 -> subVisuals[0], Image 2 -> subVisuals[1]
       if (scene.subVisuals[subVisualIndex]) {
@@ -4785,7 +4824,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       replicateApiKey,
       format,
       styleDescription,
-      scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined
+      scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined,
     );
     const editDurationMs = Date.now() - editStartTime;
 
@@ -4805,7 +4844,9 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
     // If Replicate nano-banana-pro edit fails, fall back to text-to-image as last resort
     if (!imageResult.ok) {
       const editError = imageResult.error || "Unknown edit error";
-      console.log(`[regenerate-image] Replicate Nano Banana Pro edit failed (${editError}), falling back to text-to-image generation`);
+      console.log(
+        `[regenerate-image] Replicate Nano Banana Pro edit failed (${editError}), falling back to text-to-image generation`,
+      );
 
       // LOG TO SYSTEM_LOGS so it shows in admin panel!
       await logSystemEvent({
