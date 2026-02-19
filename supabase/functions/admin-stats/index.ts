@@ -307,23 +307,40 @@ serve(async (req) => {
 
         const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-        // Get all charges from Stripe
-        const charges = await stripe.charges.list({
-          limit: 100,
-          created: {
-            gte: startDate ? Math.floor(new Date(startDate).getTime() / 1000) : undefined,
-            lte: endDate ? Math.floor(new Date(endDate).getTime() / 1000) : undefined,
-          },
-        });
+        // Paginate ALL charges (fixes Gap 8 — Stripe 100-row cap)
+        const allCharges: Array<{ status: string; amount: number; created: number; invoice?: unknown }> = [];
+        const createdFilter = {
+          gte: startDate ? Math.floor(new Date(startDate).getTime() / 1000) : undefined,
+          lte: endDate ? Math.floor(new Date(endDate).getTime() / 1000) : undefined,
+        };
+        let chargesCursor: string | undefined;
+        do {
+          const page = await stripe.charges.list({
+            limit: 100,
+            created: createdFilter,
+            ...(chargesCursor ? { starting_after: chargesCursor } : {}),
+          });
+          allCharges.push(...page.data);
+          chargesCursor = page.has_more ? page.data[page.data.length - 1]?.id : undefined;
+        } while (chargesCursor);
 
-        const successfulCharges = charges.data.filter((c: { status: string }) => c.status === "succeeded");
+        const successfulCharges = allCharges.filter((c) => c.status === "succeeded");
         const totalRevenue = successfulCharges.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0) / 100;
 
-        // Get subscriptions revenue
-        const subscriptions = await stripe.subscriptions.list({
-          limit: 100,
-          status: "active",
-        });
+        // Paginate subscriptions
+        const allSubscriptions: Array<{ items: { data: Array<{ price?: { recurring?: { interval?: string }; unit_amount?: number | null } }> } }> = [];
+        let subsCursor: string | undefined;
+        do {
+          const page = await stripe.subscriptions.list({
+            limit: 100,
+            status: "active",
+            ...(subsCursor ? { starting_after: subsCursor } : {}),
+          });
+          allSubscriptions.push(...page.data);
+          subsCursor = page.has_more ? page.data[page.data.length - 1]?.id : undefined;
+        } while (subsCursor);
+
+        const subscriptions = { data: allSubscriptions };
 
         const mrr = subscriptions.data.reduce((sum: number, s: { items: { data: Array<{ price?: { recurring?: { interval?: string }; unit_amount?: number | null } }> } }) => {
           const price = s.items.data[0]?.price;
@@ -460,28 +477,30 @@ serve(async (req) => {
       }
 
       case "create_flag": {
-        const { userId, flagType, reason, details } = params;
+        // NOTE: `userId` here is the ADMIN (from JWT), params.userId is the TARGET
+        const adminUserId = userId; // alias to prevent shadowing
+        const { userId: targetUserId, flagType, reason, details } = params;
 
         const { data: flag, error: flagError } = await supabaseAdmin
           .from("user_flags")
           .insert({
-            user_id: userId,
+            user_id: targetUserId,
             flag_type: flagType,
             reason,
             details,
-            flagged_by: userId, // Admin's ID from token
+            flagged_by: adminUserId, // Correct: admin who flagged
           })
           .select()
           .single();
 
         if (flagError) throw flagError;
 
-        // Log the action
+        // Log the action with correct admin_id vs target_id
         await supabaseAdmin.from("admin_logs").insert({
-          admin_id: userId,
+          admin_id: adminUserId,     // Correct: the admin performing the action
           action: "create_flag",
           target_type: "user",
-          target_id: userId,
+          target_id: targetUserId,   // Correct: the user being flagged
           details: { flagType, reason },
         });
 
@@ -505,26 +524,44 @@ serve(async (req) => {
 
         if (flagError) throw flagError;
 
+        // Audit log for resolve action (was missing before)
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_id: userId,
+          action: "resolve_flag",
+          target_type: "flag",
+          target_id: flagId,
+          details: { resolutionNotes, resolvedFlagType: flag?.flag_type, targetUserId: flag?.user_id },
+        });
+
         result = { flag };
         break;
       }
 
       case "admin_logs": {
-        const { page = 1, limit = 50, category = "all" } = params || {};
+        const { page = 1, limit = 50, category = "all", startDate, endDate } = params || {};
 
-        // Fetch admin action logs
-        const { data: adminLogs } = await supabaseAdmin
+        // Fetch admin action logs with DB-level date filtering (Gap 9 fix)
+        let adminLogsQuery = supabaseAdmin
           .from("admin_logs")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(500);
+          .limit(1000);
+        if (startDate) adminLogsQuery = adminLogsQuery.gte("created_at", startDate);
+        if (endDate) adminLogsQuery = adminLogsQuery.lte("created_at", endDate);
+        const { data: adminLogs } = await adminLogsQuery;
 
-        // Fetch system logs (user activity + system errors)
-        const { data: systemLogs } = await supabaseAdmin
+        // Fetch system logs with DB-level date filtering
+        let systemLogsQuery = supabaseAdmin
           .from("system_logs")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(500);
+          .limit(1000);
+        if (startDate) systemLogsQuery = systemLogsQuery.gte("created_at", startDate);
+        if (endDate) systemLogsQuery = systemLogsQuery.lte("created_at", endDate);
+        if (category && category !== "all" && category !== "admin_action") {
+          systemLogsQuery = systemLogsQuery.eq("category", category);
+        }
+        const { data: systemLogs } = await systemLogsQuery;
 
         // Transform admin_logs to unified format
         const transformedAdminLogs = (adminLogs || []).map(log => ({
@@ -556,7 +593,7 @@ serve(async (req) => {
         let allLogs = [...transformedAdminLogs, ...transformedSystemLogs]
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-        // Filter by category if specified
+        // Filter by category if specified (admin_action only comes from adminLogs)
         if (category && category !== "all") {
           allLogs = allLogs.filter(log => log.category === category);
         }
@@ -688,19 +725,19 @@ serve(async (req) => {
       }
 
       case "api_calls_list": {
-        const { page = 1, limit = 50, status, provider } = params || {};
+        // Gap 10 fix: add userId and date filtering at DB level
+        const { page = 1, limit = 50, status, provider, targetUserId, startDate, endDate } = params || {};
 
         let query = supabaseAdmin
           .from("api_call_logs")
           .select("*", { count: "exact" })
           .order("created_at", { ascending: false });
 
-        if (status) {
-          query = query.eq("status", status);
-        }
-        if (provider) {
-          query = query.eq("provider", provider);
-        }
+        if (status) query = query.eq("status", status);
+        if (provider) query = query.eq("provider", provider);
+        if (targetUserId) query = query.eq("user_id", targetUserId);
+        if (startDate) query = query.gte("created_at", startDate);
+        if (endDate) query = query.lte("created_at", endDate);
 
         const { data: logs, count, error: logsError } = await query
           .range((page - 1) * limit, page * limit - 1);

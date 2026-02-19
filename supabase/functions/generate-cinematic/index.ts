@@ -100,6 +100,90 @@ const STYLE_PROMPTS: Record<string, string> = {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// ============= PRICING CONSTANTS (Cinematic Pipeline) =============
+const CINEMATIC_PRICING = {
+  // OpenRouter (Gemini 3 Pro Preview) - script generation
+  scriptPerToken: 0.000003, // ~$3.00 per 1M tokens
+  scriptPerCall: 0.01,       // Flat estimate per script call
+  // Audio - Chatterbox TTS on Replicate
+  audioPerCall: 0.01,        // ~$0.01 per audio call
+  audioPerSecond: 0.002,     // fallback per second estimate
+  // Images - Hypereal nano-banana-pro-t2i
+  hyperealImageCost: 0.05,   // $0.05 per image (Hypereal T2I)
+  replicateImageCost: 0.04,  // $0.04 per image fallback (Replicate nano-banana)
+  // Video - Hypereal Seedance 1.5 I2V / T2V
+  // 1 Hypereal credit ≈ $0.01 USD (estimate — update from Hypereal billing dashboard)
+  hyperealCreditUsd: 0.01,
+  // Replicate Seedance-1-pro-fast I2V fallback
+  replicateVideoCost: 0.08,  // ~$0.08 per video clip estimate
+};
+
+// ============= API CALL LOGGING =============
+interface ApiCallLogParams {
+  supabase: ReturnType<typeof createClient>;
+  userId: string;
+  generationId?: string;
+  provider: "openrouter" | "replicate" | "hypereal" | "google_tts" | "elevenlabs";
+  model: string;
+  status: "success" | "error" | "started";
+  queueTimeMs?: number;
+  runningTimeMs?: number;
+  totalDurationMs: number;
+  cost?: number;
+  errorMessage?: string;
+}
+
+async function logApiCall(params: ApiCallLogParams): Promise<void> {
+  try {
+    const { supabase, userId, generationId, provider, model, status, queueTimeMs, runningTimeMs, totalDurationMs, cost, errorMessage } = params;
+    await supabase.from("api_call_logs").insert({
+      user_id: userId,
+      generation_id: generationId || null,
+      provider,
+      model,
+      status,
+      queue_time_ms: queueTimeMs || null,
+      running_time_ms: runningTimeMs || null,
+      total_duration_ms: totalDurationMs,
+      cost: cost || 0,
+      error_message: errorMessage || null,
+    });
+    console.log(`[API_LOG] Logged ${provider}/${model}: ${status}, ${totalDurationMs}ms, $${(cost || 0).toFixed(4)}`);
+  } catch (err) {
+    console.error(`[API_LOG] Error logging API call:`, err);
+  }
+}
+
+// ============= SYSTEM EVENT LOGGING =============
+interface SystemLogParams {
+  supabase: ReturnType<typeof createClient>;
+  userId?: string;
+  eventType: string;
+  category: "user_activity" | "system_error" | "system_warning" | "system_info";
+  message: string;
+  details?: Record<string, unknown>;
+  generationId?: string;
+  projectId?: string;
+}
+
+async function logSystemEvent(params: SystemLogParams): Promise<void> {
+  try {
+    const { supabase, userId, eventType, category, message, details, generationId, projectId } = params;
+    await supabase.from("system_logs").insert({
+      user_id: userId || null,
+      event_type: eventType,
+      category,
+      message,
+      details: details || null,
+      generation_id: generationId || null,
+      project_id: projectId || null,
+    });
+    console.log(`[${category.toUpperCase()}] ${eventType}: ${message}`);
+  } catch (err) {
+    console.error(`[SYSTEM_LOG] Error logging event:`, err);
+  }
+}
+
 // ============= HAITIAN CREOLE DETECTION =============
 function isHaitianCreole(text: string): boolean {
   const lowerText = text.toLowerCase();
@@ -683,6 +767,9 @@ async function generateSceneImage(
   format: "landscape" | "portrait" | "square",
   replicateToken: string,
   supabase: ReturnType<typeof createClient>,
+  userId?: string,
+  generationId?: string,
+  projectId?: string,
 ): Promise<string> {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
@@ -714,6 +801,7 @@ QUALITY REQUIREMENTS:
     );
 
     for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
+      const imgStartTime = Date.now();
       try {
         const response = await fetch(HYPEREAL_API_URL, {
           method: "POST",
@@ -795,10 +883,21 @@ QUALITY REQUIREMENTS:
 
         const { data: urlData } = supabase.storage.from("scene-images").getPublicUrl(fileName);
         console.log(`[IMG] Scene ${scene.number} image uploaded: ${urlData.publicUrl}`);
+        // Log successful Hypereal image API call
+        await logApiCall({
+          supabase, userId: userId || "unknown", generationId, provider: "hypereal",
+          model: "nano-banana-pro-t2i", status: "success",
+          totalDurationMs: Date.now() - imgStartTime, cost: CINEMATIC_PRICING.hyperealImageCost,
+        });
         return urlData.publicUrl;
       } catch (err) {
         if (attempt >= MAX_IMG_RETRIES) {
           console.error(`[IMG] Scene ${scene.number} Hypereal error after ${MAX_IMG_RETRIES} attempts:`, err);
+          await logApiCall({
+            supabase, userId: userId || "unknown", generationId, provider: "hypereal",
+            model: "nano-banana-pro-t2i", status: "error",
+            totalDurationMs: Date.now() - imgStartTime, errorMessage: String(err),
+          });
           throw err;
         }
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
@@ -1708,6 +1807,9 @@ serve(async (req) => {
         (project.format || "portrait") as "landscape" | "portrait" | "square",
         replicateToken,
         supabase,
+        user.id,
+        generationId,
+        generation.project_id,
       );
 
       scenes[idx] = { ...scene, imageUrl };
@@ -2005,7 +2107,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
       console.log(`[IMG-REGEN] Scene ${scene.number}: Regenerating image`);
 
       // Generate new image
-      const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase);
+      const newImageUrl = await generateSceneImage(scene, style, format, replicateToken, supabase, user.id, generationId, generation.project_id);
 
       // Grok commented out for testing — use Hypereal Seedance 1.5
       console.log(`[IMG-REGEN] Scene ${scene.number}: Starting video regeneration with Hypereal Seedance 1.5`);
@@ -2031,8 +2133,8 @@ STYLE CONTEXT: ${fullStylePrompt}`;
     if (phase === "finalize") {
       // Collect all video URLs from scenes
       const videoUrls = scenes.filter((s) => s.videoUrl).map((s) => s.videoUrl as string);
-      // Keep first as legacy field, but also return all clips
       const finalVideoUrl = videoUrls[0] || "";
+      const sceneCount = scenes.length;
 
       // Mark complete
       await supabase
@@ -2055,6 +2157,72 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         .eq("id", generation.project_id)
         .maybeSingle();
 
+      // ---- COST TRACKING ----
+      // Estimate costs: images (Hypereal T2I) + videos (Hypereal I2V) + script (OpenRouter) + audio (Chatterbox)
+      const openrouterCost = CINEMATIC_PRICING.scriptPerCall;
+      const replicateCost = sceneCount * CINEMATIC_PRICING.audioPerCall; // Chatterbox TTS per scene
+      const hyperealImageCost = sceneCount * CINEMATIC_PRICING.hyperealImageCost; // T2I per scene
+      const hyperealVideoCost = sceneCount * CINEMATIC_PRICING.hyperealCreditUsd * 10; // ~10 credits per video clip est.
+      const hyperealCost = hyperealImageCost + hyperealVideoCost;
+      const totalCost = openrouterCost + replicateCost + hyperealCost;
+
+      try {
+        await supabase.from("generation_costs").insert({
+          generation_id: generationId,
+          user_id: user.id,
+          openrouter_cost: openrouterCost,
+          replicate_cost: replicateCost,
+          hypereal_cost: hyperealCost,
+          google_tts_cost: 0,
+          total_cost: totalCost,
+        });
+        console.log(`[FINALIZE] Generation costs logged: total=$${totalCost.toFixed(4)}`);
+      } catch (costErr) {
+        console.error("[FINALIZE] Failed to log generation costs:", costErr);
+      }
+
+      // ---- CREDIT DEDUCTION ----
+      // Cinematic = 12 credits (professional tier generation)
+      const CINEMATIC_CREDIT_COST = 12;
+      try {
+        const { data: currentCredits } = await supabase
+          .from("user_credits")
+          .select("credits_balance, total_used")
+          .eq("user_id", user.id)
+          .single();
+
+        if (currentCredits && currentCredits.credits_balance >= CINEMATIC_CREDIT_COST) {
+          await supabase
+            .from("user_credits")
+            .update({
+              credits_balance: currentCredits.credits_balance - CINEMATIC_CREDIT_COST,
+              total_used: currentCredits.total_used + CINEMATIC_CREDIT_COST,
+            })
+            .eq("user_id", user.id);
+
+          // Log the credit transaction
+          await supabase.from("credit_transactions").insert({
+            user_id: user.id,
+            amount: -CINEMATIC_CREDIT_COST,
+            transaction_type: "usage",
+            description: `Cinematic generation: ${project?.title || "Untitled"} (${sceneCount} scenes)`,
+          });
+          console.log(`[FINALIZE] Deducted ${CINEMATIC_CREDIT_COST} credits from user ${user.id}`);
+        }
+      } catch (creditErr) {
+        console.error("[FINALIZE] Failed to deduct credits:", creditErr);
+      }
+
+      // ---- SYSTEM LOG: Generation Complete ----
+      await logSystemEvent({
+        supabase, userId: user.id,
+        eventType: "cinematic_generation_complete",
+        category: "user_activity",
+        message: `Cinematic generation completed: ${project?.title || "Untitled"} (${sceneCount} scenes)`,
+        details: { sceneCount, totalCost, videoUrls: videoUrls.length },
+        generationId, projectId: generation.project_id,
+      });
+
       return jsonResponse({
         success: true,
         projectId: generation.project_id,
@@ -2062,7 +2230,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         title: project?.title || "Untitled Cinematic",
         scenes,
         finalVideoUrl,
-        allVideoUrls: videoUrls, // All generated clips
+        allVideoUrls: videoUrls,
       });
     }
 
@@ -2079,19 +2247,32 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (supabaseUrl && supabaseKey) {
           const sb = createClient(supabaseUrl, supabaseKey);
-          const { data: gen } = await sb.from("generations").select("project_id").eq("id", genId).maybeSingle();
+          const { data: gen } = await sb.from("generations").select("project_id, user_id").eq("id", genId).maybeSingle();
 
           await sb
             .from("generations")
-            .update({
-              status: "error",
-              error_message: errorMessage,
-            })
+            .update({ status: "error", error_message: errorMessage })
             .eq("id", genId);
 
           if (gen?.project_id) {
             await sb.from("projects").update({ status: "error" }).eq("id", gen.project_id);
           }
+
+          // ---- PERSIST ERROR TO system_logs (CRITICAL for admin observability) ----
+          try {
+            await sb.from("system_logs").insert({
+              user_id: gen?.user_id || null,
+              event_type: "cinematic_generation_error",
+              category: "system_error",
+              message: `Cinematic generation failed: ${errorMessage}`,
+              details: { errorMessage, phase: parsedGenerationId, generationId: genId },
+              generation_id: genId,
+              project_id: gen?.project_id || null,
+            });
+          } catch (logErr) {
+            console.error("[ERROR-HANDLER] Failed to write system_log:", logErr);
+          }
+
           console.log(`[ERROR-HANDLER] Updated generation ${genId} and project to error status`);
         }
       }
