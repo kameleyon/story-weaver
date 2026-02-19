@@ -1764,6 +1764,13 @@ serve(async (req) => {
         forceHaitianCreole,
       };
 
+      // Heartbeat: touch started_at so the client poller knows we're still alive during long TTS calls
+      await supabase
+        .from("generations")
+        .update({ started_at: new Date().toISOString() })
+        .eq("id", generationId);
+      console.log(`[AUDIO] Scene ${scene.number}: Heartbeat written, starting TTS...`);
+
       // Call the shared audio engine (synchronous — waits for result)
       const result = await sharedGenerateSceneAudio(
         { number: scene.number, voiceover: scene.voiceover, duration: scene.duration },
