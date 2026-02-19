@@ -195,9 +195,9 @@ export function useGenerationPipeline() {
   };
 
   // Helper to call a phase with configurable timeout and fresh auth
-  const callPhase = async (
+  const callPhase = useCallback(async (
     body: Record<string, unknown>,
-    timeoutMs: number = 120000, // Default 2 minutes
+    timeoutMs: number = 120000,
     endpoint: string = "generate-video"
   ): Promise<any> => {
     // Retry transient network failures (these often surface as TypeError: Failed to fetch)
@@ -271,7 +271,7 @@ export function useGenerationPipeline() {
     }
 
     throw new Error("Phase call failed after retries");
-  };
+  }, []);
 
   const startGeneration = useCallback(
     async (params: GenerationParams) => {
