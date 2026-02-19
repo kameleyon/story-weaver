@@ -32,34 +32,9 @@ export const WorkspaceRouter = forwardRef<WorkspaceHandle>(function WorkspaceRou
   const smartflowRef = useRef<WorkspaceHandle>(null);
   const cinematicRef = useRef<WorkspaceHandle>(null);
 
-  // If a project is specified, ensure we render the correct workspace for its type.
-  useEffect(() => {
-    if (!projectId) return;
-
-    let cancelled = false;
-
-    (async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("project_type")
-        .eq("id", projectId)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (error) return;
-
-      const desiredMode = modeForProjectType(data?.project_type);
-      if (desiredMode !== mode) {
-        const next = new URLSearchParams(searchParams);
-        next.set("mode", desiredMode);
-        setSearchParams(next, { replace: true });
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, mode, searchParams, setSearchParams]);
+  // Note: No useEffect to re-query project_type here.
+  // The openProject() imperative handle already sets the correct mode via a single DB query.
+  // The workspace's own loadProject() handles loading — no double round-trip needed.
 
   useImperativeHandle(ref, () => ({
     resetWorkspace: () => {
