@@ -111,7 +111,7 @@ export default function Usage() {
 
       if (error) throw error;
 
-      const completedGenerations = generations?.filter(g => g.status === "completed" || g.status === "complete") || [];
+      const completedGenerations = generations?.filter(g => g.status === "complete") || [];
       
       return {
         videosCreated: completedGenerations.length,
@@ -472,7 +472,7 @@ export default function Usage() {
                     <Video className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length}</p>
+                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete").length}</p>
                     <p className="text-sm text-muted-foreground">Videos Generated</p>
                   </div>
                 </div>
@@ -509,7 +509,7 @@ export default function Usage() {
                     <TrendingUp className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length * 15} MB</p>
+                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete").length * 15} MB</p>
                     <p className="text-sm text-muted-foreground">Storage Used</p>
                   </div>
                 </div>
@@ -578,13 +578,13 @@ export default function Usage() {
                             return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
                           };
                           
-                          const isComplete = activity.status === "complete" || activity.status === "completed";
+                          const isComplete = activity.status === "complete";
                           const isFailed = activity.status === "failed" || activity.status === "error";
                           const isGenerating = !isComplete && !isFailed;
                           const projectType = (activity.project as any)?.project_type;
                           const IconComponent = projectType === "storytelling" 
                             ? Clapperboard 
-                            : projectType === "smartflow" || projectType === "smart-flow"
+                            : projectType === "smartflow"
                               ? BarChart3
                               : Video;
                           
