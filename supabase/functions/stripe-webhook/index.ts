@@ -104,6 +104,22 @@ serve(async (req) => {
 
         if (session.mode === "payment") {
           // One-time payment (credit purchase)
+          const paymentIntentId = session.payment_intent as string;
+
+          // --- Idempotency guard ---
+          // Stripe delivers webhooks at-least-once. Check if we've already
+          // processed this payment_intent to avoid double-crediting.
+          const { data: existingTx } = await supabaseAdmin
+            .from("credit_transactions")
+            .select("id")
+            .eq("stripe_payment_intent_id", paymentIntentId)
+            .maybeSingle();
+
+          if (existingTx) {
+            logStep("Duplicate webhook — already processed payment intent, skipping", { paymentIntentId });
+            break;
+          }
+
           const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
           for (const item of lineItems.data) {
             const productId = item.price?.product as string;
@@ -111,22 +127,23 @@ serve(async (req) => {
             
             if (credits) {
               logStep("Adding credits", { userId, credits, productId });
-              
-              // Upsert user credits
-              const { data: existingCredits } = await supabaseAdmin
-                .from("user_credits")
-                .select("*")
-                .eq("user_id", userId)
-                .single();
 
-              if (existingCredits) {
-                await supabaseAdmin
-                  .from("user_credits")
-                  .update({
-                    credits_balance: existingCredits.credits_balance + credits,
-                    total_purchased: existingCredits.total_purchased + credits,
-                  })
-                  .eq("user_id", userId);
+              // --- Atomic increment via RPC to avoid race condition ---
+              // Two simultaneous webhook retries could both read the same balance
+              // and both write balance + credits, losing one increment.
+              // Using a DB-level increment is safe under concurrent writes.
+              const { data: creditRow } = await supabaseAdmin
+                .from("user_credits")
+                .select("id")
+                .eq("user_id", userId)
+                .maybeSingle();
+
+              if (creditRow) {
+                // Atomic increment — no read-modify-write pattern
+                await supabaseAdmin.rpc("increment_user_credits", {
+                  p_user_id: userId,
+                  p_credits: credits,
+                });
               } else {
                 await supabaseAdmin
                   .from("user_credits")
@@ -137,7 +154,7 @@ serve(async (req) => {
                   });
               }
 
-              // Log the transaction
+              // Log the transaction AFTER crediting (used as idempotency record)
               await supabaseAdmin
                 .from("credit_transactions")
                 .insert({
@@ -145,7 +162,7 @@ serve(async (req) => {
                   amount: credits,
                   transaction_type: "purchase",
                   description: `Purchased ${credits} credits`,
-                  stripe_payment_intent_id: session.payment_intent as string,
+                  stripe_payment_intent_id: paymentIntentId,
                 });
             }
           }
