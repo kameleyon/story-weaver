@@ -1,10 +1,10 @@
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
@@ -18,6 +18,9 @@ import VoiceLab from "./pages/VoiceLab";
 import PublicShare from "./pages/PublicShare";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import AcceptableUse from "./pages/AcceptableUse";
 
 const queryClient = new QueryClient();
 
@@ -25,7 +28,6 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
       <TooltipProvider>
-        <Toaster />
         <Sonner />
         <BrowserRouter>
           <Routes>
@@ -55,7 +57,9 @@ const App = () => (
               path="/settings"
               element={
                 <ProtectedRoute>
-                  <Settings />
+                  <AuthenticatedLayout>
+                    <Settings />
+                  </AuthenticatedLayout>
                 </ProtectedRoute>
               }
             />
@@ -63,7 +67,9 @@ const App = () => (
               path="/usage"
               element={
                 <ProtectedRoute>
-                  <Usage />
+                  <AuthenticatedLayout>
+                    <Usage />
+                  </AuthenticatedLayout>
                 </ProtectedRoute>
               }
             />
@@ -72,7 +78,9 @@ const App = () => (
               path="/projects"
               element={
                 <ProtectedRoute>
-                  <Projects />
+                  <AuthenticatedLayout>
+                    <Projects />
+                  </AuthenticatedLayout>
                 </ProtectedRoute>
               }
             />
@@ -92,6 +100,10 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            {/* Legal pages - public */}
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/acceptable-use" element={<AcceptableUse />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
