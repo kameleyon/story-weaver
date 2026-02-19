@@ -991,17 +991,38 @@ export function useGenerationPipeline() {
           });
         }
       } else if (generation?.status === "error") {
-        const msg = generation.error_message || "Generation failed";
-        setState((prev) => ({
-          ...prev,
-          step: "error",
-          isGenerating: false,
-          error: msg,
-          projectId,
-          generationId: generation.id,
-          title: project.title,
-          format: project.format as "landscape" | "portrait" | "square",
-        }));
+        // For cinematic: if we have partial scene data, attempt to resume instead of just showing error
+        const errorScenes = normalizeScenes(generation.scenes) ?? [];
+        if (project.project_type === "cinematic" && errorScenes.length > 0) {
+          const allHaveAudio = errorScenes.every((s) => !!s.audioUrl);
+          const allHaveImages = errorScenes.every((s) => !!s.imageUrl);
+          const allHaveVideo = errorScenes.every((s) => !!s.videoUrl);
+
+          // Reset generation status so resume can proceed
+          await supabase.from("generations").update({ status: "processing", error_message: null }).eq("id", generation.id);
+
+          if (allHaveVideo) {
+            void resumeCinematic(project, generation.id, errorScenes, "finalize");
+          } else if (allHaveImages) {
+            void resumeCinematic(project, generation.id, errorScenes, "video");
+          } else if (allHaveAudio) {
+            void resumeCinematic(project, generation.id, errorScenes, "images");
+          } else {
+            void resumeCinematic(project, generation.id, errorScenes, "audio");
+          }
+        } else {
+          const msg = generation.error_message || "Generation failed";
+          setState((prev) => ({
+            ...prev,
+            step: "error",
+            isGenerating: false,
+            error: msg,
+            projectId,
+            generationId: generation.id,
+            title: project.title,
+            format: project.format as "landscape" | "portrait" | "square",
+          }));
+        }
       } else if (generation && project.project_type === "cinematic") {
         // Cinematic resume: detect last completed phase and resume from there
         const scenes = normalizeScenes(generation.scenes) ?? [];
