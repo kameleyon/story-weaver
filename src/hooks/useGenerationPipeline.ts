@@ -712,6 +712,123 @@ export function useGenerationPipeline() {
     [toast],
   );
 
+  // Resume an interrupted cinematic generation from the last completed phase
+  const resumeCinematic = useCallback(
+    async (
+      project: ProjectRow,
+      generationId: string,
+      existingScenes: Scene[],
+      resumeFrom: "audio" | "images" | "video" | "finalize"
+    ) => {
+      const cinematicEndpoint = "generate-cinematic";
+      const cProjectId = project.id;
+      const cSceneCount = existingScenes.length;
+      const phaseLabels = { audio: "Resuming audio...", images: "Resuming images...", video: "Resuming video clips...", finalize: "Finalizing..." };
+
+      setState((prev) => ({
+        ...prev,
+        step: "visuals",
+        isGenerating: true,
+        projectId: cProjectId,
+        generationId,
+        title: project.title,
+        sceneCount: cSceneCount,
+        scenes: existingScenes,
+        format: project.format as "landscape" | "portrait" | "square",
+        statusMessage: phaseLabels[resumeFrom],
+        progress: resumeFrom === "audio" ? 10 : resumeFrom === "images" ? 35 : resumeFrom === "video" ? 60 : 96,
+        projectType: "cinematic",
+      }));
+
+      try {
+        // Phase 2: Audio (resume – skip scenes that already have audio)
+        if (resumeFrom === "audio" || resumeFrom === "images" || resumeFrom === "video" || resumeFrom === "finalize") {
+          if (resumeFrom === "audio") {
+            for (let i = 0; i < cSceneCount; i++) {
+              if (existingScenes[i]?.audioUrl) continue; // skip completed
+              setState((prev) => ({ ...prev, statusMessage: `Resuming audio (${i + 1}/${cSceneCount})...`, progress: 10 + Math.floor(((i + 0.25) / cSceneCount) * 25) }));
+              let audioComplete = false;
+              while (!audioComplete) {
+                const audioRes = await callPhase({ phase: "audio", projectId: cProjectId, generationId, sceneIndex: i }, 300000, cinematicEndpoint);
+                if (!audioRes.success) throw new Error(audioRes.error || "Audio generation failed");
+                if (audioRes.status === "complete") audioComplete = true;
+                else await sleep(1200);
+              }
+              setState((prev) => ({ ...prev, progress: 10 + Math.floor(((i + 1) / cSceneCount) * 25) }));
+            }
+          }
+        }
+
+        // Phase 3: Images (resume – skip scenes that already have images)
+        if (resumeFrom === "audio" || resumeFrom === "images") {
+          setState((prev) => ({ ...prev, progress: 35, statusMessage: "Resuming images..." }));
+          for (let i = 0; i < cSceneCount; i++) {
+            if (existingScenes[i]?.imageUrl) continue;
+            setState((prev) => ({ ...prev, statusMessage: `Creating images (${i + 1}/${cSceneCount})...`, progress: 35 + Math.floor(((i + 0.25) / cSceneCount) * 25) }));
+            const imgRes = await callPhase({ phase: "images", projectId: cProjectId, generationId, sceneIndex: i }, 480000, cinematicEndpoint);
+            if (!imgRes.success) throw new Error(imgRes.error || "Image generation failed");
+            setState((prev) => ({ ...prev, progress: 35 + Math.floor(((i + 1) / cSceneCount) * 25) }));
+          }
+        }
+
+        // Phase 4: Video clips (resume – skip scenes that already have video)
+        if (resumeFrom === "audio" || resumeFrom === "images" || resumeFrom === "video") {
+          setState((prev) => ({ ...prev, progress: 60, statusMessage: "Resuming video clips..." }));
+          const VIDEO_CONCURRENCY = 3;
+          let completedVideos = existingScenes.filter((s) => !!s.videoUrl).length;
+
+          const generateVideoForScene = async (sceneIdx: number) => {
+            if (existingScenes[sceneIdx]?.videoUrl) return; // skip completed
+            let videoComplete = false;
+            let pollAttempts = 0;
+            const MAX_POLL_ATTEMPTS = 180;
+            while (!videoComplete) {
+              pollAttempts++;
+              if (pollAttempts > MAX_POLL_ATTEMPTS) throw new Error(`Video generation timed out for scene ${sceneIdx + 1}`);
+              const vidRes = await callPhase({ phase: "video", projectId: cProjectId, generationId, sceneIndex: sceneIdx }, 480000, cinematicEndpoint);
+              if (!vidRes.success) throw new Error(vidRes.error || `Video failed for scene ${sceneIdx + 1}`);
+              if (vidRes.status === "complete") videoComplete = true;
+              else await sleep(2000);
+            }
+            completedVideos++;
+            setState((prev) => ({ ...prev, statusMessage: `Generating clips (${completedVideos}/${cSceneCount})...`, progress: 60 + Math.floor((completedVideos / cSceneCount) * 35) }));
+          };
+
+          for (let batchStart = 0; batchStart < cSceneCount; batchStart += VIDEO_CONCURRENCY) {
+            const batch = [];
+            for (let i = batchStart; i < Math.min(batchStart + VIDEO_CONCURRENCY, cSceneCount); i++) {
+              batch.push(generateVideoForScene(i));
+            }
+            await Promise.all(batch);
+          }
+        }
+
+        // Phase 5: Finalize
+        setState((prev) => ({ ...prev, step: "rendering", progress: 96, statusMessage: "Finalizing cinematic..." }));
+        const cFinalRes = await callPhase({ phase: "finalize", projectId: cProjectId, generationId }, 120000, cinematicEndpoint);
+        if (!cFinalRes.success) throw new Error(cFinalRes.error || "Finalization failed");
+        const cFinalScenes = normalizeScenes(cFinalRes.scenes);
+
+        setState({
+          step: "complete", progress: 100, sceneCount: cFinalScenes?.length || cSceneCount,
+          currentScene: cFinalScenes?.length || cSceneCount, totalImages: cFinalScenes?.length || cSceneCount,
+          completedImages: cFinalScenes?.length || cSceneCount, isGenerating: false,
+          projectId: cProjectId, generationId, title: cFinalRes.title,
+          scenes: cFinalScenes, format: project.format as "landscape" | "portrait" | "square",
+          finalVideoUrl: cFinalRes.finalVideoUrl, statusMessage: "Cinematic resumed and completed!",
+          projectType: "cinematic",
+        });
+
+        toast({ title: "Generation Resumed!", description: `"${cFinalRes.title}" is ready.` });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Resume failed";
+        setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: errorMessage, statusMessage: errorMessage }));
+        toast({ variant: "destructive", title: "Resume Failed", description: errorMessage });
+      }
+    },
+    [toast, callPhase],
+  );
+
   const loadProject = useCallback(
     async (projectId: string): Promise<ProjectRow | null> => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -789,21 +906,44 @@ export function useGenerationPipeline() {
           title: project.title,
           format: project.format as "landscape" | "portrait" | "square",
         }));
+      } else if (generation && project.project_type === "cinematic") {
+        // Cinematic resume: detect last completed phase and resume from there
+        const scenes = normalizeScenes(generation.scenes) ?? [];
+        const sceneCount = scenes.length;
+
+        if (sceneCount === 0) {
+          // Script phase didn't complete, can't resume
+          setState({
+            step: "error", progress: 0, sceneCount: 0, currentScene: 0,
+            totalImages: 0, completedImages: 0, isGenerating: false,
+            projectId, generationId: generation.id, title: project.title,
+            format: project.format as "landscape" | "portrait" | "square",
+            error: "This generation was interrupted before the script completed. Please try again.",
+          });
+        } else {
+          // Determine which phase to resume from by inspecting scene data
+          const allHaveAudio = scenes.every((s) => !!s.audioUrl);
+          const allHaveImages = scenes.every((s) => !!s.imageUrl);
+          const allHaveVideo = scenes.every((s) => !!s.videoUrl);
+
+          if (allHaveVideo) {
+            // All done, just needs finalize
+            void resumeCinematic(project, generation.id, scenes, "finalize");
+          } else if (allHaveImages) {
+            void resumeCinematic(project, generation.id, scenes, "video");
+          } else if (allHaveAudio) {
+            void resumeCinematic(project, generation.id, scenes, "images");
+          } else {
+            void resumeCinematic(project, generation.id, scenes, "audio");
+          }
+        }
       } else if (generation) {
-        // For any non-complete generation (generating, error, pending, etc.),
-        // show the failed interface immediately instead of pretending it's still generating
+        // Non-cinematic interrupted generation
         setState({
-          step: "error",
-          progress: 0,
-          sceneCount: state.sceneCount,
-          currentScene: 0,
-          totalImages: state.sceneCount,
-          completedImages: 0,
-          isGenerating: false,
-          projectId,
-          generationId: generation.id,
-          title: project.title,
-          format: project.format as "landscape" | "portrait" | "square",
+          step: "error", progress: 0, sceneCount: state.sceneCount,
+          currentScene: 0, totalImages: state.sceneCount, completedImages: 0,
+          isGenerating: false, projectId, generationId: generation.id,
+          title: project.title, format: project.format as "landscape" | "portrait" | "square",
           error: "This generation was interrupted. Please try again.",
         });
       } else {
