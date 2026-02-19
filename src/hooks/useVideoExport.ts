@@ -417,37 +417,30 @@ export function useVideoExport() {
           }
 
           // D. Render Video Frames
-          // On mobile, video.currentTime seeking is extremely slow (100-500ms per seek),
-          // making frame-by-frame slow-motion export impractical (would take minutes per scene).
-          // Instead, we render from the scene's static image on mobile — fast and reliable.
-          if (scene.videoUrl && !isMobile) {
-            log("Run", runId, `Scene ${i + 1}: Using Slow-Motion Stretch (desktop)`, { videoUrl: scene.videoUrl, sceneDuration });
-            
+          if (scene.videoUrl) {
+            // Shared video load helper
             const video = document.createElement("video");
             video.crossOrigin = "anonymous";
             video.muted = true;
             video.playsInline = true;
             video.preload = "auto";
 
-            // Load video with timeout + retry
             const loadVideoWithRetry = async (url: string, maxRetries = 2) => {
               for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 try {
                   await new Promise<void>((resolve, reject) => {
                     const timeout = setTimeout(() => {
-                      video.src = ""; // abort current load
+                      video.src = "";
                       reject(new Error(`Video load timeout (120s), attempt ${attempt + 1}`));
                     }, 120000);
                     video.onloadeddata = () => { clearTimeout(timeout); resolve(); };
                     video.onerror = () => { clearTimeout(timeout); reject(new Error("Failed to load video")); };
-                    // Cache-bust on retry to avoid stale/hung connections
                     video.src = attempt > 0 ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : url;
                   });
-                  return; // success
-                } catch (err) {
-                  log("Run", runId, `Scene ${i + 1}: Video load attempt ${attempt + 1} failed`, { error: (err as Error).message });
-                  if (attempt >= maxRetries) throw err;
-                  // Brief pause before retry
+                  return;
+                } catch (loadErr) {
+                  log("Run", runId, `Scene ${i + 1}: Video load attempt ${attempt + 1} failed`, { error: (loadErr as Error).message });
+                  if (attempt >= maxRetries) throw loadErr;
                   await new Promise(r => setTimeout(r, 2000));
                 }
               }
@@ -455,99 +448,33 @@ export function useVideoExport() {
             await loadVideoWithRetry(scene.videoUrl!);
 
             const sourceDuration = video.duration || 5;
-            log("Run", runId, `Scene ${i + 1}: Source video duration=${sourceDuration}s, target=${sceneDuration}s`);
 
-            // Seek to start
-            video.currentTime = 0;
-            await new Promise<void>(r => { video.onseeked = () => r(); });
+            if (!isMobile) {
+              // --- DESKTOP: Frame-by-frame seeking (accurate slow-motion) ---
+              log("Run", runId, `Scene ${i + 1}: Using Slow-Motion Stretch (desktop)`, { sourceDuration, sceneDuration });
 
-            for (let f = 0; f < sceneFrames; f++) {
-              if (abortRef.current) break;
-
-              const timeInScene = f / fps;
-
-               // --- SLOW-MOTION STRETCH ---
-               const progress = Math.min(timeInScene / sceneDuration, 1);
-               let playbackTime = progress * sourceDuration;
-               playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
-
-              video.currentTime = playbackTime;
+              video.currentTime = 0;
               await new Promise<void>(r => { video.onseeked = () => r(); });
-
-              // Draw video frame scaled to canvas
-              ctx.fillStyle = "#000";
-              ctx.fillRect(0, 0, dim.w, dim.h);
-              const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
-              const vw = video.videoWidth * vScale;
-              const vh = video.videoHeight * vScale;
-              ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
-
-              // Brand watermark
-              if (brandMark && brandMark.trim()) {
-                drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
-              }
-
-              await waitForEncoderDrain(videoEncoder, 10);
-
-              const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
-              const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
-              const keyFrame = globalFrameCount % (fps * 2) === 0;
-              videoEncoder.encode(frame, { keyFrame });
-              frame.close();
-              globalFrameCount++;
-
-              if (globalFrameCount % 5 === 0) await yieldToUI();
-              if (globalFrameCount % 30 === 0) await longYield();
-            }
-
-            // Cleanup video element
-            video.removeAttribute("src");
-            video.load();
-
-          } else if (scene.videoUrl && isMobile) {
-            // Mobile: Use scene image instead of video seeking for reliable, fast export
-            log("Run", runId, `Scene ${i + 1}: Using image-based rendering (mobile fallback)`, { sceneDuration });
-
-            // Use whatever image we already loaded for this scene
-            const img = loadedImages[0] || null;
-            if (img) {
-              // Pre-render once to a bitmap
-              ctx.fillStyle = "#000";
-              ctx.fillRect(0, 0, dim.w, dim.h);
-              const scale = Math.min(dim.w / img.width, dim.h / img.height);
-              const dw = img.width * scale;
-              const dh = img.height * scale;
-              ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
-              if (brandMark && brandMark.trim()) {
-                drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
-              }
-              const bitmap = await createImageBitmap(canvas);
-
-              // Crossfade handling
-              const sceneCrossfadeFrames = Math.floor(fps * 0.5);
 
               for (let f = 0; f < sceneFrames; f++) {
                 if (abortRef.current) break;
-                const framesUntilSceneEnd = sceneFrames - f;
-                const shouldFadeInterScene = nextSceneFirstImage && framesUntilSceneEnd <= sceneCrossfadeFrames;
 
-                if (shouldFadeInterScene && nextSceneFirstImage) {
-                  const fadeProgress = 1 - (framesUntilSceneEnd / sceneCrossfadeFrames);
-                  ctx.fillStyle = "#000";
-                  ctx.fillRect(0, 0, dim.w, dim.h);
-                  ctx.globalAlpha = 1 - fadeProgress;
-                  ctx.drawImage(bitmap, 0, 0);
-                  const nextScale = Math.min(dim.w / nextSceneFirstImage.width, dim.h / nextSceneFirstImage.height);
-                  const nextDw = nextSceneFirstImage.width * nextScale;
-                  const nextDh = nextSceneFirstImage.height * nextScale;
-                  ctx.globalAlpha = fadeProgress;
-                  ctx.drawImage(nextSceneFirstImage, (dim.w - nextDw) / 2, (dim.h - nextDh) / 2, nextDw, nextDh);
-                  ctx.globalAlpha = 1;
-                  if (brandMark && brandMark.trim()) {
-                    drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
-                  }
-                } else {
-                  ctx.drawImage(bitmap, 0, 0);
+                const progress = Math.min((f / fps) / sceneDuration, 1);
+                let playbackTime = progress * sourceDuration;
+                playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
+
+                video.currentTime = playbackTime;
+                await new Promise<void>(r => { video.onseeked = () => r(); });
+
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, dim.w, dim.h);
+                const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
+                const vw = video.videoWidth * vScale;
+                const vh = video.videoHeight * vScale;
+                ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
+
+                if (brandMark && brandMark.trim()) {
+                  drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
                 }
 
                 await waitForEncoderDrain(videoEncoder, 10);
@@ -558,26 +485,103 @@ export function useVideoExport() {
                 frame.close();
                 globalFrameCount++;
 
-                if (globalFrameCount % 10 === 0) await yieldToUI();
-                if (globalFrameCount % 60 === 0) await longYield();
+                if (globalFrameCount % 5 === 0) await yieldToUI();
+                if (globalFrameCount % 30 === 0) await longYield();
               }
 
-              bitmap.close();
             } else {
-              // No image available — render black frames
-              warn("Run", runId, `Scene ${i + 1}: No image available for mobile fallback`);
+              // --- MOBILE: Real-time playback capture (no seeking) ---
+              // Play video at reduced playbackRate and capture frames at intervals.
+              // This uses hardware-accelerated decoding instead of slow per-frame seeking.
+              const rate = Math.max(0.1, Math.min(sourceDuration / sceneDuration, 1));
+              log("Run", runId, `Scene ${i + 1}: Using real-time playback capture (mobile)`, {
+                sourceDuration, sceneDuration, playbackRate: rate
+              });
+
+              video.currentTime = 0;
+              video.playbackRate = rate;
+
+              // Wait for video to be ready to play
+              await new Promise<void>((resolve) => {
+                if (video.readyState >= 3) { resolve(); return; }
+                video.oncanplay = () => resolve();
+              });
+
+              // Start playback
+              try { await video.play(); } catch (e) {
+                warn("Run", runId, `Scene ${i + 1}: video.play() failed, falling back to seeking`, e);
+                // If autoplay is blocked, fall back to seeking approach
+                video.currentTime = 0;
+                await new Promise<void>(r => { video.onseeked = () => r(); });
+                for (let f = 0; f < sceneFrames; f++) {
+                  if (abortRef.current) break;
+                  const progress = Math.min((f / fps) / sceneDuration, 1);
+                  let playbackTime = Math.max(0, Math.min(progress * sourceDuration, sourceDuration - 0.05));
+                  video.currentTime = playbackTime;
+                  await new Promise<void>(r => { video.onseeked = () => r(); });
+                  ctx.fillStyle = "#000";
+                  ctx.fillRect(0, 0, dim.w, dim.h);
+                  const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
+                  ctx.drawImage(video, (dim.w - vScale * video.videoWidth) / 2, (dim.h - vScale * video.videoHeight) / 2, video.videoWidth * vScale, video.videoHeight * vScale);
+                  if (brandMark && brandMark.trim()) drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                  await waitForEncoderDrain(videoEncoder, 10);
+                  const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
+                  const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
+                  videoEncoder.encode(frame, { keyFrame: globalFrameCount % (fps * 2) === 0 });
+                  frame.close();
+                  globalFrameCount++;
+                  if (globalFrameCount % 5 === 0) await yieldToUI();
+                }
+                video.removeAttribute("src");
+                video.load();
+                log("Run", runId, `Scene ${i + 1} complete (seeking fallback)`);
+                await gcYield();
+                continue; // Skip to next scene — we already rendered this one
+              }
+
+              // Capture frames at the export frame rate interval
+              const frameInterval = 1000 / fps; // ms between frames
+              let lastDrawTime = performance.now();
+
               for (let f = 0; f < sceneFrames; f++) {
                 if (abortRef.current) break;
+
+                // Wait for next frame timing
+                const targetTime = lastDrawTime + frameInterval;
+                const now = performance.now();
+                if (now < targetTime) {
+                  await new Promise<void>(r => setTimeout(r, targetTime - now));
+                }
+                lastDrawTime = performance.now();
+
+                // Draw current video frame (video is playing in real-time at reduced speed)
                 ctx.fillStyle = "#000";
                 ctx.fillRect(0, 0, dim.w, dim.h);
+                const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
+                const vw = video.videoWidth * vScale;
+                const vh = video.videoHeight * vScale;
+                ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
+
+                if (brandMark && brandMark.trim()) {
+                  drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                }
+
+                await waitForEncoderDrain(videoEncoder, 10);
                 const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
                 const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
-                videoEncoder.encode(frame, { keyFrame: globalFrameCount % (fps * 2) === 0 });
+                const keyFrame = globalFrameCount % (fps * 2) === 0;
+                videoEncoder.encode(frame, { keyFrame });
                 frame.close();
                 globalFrameCount++;
-                if (globalFrameCount % 10 === 0) await yieldToUI();
               }
+
+              // Stop playback
+              video.pause();
             }
+
+            // Cleanup video element
+            video.removeAttribute("src");
+            video.load();
 
           } else {
             // E. Render Static Images with Fade Transitions (existing logic)
