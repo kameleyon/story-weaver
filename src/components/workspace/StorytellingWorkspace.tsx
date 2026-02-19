@@ -241,6 +241,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
         savedStyle === "caricature" ||
         savedStyle === "storybook" ||
         savedStyle === "crayon" ||
+        savedStyle === "moody" ||
         savedStyle === "custom"
       ) {
         setStyle(savedStyle);

@@ -176,6 +176,7 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
         savedStyle === "caricature" ||
         savedStyle === "storybook" ||
         savedStyle === "crayon" ||
+        savedStyle === "moody" ||
         savedStyle === "custom"
       ) {
         setStyle(savedStyle);
