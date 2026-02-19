@@ -49,7 +49,23 @@ serve(async (req) => {
       );
     }
 
-    // Check voice clone limit (1 per user)
+    // Get user's subscription plan to determine voice clone limit
+    const { data: subData } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan_name, status")
+      .eq("user_id", user.id)
+      .in("status", ["active", "trialing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const planLimits: Record<string, number> = {
+      free: 0, starter: 0, creator: 1, professional: 3, enterprise: 999,
+    };
+    const plan = subData?.plan_name ?? "free";
+    const voiceCloneLimit = planLimits[plan] ?? 0;
+
+    // Check voice clone limit
     const { count: existingVoiceCount, error: countError } = await supabaseAdmin
       .from("user_voices")
       .select("id", { count: "exact", head: true })
@@ -63,15 +79,15 @@ serve(async (req) => {
       );
     }
 
-    if ((existingVoiceCount ?? 0) >= 1) {
-      console.log(`User ${user.id} already has ${existingVoiceCount} voice(s) - limit reached`);
+    if ((existingVoiceCount ?? 0) >= voiceCloneLimit) {
+      console.log(`User ${user.id} has ${existingVoiceCount} voice(s), limit is ${voiceCloneLimit} for plan ${plan}`);
       return new Response(
-        JSON.stringify({ error: "You can only have 1 cloned voice. Please delete your existing voice to create a new one." }),
+        JSON.stringify({ error: `Voice clone limit reached (${voiceCloneLimit} for your plan). Delete an existing voice or upgrade your plan.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { storagePath, voiceName, description } = await req.json();
+    const { storagePath, voiceName, description, removeNoise = true } = await req.json();
 
     if (!storagePath || !voiceName) {
       return new Response(
@@ -106,11 +122,11 @@ serve(async (req) => {
     if (description) {
       formData.append("description", description);
     }
-    // Enable background noise removal
-    formData.append("remove_background_noise", "true");
+    // Set noise removal based on user preference
+    formData.append("remove_background_noise", removeNoise ? "true" : "false");
 
     // Call ElevenLabs Instant Voice Cloning API
-    console.log("Calling ElevenLabs API with noise removal enabled...");
+    console.log(`Calling ElevenLabs API with noise removal ${removeNoise ? "enabled" : "disabled"}...`);
     const elevenLabsResponse = await fetch("https://api.elevenlabs.io/v1/voices/add", {
       method: "POST",
       headers: {
