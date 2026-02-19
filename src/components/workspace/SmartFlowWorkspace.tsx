@@ -176,7 +176,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       if (!project) return;
 
       setDataContent(project.content ?? "");
-      // Note: extraction prompt is stored in content or could be extracted from project metadata
+      setExtractionPrompt(project.presenter_focus ?? "");
 
       const nextFormat = (project.format as VideoFormat) ?? "portrait";
       setFormat(["landscape", "portrait", "square"].includes(nextFormat) ? nextFormat : "portrait");
