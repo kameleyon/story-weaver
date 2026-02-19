@@ -164,6 +164,8 @@ export function useVideoExport() {
 
         // --- 2. SETUP DIMENSIONS ---
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const isMobile = isIOS || isAndroid;
         const dimensions = isIOS 
           ? { landscape: { w: 1280, h: 720 }, portrait: { w: 720, h: 1280 }, square: { w: 960, h: 960 } }
           : { landscape: { w: 1920, h: 1080 }, portrait: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 } };
@@ -415,9 +417,11 @@ export function useVideoExport() {
           }
 
           // D. Render Video Frames
-          // Check if this scene has a video clip — use Smart Boomerang Looping
-          if (scene.videoUrl) {
-            log("Run", runId, `Scene ${i + 1}: Using Slow-Motion Stretch`, { videoUrl: scene.videoUrl, sceneDuration });
+          // On mobile, video.currentTime seeking is extremely slow (100-500ms per seek),
+          // making frame-by-frame slow-motion export impractical (would take minutes per scene).
+          // Instead, we render from the scene's static image on mobile — fast and reliable.
+          if (scene.videoUrl && !isMobile) {
+            log("Run", runId, `Scene ${i + 1}: Using Slow-Motion Stretch (desktop)`, { videoUrl: scene.videoUrl, sceneDuration });
             
             const video = document.createElement("video");
             video.crossOrigin = "anonymous";
@@ -463,13 +467,8 @@ export function useVideoExport() {
               const timeInScene = f / fps;
 
                // --- SLOW-MOTION STRETCH ---
-               // Maps linear time (0..sceneDuration) into source video (0..sourceDuration)
-               // Video plays forward once at reduced speed to fill the full audio duration.
-               // If sceneDuration > sourceDuration, speed < 1x (slow motion).
-               // Final frame freezes if we reach the end.
                const progress = Math.min(timeInScene / sceneDuration, 1);
                let playbackTime = progress * sourceDuration;
-               // Clamp to valid range
                playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
 
               video.currentTime = playbackTime;
@@ -504,6 +503,81 @@ export function useVideoExport() {
             // Cleanup video element
             video.removeAttribute("src");
             video.load();
+
+          } else if (scene.videoUrl && isMobile) {
+            // Mobile: Use scene image instead of video seeking for reliable, fast export
+            log("Run", runId, `Scene ${i + 1}: Using image-based rendering (mobile fallback)`, { sceneDuration });
+
+            // Use whatever image we already loaded for this scene
+            const img = loadedImages[0] || null;
+            if (img) {
+              // Pre-render once to a bitmap
+              ctx.fillStyle = "#000";
+              ctx.fillRect(0, 0, dim.w, dim.h);
+              const scale = Math.min(dim.w / img.width, dim.h / img.height);
+              const dw = img.width * scale;
+              const dh = img.height * scale;
+              ctx.drawImage(img, (dim.w - dw) / 2, (dim.h - dh) / 2, dw, dh);
+              if (brandMark && brandMark.trim()) {
+                drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+              }
+              const bitmap = await createImageBitmap(canvas);
+
+              // Crossfade handling
+              const sceneCrossfadeFrames = Math.floor(fps * 0.5);
+
+              for (let f = 0; f < sceneFrames; f++) {
+                if (abortRef.current) break;
+                const framesUntilSceneEnd = sceneFrames - f;
+                const shouldFadeInterScene = nextSceneFirstImage && framesUntilSceneEnd <= sceneCrossfadeFrames;
+
+                if (shouldFadeInterScene && nextSceneFirstImage) {
+                  const fadeProgress = 1 - (framesUntilSceneEnd / sceneCrossfadeFrames);
+                  ctx.fillStyle = "#000";
+                  ctx.fillRect(0, 0, dim.w, dim.h);
+                  ctx.globalAlpha = 1 - fadeProgress;
+                  ctx.drawImage(bitmap, 0, 0);
+                  const nextScale = Math.min(dim.w / nextSceneFirstImage.width, dim.h / nextSceneFirstImage.height);
+                  const nextDw = nextSceneFirstImage.width * nextScale;
+                  const nextDh = nextSceneFirstImage.height * nextScale;
+                  ctx.globalAlpha = fadeProgress;
+                  ctx.drawImage(nextSceneFirstImage, (dim.w - nextDw) / 2, (dim.h - nextDh) / 2, nextDw, nextDh);
+                  ctx.globalAlpha = 1;
+                  if (brandMark && brandMark.trim()) {
+                    drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                  }
+                } else {
+                  ctx.drawImage(bitmap, 0, 0);
+                }
+
+                await waitForEncoderDrain(videoEncoder, 10);
+                const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
+                const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
+                const keyFrame = globalFrameCount % (fps * 2) === 0;
+                videoEncoder.encode(frame, { keyFrame });
+                frame.close();
+                globalFrameCount++;
+
+                if (globalFrameCount % 10 === 0) await yieldToUI();
+                if (globalFrameCount % 60 === 0) await longYield();
+              }
+
+              bitmap.close();
+            } else {
+              // No image available — render black frames
+              warn("Run", runId, `Scene ${i + 1}: No image available for mobile fallback`);
+              for (let f = 0; f < sceneFrames; f++) {
+                if (abortRef.current) break;
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, dim.w, dim.h);
+                const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
+                const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
+                videoEncoder.encode(frame, { keyFrame: globalFrameCount % (fps * 2) === 0 });
+                frame.close();
+                globalFrameCount++;
+                if (globalFrameCount % 10 === 0) await yieldToUI();
+              }
+            }
 
           } else {
             // E. Render Static Images with Fade Transitions (existing logic)
