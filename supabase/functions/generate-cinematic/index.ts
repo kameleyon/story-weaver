@@ -1062,10 +1062,7 @@ async function resolveHyperealVideo(
 }
 
 // Hypereal Seedance 1.5 Pro T2V — used for INITIAL generation (text-to-video, no image)
-async function startSeedanceT2V(
-  scene: Scene,
-  format: "landscape" | "portrait" | "square",
-) {
+async function startSeedanceT2V(scene: Scene, format: "landscape" | "portrait" | "square") {
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
 
@@ -1732,7 +1729,9 @@ serve(async (req) => {
           await updateScenes(supabase, generationId, scenes);
           return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         } catch (i2vErr) {
-          console.warn(`[VIDEO] Scene ${scene.number}: Hypereal I2V failed, falling back to Replicate seedance-1-pro-fast: ${i2vErr}`);
+          console.warn(
+            `[VIDEO] Scene ${scene.number}: Hypereal I2V failed, falling back to Replicate seedance-1-pro-fast: ${i2vErr}`,
+          );
           const predictionId = await startSeedanceReplicateI2V(scene, scene.imageUrl, format, replicateToken);
           scenes[idx] = {
             ...scene,
@@ -1749,7 +1748,12 @@ serve(async (req) => {
       // Route to the correct resolver based on provider
       const videoUrl =
         scene.videoProvider === "hypereal"
-          ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number, scene.videoModel || "seedance-1-5-i2v")
+          ? await resolveHyperealVideo(
+              scene.videoPredictionId,
+              supabase,
+              scene.number,
+              scene.videoModel || "seedance-1-5-i2v",
+            )
           : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
 
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
