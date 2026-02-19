@@ -22,7 +22,7 @@ import {
   FolderOpen,
   Video,
   Clapperboard,
-  Wallpaper,
+  BarChart3,
   Wand2,
   Clock,
   LayoutList,
@@ -684,7 +684,7 @@ export default function Projects() {
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
-                              <Wallpaper className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : (
                               <Video className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             )}
@@ -794,7 +794,7 @@ export default function Projects() {
                 <span className="hidden sm:inline text-xs sm:text-sm">stories</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-1.5" title="SmartFlow">
-                <Wallpaper className="h-3.5 w-3.5" />
+                <BarChart3 className="h-3.5 w-3.5" />
                 <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "smartflow").length}</span>
                 <span className="hidden sm:inline text-xs sm:text-sm">smartflow</span>
               </div>

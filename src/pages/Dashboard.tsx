@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Lightbulb,
   Clapperboard,
-  Wallpaper,
+  BarChart3,
   Menu,
   Video,
 } from "lucide-react";
@@ -233,7 +233,7 @@ export default function Dashboard() {
       case "storytelling":
         return Clapperboard;
       case "smartflow":
-        return Wallpaper;
+        return BarChart3;
       default:
         return Video;
     }
