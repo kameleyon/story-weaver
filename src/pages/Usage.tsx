@@ -6,7 +6,7 @@ import {
   Zap, 
   Video,
   Clapperboard,
-  Wallpaper,
+  BarChart3,
   TrendingUp,
   Calendar,
   CreditCard,
@@ -585,7 +585,7 @@ export default function Usage() {
                           const IconComponent = projectType === "storytelling" 
                             ? Clapperboard 
                             : projectType === "smartflow" || projectType === "smart-flow"
-                              ? Wallpaper
+                              ? BarChart3
                               : Video;
                           
                           // Clean up title - remove redundant prefixes

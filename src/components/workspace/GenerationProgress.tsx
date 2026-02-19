@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Loader2, Wand2, Wallpaper } from "lucide-react";
+import { Loader2, Wand2, BarChart3 } from "lucide-react";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
@@ -122,7 +122,7 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
           {state.isGenerating ? (
             <Loader2 className="h-6 w-6 text-primary animate-spin" />
           ) : isSmartFlow ? (
-            <Wallpaper className="h-6 w-6 text-primary" />
+            <BarChart3 className="h-6 w-6 text-primary" />
           ) : (
             <Wand2 className="h-6 w-6 text-primary" />
           )}

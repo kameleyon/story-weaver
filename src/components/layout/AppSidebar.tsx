@@ -18,7 +18,7 @@ import {
   Home,
   Clapperboard,
   Mic,
-  Wallpaper,
+  BarChart3,
   MicVocal,
   Shield,
   Film,
@@ -363,24 +363,38 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               {/* Smart Flow */}
-              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton
-                      onClick={() => navigate("/app/create?mode=smartflow")}
-                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
-                        isCreateRoute && currentMode === "smartflow" 
-                          ? "bg-primary/10 text-primary" 
-                          : "hover:bg-sidebar-accent/50"
-                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
-                    >
-                      <Wallpaper className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="text-sm">Smart Flow</span>}
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  {isCollapsed && <TooltipContent side="right">Smart Flow</TooltipContent>}
-                </Tooltip>
-              </SidebarMenuItem>
+              {(() => {
+                const canAccessSmartFlow = isAdmin || plan !== "free";
+                return (
+                  <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          onClick={() => canAccessSmartFlow && navigate("/app/create?mode=smartflow")}
+                          className={`rounded-lg py-2.5 transition-colors ${
+                            !canAccessSmartFlow
+                              ? "opacity-40 cursor-not-allowed"
+                              : isCreateRoute && currentMode === "smartflow" 
+                                ? "bg-primary/10 text-primary cursor-pointer" 
+                                : "hover:bg-sidebar-accent/50 cursor-pointer"
+                          } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                        >
+                          <BarChart3 className="h-4 w-4 shrink-0" />
+                          {!isCollapsed && (
+                            <span className="text-sm flex items-center gap-2">
+                              Smart Flow
+                              {!canAccessSmartFlow && (
+                                <Crown className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {isCollapsed && <TooltipContent side="right">Smart Flow{!canAccessSmartFlow ? " (Starter plan required)" : ""}</TooltipContent>}
+                    </Tooltip>
+                  </SidebarMenuItem>
+                );
+              })()}
 
               {/* Cinematic - Beta */}
               {(() => {
@@ -491,7 +505,7 @@ export function AppSidebar() {
                     const ProjectIcon = project.project_type === "storytelling" 
                       ? Clapperboard 
                       : project.project_type === "smartflow" || project.project_type === "smart-flow"
-                        ? Wallpaper
+                        ? BarChart3
                         : project.project_type === "cinematic"
                           ? Film
                           : Video;
