@@ -1106,16 +1106,92 @@ export function useGenerationPipeline() {
             void resumeCinematic(project, generation.id, scenes, "audio");
           }
         }
-      } else if (generation) {
-        // Non-cinematic interrupted generation
-        console.log(`[loadProject] Non-cinematic interrupted, status="${generation.status}" → showing error`);
+      } else if (generation && generation.status === "generating") {
+        // Non-cinematic still running (or interrupted mid-flight) — poll DB until complete/error
+        console.log(`[loadProject] Non-cinematic status="generating" at progress=${generation.progress} → starting DB poll to wait for completion`);
         setState({
-          step: "error", progress: 0, sceneCount: state.sceneCount,
-          currentScene: 0, totalImages: state.sceneCount, completedImages: 0,
-          isGenerating: false, projectId, generationId: generation.id,
-          title: project.title, format: project.format as "landscape" | "portrait" | "square",
-          error: "This generation was interrupted. Please try again.",
+          step: inferStepFromDb(generation.status, generation.progress ?? 0),
+          progress: generation.progress ?? 0,
+          sceneCount: state.sceneCount,
+          currentScene: inferCurrentSceneFromDb(generation.progress ?? 0, state.sceneCount),
+          totalImages: state.sceneCount,
+          completedImages: 0,
+          isGenerating: true,
+          projectId,
+          generationId: generation.id,
+          title: project.title,
+          format: project.format as "landscape" | "portrait" | "square",
+          statusMessage: "Resuming — waiting for generation to complete...",
         });
+
+        // Poll DB every 3 seconds until status changes from "generating"
+        const POLL_MAX = 120; // 6 minutes
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          console.log(`[loadProject] DB poll #${pollCount} for generationId=${generation.id}`);
+          const { data: pollGen } = await supabase
+            .from("generations")
+            .select("id,status,progress,scenes,error_message,video_url")
+            .eq("id", generation.id)
+            .maybeSingle();
+
+          console.log(`[loadProject] Poll result: status="${pollGen?.status}", progress=${pollGen?.progress}`);
+
+          if (!pollGen || pollCount >= POLL_MAX) {
+            clearInterval(pollInterval);
+            const msg = pollCount >= POLL_MAX ? "Generation timed out. Please try again." : "Could not find generation.";
+            console.log(`[loadProject] Poll ended: ${msg}`);
+            setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
+            return;
+          }
+
+          if (pollGen.status === "complete") {
+            clearInterval(pollInterval);
+            const scenes = normalizeScenes(pollGen.scenes) ?? [];
+            const meta = extractMeta(Array.isArray(pollGen.scenes) ? pollGen.scenes : []);
+            console.log(`[loadProject] Poll: generation complete, scenes=${scenes.length}`);
+            setState({
+              step: "complete",
+              progress: 100,
+              sceneCount: scenes.length,
+              currentScene: scenes.length,
+              totalImages: meta.totalImages || scenes.length,
+              completedImages: meta.completedImages || scenes.length,
+              isGenerating: false,
+              projectId,
+              generationId: pollGen.id,
+              title: project.title,
+              scenes,
+              format: project.format as "landscape" | "portrait" | "square",
+              costTracking: meta.costTracking,
+              phaseTimings: meta.phaseTimings,
+              totalTimeMs: meta.totalTimeMs,
+              projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
+            });
+          } else if (pollGen.status === "error") {
+            clearInterval(pollInterval);
+            const msg = pollGen.error_message || "Generation failed";
+            console.log(`[loadProject] Poll: generation errored: "${msg}"`);
+            setState((prev) => ({
+              ...prev,
+              step: "error",
+              isGenerating: false,
+              error: msg,
+              projectId,
+              generationId: pollGen.id,
+            }));
+          } else {
+            // Still generating — update progress display
+            setState((prev) => ({
+              ...prev,
+              progress: pollGen.progress ?? prev.progress,
+              step: inferStepFromDb(pollGen.status, pollGen.progress ?? 0),
+              currentScene: inferCurrentSceneFromDb(pollGen.progress ?? 0, prev.sceneCount),
+              statusMessage: `Generation in progress (${pollGen.progress ?? 0}%)...`,
+            }));
+          }
+        }, 3000);
       } else {
         console.log(`[loadProject] No generation found for this project → showing idle input`);
         setState((prev) => ({
