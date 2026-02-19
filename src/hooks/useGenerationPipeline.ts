@@ -874,26 +874,31 @@ export function useGenerationPipeline() {
         const scenes = normalizeScenes(generation.scenes) ?? [];
         const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
         const isCinematic = project.project_type === "cinematic";
-        
-        setState({
-          step: "complete",
-          progress: 100,
-          sceneCount: scenes.length,
-          currentScene: scenes.length,
-          totalImages: meta.totalImages || scenes.length,
-          completedImages: meta.completedImages || scenes.length,
-          isGenerating: false,
-          projectId,
-          generationId: generation.id,
-          title: project.title,
-          scenes,
-          format: project.format as "landscape" | "portrait" | "square",
-          finalVideoUrl: isCinematic ? (generation.video_url ?? undefined) : undefined,
-          costTracking: meta.costTracking,
-          phaseTimings: meta.phaseTimings,
-          totalTimeMs: meta.totalTimeMs,
-          projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
-        });
+
+        // If cinematic and some scenes are missing videoUrl, auto-resume video phase
+        if (isCinematic && scenes.length > 0 && scenes.some((s) => !s.videoUrl && s.imageUrl)) {
+          void resumeCinematic(project, generation.id, scenes, "video");
+        } else {
+          setState({
+            step: "complete",
+            progress: 100,
+            sceneCount: scenes.length,
+            currentScene: scenes.length,
+            totalImages: meta.totalImages || scenes.length,
+            completedImages: meta.completedImages || scenes.length,
+            isGenerating: false,
+            projectId,
+            generationId: generation.id,
+            title: project.title,
+            scenes,
+            format: project.format as "landscape" | "portrait" | "square",
+            finalVideoUrl: isCinematic ? (generation.video_url ?? undefined) : undefined,
+            costTracking: meta.costTracking,
+            phaseTimings: meta.phaseTimings,
+            totalTimeMs: meta.totalTimeMs,
+            projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
+          });
+        }
       } else if (generation?.status === "error") {
         const msg = generation.error_message || "Generation failed";
         setState((prev) => ({
@@ -960,7 +965,7 @@ export function useGenerationPipeline() {
 
       return project;
     },
-    [toast, state.sceneCount],
+    [toast, state.sceneCount, resumeCinematic],
   );
 
   const reset = useCallback(() => {
