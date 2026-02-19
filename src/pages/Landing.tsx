@@ -208,7 +208,7 @@ export default function Landing() {
         id="features" 
         className="py-24 sm:py-32 relative overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, hsl(185,40%,15%) 0%, hsl(200,35%,10%) 100%)',
+          background: 'linear-gradient(135deg, hsl(174,52%,20%) 0%, hsl(185,50%,12%) 100%)',
         }}
       >
         <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">
