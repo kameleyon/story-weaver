@@ -185,9 +185,22 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
       const validStyles: SmartFlowStyle[] = ["minimalist", "doodle", "stick", "realistic", "storybook", "caricature", "sketch", "crayon", "chalkboard"];
       setStyle(validStyles.includes(savedStyle) ? savedStyle : "minimalist");
       
-      // Restore voice setting - if voice_type is set and not undefined, voice was enabled
+      // Restore voice setting
       const hasVoice = !!project.voice_type && project.voice_type !== "none";
       setEnableVoice(hasVoice);
+      if (hasVoice) {
+        setVoice({
+          type: (project.voice_type as "standard" | "custom") ?? "standard",
+          gender: project.voice_type === "custom" ? undefined : (project.voice_name as "male" | "female") ?? "female",
+          voiceId: project.voice_id ?? undefined,
+          voiceName: project.voice_type === "custom" ? (project.voice_name ?? undefined) : undefined,
+        });
+      }
+
+      // Restore brand mark
+      const hasBrandMark = !!project.brand_mark && project.brand_mark.trim().length > 0;
+      setBrandMarkEnabled(hasBrandMark);
+      setBrandMarkText(project.brand_mark ?? "");
     };
 
     useImperativeHandle(ref, () => ({
