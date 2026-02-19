@@ -252,6 +252,9 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
 
       // Restore character consistency
       setCharacterConsistencyEnabled(project.character_consistency_enabled ?? false);
+
+      // Restore disable expressions
+      setDisableExpressions(project.disable_expressions === true);
     };
 
     useImperativeHandle(ref, () => ({

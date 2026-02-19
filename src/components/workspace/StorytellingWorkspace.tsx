@@ -241,6 +241,9 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
         setStyle("custom");
         setCustomStyle(project.style);
       }
+
+      // Restore disable voice expressions
+      setDisableVoiceExpressions(project.disable_expressions === true || project.voice_inclination === "disabled");
     };
 
     useImperativeHandle(ref, () => ({

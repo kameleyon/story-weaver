@@ -239,6 +239,8 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
       if (project.character_consistency_enabled) {
         setCharacterConsistencyEnabled(true);
       }
+      // Restore disable expressions
+      setDisableExpressions(project.disable_expressions === true || project.voice_inclination === "disabled");
     };
 
     // Load project from URL if provided
