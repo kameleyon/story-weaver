@@ -232,7 +232,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       const knownStyles: VisualStyle[] = [
         "minimalist", "doodle", "stick", "anime", "realistic",
         "3d-pixar", "claymation", "sketch", "caricature",
-        "storybook", "crayon", "moody", "custom",
+        "storybook", "crayon", "moody", "chalkboard", "painterly", "custom",
       ];
       if (knownStyles.includes(savedStyle)) {
         setStyle(savedStyle);

@@ -22,7 +22,7 @@ import customPreview from "@/assets/styles/custom-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
 import moodyPreview from "@/assets/styles/moody-preview.png";
 
-export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "storybook" | "crayon" | "moody" | "custom";
+export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "storybook" | "crayon" | "moody" | "chalkboard" | "painterly" | "custom";
 
 interface StyleSelectorProps {
   selected: VisualStyle;
