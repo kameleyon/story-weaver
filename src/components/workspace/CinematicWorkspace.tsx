@@ -220,7 +220,18 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
       setLength(["short", "brief", "presentation"].includes(nextLength) ? nextLength : "brief");
 
       const savedStyle = (project.style ?? "realistic") as VisualStyle;
-      setStyle(savedStyle);
+      const knownStyles: VisualStyle[] = [
+        "minimalist", "doodle", "stick", "anime", "realistic",
+        "3d-pixar", "claymation", "sketch", "caricature",
+        "storybook", "crayon", "moody", "custom",
+      ];
+      if (knownStyles.includes(savedStyle)) {
+        setStyle(savedStyle);
+        if (savedStyle !== "custom") setCustomStyle("");
+      } else {
+        setStyle("custom");
+        setCustomStyle(project.style ?? "");
+      }
 
       if (project.character_description) setCharacterDescription(project.character_description);
       if (project.presenter_focus) setPresenterFocus(project.presenter_focus);
