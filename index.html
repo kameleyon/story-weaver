@@ -46,8 +46,9 @@
     <meta name="twitter:creator" content="@MotionMax" />
 
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- apple-mobile-web-app-capable removed: standalone mode hijacks the iOS audio session,
+         disconnecting active phone/WhatsApp calls when the PWA is launched. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MotionMax" />
     <meta name="application-name" content="MotionMax" />
     <meta name="format-detection" content="telephone=no" />

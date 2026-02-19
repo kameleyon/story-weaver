@@ -3,7 +3,7 @@
   "short_name": "MotionMax",
   "description": "Turn text into engaging visual contents. AI-powered video creation with voice cloning and professional quality.",
   "start_url": "/",
-  "display": "standalone",
+  "display": "browser",
   "background_color": "#0F1112",
   "theme_color": "#2D9A8C",
   "orientation": "portrait-primary",
