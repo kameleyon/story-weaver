@@ -229,20 +229,12 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       }
 
       const savedStyle = (project.style ?? "minimalist") as VisualStyle;
-      if (
-        savedStyle === "minimalist" ||
-        savedStyle === "doodle" ||
-        savedStyle === "stick" ||
-        savedStyle === "anime" ||
-        savedStyle === "realistic" ||
-        savedStyle === "3d-pixar" ||
-        savedStyle === "claymation" ||
-        savedStyle === "sketch" ||
-        savedStyle === "caricature" ||
-        savedStyle === "storybook" ||
-        savedStyle === "crayon" ||
-        savedStyle === "custom"
-      ) {
+      const knownStyles: VisualStyle[] = [
+        "minimalist", "doodle", "stick", "anime", "realistic",
+        "3d-pixar", "claymation", "sketch", "caricature",
+        "storybook", "crayon", "moody", "custom",
+      ];
+      if (knownStyles.includes(savedStyle)) {
         setStyle(savedStyle);
         if (savedStyle !== "custom") setCustomStyle("");
       } else {
