@@ -54,7 +54,6 @@ interface Scene {
   audioPredictionId?: string;
   videoPredictionId?: string;
   videoRetryCount?: number;
-  videoRetryAfter?: string;
   videoProvider?: "replicate" | "hypereal";
   videoModel?: string;
 }
@@ -1592,7 +1591,6 @@ serve(async (req) => {
       audioPredictionId: s?.audioPredictionId,
       videoPredictionId: s?.videoPredictionId,
       videoRetryCount: s?.videoRetryCount ?? 0,
-      videoRetryAfter: s?.videoRetryAfter,
       videoProvider: s?.videoProvider,
       videoModel: s?.videoModel,
     }));
@@ -1732,8 +1730,7 @@ serve(async (req) => {
         );
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
-        scene.videoRetryCount = 0; // Reset retry counter on explicit regen
-        scene.videoRetryAfter = undefined;
+        scene.videoRetryCount = 0;
         scenes[idx] = scene;
         await updateScenes(supabase, generationId, scenes);
       }
@@ -1758,7 +1755,6 @@ serve(async (req) => {
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
-            videoRetryAfter: undefined,
             videoProvider: "hypereal",
             videoModel: "seedance-1-5-i2v",
           };
@@ -1776,7 +1772,6 @@ serve(async (req) => {
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
-            videoRetryAfter: undefined,
             videoProvider: "hypereal",
             videoModel: "seedance-1-5-i2v",
           };
@@ -1790,7 +1785,6 @@ serve(async (req) => {
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
-            videoRetryAfter: undefined,
             videoProvider: "replicate",
             videoModel: "seedance-1-pro-fast",
           };
@@ -1826,7 +1820,6 @@ serve(async (req) => {
               ...scene,
               videoPredictionId: seedancePredictionId,
               videoUrl: undefined,
-              videoRetryAfter: undefined,
               videoRetryCount: 0,
               videoProvider: "hypereal",
             };
@@ -1983,7 +1976,6 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoPredictionId: predictionId,
         videoUrl: undefined,
         videoRetryCount: 0,
-        videoRetryAfter: undefined,
         videoProvider: "hypereal",
       };
       await updateScenes(supabase, generationId, scenes);
@@ -2026,7 +2018,6 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoPredictionId: predictionId,
         videoUrl: undefined,
         videoRetryCount: 0,
-        videoRetryAfter: undefined,
         videoProvider: "hypereal",
       };
       await updateScenes(supabase, generationId, scenes);

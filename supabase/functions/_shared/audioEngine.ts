@@ -548,7 +548,12 @@ async function generateElevenLabsTTS(
     }
 
     const audioBytes = new Uint8Array(await response.arrayBuffer());
-    const durationSeconds = Math.max(1, audioBytes.length / 16000); // MP3 at 128kbps
+    // ElevenLabs returns VBR MP3, so the bytes/bitrate formula is unreliable
+    // (off by 20-30% depending on speaking rate and content).
+    // Estimate duration from text length instead:
+    //   ~150 words/min, average English word ~5 chars → 750 chars/min
+    // This is more accurate for export timing offsets than a byte-rate guess.
+    const durationSeconds = Math.max(1, (sanitizedText.length / 750) * 60);
 
     const url = await uploadAndGetUrl(supabase, audioBytes, "audio/mpeg", storage, sceneNumber);
 
