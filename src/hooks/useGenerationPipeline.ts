@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -130,6 +130,7 @@ const normalizeScenes = (raw: unknown): Scene[] | undefined => {
 
 export function useGenerationPipeline() {
   const { toast } = useToast();
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [state, setState] = useState<GenerationState>({
     step: "idle",
     progress: 0,
@@ -1127,7 +1128,7 @@ export function useGenerationPipeline() {
         // Poll DB every 3 seconds until status changes from "generating"
         const POLL_MAX = 360; // 18 minutes (3s × 360 = 18 min)
         let pollCount = 0;
-        const pollInterval = setInterval(async () => {
+        pollIntervalRef.current = setInterval(async () => {
           pollCount++;
           console.log(`[loadProject] DB poll #${pollCount} for generationId=${generation.id}`);
           const { data: pollGen } = await supabase
@@ -1143,7 +1144,7 @@ export function useGenerationPipeline() {
           const isAlive = startedAt > 0 && (Date.now() - startedAt) < 3 * 60 * 1000;
 
           if (!pollGen || (pollCount >= POLL_MAX && !isAlive)) {
-            clearInterval(pollInterval);
+            clearInterval(pollIntervalRef.current!);
             const msg = pollCount >= POLL_MAX ? "Generation timed out. Please try again." : "Could not find generation.";
             console.log(`[loadProject] Poll ended: ${msg}`);
             setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
@@ -1156,7 +1157,7 @@ export function useGenerationPipeline() {
           }
 
           if (pollGen.status === "complete") {
-            clearInterval(pollInterval);
+            clearInterval(pollIntervalRef.current!);
             const scenes = normalizeScenes(pollGen.scenes) ?? [];
             const meta = extractMeta(Array.isArray(pollGen.scenes) ? pollGen.scenes : []);
             console.log(`[loadProject] Poll: generation complete, scenes=${scenes.length}`);
@@ -1179,7 +1180,7 @@ export function useGenerationPipeline() {
               projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
             });
           } else if (pollGen.status === "error") {
-            clearInterval(pollInterval);
+            clearInterval(pollIntervalRef.current!);
             const msg = pollGen.error_message || "Generation failed";
             console.log(`[loadProject] Poll: generation errored: "${msg}"`);
             setState((prev) => ({
@@ -1231,5 +1232,22 @@ export function useGenerationPipeline() {
     });
   }, []);
 
-  return { state, startGeneration, reset, loadProject };
+  const cancelGeneration = useCallback(async () => {
+    // Stop the local poll loop
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    // Mark the DB record as cancelled so it stops blocking future loads
+    const genId = state.generationId;
+    if (genId) {
+      await supabase
+        .from("generations")
+        .update({ status: "error", error_message: "Generation cancelled by user" })
+        .eq("id", genId);
+    }
+    setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: "Generation cancelled." }));
+  }, [state.generationId]);
+
+  return { state, startGeneration, reset, loadProject, cancelGeneration };
 }

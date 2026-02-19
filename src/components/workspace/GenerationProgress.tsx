@@ -1,12 +1,14 @@
 import { motion } from "framer-motion";
-import { Loader2, Wand2, BarChart3 } from "lucide-react";
+import { Loader2, Wand2, BarChart3, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { GenerationState } from "@/hooks/useGenerationPipeline";
 
 interface GenerationProgressProps {
   state: GenerationState;
+  onCancel?: () => void;
 }
 
-export function GenerationProgress({ state }: GenerationProgressProps) {
+export function GenerationProgress({ state, onCancel }: GenerationProgressProps) {
   const isSmartFlow = state.projectType === "smartflow";
   
   // Build verbose status message based on current step and progress
@@ -180,6 +182,21 @@ export function GenerationProgress({ state }: GenerationProgressProps) {
           </div>
         </div>
       </div>
+
+      {/* Cancel button — only shown while actively generating */}
+      {state.isGenerating && onCancel && (
+        <div className="flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            className="text-muted-foreground hover:text-destructive gap-1.5"
+          >
+            <X className="h-4 w-4" />
+            Cancel Generation
+          </Button>
+        </div>
+      )}
     </motion.div>
   );
 }

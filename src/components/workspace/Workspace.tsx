@@ -53,7 +53,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [showSuspendedModal, setShowSuspendedModal] = useState(false);
   const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
-  const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+  const { state: generationState, startGeneration, reset, loadProject, cancelGeneration } = useGenerationPipeline();
   const { isAdmin } = useAdminAuth();
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [showAdminLogs, setShowAdminLogs] = useState(false);
@@ -478,7 +478,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-2xl mx-auto space-y-6"
               >
-                <GenerationProgress state={generationState} />
+                <GenerationProgress state={generationState} onCancel={cancelGeneration} />
               </motion.div>
             )}
           </AnimatePresence>
