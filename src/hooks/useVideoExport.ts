@@ -466,26 +466,34 @@ export function useVideoExport() {
               video.currentTime = 0;
               await new Promise<void>(r => { video.onseeked = () => r(); });
 
+              // Seek every 2nd frame; duplicate the canvas for skipped frames.
+              // Halves the seek count (the main bottleneck) with no perceptible quality
+              // loss — Replicate clips already use sparse keyframes so inter-keyframe seeks
+              // each require decoding from the previous keyframe anyway.
+              const seekInterval = 2;
               for (let f = 0; f < sceneFrames; f++) {
                 if (abortRef.current) break;
 
-                const progress = Math.min((f / fps) / sceneDuration, 1);
-                let playbackTime = progress * sourceDuration;
-                playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
+                if (f % seekInterval === 0) {
+                  const progress = Math.min((f / fps) / sceneDuration, 1);
+                  let playbackTime = progress * sourceDuration;
+                  playbackTime = Math.max(0, Math.min(playbackTime, sourceDuration - 0.05));
 
-                video.currentTime = playbackTime;
-                await new Promise<void>(r => { video.onseeked = () => r(); });
+                  video.currentTime = playbackTime;
+                  await new Promise<void>(r => { video.onseeked = () => r(); });
 
-                ctx.fillStyle = "#000";
-                ctx.fillRect(0, 0, dim.w, dim.h);
-                const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
-                const vw = video.videoWidth * vScale;
-                const vh = video.videoHeight * vScale;
-                ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
+                  ctx.fillStyle = "#000";
+                  ctx.fillRect(0, 0, dim.w, dim.h);
+                  const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
+                  const vw = video.videoWidth * vScale;
+                  const vh = video.videoHeight * vScale;
+                  ctx.drawImage(video, (dim.w - vw) / 2, (dim.h - vh) / 2, vw, vh);
 
-                if (brandMark && brandMark.trim()) {
-                  drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                  if (brandMark && brandMark.trim()) {
+                    drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                  }
                 }
+                // Non-seek frames reuse the current canvas state (duplicated frame).
 
                 await waitForEncoderDrain(videoEncoder, 10);
                 const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
@@ -523,17 +531,22 @@ export function useVideoExport() {
                 // If autoplay is blocked, fall back to seeking approach
                 video.currentTime = 0;
                 await new Promise<void>(r => { video.onseeked = () => r(); });
+                // Seek every 3rd frame on mobile — reduces seeks by 2/3 vs per-frame.
+                // Mobile Safari's 30-second video-load timeout makes each seek expensive.
                 for (let f = 0; f < sceneFrames; f++) {
                   if (abortRef.current) break;
-                  const progress = Math.min((f / fps) / sceneDuration, 1);
-                  let playbackTime = Math.max(0, Math.min(progress * sourceDuration, sourceDuration - 0.05));
-                  video.currentTime = playbackTime;
-                  await new Promise<void>(r => { video.onseeked = () => r(); });
-                  ctx.fillStyle = "#000";
-                  ctx.fillRect(0, 0, dim.w, dim.h);
-                  const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
-                  ctx.drawImage(video, (dim.w - vScale * video.videoWidth) / 2, (dim.h - vScale * video.videoHeight) / 2, video.videoWidth * vScale, video.videoHeight * vScale);
-                  if (brandMark && brandMark.trim()) drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                  if (f % 3 === 0) {
+                    const progress = Math.min((f / fps) / sceneDuration, 1);
+                    let playbackTime = Math.max(0, Math.min(progress * sourceDuration, sourceDuration - 0.05));
+                    video.currentTime = playbackTime;
+                    await new Promise<void>(r => { video.onseeked = () => r(); });
+                    ctx.fillStyle = "#000";
+                    ctx.fillRect(0, 0, dim.w, dim.h);
+                    const vScale = Math.min(dim.w / video.videoWidth, dim.h / video.videoHeight);
+                    ctx.drawImage(video, (dim.w - vScale * video.videoWidth) / 2, (dim.h - vScale * video.videoHeight) / 2, video.videoWidth * vScale, video.videoHeight * vScale);
+                    if (brandMark && brandMark.trim()) drawBrandWatermark(ctx, brandMark.trim(), dim.w, dim.h);
+                  }
+                  // Non-seek frames reuse the current canvas (duplicated frame).
                   await waitForEncoderDrain(videoEncoder, 10);
                   const timestamp = Math.round((globalFrameCount / fps) * 1_000_000);
                   const frame = new VideoFrame(canvas, { timestamp, duration: Math.round(1e6 / fps) });
@@ -699,11 +712,6 @@ export function useVideoExport() {
               bitmap.close();
             }
             cachedBitmaps.clear();
-          }
-          
-          // Scene-level cleanup: flush audio encoder and clear references
-          if (audioEncoder) {
-            await audioEncoder.flush();
           }
           
           // Clear image references to help garbage collection
