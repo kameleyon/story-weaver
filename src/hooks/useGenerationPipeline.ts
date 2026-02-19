@@ -772,6 +772,14 @@ export function useGenerationPipeline() {
       const cSceneCount = existingScenes.length;
       const phaseLabels = { audio: "Resuming audio...", images: "Resuming images...", video: "Resuming video clips...", finalize: "Finalizing..." };
 
+      console.log(`[resumeCinematic] Starting resume: projectId=${cProjectId}, generationId=${generationId}, resumeFrom="${resumeFrom}", sceneCount=${cSceneCount}`);
+      console.log(`[resumeCinematic] Existing scenes summary:`, existingScenes.map((s, i) => ({
+        scene: i + 1,
+        hasAudio: !!s.audioUrl,
+        hasImage: !!s.imageUrl,
+        hasVideo: !!s.videoUrl,
+      })));
+
       setState((prev) => ({
         ...prev,
         step: "visuals",
@@ -914,6 +922,8 @@ export function useGenerationPipeline() {
         toast({ title: "Generation Resumed!", description: `"${cFinalRes.title}" is ready.` });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Resume failed";
+        console.error(`[resumeCinematic] FAILED with error:`, err);
+        console.error(`[resumeCinematic] Error message: "${errorMessage}"`);
         setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: errorMessage, statusMessage: errorMessage }));
         toast({ variant: "destructive", title: "Resume Failed", description: errorMessage });
       }
@@ -923,13 +933,18 @@ export function useGenerationPipeline() {
 
   const loadProject = useCallback(
     async (projectId: string): Promise<ProjectRow | null> => {
+      console.log(`[loadProject] Starting for projectId=${projectId}`);
+
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       
       if (!userId) {
+        console.error("[loadProject] No user session found");
         toast({ variant: "destructive", title: "Not signed in", description: "Please sign in." });
         return null;
       }
+
+      console.log(`[loadProject] User authenticated: ${userId}`);
 
       setState((prev) => ({
         ...prev,
@@ -949,12 +964,15 @@ export function useGenerationPipeline() {
 
       if (projectError || !project) {
         const msg = projectError?.message || "Project not found.";
+        console.error("[loadProject] Failed to load project:", msg, projectError);
         toast({ variant: "destructive", title: "Could not load project", description: msg });
         setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
         return null;
       }
 
-      const { data: generation } = await supabase
+      console.log(`[loadProject] Project loaded: title="${project.title}", type="${project.project_type}", format="${project.format}"`);
+
+      const { data: generation, error: genError } = await supabase
         .from("generations")
         .select("id,status,progress,scenes,error_message,video_url")
         .eq("project_id", projectId)
@@ -962,15 +980,32 @@ export function useGenerationPipeline() {
         .limit(1)
         .maybeSingle();
 
+      console.log(`[loadProject] Generation query result:`, {
+        generationId: generation?.id,
+        status: generation?.status,
+        progress: generation?.progress,
+        error_message: generation?.error_message,
+        hasScenes: !!generation?.scenes,
+        scenesCount: Array.isArray(generation?.scenes) ? (generation.scenes as any[]).length : 0,
+        queryError: genError?.message,
+      });
+
       if (generation?.status === "complete") {
         const scenes = normalizeScenes(generation.scenes) ?? [];
         const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
         const isCinematic = project.project_type === "cinematic";
 
+        const scenesWithVideo = scenes.filter((s) => !!s.videoUrl).length;
+        const scenesWithImage = scenes.filter((s) => !!s.imageUrl).length;
+        const scenesWithAudio = scenes.filter((s) => !!s.audioUrl).length;
+        console.log(`[loadProject] Status=complete, isCinematic=${isCinematic}, scenes=${scenes.length}, withAudio=${scenesWithAudio}, withImage=${scenesWithImage}, withVideo=${scenesWithVideo}`);
+
         // If cinematic and some scenes are missing videoUrl, auto-resume video phase
         if (isCinematic && scenes.length > 0 && scenes.some((s) => !s.videoUrl && s.imageUrl)) {
+          console.log(`[loadProject] Cinematic complete but missing videos → auto-resuming from 'video' phase`);
           void resumeCinematic(project, generation.id, scenes, "video");
         } else {
+          console.log(`[loadProject] Marking as complete, showing result`);
           setState({
             step: "complete",
             progress: 100,
@@ -992,6 +1027,7 @@ export function useGenerationPipeline() {
           });
         }
       } else if (generation?.status === "error") {
+        console.log(`[loadProject] Generation status=error, error_message="${generation.error_message}"`);
         // For cinematic: if we have partial scene data, attempt to resume instead of just showing error
         const errorScenes = normalizeScenes(generation.scenes) ?? [];
         if (project.project_type === "cinematic" && errorScenes.length > 0) {
@@ -999,8 +1035,17 @@ export function useGenerationPipeline() {
           const allHaveImages = errorScenes.every((s) => !!s.imageUrl);
           const allHaveVideo = errorScenes.every((s) => !!s.videoUrl);
 
+          console.log(`[loadProject] Cinematic with ${errorScenes.length} scenes: allHaveAudio=${allHaveAudio}, allHaveImages=${allHaveImages}, allHaveVideo=${allHaveVideo}`);
+
           // Reset generation status so resume can proceed
-          await supabase.from("generations").update({ status: "processing", error_message: null }).eq("id", generation.id);
+          const { error: resetError } = await supabase
+            .from("generations")
+            .update({ status: "processing", error_message: null })
+            .eq("id", generation.id);
+          console.log(`[loadProject] Reset generation status to 'processing', resetError=${resetError?.message ?? "none"}`);
+
+          const resumePhase = allHaveVideo ? "finalize" : allHaveImages ? "video" : allHaveAudio ? "images" : "audio";
+          console.log(`[loadProject] Resuming cinematic from phase="${resumePhase}"`);
 
           if (allHaveVideo) {
             void resumeCinematic(project, generation.id, errorScenes, "finalize");
@@ -1013,6 +1058,7 @@ export function useGenerationPipeline() {
           }
         } else {
           const msg = generation.error_message || "Generation failed";
+          console.log(`[loadProject] Non-resumable error, showing error state: "${msg}"`);
           setState((prev) => ({
             ...prev,
             step: "error",
@@ -1029,8 +1075,11 @@ export function useGenerationPipeline() {
         const scenes = normalizeScenes(generation.scenes) ?? [];
         const sceneCount = scenes.length;
 
+        console.log(`[loadProject] Cinematic in-progress generation, status="${generation.status}", sceneCount=${sceneCount}`);
+
         if (sceneCount === 0) {
           // Script phase didn't complete, can't resume
+          console.log(`[loadProject] No scenes found, script didn't complete → showing error`);
           setState({
             step: "error", progress: 0, sceneCount: 0, currentScene: 0,
             totalImages: 0, completedImages: 0, isGenerating: false,
@@ -1044,8 +1093,10 @@ export function useGenerationPipeline() {
           const allHaveImages = scenes.every((s) => !!s.imageUrl);
           const allHaveVideo = scenes.every((s) => !!s.videoUrl);
 
+          const resumePhase = allHaveVideo ? "finalize" : allHaveImages ? "video" : allHaveAudio ? "images" : "audio";
+          console.log(`[loadProject] Cinematic resume: allHaveAudio=${allHaveAudio}, allHaveImages=${allHaveImages}, allHaveVideo=${allHaveVideo} → resuming from "${resumePhase}"`);
+
           if (allHaveVideo) {
-            // All done, just needs finalize
             void resumeCinematic(project, generation.id, scenes, "finalize");
           } else if (allHaveImages) {
             void resumeCinematic(project, generation.id, scenes, "video");
@@ -1057,6 +1108,7 @@ export function useGenerationPipeline() {
         }
       } else if (generation) {
         // Non-cinematic interrupted generation
+        console.log(`[loadProject] Non-cinematic interrupted, status="${generation.status}" → showing error`);
         setState({
           step: "error", progress: 0, sceneCount: state.sceneCount,
           currentScene: 0, totalImages: state.sceneCount, completedImages: 0,
@@ -1065,6 +1117,7 @@ export function useGenerationPipeline() {
           error: "This generation was interrupted. Please try again.",
         });
       } else {
+        console.log(`[loadProject] No generation found for this project → showing idle input`);
         setState((prev) => ({
           ...prev,
           step: "idle",
