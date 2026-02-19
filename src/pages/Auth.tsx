@@ -65,8 +65,8 @@ export default function Auth() {
           toast({ variant: "destructive", title: "Sign up failed", description: getAuthErrorMessage(error.message) });
           return;
         }
-        toast({ title: "Account created", description: "Welcome to MotionMax!" });
-        navigate("/app");
+        toast({ title: "Check your email", description: "We've sent a confirmation link. Please verify your email to get started." });
+        return;
         return;
       }
 
@@ -334,7 +334,14 @@ export default function Auth() {
 
           {/* Footer text */}
           <p className="mt-6 text-center text-xs text-muted-foreground/60">
-            By continuing, you agree to our Terms of Service and Privacy Policy.
+            By continuing, you agree to our{" "}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-muted-foreground transition-colors">
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-muted-foreground transition-colors">
+              Privacy Policy
+            </a>.
           </p>
         </motion.div>
       </main>
