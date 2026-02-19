@@ -233,6 +233,13 @@ export function useVideoExport() {
               }
               
               try {
+                // Guard against non-monotonic DTS
+                const chunkDTS = chunk.timestamp;
+                if (chunkDTS !== undefined && chunkDTS !== null && lastAudioDTS >= 0 && chunkDTS <= lastAudioDTS) {
+                  // Skip this chunk — DTS went backwards (can happen after flush between scenes)
+                  return;
+                }
+                lastAudioDTS = chunkDTS ?? lastAudioDTS;
                 muxer.addAudioChunk(chunk, meta);
               } catch (e) {
                 warn("Run", runId, "muxer.addAudioChunk failed", e);
@@ -274,6 +281,7 @@ export function useVideoExport() {
 
         let globalFrameCount = 0;
         let globalAudioSampleCount = 0;
+        let lastAudioDTS = -1; // Track last audio DTS to prevent monotonicity errors
 
         for (let i = 0; i < scenes.length; i++) {
           if (abortRef.current) break;
@@ -426,13 +434,15 @@ export function useVideoExport() {
             video.preload = "auto";
 
             const loadVideoWithRetry = async (url: string, maxRetries = 2) => {
+              const timeoutMs = isMobile ? 30000 : 120000; // 30s on mobile, 120s on desktop
               for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 try {
                   await new Promise<void>((resolve, reject) => {
                     const timeout = setTimeout(() => {
-                      video.src = "";
-                      reject(new Error(`Video load timeout (120s), attempt ${attempt + 1}`));
-                    }, 120000);
+                      video.removeAttribute("src");
+                      video.load();
+                      reject(new Error(`Video load timeout (${timeoutMs/1000}s), attempt ${attempt + 1}`));
+                    }, timeoutMs);
                     video.onloadeddata = () => { clearTimeout(timeout); resolve(); };
                     video.onerror = () => { clearTimeout(timeout); reject(new Error("Failed to load video")); };
                     video.src = attempt > 0 ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : url;
@@ -445,7 +455,7 @@ export function useVideoExport() {
                 }
               }
             };
-            await loadVideoWithRetry(scene.videoUrl!);
+            await loadVideoWithRetry(scene.videoUrl!, isMobile ? 4 : 2); // More retries on mobile
 
             const sourceDuration = video.duration || 5;
 
@@ -579,9 +589,16 @@ export function useVideoExport() {
               video.pause();
             }
 
-            // Cleanup video element
+            // Aggressive cleanup: fully destroy video element to free mobile Safari media resources
+            video.pause();
+            video.onloadeddata = null;
+            video.onerror = null;
+            video.oncanplay = null;
+            video.onseeked = null;
             video.removeAttribute("src");
             video.load();
+            // On mobile, wait for Safari to actually release the media resource
+            if (isMobile) await new Promise(r => setTimeout(r, 500));
 
           } else {
             // E. Render Static Images with Fade Transitions (existing logic)
