@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, MoreVertical, Eye, Pencil, Share2, Download, Trash2, Video, Clapperboard, BarChart3, Loader2 } from "lucide-react";
+import { Star, MoreVertical, Eye, Pencil, Share2, Download, Trash2, Video, Clapperboard, BarChart3, Film, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,6 +43,8 @@ const getProjectIcon = (projectType?: string) => {
       return Clapperboard;
     case "smartflow":
       return BarChart3;
+    case "cinematic":
+      return Film;
     default:
       return Video;
   }
