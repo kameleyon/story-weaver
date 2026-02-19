@@ -39,7 +39,8 @@ const plans = [
   {
     id: "free",
     name: "Free",
-    price: "$0",
+    monthlyPrice: "$0",
+    yearlyPrice: "$0",
     period: "/month",
     description: "Get started with basic features",
     icon: Sparkles,
@@ -59,12 +60,14 @@ const plans = [
     ],
     cta: "Current Plan",
     popular: false,
-    priceId: null,
+    monthlyPriceId: null,
+    yearlyPriceId: null,
   },
   {
     id: "starter",
     name: "Starter",
-    price: "$14.99",
+    monthlyPrice: "$14.99",
+    yearlyPrice: "$9.99",
     period: "/month",
     description: "Hobbyists & social creators",
     icon: Zap,
@@ -85,12 +88,14 @@ const plans = [
     ],
     cta: "Upgrade to Starter",
     popular: false,
-    priceId: STRIPE_PLANS.starter.monthly.priceId,
+    monthlyPriceId: STRIPE_PLANS.starter.monthly.priceId,
+    yearlyPriceId: STRIPE_PLANS.starter.yearly.priceId,
   },
   {
     id: "creator",
     name: "Creator",
-    price: "$39.99",
+    monthlyPrice: "$39.99",
+    yearlyPrice: "$26.66",
     period: "/month",
     description: "Content creators & small biz",
     icon: Crown,
@@ -109,12 +114,14 @@ const plans = [
     excluded: [],
     cta: "Upgrade to Creator",
     popular: true,
-    priceId: STRIPE_PLANS.creator.monthly.priceId,
+    monthlyPriceId: STRIPE_PLANS.creator.monthly.priceId,
+    yearlyPriceId: STRIPE_PLANS.creator.yearly.priceId,
   },
   {
     id: "professional",
     name: "Professional",
-    price: "$89.99",
+    monthlyPrice: "$89.99",
+    yearlyPrice: "$59.99",
     period: "/month",
     description: "Agencies & marketing teams",
     icon: Gem,
@@ -133,12 +140,14 @@ const plans = [
     excluded: [],
     cta: "Upgrade to Professional",
     popular: false,
-    priceId: STRIPE_PLANS.professional.monthly.priceId,
+    monthlyPriceId: STRIPE_PLANS.professional.monthly.priceId,
+    yearlyPriceId: STRIPE_PLANS.professional.yearly.priceId,
   },
   {
     id: "enterprise",
     name: "Enterprise",
-    price: "Custom",
+    monthlyPrice: "Custom",
+    yearlyPrice: "Custom",
     period: "",
     description: "Large organizations",
     icon: Building2,
@@ -160,7 +169,8 @@ const plans = [
     excluded: [],
     cta: "Contact Sales",
     popular: false,
-    priceId: null,
+    monthlyPriceId: null,
+    yearlyPriceId: null,
   },
 ];
 
@@ -188,6 +198,7 @@ export default function Pricing() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [loadingCredits, setLoadingCredits] = useState<number | null>(null);
   const [showDowngradeDialog, setShowDowngradeDialog] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
   const handleDowngrade = async () => {
     try {
@@ -309,6 +320,33 @@ export default function Pricing() {
             <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
               Start free and scale as you grow. All plans include core features with images and narration.
             </p>
+
+            {/* Billing Toggle */}
+            <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-border/50 bg-muted/50 p-1">
+              <button
+                onClick={() => setBillingCycle("monthly")}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-medium transition-all",
+                  billingCycle === "monthly"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle("yearly")}
+                className={cn(
+                  "flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-all",
+                  billingCycle === "yearly"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Yearly
+                <Badge className="bg-primary/20 text-primary text-[10px] px-1.5 py-0.5">Save 33%</Badge>
+              </button>
+            </div>
           </div>
 
           {/* Pricing Cards */}
@@ -318,6 +356,8 @@ export default function Pricing() {
               const isCurrentPlan = plan.id === currentPlan;
               const isDisabled = isPlanDisabled(plan);
               const isLoading = loadingPlan === plan.id;
+              const displayPrice = billingCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+              const activePriceId = billingCycle === "yearly" ? plan.yearlyPriceId : plan.monthlyPriceId;
               
               return (
                 <motion.div
@@ -358,7 +398,7 @@ export default function Pricing() {
                       </div>
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl sm:text-3xl font-bold">
-                          {plan.price}
+                          {displayPrice}
                         </span>
                         {plan.period && (
                           <span className="text-sm text-muted-foreground">
@@ -366,6 +406,11 @@ export default function Pricing() {
                           </span>
                         )}
                       </div>
+                      {billingCycle === "yearly" && plan.id !== "free" && plan.id !== "enterprise" && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Billed ${(parseFloat(plan.yearlyPrice.replace("$", "")) * 12).toFixed(0)}/yr
+                        </p>
+                      )}
                       <CardDescription className="text-xs sm:text-sm">{plan.description}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 flex-1 flex flex-col">
@@ -399,8 +444,8 @@ export default function Pricing() {
                               window.open("mailto:support@motionmax.io?subject=Enterprise%20Inquiry", "_blank");
                             } else if (plan.id === "free" && currentPlan !== "free") {
                               setShowDowngradeDialog(true);
-                            } else if (plan.priceId) {
-                              handleSubscribe(plan.id, plan.priceId);
+                            } else if (activePriceId) {
+                              handleSubscribe(plan.id, activePriceId);
                             }
                           }}
                         >
