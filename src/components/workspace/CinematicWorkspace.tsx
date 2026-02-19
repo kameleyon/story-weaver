@@ -51,7 +51,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
 
     // Use shared pipeline instead of manual state management
-    const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+    const { state: generationState, startGeneration, reset, loadProject, cancelGeneration } = useGenerationPipeline();
 
     // Subscription and plan validation  
     const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
