@@ -777,6 +777,13 @@ export function CinematicResult({
                   playsInline
                   preload="metadata"
                 />
+              ) : scene.imageUrl ? (
+                <img
+                  src={scene.imageUrl}
+                  alt={`Scene ${scene.number}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
               ) : (
                 <div className="w-full h-full bg-muted/50 flex items-center justify-center">
                   <Film className="h-8 w-8 text-muted-foreground/50" />
