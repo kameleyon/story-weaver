@@ -3,11 +3,11 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
+  ArrowLeft, 
   User, 
   Shield,
   Loader2,
 } from "lucide-react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,24 +203,27 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 grid h-14 sm:h-16 grid-cols-3 items-center border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
-        <div className="flex items-center justify-start gap-2">
-          <SidebarTrigger />
-          <ThemedLogo className="hidden lg:block h-10 w-auto" />
-        </div>
-        <div className="flex justify-center lg:hidden">
-          <ThemedLogo className="h-10 w-auto" />
-        </div>
-        <div className="flex items-center justify-end">
+      <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 sm:h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/app")}
+              className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <ThemedLogo className="h-8 sm:h-10 w-auto" />
+          </div>
           <ThemeToggle />
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -338,7 +341,6 @@ export default function Settings() {
             </TabsContent>
           </Tabs>
         </motion.div>
-        </div>
       </main>
     </div>
   );

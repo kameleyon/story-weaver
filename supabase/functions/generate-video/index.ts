@@ -2941,7 +2941,6 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       voice_type: voiceType || "standard",
       voice_id: voiceId || null,
       voice_name: voiceName || null,
-      disable_expressions: disableExpressions || false,
       status: "generating",
     })
     .select()
@@ -3399,7 +3398,6 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
       story_tone: storyTone || null,
       story_genre: storyGenre || null,
       voice_inclination: disableExpressions ? "disabled" : null,
-      disable_expressions: disableExpressions || false,
       voice_type: voiceType || "standard",
       voice_id: voiceId || null,
       voice_name: voiceName || null,

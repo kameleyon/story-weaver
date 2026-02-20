@@ -103,7 +103,6 @@ export type ProjectRow = {
   voice_name?: string | null;
   brand_mark?: string | null;
   character_consistency_enabled?: boolean | null;
-  disable_expressions?: boolean | null;
   inspiration_style?: string | null;
   story_tone?: string | null;
   story_genre?: string | null;
@@ -942,7 +941,7 @@ export function useGenerationPipeline() {
 
       const { data: project, error: projectError } = await supabase
         .from("projects")
-        .select("id,title,content,format,length,style,presenter_focus,character_description,voice_type,voice_id,voice_name,brand_mark,character_consistency_enabled,disable_expressions,inspiration_style,story_tone,story_genre,voice_inclination,project_type")
+        .select("id,title,content,format,length,style,presenter_focus,character_description,voice_type,voice_id,voice_name,brand_mark,character_consistency_enabled,inspiration_style,story_tone,story_genre,voice_inclination,project_type")
         .eq("id", projectId)
         .eq("user_id", userId)
         .maybeSingle();

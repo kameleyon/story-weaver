@@ -1,1 +1,0 @@
-ALTER TABLE public.projects ADD COLUMN disable_expressions boolean NOT NULL DEFAULT false;

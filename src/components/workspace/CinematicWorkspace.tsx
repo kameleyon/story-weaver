@@ -220,18 +220,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
       setLength(["short", "brief", "presentation"].includes(nextLength) ? nextLength : "brief");
 
       const savedStyle = (project.style ?? "realistic") as VisualStyle;
-      const knownStyles: VisualStyle[] = [
-        "minimalist", "doodle", "stick", "anime", "realistic",
-        "3d-pixar", "claymation", "sketch", "caricature",
-        "storybook", "crayon", "moody", "custom",
-      ];
-      if (knownStyles.includes(savedStyle)) {
-        setStyle(savedStyle);
-        if (savedStyle !== "custom") setCustomStyle("");
-      } else {
-        setStyle("custom");
-        setCustomStyle(project.style ?? "");
-      }
+      setStyle(savedStyle);
 
       if (project.character_description) setCharacterDescription(project.character_description);
       if (project.presenter_focus) setPresenterFocus(project.presenter_focus);
@@ -250,8 +239,6 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
       if (project.character_consistency_enabled) {
         setCharacterConsistencyEnabled(true);
       }
-      // Restore disable expressions
-      setDisableExpressions(project.disable_expressions === true || project.voice_inclination === "disabled");
     };
 
     // Load project from URL if provided

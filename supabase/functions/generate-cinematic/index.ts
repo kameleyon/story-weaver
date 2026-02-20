@@ -1490,7 +1490,6 @@ serve(async (req) => {
           voice_id: body.voiceId || null,
           voice_name: body.voiceName || null,
           character_consistency_enabled: body.characterConsistencyEnabled || false,
-          disable_expressions: body.disableExpressions || false,
         })
         .select("id")
         .single();

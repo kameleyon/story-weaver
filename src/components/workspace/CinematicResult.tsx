@@ -192,7 +192,6 @@ export function CinematicResult({
     if (isIOS) {
       shouldAutoDownloadRef2.current = false;
       lastAutoDownloadedUrlRef.current = exportState.videoUrl;
-      toast({ title: "Video ready!", description: "Tap the Download button to save your video." });
       return;
     }
 

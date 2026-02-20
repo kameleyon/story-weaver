@@ -1,9 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useSubscription, validateGenerationAccess } from "@/hooks/useSubscription";
-import { useToast } from "@/hooks/use-toast";
-import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
-import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
 import { Play, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -52,13 +48,6 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
     const [brandMarkText, setBrandMarkText] = useState("");
     const [disableExpressions, setDisableExpressions] = useState(false);
     const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
-
-    const { plan, creditsBalance, subscriptionStatus } = useSubscription();
-    const { toast } = useToast();
-    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-    const [upgradeReason, setUpgradeReason] = useState("");
-    const [showSuspendedModal, setShowSuspendedModal] = useState(false);
-    const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
     const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
@@ -134,37 +123,6 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
     const handleGenerate = () => {
       if (content.trim().length === 0) return;
       if (generationState.isGenerating) return;
-
-      // Check for subscription issues first
-      if (subscriptionStatus === "past_due" || subscriptionStatus === "unpaid") {
-        setSuspendedStatus(subscriptionStatus as "past_due" | "unpaid");
-        setShowSuspendedModal(true);
-        return;
-      }
-
-      // Validate plan access
-      const validation = validateGenerationAccess(
-        plan,
-        creditsBalance,
-        "doc2video",
-        length,
-        format,
-        brandMarkEnabled && brandMarkText.trim().length > 0,
-        style === "custom",
-        subscriptionStatus || undefined
-      );
-
-      if (!validation.canGenerate) {
-        toast({
-          variant: "destructive",
-          title: "Cannot Generate",
-          description: validation.error,
-        });
-        setUpgradeReason(validation.error || "Please upgrade your plan to continue.");
-        setShowUpgradeModal(true);
-        return;
-      }
-
       runGeneration();
     };
 
@@ -206,12 +164,20 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
       setLength(["short", "brief", "presentation"].includes(nextLength) ? nextLength : "brief");
 
       const savedStyle = (project.style ?? "minimalist") as VisualStyle;
-      const knownStyles: VisualStyle[] = [
-        "minimalist", "doodle", "stick", "anime", "realistic",
-        "3d-pixar", "claymation", "sketch", "caricature",
-        "storybook", "crayon", "moody", "custom",
-      ];
-      if (knownStyles.includes(savedStyle)) {
+      if (
+        savedStyle === "minimalist" ||
+        savedStyle === "doodle" ||
+        savedStyle === "stick" ||
+        savedStyle === "anime" ||
+        savedStyle === "realistic" ||
+        savedStyle === "3d-pixar" ||
+        savedStyle === "claymation" ||
+        savedStyle === "sketch" ||
+        savedStyle === "caricature" ||
+        savedStyle === "storybook" ||
+        savedStyle === "crayon" ||
+        savedStyle === "custom"
+      ) {
         setStyle(savedStyle);
         if (savedStyle !== "custom") setCustomStyle("");
       } else {
@@ -252,9 +218,6 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
 
       // Restore character consistency
       setCharacterConsistencyEnabled(project.character_consistency_enabled ?? false);
-
-      // Restore disable expressions
-      setDisableExpressions(project.disable_expressions === true);
     };
 
     useImperativeHandle(ref, () => ({
@@ -471,18 +434,6 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
                 </motion.div>
               )}
             </AnimatePresence>
-        {/* Modals */}
-        <UpgradeRequiredModal
-          open={showUpgradeModal}
-          onOpenChange={setShowUpgradeModal}
-          reason={upgradeReason}
-          showCreditsOption={plan !== "free"}
-        />
-        <SubscriptionSuspendedModal
-          open={showSuspendedModal}
-          onOpenChange={setShowSuspendedModal}
-          status={suspendedStatus}
-        />
       </WorkspaceLayout>
     );
   }
