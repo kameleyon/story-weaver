@@ -58,6 +58,7 @@ export default function VoiceLab() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [removeNoise, setRemoveNoise] = useState(true);
   
   // Form state
   const [voiceName, setVoiceName] = useState("");
@@ -223,7 +224,8 @@ export default function VoiceLab() {
     await cloneVoice({ 
       file: audioBlob, 
       name: voiceName.trim(),
-      description: `Created via ${recordedBlob ? "recording" : "file upload"}`
+      description: `Created via ${recordedBlob ? "recording" : "file upload"}`,
+      removeNoise,
     });
 
     // Reset form
@@ -478,6 +480,18 @@ export default function VoiceLab() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+                      </div>
+
+                      {/* Remove noise checkbox */}
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="remove-noise"
+                          checked={removeNoise}
+                          onCheckedChange={(checked) => setRemoveNoise(checked as boolean)}
+                        />
+                        <label htmlFor="remove-noise" className="text-sm font-medium cursor-pointer">
+                          Remove background noise from audio
+                        </label>
                       </div>
 
                       {/* Ready indicator */}
