@@ -39,7 +39,7 @@ const plans = [
   {
     id: "free",
     name: "Free",
-    monthlyPrice: "$0",
+    price: "$0",
     yearlyPrice: "$0",
     period: "/month",
     description: "Get started with basic features",
@@ -60,14 +60,13 @@ const plans = [
     ],
     cta: "Current Plan",
     popular: false,
-    monthlyPriceId: null,
-    yearlyPriceId: null,
+    priceId: null,
   },
   {
     id: "starter",
     name: "Starter",
-    monthlyPrice: "$14.99",
-    yearlyPrice: "$9.99",
+    price: "$14.99",
+    yearlyPrice: "$11.99",
     period: "/month",
     description: "Hobbyists & social creators",
     icon: Zap,
@@ -88,14 +87,13 @@ const plans = [
     ],
     cta: "Upgrade to Starter",
     popular: false,
-    monthlyPriceId: STRIPE_PLANS.starter.monthly.priceId,
-    yearlyPriceId: STRIPE_PLANS.starter.yearly.priceId,
+    priceId: STRIPE_PLANS.starter.monthly.priceId,
   },
   {
     id: "creator",
     name: "Creator",
-    monthlyPrice: "$39.99",
-    yearlyPrice: "$26.66",
+    price: "$39.99",
+    yearlyPrice: "$31.99",
     period: "/month",
     description: "Content creators & small biz",
     icon: Crown,
@@ -109,19 +107,19 @@ const plans = [
       "1 voice clone",
       "50 infographics/month",
       "Brand mark",
+      "Basic analytics",
       "Priority support (24h)",
     ],
     excluded: [],
     cta: "Upgrade to Creator",
     popular: true,
-    monthlyPriceId: STRIPE_PLANS.creator.monthly.priceId,
-    yearlyPriceId: STRIPE_PLANS.creator.yearly.priceId,
+    priceId: STRIPE_PLANS.creator.monthly.priceId,
   },
   {
     id: "professional",
     name: "Professional",
-    monthlyPrice: "$89.99",
-    yearlyPrice: "$59.99",
+    price: "$89.99",
+    yearlyPrice: "$71.99",
     period: "/month",
     description: "Agencies & marketing teams",
     icon: Gem,
@@ -133,20 +131,22 @@ const plans = [
       "Full narration + multilingual",
       "3 voice clones",
       "Unlimited infographics",
-      "Cinematic video generation",
       "Full brand kit",
+      "Advanced analytics",
+      "API access (5K requests/mo)",
+      "Batch export",
+      "3 team seats",
       "Priority support (12h)",
     ],
     excluded: [],
     cta: "Upgrade to Professional",
     popular: false,
-    monthlyPriceId: STRIPE_PLANS.professional.monthly.priceId,
-    yearlyPriceId: STRIPE_PLANS.professional.yearly.priceId,
+    priceId: STRIPE_PLANS.professional.monthly.priceId,
   },
   {
     id: "enterprise",
     name: "Enterprise",
-    monthlyPrice: "Custom",
+    price: "Custom",
     yearlyPrice: "Custom",
     period: "",
     description: "Large organizations",
@@ -158,6 +158,7 @@ const plans = [
       "Custom voice training",
       "Unlimited voice clones",
       "White-label solution",
+      "Unlimited API access",
       "Unlimited team seats",
       "SSO/SAML integration",
       "On-premise available",
@@ -169,8 +170,7 @@ const plans = [
     excluded: [],
     cta: "Contact Sales",
     popular: false,
-    monthlyPriceId: null,
-    yearlyPriceId: null,
+    priceId: null,
   },
 ];
 
@@ -186,7 +186,6 @@ const creditInfo = [
   { type: "Short Video (<2 min)", credits: 1 },
   { type: "Brief Video (<5 min)", credits: 2 },
   { type: "Presentation (<10 min)", credits: 4 },
-  { type: "Cinematic", credits: 12 },
   { type: "Infographic", credits: 1 },
 ];
 
@@ -195,10 +194,10 @@ export default function Pricing() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { plan: currentPlan, createCheckout, openCustomerPortal, isLoading: isLoadingSub } = useSubscription();
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [loadingCredits, setLoadingCredits] = useState<number | null>(null);
   const [showDowngradeDialog, setShowDowngradeDialog] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
   const handleDowngrade = async () => {
     try {
@@ -285,6 +284,14 @@ export default function Pricing() {
     return false;
   };
 
+  const getDisplayPrice = (plan: typeof plans[0]) => {
+    if (plan.price === "Custom") return plan.price;
+    if (billingCycle === "yearly" && plan.yearlyPrice !== "$0") {
+      return plan.yearlyPrice;
+    }
+    return plan.price;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -322,13 +329,13 @@ export default function Pricing() {
             </p>
 
             {/* Billing Toggle */}
-            <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-border/50 bg-muted/50 p-1">
+            <div className="mt-6 sm:mt-8 inline-flex items-center gap-3 rounded-full bg-muted/50 p-1">
               <button
                 onClick={() => setBillingCycle("monthly")}
                 className={cn(
-                  "rounded-full px-4 py-1.5 text-sm font-medium transition-all",
-                  billingCycle === "monthly"
-                    ? "bg-background text-foreground shadow-sm"
+                  "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                  billingCycle === "monthly" 
+                    ? "bg-background text-foreground shadow-sm" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -337,14 +344,14 @@ export default function Pricing() {
               <button
                 onClick={() => setBillingCycle("yearly")}
                 className={cn(
-                  "flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-all",
-                  billingCycle === "yearly"
-                    ? "bg-background text-foreground shadow-sm"
+                  "px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                  billingCycle === "yearly" 
+                    ? "bg-background text-foreground shadow-sm" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 Yearly
-                <Badge className="bg-primary/20 text-primary text-[10px] px-1.5 py-0.5">Save 33%</Badge>
+                <Badge variant="secondary" className="text-xs">Save 20%</Badge>
               </button>
             </div>
           </div>
@@ -356,8 +363,6 @@ export default function Pricing() {
               const isCurrentPlan = plan.id === currentPlan;
               const isDisabled = isPlanDisabled(plan);
               const isLoading = loadingPlan === plan.id;
-              const displayPrice = billingCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
-              const activePriceId = billingCycle === "yearly" ? plan.yearlyPriceId : plan.monthlyPriceId;
               
               return (
                 <motion.div
@@ -398,7 +403,7 @@ export default function Pricing() {
                       </div>
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl sm:text-3xl font-bold">
-                          {displayPrice}
+                          {getDisplayPrice(plan)}
                         </span>
                         {plan.period && (
                           <span className="text-sm text-muted-foreground">
@@ -406,9 +411,9 @@ export default function Pricing() {
                           </span>
                         )}
                       </div>
-                      {billingCycle === "yearly" && plan.id !== "free" && plan.id !== "enterprise" && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Billed ${(parseFloat(plan.yearlyPrice.replace("$", "")) * 12).toFixed(0)}/yr
+                      {billingCycle === "yearly" && plan.price !== "$0" && plan.price !== "Custom" && (
+                        <p className="text-xs text-muted-foreground">
+                          Billed yearly (${(parseFloat(plan.yearlyPrice.replace("$", "")) * 12).toFixed(0)}/yr)
                         </p>
                       )}
                       <CardDescription className="text-xs sm:text-sm">{plan.description}</CardDescription>
@@ -444,8 +449,8 @@ export default function Pricing() {
                               window.open("mailto:support@motionmax.io?subject=Enterprise%20Inquiry", "_blank");
                             } else if (plan.id === "free" && currentPlan !== "free") {
                               setShowDowngradeDialog(true);
-                            } else if (activePriceId) {
-                              handleSubscribe(plan.id, activePriceId);
+                            } else if (plan.priceId) {
+                              handleSubscribe(plan.id, plan.priceId);
                             }
                           }}
                         >
@@ -597,9 +602,13 @@ export default function Pricing() {
             className="text-center mt-10 sm:mt-14"
           >
             <p className="text-sm text-muted-foreground">
-              Have questions?{" "}
+              Have questions? Check our{" "}
               <a href="mailto:support@motionmax.io" className="text-primary hover:underline">
-                Contact support
+                FAQ
+              </a>{" "}
+              or{" "}
+              <a href="mailto:support@motionmax.io" className="text-primary hover:underline">
+                contact support
               </a>
             </p>
           </motion.div>

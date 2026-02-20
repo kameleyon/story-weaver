@@ -4362,15 +4362,13 @@ async function handleFinalizePhase(
   });
 
   // ============= CREDIT DEDUCTION =============
-  // Calculate credits based on type/length: Short=1, Brief=2, Presentation=4, SmartFlow=1, Cinematic=12
+  // Calculate credits based on length: Short/SmartFlow=1, Brief=2, Presentation=4
   const projectLength = generation.projects.length || "short";
   const projectType = generation.projects.project_type || "doc2video";
 
   let creditsToDeduct = 1; // Default for short
   if (projectType === "smartflow") {
-    creditsToDeduct = 1;
-  } else if (projectType === "cinematic") {
-    creditsToDeduct = 12;
+    creditsToDeduct = 1; // Smart Flow always 1 credit
   } else if (projectLength === "brief") {
     creditsToDeduct = 2;
   } else if (projectLength === "presentation") {
