@@ -12,27 +12,21 @@ export function useAdminAuth() {
   sessionRef.current = session;
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setIsAdmin(false);
+      setLoading(false);
+      return;
+    }
+
     const checkAdminStatus = async () => {
-      if (!user || authLoading) {
-        setIsAdmin(false);
-        setLoading(authLoading);
-        return;
-      }
-
       try {
-        // Check admin status via the admin-stats edge function
-        const { data, error } = await supabase.functions.invoke("admin-stats", {
-          body: { action: "dashboard_stats" },
-        });
-
-        if (error) {
-          // Non-2xx responses (403, etc.) are expected for non-admin users - don't log these
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(true);
-        }
-      } catch (err) {
-        console.error("Error checking admin status:", err);
+        // Use the DB function directly instead of hitting the edge function
+        // This avoids 403 errors thrown as exceptions for non-admin users
+        const { data, error } = await supabase.rpc("is_admin", { _user_id: user.id });
+        setIsAdmin(!error && data === true);
+      } catch {
         setIsAdmin(false);
       } finally {
         setLoading(false);
