@@ -49,7 +49,25 @@ serve(async (req) => {
       );
     }
 
-    // Check voice clone limit (1 per user)
+    // Get user's subscription plan to determine voice clone limit
+    const { data: subData } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan_name, status")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    const planName = subData?.plan_name ?? "free";
+    const VOICE_CLONE_LIMITS: Record<string, number> = {
+      free: 0,
+      starter: 0,
+      creator: 1,
+      professional: 3,
+      enterprise: 999,
+    };
+    const voiceCloneLimit = VOICE_CLONE_LIMITS[planName] ?? 0;
+
+    // Check voice clone limit based on plan
     const { count: existingVoiceCount, error: countError } = await supabaseAdmin
       .from("user_voices")
       .select("id", { count: "exact", head: true })
@@ -63,10 +81,13 @@ serve(async (req) => {
       );
     }
 
-    if ((existingVoiceCount ?? 0) >= 1) {
-      console.log(`User ${user.id} already has ${existingVoiceCount} voice(s) - limit reached`);
+    if ((existingVoiceCount ?? 0) >= voiceCloneLimit) {
+      const limitMsg = voiceCloneLimit === 0
+        ? "Voice cloning requires a Creator plan or higher."
+        : `You have reached your plan limit of ${voiceCloneLimit} cloned voice(s). Please delete an existing voice to create a new one.`;
+      console.log(`User ${user.id} (plan: ${planName}) has ${existingVoiceCount}/${voiceCloneLimit} voices — limit reached`);
       return new Response(
-        JSON.stringify({ error: "You can only have 1 cloned voice. Please delete your existing voice to create a new one." }),
+        JSON.stringify({ error: limitMsg }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
