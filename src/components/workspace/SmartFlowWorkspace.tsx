@@ -1,6 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, AlertCircle, RotateCcw, BarChart3 } from "lucide-react";
+import { Play, AlertCircle, RotateCcw, Wallpaper } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
@@ -233,7 +233,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                   {/* Hero */}
                   <div className="text-center space-y-3">
                     <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                      <BarChart3 className="h-3.5 w-3.5" />
+                      <Wallpaper className="h-3.5 w-3.5" />
                       Smart Flow
                     </span>
                     <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">

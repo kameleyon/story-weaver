@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -7,14 +7,13 @@ import {
   ChevronRight,
   Lightbulb,
   Clapperboard,
-  BarChart3,
+  Wallpaper,
   Menu,
   Video,
+  Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useSubscription } from "@/hooks/useSubscription";
-import { PLAN_LIMITS } from "@/lib/planLimits";
 import { useRefreshThumbnails } from "@/hooks/useRefreshThumbnails";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -86,7 +85,6 @@ const CircularProgress = ({ percentage, size = 80 }: { percentage: number; size?
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { plan, creditsBalance } = useSubscription();
   const { refreshThumbnails } = useRefreshThumbnails();
   const [currentTip, setCurrentTip] = useState(0);
   const [projectScrollIndex, setProjectScrollIndex] = useState(0);
@@ -104,8 +102,25 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Plan-based credit limits
-  const planLimit = PLAN_LIMITS[plan]?.creditsPerMonth ?? 5;
+  // Fetch credits
+  const { data: credits } = useQuery({
+    queryKey: ["user-credits", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return { balance: 0, total: 200 };
+      
+      const { data } = await supabase
+        .from("user_credits")
+        .select("credits_balance, total_purchased")
+        .eq("user_id", user.id)
+        .single();
+      
+      const balance = data?.credits_balance || 0;
+      const total = Math.max(data?.total_purchased || 200, 200);
+      
+      return { balance, total };
+    },
+    enabled: !!user?.id,
+  });
 
   // Fetch display name from profiles table
   const { data: profile } = useQuery({
@@ -210,8 +225,8 @@ export default function Dashboard() {
     }));
   }, [recentProjectsRaw, refreshedThumbnails]);
 
-  const creditsUsed = Math.max(0, planLimit - creditsBalance);
-  const usagePercentage = planLimit > 0 ? Math.min(100, Math.round((creditsUsed / planLimit) * 100)) : 0;
+  const creditsUsed = credits ? credits.total - credits.balance : 0;
+  const usagePercentage = credits ? Math.round((creditsUsed / credits.total) * 100) : 0;
 
   const displayName = profile?.display_name || user?.email?.split('@')[0] || 'User';
 
@@ -233,7 +248,7 @@ export default function Dashboard() {
       case "storytelling":
         return Clapperboard;
       case "smartflow":
-        return BarChart3;
+        return Wallpaper;
       default:
         return Video;
     }
@@ -299,7 +314,7 @@ export default function Dashboard() {
                   <h3 className="font-semibold text-gray-900 dark:text-foreground mb-1">Usage Overview</h3>
                   <p className="text-sm text-primary font-medium">{usagePercentage}% Credits Used</p>
                   <p className="text-xs text-gray-600 dark:text-muted-foreground">
-                    {creditsBalance} / {planLimit} Credits Left
+                    {credits?.balance || 0} / {credits?.total || 200} Credits Left
                   </p>
                 </div>
               </div>
@@ -345,7 +360,7 @@ export default function Dashboard() {
             {recentProjects.length === 0 ? (
               <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-8 text-center shadow-sm">
                 <p className="text-gray-600 dark:text-muted-foreground mb-4">No projects yet</p>
-                <Button onClick={() => navigate("/app/create")} className="gap-2">
+                <Button onClick={() => navigate("/app/create?mode=doc2video")} className="gap-2">
                   <Video className="h-4 w-4" />
                   Create Your First Project
                 </Button>
@@ -364,12 +379,10 @@ export default function Dashboard() {
 
                 {/* Projects Carousel */}
                 <div className="overflow-hidden">
-                  <div 
+                  <motion.div 
                     className="flex gap-4"
-                    style={{ 
-                      transform: `translateX(-${projectScrollIndex * (200 + 16)}px)`,
-                      transition: 'transform 0.3s ease-out',
-                    }}
+                    animate={{ x: -projectScrollIndex * (200 + 16) }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   >
                     {recentProjects.map((project) => {
                       const ProjectIcon = getProjectIcon(project.project_type);
@@ -406,7 +419,7 @@ export default function Dashboard() {
                         </div>
                       );
                     })}
-                  </div>
+                  </motion.div>
                 </div>
 
                 {/* Scroll Right Button */}

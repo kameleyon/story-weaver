@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   Loader2,
   Pause,
@@ -10,6 +11,7 @@ import {
   Play,
   Share2,
   Square,
+  Trash2,
   Volume2,
   X,
   Clock,
@@ -25,6 +27,8 @@ import { useImagesZipDownload } from "@/hooks/useImagesZipDownload";
 import {
   appendVideoExportLog,
   clearVideoExportLogs,
+  formatVideoExportLogs,
+  getVideoExportLogs,
 } from "@/lib/videoExportDebug";
 import { SceneEditModal } from "./SceneEditModal";
 import { ResultActionBar } from "./ResultActionBar";
@@ -62,6 +66,8 @@ export function GenerationResult({
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [sceneProgress, setSceneProgress] = useState(0);
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null);
+  const [showExportLogs, setShowExportLogs] = useState(false);
+  const [exportLogsVersion, setExportLogsVersion] = useState(0);
   const playAllAudioRef = useRef<HTMLAudioElement | null>(null);
   const sceneAudioRef = useRef<HTMLAudioElement | null>(null);
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,6 +77,11 @@ export function GenerationResult({
   const shouldAutoDownloadRef = useRef(false);
   const lastAutoDownloadedUrlRef = useRef<string | null>(null);
 
+  // Recompute on demand (e.g. after Clear) and during export progress.
+  const exportLogText = (() => {
+    void exportLogsVersion;
+    return formatVideoExportLogs(getVideoExportLogs());
+  })();
 
   // Handle scenes update from regeneration
   const handleScenesUpdate = (updatedScenes: Scene[]) => {
@@ -684,8 +695,11 @@ export function GenerationResult({
                   : false,
             },
           ]);
+          setExportLogsVersion((v) => v + 1);
           shouldAutoDownloadRef.current = true;
-          void exportVideo(scenes, format, brandMark).catch(() => {});
+          void exportVideo(scenes, format, brandMark).catch(() => {
+            setExportLogsVersion((v) => v + 1);
+          });
         }}
         onDownloadImages={() => downloadImagesAsZip(scenes, title)}
         onRegenerateAll={onRegenerateAll}
@@ -702,6 +716,58 @@ export function GenerationResult({
         hasVideo={scenes.some((s) => !!s.imageUrl)}
       />
 
+      {/* Export Logs Modal */}
+      {showExportLogs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">Export Logs</h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowExportLogs(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(exportLogText || "");
+                  } catch {
+                    // ignore clipboard failures (e.g. permissions)
+                  }
+                }}
+                disabled={!exportLogText}
+              >
+                <Copy className="h-4 w-4" />
+                Copy
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  clearVideoExportLogs();
+                  setExportLogsVersion((v) => v + 1);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Clear
+              </Button>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/30 p-3 max-h-[60vh] overflow-auto">
+              <pre className="text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                {exportLogText || "No export logs captured yet."}
+              </pre>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Tip: copy these logs and paste them into chat after the export fails.
+            </p>
+          </Card>
+        </div>
+      )}
 
       {/* Scene Edit Modal */}
       {editingSceneIndex !== null && scenes[editingSceneIndex] && (

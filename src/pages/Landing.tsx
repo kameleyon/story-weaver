@@ -1,10 +1,11 @@
-import { FileText, Volume2, Video, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
+import { motion } from "framer-motion";
+import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
 import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ThemedLogo } from "@/components/ThemedLogo";
 import featuresBackground from "@/assets/features-bg-dark.png";
+import motionmaxLogo from "@/assets/motionmax-logo.png";
 import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
 import heroVideoPoster from "@/assets/hero-video-poster.png";
@@ -21,9 +22,9 @@ const features = [
     icon: Volume2,
   },
   {
-    title: "Visual Storytelling",
-    description: "Turn your ideas into captivating videos with custom illustrations, animations, and cinematic scenes.",
-    icon: Video,
+    title: "Audio Storytelling",
+    description: "Turn your ideas into immersive audio experiences with custom illustrations and animations.",
+    icon: Headphones,
   },
 ];
 
@@ -39,7 +40,7 @@ const pricingPlans = [
       { text: "720p quality", included: true },
       { text: "5 basic visual styles", included: true },
       { text: `${PLAN_LIMITS.free.allowedFormats.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(" ")} format only`, included: true },
-      { text: "Watermark on exports", included: false },
+      { text: "Watermark on exports", included: true },
       { text: "Voice cloning", included: !PLAN_LIMITS.free.allowVoiceCloning },
       { text: "Infographics", included: PLAN_LIMITS.free.infographicsPerMonth > 0 },
     ],
@@ -97,6 +98,7 @@ const pricingPlans = [
       { text: "Full narration + multilingual", included: true },
       { text: `${PLAN_LIMITS.professional.voiceClones} voice clones`, included: PLAN_LIMITS.professional.allowVoiceCloning },
       { text: "Unlimited infographics", included: PLAN_LIMITS.professional.infographicsPerMonth > 0 },
+      { text: "API access (5K requests/mo)", included: true },
       { text: "Priority support (12h)", included: true },
     ],
     buttonText: "Upgrade to Professional",
@@ -113,7 +115,8 @@ export default function Landing() {
       {/* Navigation with frosted glass effect */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/30">
         <div className="mx-auto flex h-16 sm:h-20 max-w-6xl items-center justify-between px-6 sm:px-8">
-          <ThemedLogo className="h-8 sm:h-10 w-auto" />
+          {/* Logo removed - main logo is in hero */}
+          <div className="w-8 sm:w-10" />
           
           {/* Nav Links */}
           <nav className="hidden items-center gap-8 md:flex">
@@ -126,12 +129,6 @@ export default function Landing() {
             <a href="#about" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
               About
             </a>
-            <button
-              onClick={() => navigate("/auth")}
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Sign In
-            </button>
           </nav>
           
           {/* Right Actions */}
@@ -162,8 +159,12 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full pb-16 md:pb-24">
           <div className="flex flex-col xl:grid xl:grid-cols-2 gap-8 xl:gap-16 items-center">
             {/* Left Content */}
-            <div
-              className="max-w-2xl text-center xl:text-left animate-fade-in"
+            {/* Left Content */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="max-w-2xl text-center xl:text-left"
             >
               <img 
                 src={motionMaxHeroLogo} 
@@ -182,11 +183,14 @@ export default function Landing() {
               >
                 Try for Free
               </Button>
-            </div>
+            </motion.div>
 
             {/* Right Illustration - Hero Video */}
-            <div
-              className="w-full max-w-2xl animate-scale-in"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="w-full max-w-2xl"
             >
               <div className="w-full rounded-2xl shadow-2xl overflow-hidden">
                 <video
@@ -199,7 +203,7 @@ export default function Landing() {
                   Your browser does not support the video tag.
                 </video>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -214,24 +218,33 @@ export default function Landing() {
           backgroundPosition: 'center',
         }}
       >
+        {/* No overlay needed - dark background has sufficient contrast */}
         <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">
-          <div className="text-center mb-16 animate-fade-in">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
               Why MotionMax?
             </h2>
             <p className="mt-4 text-lg text-white/90 max-w-2xl mx-auto">
               From idea to polished content in minutes. Our AI handles the heavy lifting so you can focus on your message.
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid gap-6 md:grid-cols-3">
             {features.map((feature, index) => {
               const IconComponent = feature.icon;
               return (
-                <div
+                <motion.div
                   key={feature.title}
-                  className="text-center p-6 rounded-2xl bg-black/25 backdrop-blur-sm border border-white/20 shadow-lg animate-fade-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className="text-center p-6 rounded-2xl bg-black/25 backdrop-blur-sm border border-white/20 shadow-lg"
                 >
                   <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
                     <IconComponent className="h-7 w-7 text-white" />
@@ -242,7 +255,7 @@ export default function Landing() {
                   <p className="text-sm text-white/90 leading-relaxed">
                     {feature.description}
                   </p>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -252,23 +265,31 @@ export default function Landing() {
       {/* Pricing Section */}
       <section id="pricing" className="py-24 sm:py-32 border-t border-border/30">
         <div className="mx-auto max-w-7xl px-6 sm:px-8">
-          <div className="text-center mb-16 animate-fade-in">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
               Simple, transparent pricing
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
               Start free, upgrade when you need more.
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {pricingPlans.map((plan, index) => {
               const IconComponent = plan.icon;
               return (
-                <div
+                <motion.div
                   key={plan.name}
-                  className={`rounded-2xl border ${plan.popular ? 'border-2 border-primary' : 'border-border/50'} bg-card p-6 relative flex flex-col animate-fade-in`}
-                  style={{ animationDelay: `${index * 100}ms` }}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`rounded-2xl border ${plan.popular ? 'border-2 border-primary' : 'border-border/50'} bg-card p-6 relative flex flex-col`}
                 >
                   {plan.popular && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -314,7 +335,7 @@ export default function Landing() {
                   >
                     {plan.buttonText}
                   </Button>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -324,7 +345,11 @@ export default function Landing() {
       {/* Simple CTA Section */}
       <section className="py-24 sm:py-32 border-t border-border/30">
         <div className="mx-auto max-w-3xl px-6 sm:px-8 text-center">
-          <div className="animate-fade-in">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
               Ready to get started?
             </h2>
@@ -344,19 +369,24 @@ export default function Landing() {
                 size="lg"
                 variant="ghost"
                 className="text-muted-foreground hover:text-foreground"
-                asChild
+                onClick={() => navigate("/pricing")}
               >
-                <a href="#pricing">View Pricing</a>
+                View Pricing
               </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* About Us Section */}
       <section id="about" className="py-20 sm:py-24 border-t border-border/30 bg-muted/30">
         <div className="mx-auto max-w-4xl px-6 sm:px-8">
-          <div className="text-center space-y-6 animate-fade-in">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center space-y-6"
+          >
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               About MotionMax
             </h2>
@@ -380,16 +410,16 @@ export default function Landing() {
                 </a>
               </p>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-border/30 py-10">
         <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 px-6 sm:px-8">
-          <ThemedLogo className="h-10 w-auto" />
+          <img src={motionmaxLogo} alt="MotionMax" className="h-10 w-auto" />
           <p className="text-sm text-muted-foreground">
-            © 2026 MotionMax. All rights reserved.
+            © 2025 MotionMax. All rights reserved.
           </p>
         </div>
       </footer>

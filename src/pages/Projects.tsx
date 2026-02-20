@@ -22,7 +22,7 @@ import {
   FolderOpen,
   Video,
   Clapperboard,
-  BarChart3,
+  Wallpaper,
   Wand2,
   Clock,
   LayoutList,
@@ -260,7 +260,6 @@ export default function Projects() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-projects"] });
       queryClient.invalidateQueries({ queryKey: ["recent-projects"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-recent"] });
       toast.success("Project deleted");
     },
     onError: (error) => toast.error("Failed to delete: " + error.message),
@@ -274,7 +273,6 @@ export default function Projects() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-projects"] });
       queryClient.invalidateQueries({ queryKey: ["recent-projects"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-recent"] });
       setSelectedIds(new Set());
       toast.success("Projects deleted");
     },
@@ -410,7 +408,7 @@ export default function Projects() {
         setShareUrl(`${window.location.origin}/share/${existingShare.share_token}`);
       } else {
         // Create new share token
-        const shareToken = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+        const shareToken = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
         const { error } = await supabase.from("project_shares").insert({
           project_id: project.id,
           user_id: user?.id,
@@ -457,12 +455,6 @@ export default function Projects() {
       // If there's a pre-rendered video URL, download that
       if (generation.video_url) {
         const response = await fetch(generation.video_url);
-        if (!response.ok) {
-          // Likely an expired signed URL — redirect to workspace to re-export
-          toast.error("Video URL has expired. Opening project to re-export...");
-          navigate(`/app/create?mode=doc2video&project=${project.id}`);
-          return;
-        }
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -692,7 +684,7 @@ export default function Projects() {
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
-                              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                              <Wallpaper className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : (
                               <Video className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             )}
@@ -802,7 +794,7 @@ export default function Projects() {
                 <span className="hidden sm:inline text-xs sm:text-sm">stories</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-1.5" title="SmartFlow">
-                <BarChart3 className="h-3.5 w-3.5" />
+                <Wallpaper className="h-3.5 w-3.5" />
                 <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "smartflow").length}</span>
                 <span className="hidden sm:inline text-xs sm:text-sm">smartflow</span>
               </div>

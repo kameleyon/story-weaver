@@ -18,7 +18,7 @@ import {
   Home,
   Clapperboard,
   Mic,
-  BarChart3,
+  Wallpaper,
   MicVocal,
   Shield,
   Film,
@@ -74,7 +74,6 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useSubscription, STRIPE_PLANS } from "@/hooks/useSubscription";
 import { ProjectSearch } from "@/components/layout/ProjectSearch";
 import { useState, useEffect } from "react";
-import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { toast } from "sonner";
 
 // No external props needed — navigation is handled internally
@@ -103,8 +102,6 @@ export function AppSidebar() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-  const [featureUpgradeOpen, setFeatureUpgradeOpen] = useState(false);
-  const [featureUpgradeReason, setFeatureUpgradeReason] = useState("");
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   // Show upgrade modal for free tier or cancelled users (once per session per tier version)
@@ -366,45 +363,24 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               {/* Smart Flow */}
-              {(() => {
-                const canAccessSmartFlow = isAdmin || plan !== "free";
-                return (
-                  <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton
-                          onClick={() => {
-                            if (canAccessSmartFlow) {
-                              navigate("/app/create?mode=smartflow");
-                            } else {
-                              setFeatureUpgradeReason("Smart Flow requires a Starter plan or higher. Upgrade to create infographic-style videos.");
-                              setFeatureUpgradeOpen(true);
-                            }
-                          }}
-                          className={`rounded-lg py-2.5 transition-colors ${
-                            !canAccessSmartFlow
-                              ? "opacity-40 cursor-not-allowed"
-                              : isCreateRoute && currentMode === "smartflow" 
-                                ? "bg-primary/10 text-primary cursor-pointer" 
-                                : "hover:bg-sidebar-accent/50 cursor-pointer"
-                          } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
-                        >
-                          <BarChart3 className="h-4 w-4 shrink-0" />
-                          {!isCollapsed && (
-                            <span className="text-sm flex items-center gap-2">
-                              Smart Flow
-                              {!canAccessSmartFlow && (
-                                <Crown className="h-3 w-3 text-muted-foreground" />
-                              )}
-                            </span>
-                          )}
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      {isCollapsed && <TooltipContent side="right">Smart Flow{!canAccessSmartFlow ? " (Starter plan required)" : ""}</TooltipContent>}
-                    </Tooltip>
-                  </SidebarMenuItem>
-                );
-              })()}
+              <SidebarMenuItem className={isCollapsed ? "w-auto" : "w-full"}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => navigate("/app/create?mode=smartflow")}
+                      className={`cursor-pointer rounded-lg py-2.5 transition-colors ${
+                        isCreateRoute && currentMode === "smartflow" 
+                          ? "bg-primary/10 text-primary" 
+                          : "hover:bg-sidebar-accent/50"
+                      } ${isCollapsed ? "w-10 h-10 p-0 flex items-center justify-center" : "w-full px-3"}`}
+                    >
+                      <Wallpaper className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && <span className="text-sm">Smart Flow</span>}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  {isCollapsed && <TooltipContent side="right">Smart Flow</TooltipContent>}
+                </Tooltip>
+              </SidebarMenuItem>
 
               {/* Cinematic - Beta */}
               {(() => {
@@ -414,14 +390,7 @@ export function AppSidebar() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton
-                          onClick={() => {
-                            if (canAccessCinematic) {
-                              navigate("/app/create?mode=cinematic");
-                            } else {
-                              setFeatureUpgradeReason("Cinematic mode requires a Professional plan or higher. Upgrade to create cinematic-quality videos.");
-                              setFeatureUpgradeOpen(true);
-                            }
-                          }}
+                          onClick={() => canAccessCinematic && navigate("/app/create?mode=cinematic")}
                           className={`rounded-lg py-2.5 transition-colors ${
                             !canAccessCinematic
                               ? "opacity-40 cursor-not-allowed"
@@ -522,7 +491,7 @@ export function AppSidebar() {
                     const ProjectIcon = project.project_type === "storytelling" 
                       ? Clapperboard 
                       : project.project_type === "smartflow" || project.project_type === "smart-flow"
-                        ? BarChart3
+                        ? Wallpaper
                         : project.project_type === "cinematic"
                           ? Film
                           : Video;
@@ -713,14 +682,6 @@ export function AppSidebar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Feature Upgrade Modal */}
-      <UpgradeRequiredModal
-        open={featureUpgradeOpen}
-        onOpenChange={setFeatureUpgradeOpen}
-        reason={featureUpgradeReason}
-        showCreditsOption={false}
-      />
     </>
   );
 }
