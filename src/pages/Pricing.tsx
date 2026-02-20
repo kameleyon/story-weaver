@@ -133,7 +133,6 @@ const plans = [
       "Unlimited infographics",
       "Full brand kit",
       "Advanced analytics",
-      "API access (5K requests/mo)",
       "Batch export",
       "3 team seats",
       "Priority support (12h)",
