@@ -8,7 +8,6 @@ import {
   Lightbulb,
   Clapperboard,
   BarChart3,
-  Film,
   Menu,
   Video,
 } from "lucide-react";
@@ -235,8 +234,6 @@ export default function Dashboard() {
         return Clapperboard;
       case "smartflow":
         return BarChart3;
-      case "cinematic":
-        return Film;
       default:
         return Video;
     }

@@ -267,7 +267,7 @@ export function AdminSubscribers() {
                               <DialogHeader>
                                 <DialogTitle>User Details</DialogTitle>
                               </DialogHeader>
-                              <AdminUserDetails userId={user.id} callAdminApi={callAdminApi} />
+                              <AdminUserDetails userId={user.id} />
                             </DialogContent>
                           </Dialog>
                         </TableCell>
@@ -309,7 +309,7 @@ export function AdminSubscribers() {
                             <DialogHeader>
                               <DialogTitle>User Details</DialogTitle>
                             </DialogHeader>
-                            <AdminUserDetails userId={user.id} callAdminApi={callAdminApi} />
+                            <AdminUserDetails userId={user.id} />
                           </DialogContent>
                         </Dialog>
                       </div>

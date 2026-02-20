@@ -23,7 +23,6 @@ import {
   Video,
   Clapperboard,
   BarChart3,
-  Film,
   Wand2,
   Clock,
   LayoutList,
@@ -574,38 +573,6 @@ export default function Projects() {
           </div>
         </div>
 
-        {/* Summary Bar — shown once projects are loaded */}
-        {!isLoading && projectsWithThumbnails.length > 0 && (
-          <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-            <span className="text-xs sm:text-sm">
-              {projectsWithThumbnails.length} project{projectsWithThumbnails.length !== 1 ? "s" : ""} loaded
-              {selectedIds.size > 0 && ` • ${selectedIds.size} selected`}
-            </span>
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="flex items-center gap-1 sm:gap-1.5" title="Explainers">
-                <Video className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "doc2video" || !p.project_type).length}</span>
-                <span className="hidden sm:inline text-xs sm:text-sm">explainers</span>
-              </div>
-              <div className="flex items-center gap-1 sm:gap-1.5" title="Stories">
-                <Clapperboard className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "storytelling").length}</span>
-                <span className="hidden sm:inline text-xs sm:text-sm">stories</span>
-              </div>
-              <div className="flex items-center gap-1 sm:gap-1.5" title="Cinematic">
-                <Film className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "cinematic").length}</span>
-                <span className="hidden sm:inline text-xs sm:text-sm">cinematic</span>
-              </div>
-              <div className="flex items-center gap-1 sm:gap-1.5" title="SmartFlow">
-                <BarChart3 className="h-3.5 w-3.5" />
-                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "smartflow").length}</span>
-                <span className="hidden sm:inline text-xs sm:text-sm">smartflow</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Content */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -726,8 +693,6 @@ export default function Projects() {
                               <Clapperboard className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : project.project_type === "smartflow" ? (
                               <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-                            ) : project.project_type === "cinematic" ? (
-                              <Film className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : (
                               <Video className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             )}
@@ -818,6 +783,32 @@ export default function Projects() {
           </div>
         )}
 
+        {/* Footer Stats */}
+        <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
+          <span className="text-xs sm:text-sm">
+            {projectsWithThumbnails.length} project{projectsWithThumbnails.length !== 1 ? "s" : ""} loaded
+            {selectedIds.size > 0 && ` • ${selectedIds.size} selected`}
+          </span>
+          {projectsWithThumbnails.length > 0 && (
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-1 sm:gap-1.5" title="Explainers">
+                <Video className="h-3.5 w-3.5" />
+                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "doc2video" || !p.project_type).length}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm">explainers</span>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5" title="Stories">
+                <Clapperboard className="h-3.5 w-3.5" />
+                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "storytelling").length}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm">stories</span>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5" title="SmartFlow">
+                <BarChart3 className="h-3.5 w-3.5" />
+                <span className="text-xs sm:text-sm">{projectsWithThumbnails.filter(p => p.project_type === "smartflow").length}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm">smartflow</span>
+              </div>
+            </div>
+          )}
+        </div>
         </div>
       </main>
 

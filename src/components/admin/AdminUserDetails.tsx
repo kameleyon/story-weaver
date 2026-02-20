@@ -65,12 +65,10 @@ interface UserDetails {
 interface AdminUserDetailsProps {
   userId: string;
   onFlagCreated?: () => void;
-  callAdminApi?: (action: string, params?: Record<string, unknown>) => Promise<unknown>;
 }
 
-export function AdminUserDetails({ userId, onFlagCreated, callAdminApi: callAdminApiProp }: AdminUserDetailsProps) {
-  const { callAdminApi: callAdminApiHook } = useAdminAuth();
-  const callAdminApi = callAdminApiProp || callAdminApiHook;
+export function AdminUserDetails({ userId, onFlagCreated }: AdminUserDetailsProps) {
+  const { callAdminApi, user: adminUser } = useAdminAuth();
   const [data, setData] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

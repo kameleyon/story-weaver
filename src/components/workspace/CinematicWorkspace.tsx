@@ -51,7 +51,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     const [characterConsistencyEnabled, setCharacterConsistencyEnabled] = useState(false);
 
     // Use shared pipeline instead of manual state management
-    const { state: generationState, startGeneration, reset, loadProject, cancelGeneration } = useGenerationPipeline();
+    const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
     // Subscription and plan validation  
     const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
@@ -445,23 +445,21 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                          {showAdminLogs ? "Hide" : "Show"} Generation Logs ({adminLogs.length})
                        </Button>
                        {showAdminLogs && (
-                          <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-border/50 bg-background/95 p-3 font-mono text-xs space-y-1">
-                            {adminLogs.map((log) => (
-                              <div key={log.id} className={cn(
-                                "flex gap-2",
-                                log.category === "system_error" && "text-destructive",
-                                log.category === "system_warning" && "text-yellow-600 dark:text-yellow-400",
-                                log.category === "admin_action" && "text-primary",
-                                !["system_error","system_warning","admin_action"].includes(log.category) && "text-foreground/70",
-                              )}>
-                                <span className="text-muted-foreground whitespace-nowrap shrink-0">
-                                  {new Date(log.created_at).toLocaleTimeString()}
-                                </span>
-                                <span className="text-muted-foreground shrink-0">[{log.category}]</span>
-                                <span className="break-all">{log.message}</span>
-                              </div>
-                            ))}
-                          </div>
+                         <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-border/50 bg-background/80 p-3 font-mono text-xs space-y-1">
+                           {adminLogs.map((log) => (
+                             <div key={log.id} className={cn(
+                               "flex gap-2",
+                               log.event_type === "error" && "text-destructive",
+                               log.event_type === "warning" && "text-amber-500 dark:text-amber-400",
+                             )}>
+                               <span className="text-muted-foreground whitespace-nowrap">
+                                 {new Date(log.created_at).toLocaleTimeString()}
+                               </span>
+                               <span className="text-muted-foreground">[{log.category}]</span>
+                               <span>{log.message}</span>
+                             </div>
+                           ))}
+                         </div>
                        )}
                      </div>
                    )}
@@ -472,7 +470,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="max-w-5xl mx-auto space-y-4"
+                  className="max-w-5xl mx-auto"
                 >
                   <CinematicResult
                     title={generationState.title || "Untitled Cinematic"}
@@ -483,46 +481,6 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     onNewProject={handleNewProject}
                     format={format}
                   />
-                  {/* Admin Generation Logs – shown under completed projects too */}
-                  {isAdmin && (
-                    <div className="mt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (!showAdminLogs && generationState.generationId) {
-                            await fetchAdminLogs(generationState.generationId);
-                          }
-                          setShowAdminLogs(!showAdminLogs);
-                        }}
-                        className="gap-2 text-xs text-muted-foreground"
-                      >
-                        <Terminal className="h-3.5 w-3.5" />
-                        {showAdminLogs ? "Hide" : "Show"} Generation Logs {adminLogs.length > 0 ? `(${adminLogs.length})` : ""}
-                      </Button>
-                      {showAdminLogs && (
-                        <div className="mt-2 max-h-80 overflow-y-auto rounded-lg border border-border/50 bg-background/95 p-3 font-mono text-xs space-y-1">
-                          {adminLogs.length === 0 ? (
-                            <p className="text-muted-foreground text-center py-4">No logs found for this generation.</p>
-                          ) : adminLogs.map((log) => (
-                            <div key={log.id} className={cn(
-                              "flex gap-2",
-                              log.category === "system_error" && "text-destructive",
-                              log.category === "system_warning" && "text-yellow-600 dark:text-yellow-400",
-                              log.category === "admin_action" && "text-primary",
-                              !["system_error","system_warning","admin_action"].includes(log.category) && "text-foreground/70",
-                            )}>
-                              <span className="text-muted-foreground whitespace-nowrap shrink-0">
-                                {new Date(log.created_at).toLocaleTimeString()}
-                              </span>
-                              <span className="text-muted-foreground shrink-0">[{log.category}]</span>
-                              <span className="break-all">{log.message}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </motion.div>
               ) : (
                 <motion.div

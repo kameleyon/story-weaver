@@ -1,6 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff, RefreshCw, Terminal, Loader2 } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,6 @@ import { useSubscription, validateGenerationAccess, getCreditsRequired, PLAN_LIM
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { cn } from "@/lib/utils";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
@@ -53,41 +51,9 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [showSuspendedModal, setShowSuspendedModal] = useState(false);
   const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
-  const { state: generationState, startGeneration, reset, loadProject, cancelGeneration } = useGenerationPipeline();
-  const { isAdmin } = useAdminAuth();
-  const [adminLogs, setAdminLogs] = useState<any[]>([]);
-  const [showAdminLogs, setShowAdminLogs] = useState(false);
-  const [isResuming, setIsResuming] = useState(false);
-
-  const fetchAdminLogs = useCallback(async (genId: string) => {
-    if (!isAdmin) return;
-    const { data } = await supabase
-      .from("system_logs")
-      .select("*")
-      .eq("generation_id", genId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (data) setAdminLogs(data);
-  }, [isAdmin]);
-
-  useEffect(() => {
-    if (isAdmin && generationState.generationId && (generationState.step === "complete" || generationState.step === "error")) {
-      fetchAdminLogs(generationState.generationId);
-    }
-  }, [isAdmin, generationState.generationId, generationState.step, fetchAdminLogs]);
-
-  const handleResume = async () => {
-    if (!generationState.projectId) return;
-    setIsResuming(true);
-    try {
-      await loadProject(generationState.projectId);
-    } finally {
-      setIsResuming(false);
-    }
-  };
+  const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
 
   const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
-
 
   // Get disabled formats based on plan (free users can only use landscape)
   const limits = PLAN_LIMITS[plan];
@@ -398,57 +364,15 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-2xl mx-auto space-y-6"
               >
-                <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-8 text-center">
-                  <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                <div className="rounded-2xl border border-primary/50 bg-primary/10 p-8 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto text-primary mb-4" />
                   <h2 className="text-xl font-semibold text-foreground mb-2">Generation Failed</h2>
                   <p className="text-muted-foreground mb-6">{getUserFriendlyErrorMessage(generationState.error)}</p>
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                    {generationState.projectId && (
-                      <Button onClick={handleResume} disabled={isResuming} className="gap-2">
-                        {isResuming ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                        Continue Generation
-                      </Button>
-                    )}
-                    <Button onClick={() => { reset(); }} variant="outline" className="gap-2">
-                      <RotateCcw className="h-4 w-4" />
-                      Start Over
-                    </Button>
-                  </div>
+                  <Button onClick={() => { reset(); }} variant="outline" className="gap-2">
+                    <RotateCcw className="h-4 w-4" />
+                    Try Again
+                  </Button>
                 </div>
-
-                {/* Admin Generation Logs */}
-                {isAdmin && adminLogs.length > 0 && (
-                  <div className="mt-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAdminLogs(!showAdminLogs)}
-                      className="gap-2 text-xs text-muted-foreground"
-                    >
-                      <Terminal className="h-3.5 w-3.5" />
-                      {showAdminLogs ? "Hide" : "Show"} Generation Logs ({adminLogs.length})
-                    </Button>
-                    {showAdminLogs && (
-                      <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-border/50 bg-background/95 p-3 font-mono text-xs space-y-1">
-                        {adminLogs.map((log) => (
-                          <div key={log.id} className={cn(
-                            "flex gap-2",
-                            log.category === "system_error" && "text-destructive",
-                            log.category === "system_warning" && "text-yellow-600 dark:text-yellow-400",
-                            log.category === "admin_action" && "text-primary",
-                            !["system_error","system_warning","admin_action"].includes(log.category) && "text-foreground/70",
-                          )}>
-                            <span className="text-muted-foreground whitespace-nowrap shrink-0">
-                              {new Date(log.created_at).toLocaleTimeString()}
-                            </span>
-                            <span className="text-muted-foreground shrink-0">[{log.category}]</span>
-                            <span className="break-all">{log.message}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </motion.div>
             ) : generationState.step === "complete" && generationState.scenes ? (
               <motion.div
@@ -478,7 +402,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                 exit={{ opacity: 0, y: -20 }}
                 className="max-w-2xl mx-auto space-y-6"
               >
-                <GenerationProgress state={generationState} onCancel={cancelGeneration} />
+                <GenerationProgress state={generationState} />
               </motion.div>
             )}
           </AnimatePresence>
