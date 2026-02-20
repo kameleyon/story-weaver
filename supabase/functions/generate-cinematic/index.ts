@@ -928,7 +928,7 @@ async function startSeedance(
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   const visualPrompt =
-    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+    scene.visualPrompt || scene.voiceover || "Cinematic scene with dramatic lighting";
   console.log(
     `[Seedance-Hypereal] Starting scene ${scene.number} | image: ${imageUrl.substring(0, 80)}... | prompt: ${visualPrompt.substring(0, 100)}...`,
   );
@@ -1085,7 +1085,7 @@ async function startSeedanceT2V(scene: Scene, format: "landscape" | "portrait" |
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   const visualPrompt =
-    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+    scene.visualPrompt || scene.voiceover || "Cinematic scene with dramatic lighting";
 
   const videoPrompt = `${visualPrompt}
 
@@ -1723,7 +1723,7 @@ serve(async (req) => {
       if (!scene) throw new Error("Scene not found");
 
       // Explicit regeneration flag from frontend
-      const isRegeneration = !!body.regenerate;
+      const isRegeneration = !!(body as any).regenerate;
       if (isRegeneration) {
         console.log(
           `[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`,
@@ -1751,7 +1751,7 @@ serve(async (req) => {
         // Both initial gen and regen use Hypereal Seedance 1.5
         // Initial = T2V (text-to-video, no image, 5s), Regen = I2V (image-to-video)
         if (isRegeneration) {
-          const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
+          const predictionId = await startSeedance(scene, scene.imageUrl!, format, replicateToken);
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
