@@ -159,10 +159,8 @@ export default function VoiceLab() {
 
     } catch (error) {
       console.error("Failed to start recording:", error);
-      toast({
-        title: "Microphone access denied",
+      toast.error("Microphone access denied", {
         description: "Please allow microphone access in your browser settings to record audio.",
-        variant: "destructive",
       });
     }
   };
@@ -191,10 +189,8 @@ export default function VoiceLab() {
     if (file && (hasValidType || hasValidExtension)) {
       setUploadedFile(file);
     } else {
-      toast({
-        title: "Invalid file type",
+      toast.error("Invalid file type", {
         description: "Please upload an MP3, WAV, M4A, or MP4 file.",
-        variant: "destructive",
       });
     }
   };
@@ -214,10 +210,8 @@ export default function VoiceLab() {
     try {
       const audioDuration = await getAudioDuration(audioBlob);
       if (audioDuration < 10) {
-        toast({
-          title: "Audio too short",
+        toast.error("Audio too short", {
           description: "Audio must be at least 10 seconds long for voice cloning.",
-          variant: "destructive",
         });
         return;
       }
