@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
-import { FileText, Volume2, Headphones, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
+import { FileText, Volume2, Clapperboard, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
 import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import featuresBackground from "@/assets/features-bg-dark.png";
+import featuresBackgroundDark from "@/assets/features-bg-dark.png";
 import motionmaxLogo from "@/assets/motionmax-logo.png";
 import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
@@ -22,9 +22,9 @@ const features = [
     icon: Volume2,
   },
   {
-    title: "Audio Storytelling",
-    description: "Turn your ideas into immersive audio experiences with custom illustrations and animations.",
-    icon: Headphones,
+    title: "AI Video Generation",
+    description: "Generate fully produced videos with AI visuals, scene-by-scene storytelling, and professional narration.",
+    icon: Clapperboard,
   },
 ];
 
@@ -40,7 +40,7 @@ const pricingPlans = [
       { text: "720p quality", included: true },
       { text: "5 basic visual styles", included: true },
       { text: `${PLAN_LIMITS.free.allowedFormats.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(" ")} format only`, included: true },
-      { text: "Watermark on exports", included: true },
+      { text: "Watermark on exports", included: false },
       { text: "Voice cloning", included: !PLAN_LIMITS.free.allowVoiceCloning },
       { text: "Infographics", included: PLAN_LIMITS.free.infographicsPerMonth > 0 },
     ],
@@ -98,7 +98,6 @@ const pricingPlans = [
       { text: "Full narration + multilingual", included: true },
       { text: `${PLAN_LIMITS.professional.voiceClones} voice clones`, included: PLAN_LIMITS.professional.allowVoiceCloning },
       { text: "Unlimited infographics", included: PLAN_LIMITS.professional.infographicsPerMonth > 0 },
-      { text: "API access (5K requests/mo)", included: true },
       { text: "Priority support (12h)", included: true },
     ],
     buttonText: "Upgrade to Professional",
@@ -115,8 +114,8 @@ export default function Landing() {
       {/* Navigation with frosted glass effect */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-md border-b border-border/30">
         <div className="mx-auto flex h-16 sm:h-20 max-w-6xl items-center justify-between px-6 sm:px-8">
-          {/* Logo removed - main logo is in hero */}
-          <div className="w-8 sm:w-10" />
+          {/* Logo */}
+          <img src={motionmaxLogo} alt="MotionMax" className="h-8 sm:h-10 w-auto" />
           
           {/* Nav Links */}
           <nav className="hidden items-center gap-8 md:flex">
@@ -143,7 +142,14 @@ export default function Landing() {
             >
               <CircleUserRound className="h-5 w-5" />
             </Button>
-            {/* Desktop: Get Started button */}
+            {/* Desktop: Sign In + Get Started */}
+            <Button
+              variant="ghost"
+              className="hidden md:flex text-sm font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => navigate("/auth")}
+            >
+              Sign In
+            </Button>
             <Button
               className="hidden md:flex rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
               onClick={() => navigate("/auth")}
@@ -158,7 +164,6 @@ export default function Landing() {
       <section className="relative min-h-screen flex items-center pt-32 md:pt-40 xl:pt-16">
         <div className="mx-auto max-w-7xl px-6 sm:px-8 w-full pb-16 md:pb-24">
           <div className="flex flex-col xl:grid xl:grid-cols-2 gap-8 xl:gap-16 items-center">
-            {/* Left Content */}
             {/* Left Content */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -213,7 +218,7 @@ export default function Landing() {
         id="features" 
         className="py-24 sm:py-32 relative overflow-hidden"
         style={{
-          backgroundImage: `url(${featuresBackground})`,
+          backgroundImage: `url(${featuresBackgroundDark})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -365,14 +370,15 @@ export default function Landing() {
                 Start Creating Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button
-                size="lg"
-                variant="ghost"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => navigate("/pricing")}
-              >
-                View Pricing
-              </Button>
+              <a href="#pricing">
+                <Button
+                  size="lg"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  View Pricing
+                </Button>
+              </a>
             </div>
           </motion.div>
         </div>
@@ -419,7 +425,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 px-6 sm:px-8">
           <img src={motionmaxLogo} alt="MotionMax" className="h-10 w-auto" />
           <p className="text-sm text-muted-foreground">
-            © 2025 MotionMax. All rights reserved.
+            © 2026 MotionMax. All rights reserved.
           </p>
         </div>
       </footer>
