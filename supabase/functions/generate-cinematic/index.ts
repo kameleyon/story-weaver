@@ -1410,13 +1410,24 @@ serve(async (req) => {
     if (!openrouterApiKey) throw new Error("OPENROUTER_API_KEY not configured");
     if (!replicateToken) throw new Error("REPLICATE_API_TOKEN not configured");
 
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseAnonKey) throw new Error("SUPABASE_ANON_KEY not configured");
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify user
+    // Verify user via getClaims (local JWT validation — no network round-trip, no service-role mismatch)
     const token = sanitizeBearer(authHeader);
-    const { data: authData, error: authError } = await supabase.auth.getUser(token);
-    const user = authData?.user;
-    if (authError || !user) return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
+    }
+    const userId = claimsData.claims.sub as string;
+    const userEmail = claimsData.claims.email as string;
+    if (!userId) return jsonResponse({ error: "Invalid authentication" }, { status: 401 });
+    const user = { id: userId, email: userEmail };
 
     // Verify plan access: Professional, Enterprise, or Admin
     const { data: isAdmin } = await supabase.rpc("is_admin", { _user_id: user.id });
