@@ -975,7 +975,7 @@ export function useGenerationPipeline() {
 
       const { data: generation, error: genError } = await supabase
         .from("generations")
-        .select("id,status,progress,scenes,error_message,video_url")
+        .select("id,status,progress,scenes,error_message,video_url,started_at")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -1125,6 +1125,31 @@ export function useGenerationPipeline() {
           statusMessage: "Resuming — waiting for generation to complete...",
         });
 
+      // Check upfront if this generation is already dead (started_at is stale and not actively running)
+        const genStartedAt = generation.started_at ? new Date(generation.started_at).getTime() : 0;
+        const genIsStale = genStartedAt > 0 && (Date.now() - genStartedAt) > 10 * 60 * 1000; // >10 min stale
+        const genHasNoHeartbeat = genStartedAt === 0;
+
+        if (genIsStale || genHasNoHeartbeat) {
+          // Generation is frozen — mark it as error immediately, no need to poll
+          console.log(`[loadProject] Generation is frozen (started_at stale by ${Math.round((Date.now() - genStartedAt) / 60000)}min) → marking as error`);
+          await supabase
+            .from("generations")
+            .update({ status: "error", error_message: "Generation timed out" })
+            .eq("id", generation.id);
+          setState((prev) => ({
+            ...prev,
+            step: "error",
+            isGenerating: false,
+            error: "This generation timed out. Please try again.",
+            projectId,
+            generationId: generation.id,
+            title: project.title,
+            format: project.format as "landscape" | "portrait" | "square",
+          }));
+          return project;
+        }
+
         // Poll DB every 3 seconds until status changes from "generating"
         const POLL_MAX = 360; // 18 minutes (3s × 360 = 18 min)
         let pollCount = 0;
@@ -1145,6 +1170,7 @@ export function useGenerationPipeline() {
 
           if (!pollGen || (pollCount >= POLL_MAX && !isAlive)) {
             clearInterval(pollIntervalRef.current!);
+            pollIntervalRef.current = null;
             const msg = pollCount >= POLL_MAX ? "Generation timed out. Please try again." : "Could not find generation.";
             console.log(`[loadProject] Poll ended: ${msg}`);
             setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
