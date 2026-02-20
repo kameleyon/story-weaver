@@ -42,6 +42,7 @@ const getProjectIcon = (projectType?: string) => {
     case "storytelling":
       return Clapperboard;
     case "smartflow":
+    case "smart-flow":
       return BarChart3;
     default:
       return Video;

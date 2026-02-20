@@ -60,7 +60,7 @@ export function useVoiceCloning() {
 
   // Clone voice mutation
   const cloneVoiceMutation = useMutation({
-    mutationFn: async ({ file, name, description, removeNoise = true }: { file: Blob; name: string; description?: string; removeNoise?: boolean }) => {
+    mutationFn: async ({ file, name, description }: { file: Blob; name: string; description?: string }) => {
       setIsCloning(true);
       
       // Upload audio file first - returns storage path (not URL)
@@ -68,7 +68,7 @@ export function useVoiceCloning() {
       
       // Call clone-voice edge function with storage path
       const { data, error } = await supabase.functions.invoke("clone-voice", {
-        body: { storagePath, voiceName: name, description, removeNoise },
+        body: { storagePath, voiceName: name, description },
       });
 
       if (error) {

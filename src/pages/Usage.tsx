@@ -34,7 +34,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, format, startOfMonth, endOfMonth, subMonths, isSameMonth } from "date-fns";
-import { CREDIT_COSTS } from "@/lib/planLimits";
 import { useToast } from "@/hooks/use-toast";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
@@ -102,29 +101,20 @@ export default function Usage() {
       const monthStart = startOfMonth(now);
       const monthEnd = endOfMonth(now);
 
-      // Get generations for current billing cycle with project info for credit calc
+      // Get generations for current billing cycle
       const { data: generations, error } = await supabase
         .from("generations")
-        .select("id, created_at, status, project:projects(project_type, length)")
+        .select("id, created_at, status")
         .eq("user_id", user.id)
         .gte("created_at", monthStart.toISOString())
         .lte("created_at", monthEnd.toISOString());
 
       if (error) throw error;
 
-      const completedGenerations = generations?.filter(g => g.status === "complete") || [];
+      const completedGenerations = generations?.filter(g => g.status === "completed" || g.status === "complete") || [];
       
-      // Calculate actual credits consumed
-      const creditsUsed = completedGenerations.reduce((sum, g) => {
-        const projectType = (g.project as any)?.project_type;
-        const length = (g.project as any)?.length || "short";
-        if (projectType === "smartflow") return sum + CREDIT_COSTS.smartflow;
-        return sum + (CREDIT_COSTS[length as keyof typeof CREDIT_COSTS] || CREDIT_COSTS.short);
-      }, 0);
-
       return {
         videosCreated: completedGenerations.length,
-        creditsUsed,
         totalGenerations: generations?.length || 0,
         billingStart: monthStart,
         billingEnd: monthEnd,
@@ -167,7 +157,7 @@ export default function Usage() {
           completed_at,
           status,
           scenes,
-          project:projects(title, project_type, length)
+          project:projects(title, project_type)
         `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -217,8 +207,8 @@ export default function Usage() {
   const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
   const PlanIcon = planInfo.icon;
   const creditsLimit = planInfo.credits;
-  const creditsUsed = usageData?.creditsUsed || 0;
-  const creditsPercentage = creditsLimit === Infinity ? 0 : (creditsUsed / creditsLimit) * 100;
+  const videosCreated = usageData?.videosCreated || 0;
+  const creditsPercentage = creditsLimit === Infinity ? 0 : (videosCreated / creditsLimit) * 100;
 
   // Calculate renewal date
   const renewalDate = subscriptionEnd 
@@ -337,24 +327,24 @@ export default function Usage() {
             <Card className="border-border/50 bg-card/50 shadow-sm">
               <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
                 <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                  <Coins className="h-4 w-4 text-primary" />
-                  Credits Used This Cycle
+                  <Video className="h-4 w-4 text-primary" />
+                  Videos This Cycle
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
                 <div className="flex items-end justify-between">
                   <span className="text-2xl sm:text-3xl font-bold">
-                    {isLoadingUsage ? "..." : creditsUsed}
+                    {isLoadingUsage ? "..." : videosCreated}
                   </span>
                   <span className="text-sm text-muted-foreground">
                     / {creditsLimit === Infinity ? "∞" : creditsLimit}
                   </span>
                 </div>
-                <Progress value={Math.min(creditsPercentage, 100)} className="mt-3 h-2" />
+                <Progress value={creditsPercentage} className="mt-3 h-2" />
                 <p className="mt-2 text-xs text-muted-foreground">
                   {creditsLimit === Infinity 
                     ? "Unlimited credits with your plan" 
-                    : `${Math.max(0, creditsLimit - creditsUsed)} plan credits remaining this cycle`}
+                    : `${Math.max(0, creditsLimit - videosCreated)} credits remaining this cycle`}
                 </p>
               </CardContent>
             </Card>
@@ -371,7 +361,7 @@ export default function Usage() {
                   <span className="text-2xl sm:text-3xl font-bold">
                     {isLoadingSub ? "..." : creditsBalance}
                   </span>
-                  <span className="text-sm text-muted-foreground">available</span>
+                  <span className="text-sm text-muted-foreground">bonus credits</span>
                 </div>
                 <Button 
                   variant="outline" 
@@ -482,7 +472,7 @@ export default function Usage() {
                     <Video className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete").length}</p>
+                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length}</p>
                     <p className="text-sm text-muted-foreground">Videos Generated</p>
                   </div>
                 </div>
@@ -506,7 +496,7 @@ export default function Usage() {
                         return acc;
                       }, 0) / 60)}
                     </p>
-                    <p className="text-sm text-muted-foreground">Est. Content Minutes</p>
+                    <p className="text-sm text-muted-foreground">Total Minutes</p>
                   </div>
                 </div>
               </CardContent>
@@ -516,18 +506,11 @@ export default function Usage() {
               <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center gap-4">
                   <div className="p-3 rounded-xl bg-primary/10">
-                    <Coins className="h-5 w-5 text-primary" />
+                    <TrendingUp className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">
-                      {allActivity.filter(a => a.status === "complete").reduce((sum, a) => {
-                        const pt = (a.project as any)?.project_type;
-                        const len = (a.project as any)?.length || "short";
-                        if (pt === "smartflow") return sum + CREDIT_COSTS.smartflow;
-                        return sum + (CREDIT_COSTS[len as keyof typeof CREDIT_COSTS] || CREDIT_COSTS.short);
-                      }, 0)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Total Credits Used</p>
+                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length * 15} MB</p>
+                    <p className="text-sm text-muted-foreground">Storage Used</p>
                   </div>
                 </div>
               </CardContent>
@@ -595,13 +578,13 @@ export default function Usage() {
                             return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
                           };
                           
-                          const isComplete = activity.status === "complete";
+                          const isComplete = activity.status === "complete" || activity.status === "completed";
                           const isFailed = activity.status === "failed" || activity.status === "error";
                           const isGenerating = !isComplete && !isFailed;
                           const projectType = (activity.project as any)?.project_type;
                           const IconComponent = projectType === "storytelling" 
                             ? Clapperboard 
-                            : projectType === "smartflow"
+                            : projectType === "smartflow" || projectType === "smart-flow"
                               ? BarChart3
                               : Video;
                           
@@ -656,19 +639,10 @@ export default function Usage() {
                               </TableCell>
                               <TableCell className="py-2 px-1 sm:px-3 text-right">
                                 {isComplete ? (
-                                  (() => {
-                                    const pt = (activity.project as any)?.project_type;
-                                    const len = (activity.project as any)?.length || "short";
-                                    const cost = pt === "smartflow" 
-                                      ? CREDIT_COSTS.smartflow 
-                                      : (CREDIT_COSTS[len as keyof typeof CREDIT_COSTS] || CREDIT_COSTS.short);
-                                    return (
-                                      <div className="flex items-center justify-end gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] text-muted-foreground" title="Credits used">
-                                        <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                        <span>{cost}</span>
-                                      </div>
-                                    );
-                                  })()
+                                  <div className="flex items-center justify-end gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] text-muted-foreground" title="Credits used">
+                                    <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                    <span>1</span>
+                                  </div>
                                 ) : (
                                   <span className="text-[10px] sm:text-[11px] text-muted-foreground">—</span>
                                 )}

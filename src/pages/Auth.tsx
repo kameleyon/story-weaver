@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
-import { validatePassword } from "@/lib/passwordValidation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { PasswordStrengthIndicator } from "@/components/settings/PasswordStrengthIndicator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,9 +85,8 @@ export default function Auth() {
       }
 
       // mode === "update"
-      const pwValidation = validatePassword(password);
-      if (!pwValidation.valid) {
-        toast({ variant: "destructive", title: "Weak password", description: pwValidation.error });
+      if (password.length < 6) {
+        toast({ variant: "destructive", title: "Password too short", description: "Use at least 6 characters." });
         return;
       }
       if (password !== confirmPassword) {
@@ -219,9 +216,6 @@ export default function Auth() {
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  {(mode === "signup" || mode === "update") && (
-                    <PasswordStrengthIndicator password={password} />
-                  )}
                 </div>
               )}
 

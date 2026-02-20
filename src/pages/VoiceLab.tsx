@@ -26,8 +26,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useVoiceCloning, UserVoice } from "@/hooks/useVoiceCloning";
-import { useSubscription } from "@/hooks/useSubscription";
-import { PLAN_LIMITS } from "@/lib/planLimits";
 import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -45,8 +43,6 @@ export default function VoiceLab() {
   const navigate = useNavigate();
   const { isOpen: sidebarOpen, setIsOpen: setSidebarOpen } = useSidebarState();
   const { voices, voicesLoading, isCloning, cloneVoice, deleteVoice } = useVoiceCloning();
-  const { plan } = useSubscription();
-  const voiceCloneLimit = PLAN_LIMITS[plan]?.voiceClones ?? 0;
   
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -231,8 +227,7 @@ export default function VoiceLab() {
     await cloneVoice({ 
       file: audioBlob, 
       name: voiceName.trim(),
-      description: `Created via ${recordedBlob ? "recording" : "file upload"}`,
-      removeNoise,
+      description: `Created via ${recordedBlob ? "recording" : "file upload"}`
     });
 
     // Reset form
@@ -269,11 +264,16 @@ export default function VoiceLab() {
   };
 
   const hasAudio = !!recordedBlob || !!uploadedFile;
-  const hasReachedLimit = voices.length >= voiceCloneLimit;
-  const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasReachedLimit && consentAccepted;
+  const hasExistingVoice = voices.length >= 1;
+  const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasExistingVoice && consentAccepted;
   const isReady = hasAudio;
 
-  // Remove premature modal — only show limit warning inline when user tries to clone
+  // Show modal when user has existing voice and tries to add audio
+  useEffect(() => {
+    if (hasAudio && voices.length >= 1) {
+      setShowExistingVoiceModal(true);
+    }
+  }, [hasAudio, voices.length]);
 
   // Scroll to My Voices section when modal action is taken
   const scrollToMyVoices = () => {
@@ -548,9 +548,9 @@ export default function VoiceLab() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      {hasReachedLimit && (
+                      {hasExistingVoice && (
                         <p className="text-sm text-destructive">
-                          You've reached your voice clone limit ({voiceCloneLimit} voice{voiceCloneLimit !== 1 ? "s" : ""}). Delete an existing voice to create a new one, or upgrade your plan.
+                          You already have a cloned voice. Delete it to create a new one.
                         </p>
                       )}
                       <div className="flex justify-end">
@@ -566,7 +566,7 @@ export default function VoiceLab() {
                               Cloning...
                             </>
                           ) : (
-                            "Clone Voice"
+                            "Next"
                           )}
                         </Button>
                       </div>
@@ -617,7 +617,7 @@ export default function VoiceLab() {
                 Voice Limit Reached
               </DialogTitle>
               <DialogDescription className="pt-2">
-                You've reached your voice clone limit ({voiceCloneLimit} voice{voiceCloneLimit !== 1 ? "s" : ""}). Delete an existing voice to create a new one, or upgrade your plan for more slots.
+                You already have a cloned voice. Delete it to create a new one.
               </DialogDescription>
             </DialogHeader>
             <div className="flex justify-end gap-3 pt-4">

@@ -691,7 +691,7 @@ export default function Projects() {
                           <div className="p-1 sm:p-2 rounded-lg bg-[hsl(var(--thumbnail-surface))] border border-border/20 shrink-0">
                             {project.project_type === "storytelling" ? (
                               <Clapperboard className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-                            ) : project.project_type === "smartflow" ? (
+                            ) : project.project_type === "smartflow" || project.project_type === "smart-flow" ? (
                               <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                             ) : (
                               <Video className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />

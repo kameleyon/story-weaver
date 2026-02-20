@@ -510,7 +510,7 @@ export function AppSidebar() {
                   recentProjects.map((project) => {
                     const projectMode = project.project_type === "storytelling" 
                       ? "storytelling" 
-                      : project.project_type === "smartflow"
+                      : project.project_type === "smartflow" || project.project_type === "smart-flow"
                         ? "smartflow"
                         : project.project_type === "cinematic"
                           ? "cinematic"
@@ -521,7 +521,7 @@ export function AppSidebar() {
                     // Get appropriate icon for project type
                     const ProjectIcon = project.project_type === "storytelling" 
                       ? Clapperboard 
-                      : project.project_type === "smartflow"
+                      : project.project_type === "smartflow" || project.project_type === "smart-flow"
                         ? BarChart3
                         : project.project_type === "cinematic"
                           ? Film

@@ -6,7 +6,6 @@ import {
   User, 
   Shield,
   Loader2,
-  AlertTriangle,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -19,9 +18,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { supabase } from "@/integrations/supabase/client";
-import { validatePassword } from "@/lib/passwordValidation";
-import { PasswordStrengthIndicator } from "@/components/settings/PasswordStrengthIndicator";
-import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -161,11 +157,10 @@ export default function Settings() {
       return;
     }
 
-    const validation = validatePassword(newPassword);
-    if (!validation.valid) {
+    if (newPassword.length < 6) {
       toast({
-        title: "Weak password",
-        description: validation.error,
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
         variant: "destructive",
       });
       return;
@@ -323,7 +318,6 @@ export default function Settings() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                     />
-                    <PasswordStrengthIndicator password={newPassword} />
                     <Input 
                       type="password" 
                       placeholder="Confirm new password"
@@ -343,24 +337,6 @@ export default function Settings() {
               </Card>
             </TabsContent>
           </Tabs>
-
-          {/* Danger Zone */}
-          <div className="mt-8 sm:mt-10">
-            <Card className="border-destructive/30 bg-destructive/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  Danger Zone
-                </CardTitle>
-                <CardDescription>
-                  Permanently delete your account and all associated data. This action cannot be undone.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DeleteAccountDialog />
-              </CardContent>
-            </Card>
-          </div>
         </motion.div>
         </div>
       </main>
