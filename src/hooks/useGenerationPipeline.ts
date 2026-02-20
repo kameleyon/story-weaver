@@ -664,44 +664,126 @@ export function useGenerationPipeline() {
 
         let imageStartIndex = 0;
         let imagesResult: any;
+        let totalImagesFromBackend = 0;
+        let completedImagesFromBackend = 0;
+
+        // Helper: poll DB to check if all images were written (backend may succeed even if fetch dropped)
+        const waitForImagesInDb = async (): Promise<{ done: boolean; completedCount: number; totalCount: number }> => {
+          for (let attempt = 0; attempt < 24; attempt++) { // poll up to 2 minutes
+            await sleep(5000);
+            const { data: genRow } = await supabase
+              .from("generations")
+              .select("scenes, progress")
+              .eq("id", generationId)
+              .maybeSingle();
+            const dbScenes = normalizeScenes(genRow?.scenes) ?? [];
+            if (dbScenes.length === 0) continue;
+            const withImages = dbScenes.filter((s) => !!s.imageUrl).length;
+            const total = dbScenes.length;
+            setState((prev) => ({
+              ...prev,
+              progress: Math.max(prev.progress, 45 + Math.floor((withImages / total) * 40)),
+              completedImages: withImages,
+              totalImages: total,
+              statusMessage: `Generating images... (${withImages}/${total} ready)`,
+            }));
+            if (withImages >= total) return { done: true, completedCount: withImages, totalCount: total };
+          }
+          // After polling window, check DB one final time and proceed regardless
+          const { data: finalRow } = await supabase
+            .from("generations")
+            .select("scenes")
+            .eq("id", generationId)
+            .maybeSingle();
+          const dbScenesFinal = normalizeScenes(finalRow?.scenes) ?? [];
+          const withImages = dbScenesFinal.filter((s) => !!s.imageUrl).length;
+          return { done: withImages > 0, completedCount: withImages, totalCount: dbScenesFinal.length };
+        };
         
         // Loop until all images are generated
+        let imageFetchFailed = false;
         do {
-          // Images phase can take 3-5 minutes per chunk with Replicate Pro models
-          imagesResult = await callPhase(
-            {
-              phase: "images",
-              generationId,
-              projectId,
-              imageStartIndex,
-            },
-            480000 // 8 minutes timeout for images (Replicate Pro can be slow)
-          );
+          try {
+            // Images phase can take 3-5 minutes per chunk with Replicate Pro models
+            imagesResult = await callPhase(
+              {
+                phase: "images",
+                generationId,
+                projectId,
+                imageStartIndex,
+              },
+              480000 // 8 minutes timeout for images (Replicate Pro can be slow)
+            );
 
-          if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+            if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
 
-          setState((prev) => ({
-            ...prev,
-            progress: imagesResult.progress,
-            completedImages: imagesResult.imagesGenerated,
-            totalImages: imagesResult.totalImages,
-            statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
-            costTracking: imagesResult.costTracking,
-            phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
-          }));
+            totalImagesFromBackend = imagesResult.totalImages || totalImagesFromBackend;
+            completedImagesFromBackend = imagesResult.imagesGenerated || completedImagesFromBackend;
 
-          if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
-            imageStartIndex = imagesResult.nextStartIndex;
+            setState((prev) => ({
+              ...prev,
+              progress: imagesResult.progress,
+              completedImages: imagesResult.imagesGenerated,
+              totalImages: imagesResult.totalImages,
+              statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
+              costTracking: imagesResult.costTracking,
+              phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
+            }));
+
+            if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
+              imageStartIndex = imagesResult.nextStartIndex;
+            }
+          } catch (imgErr) {
+            // The fetch failed (connection dropped / timeout), but the backend may have
+            // actually finished writing images. Poll the DB to find out before giving up.
+            const errMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
+            console.warn(`[IMAGES] Fetch failed (chunk starting at ${imageStartIndex}): ${errMsg}. Checking DB for results...`);
+            setState((prev) => ({
+              ...prev,
+              statusMessage: "Connection dropped — checking if images completed...",
+            }));
+
+            const { done, completedCount, totalCount } = await waitForImagesInDb();
+            totalImagesFromBackend = totalCount || totalImagesFromBackend;
+            completedImagesFromBackend = completedCount;
+
+            if (done) {
+              console.log(`[IMAGES] DB confirms ${completedCount}/${totalCount} images complete. Proceeding.`);
+              // Synthesize a result to allow the loop to exit
+              imagesResult = {
+                success: true,
+                hasMore: false,
+                imagesGenerated: completedCount,
+                totalImages: totalCount,
+                progress: 88,
+              };
+              imageFetchFailed = true; // flag so we re-fetch state from DB before finalize
+            } else {
+              // Truly failed — throw original error
+              throw imgErr;
+            }
           }
         } while (imagesResult.hasMore);
+
+        // If fetch failed but DB had results, re-read DB state for accurate counts
+        if (imageFetchFailed) {
+          const { data: refreshRow } = await supabase
+            .from("generations")
+            .select("scenes")
+            .eq("id", generationId)
+            .maybeSingle();
+          const refreshScenes = normalizeScenes(refreshRow?.scenes) ?? [];
+          completedImagesFromBackend = refreshScenes.filter((s) => !!s.imageUrl).length;
+          totalImagesFromBackend = refreshScenes.length;
+        }
 
         setState((prev) => ({
           ...prev,
           progress: 90,
-          completedImages: imagesResult.imagesGenerated,
-          totalImages: imagesResult.totalImages,
-          statusMessage: `Images complete (${imagesResult.imagesGenerated}/${imagesResult.totalImages}). Finalizing...`,
-          costTracking: imagesResult.costTracking,
+          completedImages: completedImagesFromBackend || imagesResult?.imagesGenerated || prev.completedImages,
+          totalImages: totalImagesFromBackend || imagesResult?.totalImages || prev.totalImages,
+          statusMessage: `Images complete. Finalizing...`,
+          costTracking: imagesResult?.costTracking,
         }));
 
         // ============= PHASE 4: FINALIZE =============
@@ -720,8 +802,8 @@ export function useGenerationPipeline() {
           progress: 100,
           sceneCount: finalScenes?.length || sceneCount,
           currentScene: finalScenes?.length || sceneCount,
-          totalImages: imagesResult.totalImages,
-          completedImages: imagesResult.imagesGenerated,
+          totalImages: totalImagesFromBackend || imagesResult?.totalImages || sceneCount,
+          completedImages: completedImagesFromBackend || imagesResult?.imagesGenerated || sceneCount,
           isGenerating: false,
           projectId,
           generationId,
