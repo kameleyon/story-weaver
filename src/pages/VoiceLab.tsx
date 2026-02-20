@@ -61,7 +61,7 @@ export default function VoiceLab() {
   
   // Form state
   const [voiceName, setVoiceName] = useState("");
-  const [removeNoise, setRemoveNoise] = useState(true);
+  
   const [consentAccepted, setConsentAccepted] = useState(false);
 
   // Visualizer state
@@ -260,16 +260,18 @@ export default function VoiceLab() {
   };
 
   const hasAudio = !!recordedBlob || !!uploadedFile;
-  const hasExistingVoice = voices.length >= 1;
+  const { plan } = useSubscription();
+  const voiceCloneLimit = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.voiceClones ?? 0;
+  const hasExistingVoice = voices.length >= voiceCloneLimit;
   const canClone = hasAudio && voiceName.trim().length > 0 && !isCloning && !hasExistingVoice && consentAccepted;
   const isReady = hasAudio;
 
   // Show modal when user has existing voice and tries to add audio
   useEffect(() => {
-    if (hasAudio && voices.length >= 1) {
+    if (hasAudio && voices.length >= voiceCloneLimit && voiceCloneLimit > 0) {
       setShowExistingVoiceModal(true);
     }
-  }, [hasAudio, voices.length]);
+  }, [hasAudio, voices.length, voiceCloneLimit]);
 
   // Scroll to My Voices section when modal action is taken
   const scrollToMyVoices = () => {
@@ -478,18 +480,6 @@ export default function VoiceLab() {
                         </div>
                       </div>
 
-                      {/* Remove noise checkbox */}
-                      <div className="flex items-center gap-2">
-                        <Checkbox 
-                          id="remove-noise" 
-                          checked={removeNoise}
-                          onCheckedChange={(checked) => setRemoveNoise(checked as boolean)}
-                        />
-                        <label htmlFor="remove-noise" className="text-sm font-medium cursor-pointer">
-                          Remove background noise from audio recordings
-                        </label>
-                      </div>
-
                       {/* Ready indicator */}
                       <div className="flex items-center gap-2 text-primary">
                         <Check className="h-4 w-4" />
@@ -546,7 +536,7 @@ export default function VoiceLab() {
                     <div className="flex flex-col gap-2">
                       {hasExistingVoice && (
                         <p className="text-sm text-destructive">
-                          You already have a cloned voice. Delete it to create a new one.
+                          You've reached your plan's limit of {voiceCloneLimit} cloned voice(s). Delete one to create a new one.
                         </p>
                       )}
                       <div className="flex justify-end">
@@ -613,7 +603,7 @@ export default function VoiceLab() {
                 Voice Limit Reached
               </DialogTitle>
               <DialogDescription className="pt-2">
-                You already have a cloned voice. Delete it to create a new one.
+                You have reached your plan's voice clone limit ({voiceCloneLimit}). Delete an existing voice to create a new one.
               </DialogDescription>
             </DialogHeader>
             <div className="flex justify-end gap-3 pt-4">
