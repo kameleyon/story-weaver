@@ -824,11 +824,32 @@ export async function generateSceneAudio(
     return { ...result, provider: result.provider || "Gemini TTS" };
   }
 
-  // ========== CASE 4: Default (English/other) ==========
+  // ========== CASE 4: Default (English/other) — Chatterbox with Gemini fallback ==========
   console.log(`[TTS] Scene ${scene.number}: Standard voice via Chatterbox`);
-  return await generateChatterboxChunked(
+  const chatterboxResult = await generateChatterboxChunked(
     scene, scene.number, replicateApiKey, supabase, storage, voiceGender,
   );
+
+  if (chatterboxResult.url) return chatterboxResult;
+
+  // Chatterbox failed — fall back to Gemini TTS if keys are available
+  if (googleApiKeys.length > 0) {
+    console.warn(
+      `[TTS] Scene ${scene.number}: Chatterbox exhausted (${chatterboxResult.error}). Falling back to Gemini TTS.`,
+    );
+    const geminiResult = await generateGeminiTTSWithKeyRotation(
+      voiceoverText, scene.number, googleApiKeys, supabase, storage,
+    );
+    if (geminiResult.url) {
+      console.log(`✅ Scene ${scene.number} SUCCEEDED via Gemini TTS fallback after Chatterbox failure`);
+      return { ...geminiResult, provider: "Gemini TTS (Chatterbox fallback)" };
+    }
+    console.error(`[TTS] Scene ${scene.number}: Gemini TTS fallback also failed: ${geminiResult.error}`);
+    return { url: null, error: `TTS failed: Chatterbox (${chatterboxResult.error}), Gemini (${geminiResult.error})` };
+  }
+
+  // No fallback available
+  return chatterboxResult;
 }
 
 /**
