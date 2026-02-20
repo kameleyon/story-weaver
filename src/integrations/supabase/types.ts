@@ -371,6 +371,7 @@ export type Database = {
           content: string
           created_at: string
           description: string | null
+          disable_expressions: boolean
           format: string
           id: string
           inspiration_style: string | null
@@ -397,6 +398,7 @@ export type Database = {
           content: string
           created_at?: string
           description?: string | null
+          disable_expressions?: boolean
           format?: string
           id?: string
           inspiration_style?: string | null
@@ -423,6 +425,7 @@ export type Database = {
           content?: string
           created_at?: string
           description?: string | null
+          disable_expressions?: boolean
           format?: string
           id?: string
           inspiration_style?: string | null
@@ -687,6 +690,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_user_credits: {
+        Args: { p_credits: number; p_user_id: string }
+        Returns: undefined
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
