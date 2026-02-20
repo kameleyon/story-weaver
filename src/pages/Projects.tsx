@@ -78,6 +78,9 @@ import {
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
+import { useSidebarState } from "@/hooks/useSidebarState";
 
 type SortField = "title" | "created_at" | "updated_at";
 type SortOrder = "asc" | "desc";
@@ -111,6 +114,7 @@ export default function Projects() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { refreshThumbnails } = useRefreshThumbnails();
+  const { isOpen: sidebarOpen, setIsOpen: setSidebarOpen } = useSidebarState();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -482,34 +486,35 @@ export default function Projects() {
   const SortIcon = sortOrder === "asc" ? SortAsc : SortDesc;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 sm:h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/app")}
-              className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <ThemedLogo className="h-8 sm:h-10 w-auto" />
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
+    <SidebarProvider defaultOpen={sidebarOpen} onOpenChange={setSidebarOpen}>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
 
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">All Projects</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage, organize, and access all your video creations</p>
-        </motion.div>
+        <main className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="sticky top-0 z-40 grid h-14 sm:h-16 grid-cols-3 items-center border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
+            <div className="flex items-center justify-start gap-2">
+              <SidebarTrigger />
+              <ThemedLogo className="hidden lg:block h-10 w-auto" />
+            </div>
+            <div className="flex justify-center lg:hidden">
+              <ThemedLogo className="h-10 w-auto" />
+            </div>
+            <div className="flex items-center justify-end">
+              <ThemeToggle />
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-auto">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">All Projects</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Manage, organize, and access all your video creations</p>
+          </motion.div>
 
         {/* Toolbar */}
         <div className="flex flex-col lg:flex-row gap-4 mt-6 mb-6">
@@ -804,7 +809,10 @@ export default function Projects() {
             </div>
           )}
         </div>
-      </main>
+        </div>
+        </div>
+        </main>
+        {/* Dialogs live outside scrollable content but inside sidebar wrapper */}
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -906,6 +914,7 @@ export default function Projects() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 }
