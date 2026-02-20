@@ -10,11 +10,13 @@ import {
   Wallpaper,
   Menu,
   Video,
-  Users
+  Film,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRefreshThumbnails } from "@/hooks/useRefreshThumbnails";
+import { useSubscription } from "@/hooks/useSubscription";
+import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
@@ -85,6 +87,7 @@ const CircularProgress = ({ percentage, size = 80 }: { percentage: number; size?
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { plan } = useSubscription();
   const { refreshThumbnails } = useRefreshThumbnails();
   const [currentTip, setCurrentTip] = useState(0);
   const [projectScrollIndex, setProjectScrollIndex] = useState(0);
@@ -106,18 +109,16 @@ export default function Dashboard() {
   const { data: credits } = useQuery({
     queryKey: ["user-credits", user?.id],
     queryFn: async () => {
-      if (!user?.id) return { balance: 0, total: 200 };
+      if (!user?.id) return { balance: 0 };
       
       const { data } = await supabase
         .from("user_credits")
-        .select("credits_balance, total_purchased")
+        .select("credits_balance")
         .eq("user_id", user.id)
         .single();
       
-      const balance = data?.credits_balance || 0;
-      const total = Math.max(data?.total_purchased || 200, 200);
-      
-      return { balance, total };
+      const balance = data?.credits_balance ?? 0;
+      return { balance };
     },
     enabled: !!user?.id,
   });
@@ -225,8 +226,10 @@ export default function Dashboard() {
     }));
   }, [recentProjectsRaw, refreshedThumbnails]);
 
-  const creditsUsed = credits ? credits.total - credits.balance : 0;
-  const usagePercentage = credits ? Math.round((creditsUsed / credits.total) * 100) : 0;
+  const planMonthlyLimit = PLAN_LIMITS[plan]?.creditsPerMonth ?? 5;
+  const creditsBalance = credits?.balance ?? 0;
+  const creditsUsed = Math.max(0, planMonthlyLimit - creditsBalance);
+  const usagePercentage = Math.min(100, Math.round((creditsUsed / planMonthlyLimit) * 100));
 
   const displayName = profile?.display_name || user?.email?.split('@')[0] || 'User';
 
@@ -249,6 +252,8 @@ export default function Dashboard() {
         return Clapperboard;
       case "smartflow":
         return Wallpaper;
+      case "cinematic":
+        return Film;
       default:
         return Video;
     }
@@ -311,10 +316,10 @@ export default function Dashboard() {
               <div className="flex items-center gap-5">
                 <CircularProgress percentage={usagePercentage} />
                 <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-foreground mb-1">Usage Overview</h3>
+                  <h3 className="font-semibold text-foreground mb-1">Usage Overview</h3>
                   <p className="text-sm text-primary font-medium">{usagePercentage}% Credits Used</p>
-                  <p className="text-xs text-gray-600 dark:text-muted-foreground">
-                    {credits?.balance || 0} / {credits?.total || 200} Credits Left
+                  <p className="text-xs text-muted-foreground">
+                    {creditsBalance} / {planMonthlyLimit} Credits Left
                   </p>
                 </div>
               </div>
@@ -327,14 +332,14 @@ export default function Dashboard() {
                   <Lightbulb className="h-5 w-5 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-foreground mb-2">Did You Know?</h3>
+                  <h3 className="font-semibold text-foreground mb-2">Did You Know?</h3>
                   <AnimatePresence mode="wait">
                     <motion.p
                       key={currentTip}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -5 }}
-                      className="text-sm text-gray-600 dark:text-muted-foreground leading-relaxed"
+                      className="text-sm text-muted-foreground leading-relaxed"
                     >
                       Tip: {TIPS[currentTip]}
                     </motion.p>
@@ -359,8 +364,8 @@ export default function Dashboard() {
 
             {recentProjects.length === 0 ? (
               <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-8 text-center shadow-sm">
-                <p className="text-gray-600 dark:text-muted-foreground mb-4">No projects yet</p>
-                <Button onClick={() => navigate("/app/create?mode=doc2video")} className="gap-2">
+                <p className="text-muted-foreground mb-4">No projects yet</p>
+                <Button onClick={() => navigate("/app/create")} className="gap-2">
                   <Video className="h-4 w-4" />
                   Create Your First Project
                 </Button>
@@ -378,11 +383,10 @@ export default function Dashboard() {
                 )}
 
                 {/* Projects Carousel */}
-                <div className="overflow-hidden">
-                  <motion.div 
-                    className="flex gap-4"
-                    animate={{ x: -projectScrollIndex * (200 + 16) }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                <div className="overflow-hidden" ref={(el) => { if (el) el.setAttribute('data-carousel', 'true'); }}>
+                  <div 
+                    className="flex gap-4 transition-transform duration-300 ease-out"
+                    style={{ transform: `translateX(calc(-${projectScrollIndex} * (200px + 1rem)))` }}
                   >
                     {recentProjects.map((project) => {
                       const ProjectIcon = getProjectIcon(project.project_type);
@@ -409,17 +413,17 @@ export default function Dashboard() {
                           </div>
                           {/* Info area */}
                           <div className="p-3">
-                            <p className="font-medium text-sm text-gray-900 dark:text-foreground truncate group-hover:text-primary transition-colors">
+                            <p className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">
                               {project.title}
                             </p>
-                            <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               Last edited {format(new Date(project.updated_at), "MMM d, yyyy")}
                             </p>
                           </div>
                         </div>
                       );
                     })}
-                  </motion.div>
+                  </div>
                 </div>
 
                 {/* Scroll Right Button */}
