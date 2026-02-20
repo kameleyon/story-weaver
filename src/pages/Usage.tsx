@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ArrowLeft, 
   Zap, 
   Video,
   Clapperboard,
@@ -23,7 +22,8 @@ import {
   Clock,
   Coins,
   ChevronDown,
-  LucideIcon
+  LucideIcon,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +35,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, format, startOfMonth, endOfMonth, subMonths, isSameMonth } from "date-fns";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
+import { useSidebarState } from "@/hooks/useSidebarState";
 import {
   Table,
   TableBody,
@@ -65,7 +68,7 @@ export default function Usage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { toast } = useToast();
+  const { isOpen: sidebarOpen, setIsOpen: setSidebarOpen } = useSidebarState();
   const { 
     plan, 
     subscribed, 
@@ -82,14 +85,10 @@ export default function Usage() {
   // Show success toast if redirected from checkout
   useEffect(() => {
     if (searchParams.get("success") === "true") {
-      toast({
-        title: "Payment successful!",
-        description: "Your subscription has been activated. It may take a moment to reflect.",
-      });
-      // Refresh subscription status
+      toast.success("Payment successful! Your subscription has been activated. It may take a moment to reflect.");
       checkSubscription();
     }
-  }, [searchParams, toast, checkSubscription]);
+  }, [searchParams, checkSubscription]);
 
   // Fetch usage data from generations table
   const { data: usageData, isLoading: isLoadingUsage } = useQuery({
@@ -226,50 +225,45 @@ export default function Usage() {
       setIsOpeningPortal(true);
       await openCustomerPortal();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to open billing portal",
-        variant: "destructive",
-      });
+      toast.error(error instanceof Error ? error.message : "Failed to open billing portal");
     } finally {
       setIsOpeningPortal(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 sm:h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/app")}
-              className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <ThemedLogo className="h-8 sm:h-10 w-auto" />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            </Button>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+    <SidebarProvider defaultOpen={sidebarOpen} onOpenChange={setSidebarOpen}>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
-        <motion.div
+        <main className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="sticky top-0 z-40 grid h-14 sm:h-16 grid-cols-3 items-center border-b border-border/30 bg-background/80 px-4 sm:px-6 backdrop-blur-sm">
+            <div className="flex items-center justify-start gap-2">
+              <SidebarTrigger />
+              <ThemedLogo className="hidden lg:block h-10 w-auto" />
+            </div>
+            <div className="flex justify-center lg:hidden">
+              <ThemedLogo className="h-10 w-auto" />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="rounded-full h-8 w-8 sm:h-9 sm:w-9"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              </Button>
+              <ThemeToggle />
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <div className="flex-1 overflow-auto">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
+          <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
@@ -677,7 +671,10 @@ export default function Usage() {
             </CardContent>
           </Card>
         </motion.div>
-      </main>
-    </div>
+          </div>
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
