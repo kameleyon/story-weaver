@@ -92,7 +92,7 @@ serve(async (req) => {
       );
     }
 
-    const { storagePath, voiceName, description } = await req.json();
+    const { storagePath, voiceName, description, removeNoise } = await req.json();
 
     if (!storagePath || !voiceName) {
       return new Response(
@@ -127,8 +127,8 @@ serve(async (req) => {
     if (description) {
       formData.append("description", description);
     }
-    // Enable background noise removal
-    formData.append("remove_background_noise", "true");
+    // Enable background noise removal based on user preference (defaults to true)
+    formData.append("remove_background_noise", removeNoise !== false ? "true" : "false");
 
     // Call ElevenLabs Instant Voice Cloning API
     console.log("Calling ElevenLabs API with noise removal enabled...");
