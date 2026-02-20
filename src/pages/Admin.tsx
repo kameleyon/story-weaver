@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Cable, Film, LogOut, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, Shield, Users, DollarSign, LayoutDashboard, Flag, FileText, AlertTriangle, Cable, Film, LogOut } from "lucide-react";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { AdminSubscribers } from "@/components/admin/AdminSubscribers";
 import { AdminRevenue } from "@/components/admin/AdminRevenue";
@@ -54,12 +53,6 @@ export default function Admin() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" asChild className="mr-1">
-                <Link to="/app">
-                  <ArrowLeft className="h-4 w-4 mr-1.5" />
-                  <span className="hidden sm:inline">Back to App</span>
-                </Link>
-              </Button>
               <div className="p-2 rounded-lg bg-primary/10 shadow-sm">
                 <Shield className="h-6 w-6 text-primary" />
               </div>

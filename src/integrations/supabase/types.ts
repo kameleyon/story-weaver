@@ -691,10 +691,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      increment_user_credits: {
-        Args: { p_credits: number; p_user_id: string }
-        Returns: undefined
-      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {

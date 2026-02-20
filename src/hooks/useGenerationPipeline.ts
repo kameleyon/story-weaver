@@ -1056,105 +1056,14 @@ export function useGenerationPipeline() {
           }
         }
       } else if (generation) {
-        // Non-cinematic interrupted generation — try to resume from where it stopped
-        const partialScenes = normalizeScenes(generation.scenes) ?? [];
-        const progress = generation.progress ?? 0;
-        const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
-        const imagesCompleted = partialScenes.filter((s) => !!s.imageUrl).length;
-        const hasAudio = partialScenes.some((s) => !!s.audioUrl);
-        const totalImages = meta.totalImages || partialScenes.length;
-
-        if (partialScenes.length > 0 && (hasAudio || imagesCompleted > 0)) {
-          // We have partial progress — show generating state and resume images
-          const nextImageIndex = imagesCompleted;
-          const totalImagesCount = totalImages || partialScenes.length * 3; // estimate 3 images per scene
-
-          setState({
-            step: "visuals",
-            progress: Math.max(progress, 45),
-            sceneCount: partialScenes.length,
-            currentScene: imagesCompleted,
-            totalImages: totalImagesCount,
-            completedImages: imagesCompleted,
-            isGenerating: true,
-            projectId,
-            generationId: generation.id,
-            title: project.title,
-            scenes: partialScenes,
-            format: project.format as "landscape" | "portrait" | "square",
-            statusMessage: `Resuming images (${imagesCompleted}/${totalImagesCount})...`,
-            costTracking: meta.costTracking,
-            projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
-          });
-
-          // Resume image generation from where it stopped
-          const genId = generation.id;
-          const projId = projectId;
-          (async () => {
-            try {
-              let imageStartIndex = nextImageIndex;
-              let imagesResult: any;
-
-              do {
-                imagesResult = await callPhase(
-                  { phase: "images", generationId: genId, projectId: projId, imageStartIndex },
-                  480000
-                );
-
-                if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
-
-                setState((prev) => ({
-                  ...prev,
-                  progress: imagesResult.progress,
-                  completedImages: imagesResult.imagesGenerated,
-                  totalImages: imagesResult.totalImages,
-                  statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
-                  costTracking: imagesResult.costTracking,
-                }));
-
-                if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
-                  imageStartIndex = imagesResult.nextStartIndex;
-                }
-              } while (imagesResult.hasMore);
-
-              // Finalize
-              setState((prev) => ({ ...prev, progress: 90, statusMessage: "Finalizing..." }));
-              const finalResult = await callPhase({ phase: "finalize", generationId: genId, projectId: projId });
-              if (!finalResult.success) throw new Error(finalResult.error || "Finalization failed");
-
-              const finalScenes = normalizeScenes(finalResult.scenes);
-              setState({
-                step: "complete", progress: 100,
-                sceneCount: finalScenes?.length || partialScenes.length,
-                currentScene: finalScenes?.length || partialScenes.length,
-                totalImages: imagesResult.totalImages,
-                completedImages: imagesResult.imagesGenerated,
-                isGenerating: false, projectId, generationId: genId,
-                title: finalResult.title, scenes: finalScenes,
-                format: project.format as "landscape" | "portrait" | "square",
-                statusMessage: "Generation complete!",
-                costTracking: finalResult.costTracking,
-                phaseTimings: finalResult.phaseTimings,
-                totalTimeMs: finalResult.totalTimeMs,
-                projectType: (project.project_type as GenerationState["projectType"]) ?? undefined,
-              });
-
-              toast({ title: "Video Generated!", description: `"${finalResult.title}" is ready.` });
-            } catch (err) {
-              const errorMessage = err instanceof Error ? err.message : "Resume failed";
-              setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: errorMessage, statusMessage: errorMessage }));
-              toast({ variant: "destructive", title: "Generation Failed", description: errorMessage });
-            }
-          })();
-        } else {
-          setState({
-            step: "error", progress: 0, sceneCount: state.sceneCount,
-            currentScene: 0, totalImages: state.sceneCount, completedImages: 0,
-            isGenerating: false, projectId, generationId: generation.id,
-            title: project.title, format: project.format as "landscape" | "portrait" | "square",
-            error: "This generation was interrupted. Please try again.",
-          });
-        }
+        // Non-cinematic interrupted generation
+        setState({
+          step: "error", progress: 0, sceneCount: state.sceneCount,
+          currentScene: 0, totalImages: state.sceneCount, completedImages: 0,
+          isGenerating: false, projectId, generationId: generation.id,
+          title: project.title, format: project.format as "landscape" | "portrait" | "square",
+          error: "This generation was interrupted. Please try again.",
+        });
       } else {
         setState((prev) => ({
           ...prev,

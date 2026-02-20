@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import featuresBackground from "@/assets/features-bg-dark.png";
 import motionMaxHeroLogo from "@/assets/motionmax-hero-logo.png";
 import heroPromoVideo from "@/assets/hero-promo.mp4";
 import heroVideoPoster from "@/assets/hero-video-poster.png";
@@ -208,7 +209,9 @@ export default function Landing() {
         id="features" 
         className="py-24 sm:py-32 relative overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, hsl(174,52%,40%) 0%, hsl(185,50%,30%) 100%)',
+          backgroundImage: `url(${featuresBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
         }}
       >
         <div className="mx-auto max-w-6xl px-6 sm:px-8 relative z-10">

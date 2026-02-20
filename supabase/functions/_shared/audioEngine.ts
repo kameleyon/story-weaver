@@ -548,12 +548,7 @@ async function generateElevenLabsTTS(
     }
 
     const audioBytes = new Uint8Array(await response.arrayBuffer());
-    // ElevenLabs returns VBR MP3, so the bytes/bitrate formula is unreliable
-    // (off by 20-30% depending on speaking rate and content).
-    // Estimate duration from text length instead:
-    //   ~150 words/min, average English word ~5 chars → 750 chars/min
-    // This is more accurate for export timing offsets than a byte-rate guess.
-    const durationSeconds = Math.max(1, (sanitizedText.length / 750) * 60);
+    const durationSeconds = Math.max(1, audioBytes.length / 16000); // MP3 at 128kbps
 
     const url = await uploadAndGetUrl(supabase, audioBytes, "audio/mpeg", storage, sceneNumber);
 
@@ -677,25 +672,12 @@ async function callChatterboxChunk(
 
   let prediction = await createResponse.json();
 
-  // Bounded polling: max 45 attempts × 1s = 45s cap.
-  // Prevents the Edge Function from hanging indefinitely on a cold-start stuck prediction.
-  const MAX_AUDIO_POLL_ATTEMPTS = 45;
-  let audioPollAttempts = 0;
-  while (
-    prediction.status !== "succeeded" &&
-    prediction.status !== "failed" &&
-    audioPollAttempts < MAX_AUDIO_POLL_ATTEMPTS
-  ) {
+  while (prediction.status !== "succeeded" && prediction.status !== "failed") {
     await sleep(1000);
-    audioPollAttempts++;
     const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
       headers: { Authorization: `Bearer ${replicateApiKey}` },
     });
     prediction = await pollResponse.json();
-  }
-
-  if (prediction.status !== "succeeded" && prediction.status !== "failed") {
-    throw new Error(`Chatterbox chunk ${chunkIndex + 1} timed out after ${MAX_AUDIO_POLL_ATTEMPTS}s (status: ${prediction.status})`);
   }
 
   if (prediction.status === "failed") {

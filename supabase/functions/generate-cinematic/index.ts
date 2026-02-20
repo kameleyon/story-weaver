@@ -54,6 +54,7 @@ interface Scene {
   audioPredictionId?: string;
   videoPredictionId?: string;
   videoRetryCount?: number;
+  videoRetryAfter?: string;
   videoProvider?: "replicate" | "hypereal";
   videoModel?: string;
 }
@@ -845,29 +846,12 @@ QUALITY REQUIREMENTS:
 
       let prediction = await createResponse.json();
 
-      // Bounded polling: max 30 attempts × 2s = 60s cap.
-      // If Replicate gets stuck in "starting" during a cold start, we break
-      // out and let the outer retry loop attempt again rather than holding the
-      // Edge Function open until the runtime kills it with a generic error.
-      const MAX_POLL_ATTEMPTS = 30;
-      let pollAttempts = 0;
-      while (
-        prediction.status !== "succeeded" &&
-        prediction.status !== "failed" &&
-        pollAttempts < MAX_POLL_ATTEMPTS
-      ) {
+      while (prediction.status !== "succeeded" && prediction.status !== "failed") {
         await sleep(2000);
-        pollAttempts++;
         const pollResponse = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
           headers: { Authorization: `Bearer ${replicateToken}` },
         });
         prediction = await pollResponse.json();
-      }
-
-      // If we exhausted our poll budget without a terminal status, throw a
-      // descriptive error so the outer retry can try again cleanly.
-      if (prediction.status !== "succeeded" && prediction.status !== "failed") {
-        throw new Error(`Image generation timed out after ${MAX_POLL_ATTEMPTS * 2}s (status: ${prediction.status})`);
       }
 
       if (prediction.status === "failed") {
@@ -928,7 +912,7 @@ async function startSeedance(
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   const visualPrompt =
-    scene.visualPrompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
   console.log(
     `[Seedance-Hypereal] Starting scene ${scene.number} | image: ${imageUrl.substring(0, 80)}... | prompt: ${visualPrompt.substring(0, 100)}...`,
   );
@@ -1085,7 +1069,7 @@ async function startSeedanceT2V(scene: Scene, format: "landscape" | "portrait" |
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   const visualPrompt =
-    scene.visualPrompt || scene.voiceover || "Cinematic scene with dramatic lighting";
+    scene.visualPrompt || scene.visual_prompt || scene.voiceover || "Cinematic scene with dramatic lighting";
 
   const videoPrompt = `${visualPrompt}
 
@@ -1461,46 +1445,10 @@ serve(async (req) => {
 
     // =============== PHASE 1: SCRIPT ===============
     if (phase === "script") {
-      // ---- Input size validation ----
-      // generate-video enforces INPUT_LIMITS; cinematic must do the same to
-      // prevent giant payloads being forwarded to OpenRouter/Gemini at cost.
-      const INPUT_LIMITS = {
-        content: 500_000,        // 500K chars — matches generate-video
-        presenterFocus: 2_000,
-        characterDescription: 5_000,
-        customStyle: 2_000,
-        brandMark: 500,
-        voiceName: 200,
-      };
-
       const content = requireString(body.content, "content");
-      if (content.length > INPUT_LIMITS.content) {
-        return jsonResponse(
-          { error: `content exceeds maximum length of ${INPUT_LIMITS.content.toLocaleString()} characters` },
-          { status: 400 },
-        );
-      }
-
       const format = (body.format || "portrait") as "landscape" | "portrait" | "square";
       const length = requireString(body.length, "length");
       const style = requireString(body.style, "style");
-
-      // Validate optional string fields
-      if (body.presenterFocus && body.presenterFocus.length > INPUT_LIMITS.presenterFocus) {
-        return jsonResponse({ error: `presenterFocus exceeds ${INPUT_LIMITS.presenterFocus} characters` }, { status: 400 });
-      }
-      if (body.characterDescription && body.characterDescription.length > INPUT_LIMITS.characterDescription) {
-        return jsonResponse({ error: `characterDescription exceeds ${INPUT_LIMITS.characterDescription} characters` }, { status: 400 });
-      }
-      if (body.customStyle && body.customStyle.length > INPUT_LIMITS.customStyle) {
-        return jsonResponse({ error: `customStyle exceeds ${INPUT_LIMITS.customStyle} characters` }, { status: 400 });
-      }
-      if (body.brandMark && body.brandMark.length > INPUT_LIMITS.brandMark) {
-        return jsonResponse({ error: `brandMark exceeds ${INPUT_LIMITS.brandMark} characters` }, { status: 400 });
-      }
-      if (body.voiceName && body.voiceName.length > INPUT_LIMITS.voiceName) {
-        return jsonResponse({ error: `voiceName exceeds ${INPUT_LIMITS.voiceName} characters` }, { status: 400 });
-      }
 
       console.log("=== CINEMATIC SCRIPT START ===");
 
@@ -1591,6 +1539,7 @@ serve(async (req) => {
       audioPredictionId: s?.audioPredictionId,
       videoPredictionId: s?.videoPredictionId,
       videoRetryCount: s?.videoRetryCount ?? 0,
+      videoRetryAfter: s?.videoRetryAfter,
       videoProvider: s?.videoProvider,
       videoModel: s?.videoModel,
     }));
@@ -1723,14 +1672,15 @@ serve(async (req) => {
       if (!scene) throw new Error("Scene not found");
 
       // Explicit regeneration flag from frontend
-      const isRegeneration = !!(body as any).regenerate;
+      const isRegeneration = !!body.regenerate;
       if (isRegeneration) {
         console.log(
           `[VIDEO] Scene ${scene.number}: Clearing existing video for regeneration (using Grok Imagine Video)`,
         );
         scene.videoUrl = undefined;
         scene.videoPredictionId = undefined;
-        scene.videoRetryCount = 0;
+        scene.videoRetryCount = 0; // Reset retry counter on explicit regen
+        scene.videoRetryAfter = undefined;
         scenes[idx] = scene;
         await updateScenes(supabase, generationId, scenes);
       }
@@ -1751,10 +1701,11 @@ serve(async (req) => {
         // Both initial gen and regen use Hypereal Seedance 1.5
         // Initial = T2V (text-to-video, no image, 5s), Regen = I2V (image-to-video)
         if (isRegeneration) {
-          const predictionId = await startSeedance(scene, scene.imageUrl!, format, replicateToken);
+          const predictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
+            videoRetryAfter: undefined,
             videoProvider: "hypereal",
             videoModel: "seedance-1-5-i2v",
           };
@@ -1772,6 +1723,7 @@ serve(async (req) => {
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
+            videoRetryAfter: undefined,
             videoProvider: "hypereal",
             videoModel: "seedance-1-5-i2v",
           };
@@ -1785,6 +1737,7 @@ serve(async (req) => {
           scenes[idx] = {
             ...scene,
             videoPredictionId: predictionId,
+            videoRetryAfter: undefined,
             videoProvider: "replicate",
             videoModel: "seedance-1-pro-fast",
           };
@@ -1820,6 +1773,7 @@ serve(async (req) => {
               ...scene,
               videoPredictionId: seedancePredictionId,
               videoUrl: undefined,
+              videoRetryAfter: undefined,
               videoRetryCount: 0,
               videoProvider: "hypereal",
             };
@@ -1976,6 +1930,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoPredictionId: predictionId,
         videoUrl: undefined,
         videoRetryCount: 0,
+        videoRetryAfter: undefined,
         videoProvider: "hypereal",
       };
       await updateScenes(supabase, generationId, scenes);
@@ -2018,6 +1973,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoPredictionId: predictionId,
         videoUrl: undefined,
         videoRetryCount: 0,
+        videoRetryAfter: undefined,
         videoProvider: "hypereal",
       };
       await updateScenes(supabase, generationId, scenes);

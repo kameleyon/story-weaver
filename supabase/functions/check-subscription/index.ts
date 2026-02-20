@@ -163,36 +163,14 @@ serve(async (req) => {
       const productId = subscription.items.data[0].price.product as string;
       logStep("Active subscription found", { subscriptionId: subscription.id, productId, periodEnd: periodEndRaw });
 
-      // Map product IDs to plans - all known product IDs across all cohorts
+      // Map product IDs to plans - Corrected Stripe product IDs
       const productToPlan: Record<string, string> = {
-        // Current products (2025 cohort)
-        "prod_TqznNZmUhevHh4": "starter",
-        "prod_TqznlgT1Jl6Re7": "creator",
-        "prod_TqznqQYYG4UUY8": "professional",
-        // Legacy products (2024 cohort)
-        "prod_Tnyz2nMLqpHz3R": "starter",
-        "prod_Tnz0KUQX2J5VBH": "creator",
-        "prod_Tnz0BeRmJDdh0V": "professional",
-        // Additional legacy IDs seen in webhook
-        "prod_TnzLdHWPkqAiqr": "starter",
-        "prod_TnzLCasreSakEb": "creator",
-        "prod_TnzLP4tQINtak9": "professional",
+        // Actual Stripe products
+        "prod_Tnyz2nMLqpHz3R": "starter",      // Premium Plan -> starter
+        "prod_Tnz0KUQX2J5VBH": "creator",      // Pro Plan -> creator
+        "prod_Tnz0BeRmJDdh0V": "professional", // Platinum Plan -> professional
       };
-
-      if (productToPlan[productId]) {
-        plan = productToPlan[productId];
-      } else {
-        // Fall back to DB plan_name if the product ID is unrecognized — prevents
-        // paying users from being silently downgraded to free tier when we add
-        // new Stripe products without updating this map.
-        if (dbSubscription?.plan_name && dbSubscription.plan_name !== "free") {
-          plan = dbSubscription.plan_name;
-          logStep("Unknown product ID — falling back to DB plan_name", { productId, dbPlan: plan });
-        } else {
-          plan = "free";
-          logStep("Unknown product ID and no DB fallback — defaulting to free", { productId });
-        }
-      }
+      plan = productToPlan[productId] || "free";
     }
 
     // creditData already fetched above
