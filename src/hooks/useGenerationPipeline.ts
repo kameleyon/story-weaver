@@ -1110,22 +1110,21 @@ export function useGenerationPipeline() {
           });
         }
       } else if (generation?.status === "error") {
-        console.log(`[loadProject] Generation status=error, error_message="${generation.error_message}"`);
-        // For cinematic: if we have partial scene data, attempt to resume instead of just showing error
+        console.log(`[loadProject] Generation status=error, error_message="${generation.error_message}", progress=${generation.progress}`);
         const errorScenes = normalizeScenes(generation.scenes) ?? [];
+
         if (project.project_type === "cinematic" && errorScenes.length > 0) {
+          // ── Cinematic: resume from last successful phase ──
           const allHaveAudio = errorScenes.every((s) => !!s.audioUrl);
           const allHaveImages = errorScenes.every((s) => !!s.imageUrl);
           const allHaveVideo = errorScenes.every((s) => !!s.videoUrl);
 
           console.log(`[loadProject] Cinematic with ${errorScenes.length} scenes: allHaveAudio=${allHaveAudio}, allHaveImages=${allHaveImages}, allHaveVideo=${allHaveVideo}`);
 
-          // Reset generation status so resume can proceed
-          const { error: resetError } = await supabase
+          await supabase
             .from("generations")
             .update({ status: "processing", error_message: null })
             .eq("id", generation.id);
-          console.log(`[loadProject] Reset generation status to 'processing', resetError=${resetError?.message ?? "none"}`);
 
           const resumePhase = allHaveVideo ? "finalize" : allHaveImages ? "video" : allHaveAudio ? "images" : "audio";
           console.log(`[loadProject] Resuming cinematic from phase="${resumePhase}"`);
@@ -1139,9 +1138,168 @@ export function useGenerationPipeline() {
           } else {
             void resumeCinematic(project, generation.id, errorScenes, "audio");
           }
+        } else if (project.project_type !== "cinematic" && errorScenes.length > 0) {
+          // ── Doc2Video / Storytelling: check how far the backend actually got ──
+          const anyHaveAudio = errorScenes.some((s) => !!s.audioUrl);
+          const anyHaveImages = errorScenes.some((s) => !!s.imageUrl);
+          const allHaveImages = errorScenes.every((s) => !!s.imageUrl);
+          const progress = generation.progress ?? 0;
+
+          console.log(`[loadProject] Non-cinematic error with ${errorScenes.length} scenes: anyHaveAudio=${anyHaveAudio}, anyHaveImages=${anyHaveImages}, allHaveImages=${allHaveImages}, progress=${progress}`);
+
+          // If images are done (or nearly done), go straight to finalize
+          if (allHaveImages || progress >= 88) {
+            console.log(`[loadProject] Images complete — jumping to finalize`);
+            setState((prev) => ({
+              ...prev,
+              step: "rendering",
+              progress: 90,
+              isGenerating: true,
+              projectId,
+              generationId: generation.id,
+              title: project.title,
+              format: project.format as "landscape" | "portrait" | "square",
+              statusMessage: "Resuming — finalizing your video...",
+            }));
+
+            await supabase
+              .from("generations")
+              .update({ status: "processing", error_message: null })
+              .eq("id", generation.id);
+
+            try {
+              const finalResult = await callPhase({ phase: "finalize", generationId: generation.id, projectId });
+              if (!finalResult.success) throw new Error(finalResult.error || "Finalization failed");
+              const finalScenes = normalizeScenes(finalResult.scenes);
+              setState({
+                step: "complete", progress: 100,
+                sceneCount: finalScenes?.length || errorScenes.length,
+                currentScene: finalScenes?.length || errorScenes.length,
+                totalImages: finalScenes?.length || errorScenes.length,
+                completedImages: finalScenes?.length || errorScenes.length,
+                isGenerating: false, projectId,
+                generationId: generation.id,
+                title: finalResult.title,
+                scenes: finalScenes,
+                format: project.format as "landscape" | "portrait" | "square",
+                statusMessage: "Generation complete!",
+              });
+              toast({ title: "Video Ready!", description: `"${finalResult.title}" is ready.` });
+            } catch (finalErr) {
+              const msg = finalErr instanceof Error ? finalErr.message : "Finalization failed";
+              setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
+              toast({ variant: "destructive", title: "Finalization Failed", description: msg });
+            }
+          } else if (anyHaveAudio && progress >= 40) {
+            // Images phase was in progress — restart images from where we left off
+            const nextImageIndex = errorScenes.filter((s) => !!s.imageUrl).length;
+            console.log(`[loadProject] Images phase was interrupted at index ${nextImageIndex} — resuming images`);
+            setState((prev) => ({
+              ...prev,
+              step: "visuals",
+              progress: Math.max(45, progress),
+              isGenerating: true,
+              projectId,
+              generationId: generation.id,
+              title: project.title,
+              format: project.format as "landscape" | "portrait" | "square",
+              sceneCount: errorScenes.length,
+              statusMessage: `Resuming images (${nextImageIndex}/${errorScenes.length} done)...`,
+            }));
+
+            await supabase
+              .from("generations")
+              .update({ status: "processing", error_message: null })
+              .eq("id", generation.id);
+
+            try {
+              // Re-run image phase from current checkpoint
+              let imageStartIndex = nextImageIndex;
+              let imagesResult: any;
+              let totalImagesFromBackend = errorScenes.length;
+              let completedImagesFromBackend = nextImageIndex;
+
+              do {
+                try {
+                  imagesResult = await callPhase(
+                    { phase: "images", generationId: generation.id, projectId, imageStartIndex },
+                    480000
+                  );
+                  if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+                  totalImagesFromBackend = imagesResult.totalImages || totalImagesFromBackend;
+                  completedImagesFromBackend = imagesResult.imagesGenerated || completedImagesFromBackend;
+                  setState((prev) => ({
+                    ...prev,
+                    progress: imagesResult.progress,
+                    completedImages: imagesResult.imagesGenerated,
+                    totalImages: imagesResult.totalImages,
+                    statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
+                  }));
+                  if (imagesResult.hasMore && imagesResult.nextStartIndex !== undefined) {
+                    imageStartIndex = imagesResult.nextStartIndex;
+                  }
+                } catch (imgErr) {
+                  // Connection dropped — check DB
+                  console.warn(`[RESUME-IMAGES] Fetch failed, checking DB...`);
+                  setState((prev) => ({ ...prev, statusMessage: "Connection dropped — checking images..." }));
+                  await sleep(8000);
+                  const { data: chkRow } = await supabase.from("generations").select("scenes").eq("id", generation.id).maybeSingle();
+                  const chkScenes = normalizeScenes(chkRow?.scenes) ?? [];
+                  const done = chkScenes.filter((s) => !!s.imageUrl).length;
+                  const total = chkScenes.length;
+                  completedImagesFromBackend = done;
+                  totalImagesFromBackend = total;
+                  if (done >= total && total > 0) {
+                    imagesResult = { success: true, hasMore: false, imagesGenerated: done, totalImages: total, progress: 88 };
+                  } else {
+                    throw imgErr;
+                  }
+                }
+              } while (imagesResult?.hasMore);
+
+              setState((prev) => ({ ...prev, progress: 90, statusMessage: "Images complete. Finalizing..." }));
+
+              const finalResult = await callPhase({ phase: "finalize", generationId: generation.id, projectId });
+              if (!finalResult.success) throw new Error(finalResult.error || "Finalization failed");
+              const finalScenes = normalizeScenes(finalResult.scenes);
+              setState({
+                step: "complete", progress: 100,
+                sceneCount: finalScenes?.length || errorScenes.length,
+                currentScene: finalScenes?.length || errorScenes.length,
+                totalImages: totalImagesFromBackend,
+                completedImages: completedImagesFromBackend,
+                isGenerating: false, projectId,
+                generationId: generation.id,
+                title: finalResult.title,
+                scenes: finalScenes,
+                format: project.format as "landscape" | "portrait" | "square",
+                statusMessage: "Generation complete!",
+              });
+              toast({ title: "Video Ready!", description: `"${finalResult.title}" is ready.` });
+            } catch (resumeErr) {
+              const msg = resumeErr instanceof Error ? resumeErr.message : "Resume failed";
+              await supabase.from("generations").update({ status: "error", error_message: msg }).eq("id", generation.id);
+              setState((prev) => ({ ...prev, step: "error", isGenerating: false, error: msg }));
+              toast({ variant: "destructive", title: "Resume Failed", description: msg });
+            }
+          } else {
+            // Not enough partial data to resume — show error
+            const msg = generation.error_message || "Generation failed";
+            console.log(`[loadProject] Not enough partial data to resume, showing error: "${msg}"`);
+            setState((prev) => ({
+              ...prev,
+              step: "error",
+              isGenerating: false,
+              error: msg,
+              projectId,
+              generationId: generation.id,
+              title: project.title,
+              format: project.format as "landscape" | "portrait" | "square",
+            }));
+          }
         } else {
           const msg = generation.error_message || "Generation failed";
-          console.log(`[loadProject] Non-resumable error, showing error state: "${msg}"`);
+          console.log(`[loadProject] Non-resumable error (no scenes), showing error state: "${msg}"`);
           setState((prev) => ({
             ...prev,
             step: "error",
@@ -1325,7 +1483,7 @@ export function useGenerationPipeline() {
 
       return project;
     },
-    [toast, state.sceneCount, resumeCinematic],
+    [toast, state.sceneCount, resumeCinematic, callPhase],
   );
 
   const reset = useCallback(() => {
