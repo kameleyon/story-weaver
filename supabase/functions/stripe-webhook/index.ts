@@ -2,10 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -36,6 +33,7 @@ const subscriptionProducts: Record<string, string> = {
 };
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -87,7 +85,27 @@ serve(async (req) => {
       });
     }
 
-    logStep("Event verified and parsed", { type: event.type });
+    logStep("Event verified and parsed", { type: event.type, eventId: event.id });
+
+    // Event-level idempotency: check if this Stripe event was already processed
+    const { data: existingEvent } = await supabaseAdmin
+      .from("webhook_events")
+      .select("id")
+      .eq("event_id", event.id)
+      .limit(1);
+
+    if (existingEvent && existingEvent.length > 0) {
+      logStep("Duplicate event detected, skipping", { eventId: event.id });
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Record event as processed (before processing to prevent races)
+    await supabaseAdmin
+      .from("webhook_events")
+      .insert({ event_id: event.id, event_type: event.type });
 
     switch (event.type) {
       case "checkout.session.completed": {

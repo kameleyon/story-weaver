@@ -2,13 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
 import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  // Keep this list broad so browser preflight never fails as client headers evolve.
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 // ============= INPUT VALIDATION =============
 const INPUT_LIMITS = {
@@ -115,8 +109,8 @@ async function moderateContent(content: string): Promise<ModerationResult> {
     const geminiKey = Deno.env.get("GOOGLE_TTS_API_KEY");
 
     if (!geminiKey) {
-      console.warn("[MODERATION] GOOGLE_TTS_API_KEY missing, skipping AI moderation");
-      return { passed: true };
+      console.error("[MODERATION] GOOGLE_TTS_API_KEY missing, rejecting content (fail-closed)");
+      return { passed: false, reason: "Content moderation is temporarily unavailable. Please try again later.", flagType: "warning" };
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
@@ -146,7 +140,7 @@ User Prompt: "${content.substring(0, 5000)}"`,
 
     if (!response.ok) {
       console.error(`[MODERATION] Gemini API failed: ${response.status}`);
-      return { passed: true }; // Fail open
+      return { passed: false, reason: "Content moderation is temporarily unavailable. Please try again later.", flagType: "warning" }; // Fail closed
     }
 
     const data = await response.json();
@@ -168,7 +162,7 @@ User Prompt: "${content.substring(0, 5000)}"`,
     return { passed: true };
   } catch (err) {
     console.error("[MODERATION] Error calling Gemini moderation:", err);
-    return { passed: true }; // Fail open
+    return { passed: false, reason: "Content moderation is temporarily unavailable. Please try again later.", flagType: "warning" }; // Fail closed
   }
 }
 
@@ -4960,6 +4954,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
 
 // ============= MAIN HANDLER =============
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
