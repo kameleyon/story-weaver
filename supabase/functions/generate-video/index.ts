@@ -4104,18 +4104,10 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
             // Use Hypereal nano-banana-pro-t2i for all T2I image generation
             const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
             if (hyperealApiKey) {
-              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex} (attempt ${attempt})`);
+              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex}`);
               result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
               actualProvider = "hypereal";
               actualModel = "nano-banana-pro-t2i";
-
-              // If Hypereal failed on final attempt, fall back to Replicate instead of giving up
-              if (!result.ok && attempt >= 4) {
-                console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate`);
-                result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
-                actualProvider = "replicate";
-                actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-              }
             } else {
               // Fallback to Replicate if Hypereal key not available
               console.log(
