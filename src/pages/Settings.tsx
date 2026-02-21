@@ -338,7 +338,7 @@ export default function Settings() {
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
               <p>
-                This action is <strong>permanent and irreversible</strong>. All your data will be deleted, including:
+              This will <strong>submit a deletion request</strong> to our support team. Once processed, all your data will be permanently removed, including:
               </p>
               <ul className="list-disc list-inside text-sm space-y-1">
                 <li>All projects and video generations</li>
@@ -346,8 +346,11 @@ export default function Settings() {
                 <li>Remaining credits (no refund)</li>
                 <li>Your account and profile</li>
               </ul>
+              <p className="text-xs text-muted-foreground mt-2">
+                Our team will process your request within 48 hours. You'll receive a confirmation email once complete.
+              </p>
               <p>
-                Type <strong>DELETE</strong> below to confirm:
+                Type <strong>DELETE</strong> below to submit your request:
               </p>
               <Input
                 value={deleteConfirmText}
@@ -367,7 +370,7 @@ export default function Settings() {
               {isDeletingAccount ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Permanently Delete Account
+              Submit Deletion Request
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
