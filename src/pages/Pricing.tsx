@@ -2,7 +2,6 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
-  ArrowLeft, 
   Check, 
   Zap, 
   Crown,
@@ -12,13 +11,14 @@ import {
   Plus,
   Loader2,
   Info,
-  X
+  X,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { useSubscription, STRIPE_PLANS, CREDIT_PACKS } from "@/hooks/useSubscription";
 import { PLAN_LIMITS } from "@/lib/planLimits";
@@ -180,6 +180,7 @@ const creditInfo = [
   { type: "Brief Video (<5 min)", credits: 2 },
   { type: "Presentation (<10 min)", credits: 4 },
   { type: "Infographic", credits: 1 },
+  { type: "Cinematic", credits: 12 },
 ];
 
 export default function Pricing() {
@@ -283,17 +284,11 @@ export default function Pricing() {
       <header className="sticky top-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate(-1)}
-              className="rounded-full"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            <SidebarTrigger className="lg:hidden">
+              <Menu className="h-5 w-5 text-muted-foreground" />
+            </SidebarTrigger>
             <ThemedLogo className="h-7 sm:h-8 w-auto" />
           </div>
-          <ThemeToggle />
         </div>
       </header>
 

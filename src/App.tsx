@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
@@ -22,6 +24,17 @@ import AcceptableUse from "./pages/AcceptableUse";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const PricingWrapper = () => (
+  <SidebarProvider defaultOpen={true}>
+    <div className="flex min-h-screen w-full overflow-hidden">
+      <AppSidebar />
+      <main className="flex-1 min-w-0 overflow-hidden">
+        <Pricing />
+      </main>
+    </div>
+  </SidebarProvider>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -68,7 +81,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route path="/pricing" element={<Pricing />} />
+            <Route path="/pricing" element={<PricingWrapper />} />
             <Route
               path="/projects"
               element={
