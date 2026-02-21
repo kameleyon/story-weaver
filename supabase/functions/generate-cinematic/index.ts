@@ -799,8 +799,9 @@ QUALITY REQUIREMENTS:
         return urlData.publicUrl;
       } catch (err) {
         if (attempt >= MAX_IMG_RETRIES) {
-          console.error(`[IMG] Scene ${scene.number} Hypereal error after ${MAX_IMG_RETRIES} attempts:`, err);
-          throw err;
+          console.error(`[IMG] Scene ${scene.number} Hypereal error after ${MAX_IMG_RETRIES} attempts, falling back to Replicate:`, err);
+          // Don't throw — fall through to Replicate fallback below
+          break;
         }
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[IMG] Scene ${scene.number}: Error on attempt ${attempt}, retrying in ${delayMs}ms`);
@@ -809,7 +810,7 @@ QUALITY REQUIREMENTS:
     }
   }
 
-  // Fallback to Replicate nano-banana if Hypereal key not available
+  // Fallback to Replicate nano-banana (when Hypereal key not available OR Hypereal failed after all retries)
   console.log(`[IMG] HYPEREAL_API_KEY not set, falling back to Replicate nano-banana for scene ${scene.number}`);
 
   for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
