@@ -15,6 +15,7 @@
  */
 
 import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { WaveFile } from "npm:wavefile";
 
 // ============= TYPES =============
 
@@ -195,53 +196,59 @@ function extractPcmFromWav(wavBytes: Uint8Array): {
   numChannels: number;
   bitsPerSample: number;
 } {
-  const freshBuffer = new Uint8Array(wavBytes).buffer;
-  const view = new DataView(freshBuffer);
+  const wav = new WaveFile(wavBytes);
+  const fmt = wav.fmt as { sampleRate: number; numChannels: number; bitsPerSample: number };
+  const samples = wav.getSamples(false, Float64Array) as Float64Array;
 
-  const numChannels = view.getUint16(22, true);
-  const sampleRate = view.getUint32(24, true);
-  const bitsPerSample = view.getUint16(34, true);
+  // Convert Float64 samples back to PCM bytes for duration calculation
+  const bitsPerSample = fmt.bitsPerSample;
+  const bytesPerSample = bitsPerSample / 8;
+  const pcm = new Uint8Array(samples.length * bytesPerSample);
+  const view = new DataView(pcm.buffer);
 
-  let dataOffset = 36;
-  let dataSize = 0;
-
-  for (let offset = 12; offset < Math.min(wavBytes.length - 8, 200); offset++) {
-    if (
-      wavBytes[offset] === 0x64 &&
-      wavBytes[offset + 1] === 0x61 &&
-      wavBytes[offset + 2] === 0x74 &&
-      wavBytes[offset + 3] === 0x61
-    ) {
-      dataOffset = offset + 8;
-      dataSize = view.getUint32(offset + 4, true);
-      break;
+  for (let i = 0; i < samples.length; i++) {
+    if (bitsPerSample === 16) {
+      const val = Math.max(-32768, Math.min(32767, Math.round(samples[i])));
+      view.setInt16(i * 2, val, true);
+    } else if (bitsPerSample === 32) {
+      view.setFloat32(i * 4, samples[i], true);
     }
   }
 
-  if (dataSize === 0) {
-    dataOffset = 44;
-    dataSize = wavBytes.length - 44;
-  }
-
-  return { pcm: wavBytes.slice(dataOffset, dataOffset + dataSize), sampleRate, numChannels, bitsPerSample };
+  return { pcm, sampleRate: fmt.sampleRate, numChannels: fmt.numChannels, bitsPerSample };
 }
 
 function stitchWavBuffers(buffers: Uint8Array[]): Uint8Array {
   if (buffers.length === 0) return new Uint8Array(0);
   if (buffers.length === 1) return buffers[0];
 
-  const parsedBuffers = buffers.map((b) => extractPcmFromWav(b));
-  const { sampleRate, numChannels, bitsPerSample } = parsedBuffers[0];
+  const parsedWavs = buffers.map((buffer) => new WaveFile(buffer));
 
-  const totalLength = parsedBuffers.reduce((acc, p) => acc + p.pcm.length, 0);
-  const mergedPcm = new Uint8Array(totalLength);
+  // Extract samples from all buffers as interleaved Float64
+  const allSamples = parsedWavs.map((wav) => wav.getSamples(false, Float64Array) as Float64Array);
+
+  // Calculate total length
+  const totalLength = allSamples.reduce((acc, samples) => acc + samples.length, 0);
+
+  // Merge into a single Float64Array
+  const mergedSamples = new Float64Array(totalLength);
   let offset = 0;
-  for (const p of parsedBuffers) {
-    mergedPcm.set(p.pcm, offset);
-    offset += p.pcm.length;
+  for (const samples of allSamples) {
+    mergedSamples.set(samples, offset);
+    offset += samples.length;
   }
 
-  return pcmToWav(mergedPcm, sampleRate, numChannels, bitsPerSample);
+  // Create a new WaveFile using the formatting of the first chunk
+  const baseFormat = parsedWavs[0].fmt as { numChannels: number; sampleRate: number; bitsPerSample: number };
+  const mergedWav = new WaveFile();
+  mergedWav.fromScratch(
+    baseFormat.numChannels,
+    baseFormat.sampleRate,
+    baseFormat.bitsPerSample.toString(),
+    mergedSamples,
+  );
+
+  return new Uint8Array(mergedWav.toBuffer());
 }
 
 function splitTextIntoChunks(text: string, maxChars: number = 400): string[] {

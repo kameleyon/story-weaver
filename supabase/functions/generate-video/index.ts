@@ -101,30 +101,7 @@ function sanitizeContent(content: string): string {
   return sanitized.trim();
 }
 
-// ============= CONTENT MODERATION (Basic Level) =============
-// Basic blocklist for obviously inappropriate content - keeps it minimal to avoid over-restriction
-const BLOCKED_TERMS = [
-  // Violence/Gore
-  "murder",
-  "kill children",
-  "child abuse",
-  "torture scene",
-  "graphic violence",
-  // Explicit adult content
-  "pornographic",
-  "explicit sex",
-  "naked children",
-  "child porn",
-  // Hate speech
-  "racial slur",
-  "nazi propaganda",
-  "ethnic cleansing",
-  "genocide tutorial",
-  // Illegal activities
-  "how to make bomb",
-  "terrorism instructions",
-  "drug manufacturing",
-];
+// ============= CONTENT MODERATION (Gemini AI-Powered) =============
 
 interface ModerationResult {
   passed: boolean;
@@ -132,21 +109,67 @@ interface ModerationResult {
   flagType?: "warning" | "flagged" | "suspended" | "banned";
 }
 
-function moderateContent(content: string): ModerationResult {
-  const contentLower = content.toLowerCase();
+async function moderateContent(content: string): Promise<ModerationResult> {
+  try {
+    // Use the first Google TTS API key (already in environment)
+    const geminiKey = Deno.env.get("GOOGLE_TTS_API_KEY");
 
-  for (const term of BLOCKED_TERMS) {
-    if (contentLower.includes(term.toLowerCase())) {
-      console.log(`[MODERATION] Blocked term detected: "${term}"`);
-      return {
-        passed: false,
-        reason: `Content contains prohibited material. Please revise your input.`,
-        flagType: "warning",
-      };
+    if (!geminiKey) {
+      console.warn("[MODERATION] GOOGLE_TTS_API_KEY missing, skipping AI moderation");
+      return { passed: true };
     }
-  }
 
-  return { passed: true };
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+
+    const payload = {
+      contents: [{
+        parts: [{
+          text: `You are an AI safety moderator for a video generation app. Analyze the following user prompt.
+Strictly flag if the prompt contains: explicitly sexual content, graphic non-fictional gore, hate speech, or promotes illegal acts.
+Allow: fictional drama, action movie concepts, mystery, and standard storytelling.
+Reply ONLY with a valid JSON object in this exact format: {"passed": boolean, "reason": "short explanation if failed, otherwise empty string"}
+
+User Prompt: "${content.substring(0, 5000)}"`,
+        }],
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
+      },
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.error(`[MODERATION] Gemini API failed: ${response.status}`);
+      return { passed: true }; // Fail open
+    }
+
+    const data = await response.json();
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (responseText) {
+      const result = JSON.parse(responseText);
+
+      if (result.passed === false) {
+        console.log(`[MODERATION] Blocked by Gemini: ${result.reason}`);
+        return {
+          passed: false,
+          reason: `Content violates our safety policy (${result.reason}). Please revise your input.`,
+          flagType: "warning",
+        };
+      }
+    }
+
+    return { passed: true };
+  } catch (err) {
+    console.error("[MODERATION] Error calling Gemini moderation:", err);
+    return { passed: true }; // Fail open
+  }
 }
 
 // Add compliance instructions to AI prompts
@@ -5107,7 +5130,7 @@ serve(async (req) => {
       }
 
       // ============= CONTENT MODERATION CHECK =============
-      const moderationResult = moderateContent(content);
+      const moderationResult = await moderateContent(content);
       if (!moderationResult.passed) {
         console.log(`[MODERATION] Content rejected for user ${user.id}: ${moderationResult.reason}`);
 
