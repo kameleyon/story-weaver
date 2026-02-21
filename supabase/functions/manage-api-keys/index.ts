@@ -1,25 +1,35 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-// AES-GCM encryption using Web Crypto API
+// AES-GCM encryption using Web Crypto API with PBKDF2 key derivation
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_SALT = new TextEncoder().encode("motionmax-api-key-encryption-v1");
+
 async function getEncryptionKey(): Promise<CryptoKey> {
   const keyString = Deno.env.get("ENCRYPTION_KEY");
   if (!keyString) {
     throw new Error("ENCRYPTION_KEY not configured");
   }
   
-  // Create a consistent 256-bit key from the secret
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(keyString);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", keyData);
-  
-  return crypto.subtle.importKey(
+  // Import the secret as a PBKDF2 base key
+  const baseKey = await crypto.subtle.importKey(
     "raw",
-    hashBuffer,
+    new TextEncoder().encode(keyString),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  // Derive a proper AES-GCM key using PBKDF2
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: PBKDF2_SALT,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    baseKey,
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt", "decrypt"]
@@ -69,12 +79,28 @@ async function decrypt(ciphertext: string): Promise<string> {
     return new TextDecoder().decode(decrypted);
   } catch (error) {
     console.error("Decryption failed:", error);
-    // Return empty string if decryption fails (legacy unencrypted data)
-    return "";
+    
+    // Try legacy SHA-256 derived key as fallback for existing encrypted data
+    try {
+      const keyString = Deno.env.get("ENCRYPTION_KEY");
+      if (!keyString) return "";
+      const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(keyString));
+      const legacyKey = await crypto.subtle.importKey("raw", hashBuffer, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+      const combined = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
+      const iv = combined.slice(0, 12);
+      const encrypted = combined.slice(12);
+      const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, legacyKey, encrypted);
+      console.log("Decrypted with legacy key - will re-encrypt with PBKDF2 on next save");
+      return new TextDecoder().decode(decrypted);
+    } catch (legacyError) {
+      console.error("Legacy decryption also failed:", legacyError);
+      return "";
+    }
   }
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
