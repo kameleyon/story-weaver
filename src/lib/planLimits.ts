@@ -74,6 +74,7 @@ export const CREDIT_COSTS = {
   brief: 2,
   presentation: 4,
   smartflow: 1, // Infographic
+  cinematic: 12,
 } as const;
 
 /**
@@ -86,7 +87,9 @@ export function getCreditsRequired(
   if (projectType === "smartflow") {
     return CREDIT_COSTS.smartflow;
   }
-  // Cinematic costs more (same as storytelling for now)
+  if (projectType === "cinematic") {
+    return CREDIT_COSTS.cinematic;
+  }
   return CREDIT_COSTS[length as keyof typeof CREDIT_COSTS] || CREDIT_COSTS.short;
 }
 
