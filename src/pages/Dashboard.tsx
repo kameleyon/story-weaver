@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useRefreshThumbnails } from "@/hooks/useRefreshThumbnails";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
@@ -88,14 +87,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { plan } = useSubscription();
-  const { refreshThumbnails } = useRefreshThumbnails();
   const [currentTip, setCurrentTip] = useState(0);
   const [projectScrollIndex, setProjectScrollIndex] = useState(0);
   const [greetingIndex] = useState(() => Math.floor(Math.random() * GREETINGS.length));
-  
-  // Track refreshed thumbnails separately
-  const [refreshedThumbnails, setRefreshedThumbnails] = useState<Map<string, string | null>>(new Map());
-  const refreshInProgressRef = useRef(false);
 
   // Rotate tips
   useEffect(() => {
@@ -140,91 +134,29 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Fetch recent projects - fast initial load without thumbnail refresh
-  const { data: recentProjectsRaw = [] } = useQuery({
+  // Fetch recent projects - single lightweight query using permanent thumbnail_url
+  const { data: recentProjects = [] } = useQuery({
     queryKey: ["dashboard-recent", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
-      // Fetch projects
-      const { data: projects } = await supabase
+      const { data: projects, error } = await supabase
         .from("projects")
-        .select("id, title, created_at, updated_at, project_type, style")
+        .select("id, title, created_at, updated_at, project_type, style, thumbnail_url")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(10);
       
-      if (!projects?.length) return [];
+      if (error) throw error;
       
-      // Fetch latest complete generation for each project to get thumbnail
-      const projectIds = projects.map(p => p.id);
-      const { data: generations } = await supabase
-        .from("generations")
-        .select("project_id, scenes")
-        .in("project_id", projectIds)
-        .eq("status", "complete")
-        .order("created_at", { ascending: false });
-      
-      // Create a map of project_id -> first image URL (may be expired)
-      const thumbnailMap: Record<string, string | null> = {};
-      if (generations) {
-        for (const gen of generations) {
-          if (thumbnailMap[gen.project_id] !== undefined) continue;
-          
-          const scenes = gen.scenes as any[];
-          if (Array.isArray(scenes) && scenes.length > 0) {
-            const firstScene = scenes[0];
-            const imageUrl = firstScene?.imageUrl || 
-                            firstScene?.image_url || 
-                            (Array.isArray(firstScene?.imageUrls) ? firstScene.imageUrls[0] : null);
-            thumbnailMap[gen.project_id] = imageUrl || null;
-          } else {
-            thumbnailMap[gen.project_id] = null;
-          }
-        }
-      }
-      
-      return projects.map(p => ({
+      return (projects || []).map(p => ({
         ...p,
-        thumbnailUrl: thumbnailMap[p.id] || null,
+        thumbnailUrl: p.thumbnail_url || null,
       }));
     },
     enabled: !!user?.id,
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 30000,
   });
-
-  // Background refresh of thumbnails
-  useEffect(() => {
-    if (recentProjectsRaw.length === 0 || refreshInProgressRef.current) return;
-    
-    const thumbnailInputs = recentProjectsRaw
-      .filter(p => p.thumbnailUrl && p.thumbnailUrl.includes("/storage/v1/object/sign/"))
-      .map(p => ({ projectId: p.id, thumbnailUrl: p.thumbnailUrl }));
-    
-    if (thumbnailInputs.length === 0) return;
-    
-    refreshInProgressRef.current = true;
-    
-    refreshThumbnails(thumbnailInputs)
-      .then(refreshedMap => {
-        setRefreshedThumbnails(refreshedMap);
-      })
-      .catch(err => {
-        console.warn("[Dashboard] Background thumbnail refresh failed:", err);
-      })
-      .finally(() => {
-        refreshInProgressRef.current = false;
-      });
-  }, [recentProjectsRaw, refreshThumbnails]);
-
-  // Merge refreshed thumbnails
-  const recentProjects = useMemo(() => {
-    if (refreshedThumbnails.size === 0) return recentProjectsRaw;
-    return recentProjectsRaw.map(p => ({
-      ...p,
-      thumbnailUrl: refreshedThumbnails.get(p.id) ?? p.thumbnailUrl,
-    }));
-  }, [recentProjectsRaw, refreshedThumbnails]);
 
   const planMonthlyLimit = PLAN_LIMITS[plan]?.creditsPerMonth ?? 5;
   const creditsBalance = credits?.balance ?? 0;

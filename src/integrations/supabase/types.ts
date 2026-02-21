@@ -383,6 +383,7 @@ export type Database = {
           story_genre: string | null
           story_tone: string | null
           style: string
+          thumbnail_url: string | null
           title: string
           updated_at: string
           user_id: string
@@ -410,6 +411,7 @@ export type Database = {
           story_genre?: string | null
           story_tone?: string | null
           style?: string
+          thumbnail_url?: string | null
           title: string
           updated_at?: string
           user_id: string
@@ -437,6 +439,7 @@ export type Database = {
           story_genre?: string | null
           story_tone?: string | null
           style?: string
+          thumbnail_url?: string | null
           title?: string
           updated_at?: string
           user_id?: string
