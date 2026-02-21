@@ -89,6 +89,7 @@ export function useVideoExport() {
   const [state, setState] = useState<ExportState>({ status: "idle", progress: 0 });
   const abortRef = useRef(false);
   const exportRunIdRef = useRef(0);
+  const workerRef = useRef<Worker | null>(null);
 
   const log = useCallback((...args: any[]) => {
     appendVideoExportLog("log", ["[VideoExport]", ...args]);
@@ -107,6 +108,11 @@ export function useVideoExport() {
 
   const reset = useCallback(() => {
     abortRef.current = true;
+    if (workerRef.current) {
+      workerRef.current.postMessage({ type: "abort" });
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
     setState({ status: "idle", progress: 0 });
   }, []);
 
@@ -180,6 +186,175 @@ export function useVideoExport() {
           wantsAudio, 
           audioTrackConfig 
         });
+
+        // === WEB WORKER PATH: Offload encoding for image-only exports ===
+        const hasVideoScenes = scenes.some(s => !!s.videoUrl);
+        const canUseWorker = !hasVideoScenes
+          && typeof Worker !== 'undefined'
+          && typeof OffscreenCanvas !== 'undefined';
+
+        if (canUseWorker) {
+          log("Run", runId, "Using Web Worker path (OffscreenCanvas) for image-only export");
+          setState({ status: "loading", progress: 5 });
+
+          // Pre-fetch all unique image URLs as blobs for efficient bitmap creation
+          const blobCache = new Map<string, Blob>();
+          for (const s of scenes) {
+            const urls = s.imageUrls?.length ? s.imageUrls : [s.imageUrl || ""];
+            for (const url of urls) {
+              if (url && !blobCache.has(url)) {
+                try {
+                  const resp = await fetch(url, { mode: "cors" });
+                  if (resp.ok) blobCache.set(url, await resp.blob());
+                } catch { /* skip failed fetches */ }
+              }
+            }
+          }
+
+          // Prepare scene payloads for worker (ImageBitmaps + decoded audio)
+          const targetSR = audioTrackConfig?.sampleRate ?? 48000;
+          const workerScenes: Array<{
+            imageBitmaps: ImageBitmap[];
+            nextSceneFirstBitmap: ImageBitmap | null;
+            audioSamples: Float32Array | null;
+            duration: number;
+          }> = [];
+          const xfer: Transferable[] = [];
+
+          for (let si = 0; si < scenes.length; si++) {
+            if (abortRef.current) break;
+            const s = scenes[si];
+            setState({ status: "loading", progress: Math.floor(5 + (si / scenes.length) * 20) });
+
+            // Create ImageBitmaps from cached blobs
+            const urls = s.imageUrls?.length ? s.imageUrls : [s.imageUrl || ""];
+            const bitmaps: ImageBitmap[] = [];
+            for (const url of urls) {
+              const blob = url ? blobCache.get(url) : null;
+              if (blob) {
+                try {
+                  const bm = await createImageBitmap(blob);
+                  bitmaps.push(bm);
+                  xfer.push(bm);
+                } catch { /* skip */ }
+              }
+            }
+
+            // Next scene first image for crossfade transition
+            let nextBm: ImageBitmap | null = null;
+            if (si < scenes.length - 1) {
+              const nu = scenes[si + 1].imageUrls?.length
+                ? scenes[si + 1].imageUrls!
+                : [scenes[si + 1].imageUrl || ""];
+              const nb = nu[0] ? blobCache.get(nu[0]) : null;
+              if (nb) {
+                try { nextBm = await createImageBitmap(nb); xfer.push(nextBm); }
+                catch { /* skip */ }
+              }
+            }
+
+            // Decode + resample audio on main thread (OfflineAudioContext unavailable in workers)
+            let audioSamples: Float32Array | null = null;
+            let aDur = 0;
+            if (s.audioUrl && audioTrackConfig) {
+              try {
+                const resp = await fetch(s.audioUrl);
+                if (resp.ok) {
+                  const ab = await resp.arrayBuffer();
+                  const dCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(1, 1, targetSR);
+                  const decoded = await dCtx.decodeAudioData(ab);
+                  aDur = decoded.duration;
+                  const rLen = Math.ceil(decoded.duration * targetSR);
+                  const oCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(2, rLen, targetSR);
+                  const src = oCtx.createBufferSource();
+                  src.buffer = decoded;
+                  src.connect(oCtx.destination);
+                  src.start(0);
+                  const rendered = await oCtx.startRendering();
+                  audioSamples = new Float32Array(rendered.length * 2);
+                  const L = rendered.getChannelData(0);
+                  const R = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : L;
+                  for (let j = 0; j < rendered.length; j++) {
+                    audioSamples[j * 2] = L[j];
+                    audioSamples[j * 2 + 1] = R[j];
+                  }
+                  xfer.push(audioSamples.buffer);
+                }
+              } catch (e) {
+                warn("Run", runId, `Audio decode failed scene ${si + 1}:`, e);
+              }
+            }
+
+            workerScenes.push({
+              imageBitmaps: bitmaps,
+              nextSceneFirstBitmap: nextBm,
+              audioSamples,
+              duration: aDur > 0 ? aDur : (s.duration || 3),
+            });
+          }
+
+          blobCache.clear();
+          setState({ status: "rendering", progress: 25 });
+
+          // Create and communicate with worker
+          const worker = new Worker(
+            new URL('../workers/videoExportWorker.ts', import.meta.url),
+            { type: 'module' }
+          );
+          workerRef.current = worker;
+
+          const url = await new Promise<string>((resolve, reject) => {
+            worker.onmessage = (ev: MessageEvent) => {
+              const m = ev.data;
+              if (m.type === 'progress') {
+                setState({ status: m.status, progress: m.progress, warning: m.warning });
+              } else if (m.type === 'complete') {
+                const blob = new Blob([m.buffer], { type: 'video/mp4' });
+                const vUrl = URL.createObjectURL(blob);
+                log("Run", runId, "Worker export complete", { size: m.buffer.byteLength });
+                setState({ status: 'complete', progress: 100, videoUrl: vUrl });
+                workerRef.current = null;
+                worker.terminate();
+                resolve(vUrl);
+              } else if (m.type === 'error') {
+                err("Worker export failed:", m.message);
+                setState({ status: 'error', progress: 0, error: m.message });
+                workerRef.current = null;
+                worker.terminate();
+                reject(new Error(m.message));
+              } else if (m.type === 'log') {
+                appendVideoExportLog(m.level, ["[Worker]", ...m.args]);
+              }
+            };
+            worker.onerror = (ev) => {
+              err("Worker crashed:", ev.message);
+              setState({ status: 'error', progress: 0, error: 'Export worker crashed' });
+              workerRef.current = null;
+              worker.terminate();
+              reject(new Error('Worker crashed'));
+            };
+
+            worker.postMessage({
+              type: 'start',
+              scenes: workerScenes,
+              config: {
+                width: dim.w,
+                height: dim.h,
+                fps,
+                brandMark: brandMark?.trim() || null,
+                audioCodec: audioTrackConfig?.codec || null,
+                audioSampleRate: targetSR,
+                audioChannels: audioTrackConfig?.numberOfChannels ?? 2,
+                audioBitrate: audioTrackConfig?.bitrate ?? 128_000,
+                videoBitrate: isIOS ? 2_500_000 : 6_000_000,
+              },
+            }, xfer);
+          });
+
+          return url;
+        }
+
+        // === MAIN THREAD FALLBACK: Video scenes or browsers without OffscreenCanvas ===
 
         // Initialize Muxer
         muxer = new Muxer({
