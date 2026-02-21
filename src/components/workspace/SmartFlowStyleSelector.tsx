@@ -13,7 +13,7 @@ import minimalistPreview from "@/assets/styles/minimalist-preview.png";
 import doodlePreview from "@/assets/styles/doodle-preview.png";
 import stickPreview from "@/assets/styles/stick-preview.png";
 import realisticPreview from "@/assets/styles/realistic-preview.png";
-import storybookPreview from "@/assets/styles/painterly-preview.png";
+import storybookPreview from "@/assets/styles/storybook-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
 import sketchPreview from "@/assets/styles/sketch-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
