@@ -1,16 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
   User, 
   Shield,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -19,6 +21,32 @@ import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useSidebarState } from "@/hooks/useSidebarState";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+/** Calculate a 0–100 password strength score */
+function getPasswordStrength(password: string): { score: number; label: string; color: string } {
+  if (!password) return { score: 0, label: "", color: "bg-muted" };
+  let score = 0;
+  if (password.length >= 8) score += 25;
+  else if (password.length >= 6) score += 10;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 25;
+  if (/\d/.test(password)) score += 25;
+  if (/[^a-zA-Z0-9]/.test(password)) score += 25;
+
+  if (score <= 25) return { score, label: "Weak", color: "bg-destructive" };
+  if (score <= 50) return { score, label: "Fair", color: "bg-orange-500" };
+  if (score <= 75) return { score, label: "Good", color: "bg-yellow-500" };
+  return { score, label: "Strong", color: "bg-green-500" };
+}
 
 export default function Settings() {
   const { user } = useAuth();
@@ -32,6 +60,11 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  const passwordStrength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -93,7 +126,8 @@ export default function Settings() {
 
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) { toast.error("Please fill in both password fields."); return; }
-    if (newPassword.length < 6) { toast.error("Password must be at least 6 characters long."); return; }
+    if (newPassword.length < 8) { toast.error("Password must be at least 8 characters long."); return; }
+    if (passwordStrength.score < 50) { toast.error("Please choose a stronger password with a mix of uppercase, lowercase, numbers, or symbols."); return; }
     if (newPassword !== confirmPassword) { toast.error("Passwords don't match."); return; }
     setIsChangingPassword(true);
     try {
@@ -106,6 +140,25 @@ export default function Settings() {
       toast.error(error.message || "Please try again.");
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+    setIsDeletingAccount(true);
+    try {
+      // Send deletion request via support email
+      window.open(
+        `mailto:support@motionmax.io?subject=Account%20Deletion%20Request&body=Please%20delete%20my%20account%20associated%20with%20email%3A%20${encodeURIComponent(user?.email || "")}%0A%0AUser%20ID%3A%20${encodeURIComponent(user?.id || "")}%0A%0AI%20understand%20this%20action%20is%20permanent%20and%20all%20my%20data%20will%20be%20deleted.`,
+        "_blank"
+      );
+      toast.success("A deletion request email has been prepared. Please send it to complete your request.");
+      setShowDeleteDialog(false);
+      setDeleteConfirmText("");
+    } catch (error: any) {
+      toast.error("Failed to initiate account deletion. Please contact support directly.");
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -192,6 +245,36 @@ export default function Settings() {
                         </Button>
                       </CardContent>
                     </Card>
+
+                    {/* Danger Zone */}
+                    <Card className="mt-6 border-destructive/50 bg-destructive/5">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-destructive">
+                          <AlertTriangle className="h-5 w-5" />
+                          Danger Zone
+                        </CardTitle>
+                        <CardDescription>
+                          Irreversible actions that permanently affect your account
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Delete Account</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Permanently delete your account and all associated data including projects, generations, and voice clones.
+                            </p>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            className="rounded-full shrink-0"
+                            onClick={() => setShowDeleteDialog(true)}
+                          >
+                            Delete Account
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </TabsContent>
 
                   <TabsContent value="security" className="mt-6">
@@ -204,9 +287,31 @@ export default function Settings() {
                         <div className="space-y-4">
                           <Label>Change Password</Label>
                           <p className="text-sm text-muted-foreground">
-                            Enter a new password to update your account security. Password must be at least 6 characters.
+                            Enter a new password to update your account security. Password must be at least 8 characters with a mix of character types.
                           </p>
                           <Input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                          {newPassword && (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">Password strength</span>
+                                <span className={`font-medium ${
+                                  passwordStrength.score <= 25 ? "text-destructive" :
+                                  passwordStrength.score <= 50 ? "text-orange-500" :
+                                  passwordStrength.score <= 75 ? "text-yellow-600" :
+                                  "text-green-600"
+                                }`}>
+                                  {passwordStrength.label}
+                                </span>
+                              </div>
+                              <Progress value={passwordStrength.score} className="h-1.5" />
+                              <ul className="text-[11px] text-muted-foreground space-y-0.5 mt-1">
+                                <li className={newPassword.length >= 8 ? "text-green-600" : ""}>• At least 8 characters</li>
+                                <li className={/[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword) ? "text-green-600" : ""}>• Uppercase and lowercase letters</li>
+                                <li className={/\d/.test(newPassword) ? "text-green-600" : ""}>• At least one number</li>
+                                <li className={/[^a-zA-Z0-9]/.test(newPassword) ? "text-green-600" : ""}>• At least one special character</li>
+                              </ul>
+                            </div>
+                          )}
                           <Input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
                           <Button onClick={handleChangePassword} disabled={isChangingPassword} className="gap-2 rounded-full">
                             {isChangingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -222,6 +327,51 @@ export default function Settings() {
           </div>
         </main>
       </div>
+
+      {/* Delete Account Confirmation */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Your Account?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                This action is <strong>permanent and irreversible</strong>. All your data will be deleted, including:
+              </p>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                <li>All projects and video generations</li>
+                <li>Voice clones and audio files</li>
+                <li>Remaining credits (no refund)</li>
+                <li>Your account and profile</li>
+              </ul>
+              <p>
+                Type <strong>DELETE</strong> below to confirm:
+              </p>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE to confirm"
+                className="mt-2"
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmText("")}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirmText !== "DELETE" || isDeletingAccount}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingAccount ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Permanently Delete Account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 }
