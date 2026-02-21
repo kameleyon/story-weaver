@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-export type StoryLength = "short" | "brief" | "extended";
+export type StoryLength = "short" | "brief" | "presentation";
 
 interface StorytellingLengthSelectorProps {
   selected: StoryLength;
@@ -11,7 +11,7 @@ interface StorytellingLengthSelectorProps {
 const LENGTHS: { id: StoryLength; label: string; description: string }[] = [
   { id: "short", label: "Short", description: "< 3 min" },
   { id: "brief", label: "Brief", description: "< 7 min" },
-  { id: "extended", label: "Extended", description: "< 15 min" },
+  { id: "presentation", label: "Extended", description: "< 15 min" },
 ];
 
 export function StorytellingLengthSelector({ selected, onSelect }: StorytellingLengthSelectorProps) {
