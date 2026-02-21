@@ -5333,46 +5333,29 @@ serve(async (req) => {
       );
       // ============= END PLAN RESTRICTION VALIDATION =============
 
-      // ============= UPFRONT CREDIT DEDUCTION =============
-      // Deduct credits BEFORE any API calls to prevent tab-close exploit
-      const { data: currentCredits, error: preFetchError } = await supabase
-        .from("user_credits")
-        .select("credits_balance, total_used")
-        .eq("user_id", user.id)
-        .single();
+      // ============= UPFRONT CREDIT DEDUCTION (Atomic via RPC) =============
+      if (creditsRequired > 0) {
+        const { data: deductionSuccess, error: rpcError } = await supabase.rpc(
+          "deduct_credits_securely",
+          {
+            p_user_id: user.id,
+            p_amount: creditsRequired,
+            p_transaction_type: "generation",
+            p_description: `Video generation started: ${body.projectType || "doc2video"} / ${length}`,
+          },
+        );
 
-      if (preFetchError && preFetchError.code !== "PGRST116") {
-        console.error("[generate-video] Error fetching credits for upfront deduction:", preFetchError);
-      }
-
-      if (currentCredits) {
-        const newBalance = Math.max(0, (currentCredits.credits_balance || 0) - creditsRequired);
-        const newTotalUsed = (currentCredits.total_used || 0) + creditsRequired;
-
-        const { error: deductError } = await supabase
-          .from("user_credits")
-          .update({
-            credits_balance: newBalance,
-            total_used: newTotalUsed,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", user.id);
-
-        if (deductError) {
-          console.error("[generate-video] Upfront credit deduction failed:", deductError);
-        } else {
-          console.log(`[generate-video] Credits reserved upfront: ${currentCredits.credits_balance} -> ${newBalance} (cost: ${creditsRequired})`);
-
-          // Record transaction immediately
-          await supabase.from("credit_transactions").insert({
-            user_id: user.id,
-            amount: -creditsRequired,
-            transaction_type: "generation",
-            description: `Video generation started: ${body.projectType || "doc2video"} / ${length}`,
-          });
+        if (rpcError || !deductionSuccess) {
+          console.error(`[CREDITS] Atomic deduction failed for user ${user.id}:`, rpcError?.message);
+          return new Response(
+            JSON.stringify({
+              error: "Failed to deduct credits. Please ensure you have enough balance.",
+              code: "INSUFFICIENT_CREDITS",
+            }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
         }
-      } else {
-        console.log("[generate-video] No user_credits record found, skipping upfront deduction");
+        console.log(`[CREDITS] Securely deducted ${creditsRequired} credits for user ${user.id}`);
       }
       // ============= END UPFRONT CREDIT DEDUCTION =============
 

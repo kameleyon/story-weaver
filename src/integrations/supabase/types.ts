@@ -686,6 +686,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      deduct_credits_securely: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_transaction_type: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       get_shared_project: { Args: { share_token_param: string }; Returns: Json }
       has_role: {
         Args: {

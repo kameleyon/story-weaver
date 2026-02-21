@@ -1461,47 +1461,27 @@ serve(async (req) => {
       const length = requireString(body.length, "length");
       const style = requireString(body.style, "style");
 
-      // ============= UPFRONT CREDIT DEDUCTION (Cinematic = 12 credits) =============
+      // ============= UPFRONT CREDIT DEDUCTION (Atomic via RPC) =============
       const CINEMATIC_CREDIT_COST = 12;
 
-      const { data: creditData } = await supabase
-        .from("user_credits")
-        .select("credits_balance, total_used")
-        .eq("user_id", user.id)
-        .single();
+      const { data: deductionSuccess, error: rpcError } = await supabase.rpc(
+        "deduct_credits_securely",
+        {
+          p_user_id: user.id,
+          p_amount: CINEMATIC_CREDIT_COST,
+          p_transaction_type: "generation",
+          p_description: `Cinematic generation started (${length})`,
+        },
+      );
 
-      const creditsBalance = creditData?.credits_balance || 0;
-
-      if (creditsBalance < CINEMATIC_CREDIT_COST) {
+      if (rpcError || !deductionSuccess) {
+        console.error(`[CINEMATIC] Atomic deduction failed for user ${user.id}:`, rpcError?.message);
         return jsonResponse({
-          error: `Insufficient credits. Cinematic generation requires ${CINEMATIC_CREDIT_COST} credits but you have ${creditsBalance}.`,
+          error: `Insufficient credits. Cinematic generation requires ${CINEMATIC_CREDIT_COST} credits.`,
           code: "INSUFFICIENT_CREDITS",
         }, { status: 402 });
       }
-
-      // Deduct immediately before any API calls
-      if (creditData) {
-        const newBalance = Math.max(0, creditsBalance - CINEMATIC_CREDIT_COST);
-        const newTotalUsed = (creditData.total_used || 0) + CINEMATIC_CREDIT_COST;
-
-        await supabase
-          .from("user_credits")
-          .update({
-            credits_balance: newBalance,
-            total_used: newTotalUsed,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", user.id);
-
-        await supabase.from("credit_transactions").insert({
-          user_id: user.id,
-          amount: -CINEMATIC_CREDIT_COST,
-          transaction_type: "generation",
-          description: `Cinematic generation started (${length})`,
-        });
-
-        console.log(`[CINEMATIC] Credits reserved upfront: ${creditsBalance} -> ${newBalance} (cost: ${CINEMATIC_CREDIT_COST})`);
-      }
+      console.log(`[CINEMATIC] Securely deducted ${CINEMATIC_CREDIT_COST} credits for user ${user.id}`);
       // ============= END UPFRONT CREDIT DEDUCTION =============
 
       console.log("=== CINEMATIC SCRIPT START ===");
