@@ -23,7 +23,6 @@ import {
   Coins,
   ChevronDown,
   LucideIcon,
-  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +32,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { CREDIT_COSTS } from "@/lib/planLimits";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, format, startOfMonth, endOfMonth, subMonths, isSameMonth } from "date-fns";
 import { toast } from "sonner";
@@ -55,7 +55,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Plan limits configuration - Updated tiers with matching icons from Pricing page
+// Plan limits configuration
 const planLimits: Record<string, { credits: number; label: string; color: string; icon: LucideIcon }> = {
   free: { credits: 5, label: "Free", color: "bg-muted", icon: Sparkles },
   starter: { credits: 30, label: "Starter", color: "bg-primary/20", icon: Zap },
@@ -63,6 +63,14 @@ const planLimits: Record<string, { credits: number; label: string; color: string
   professional: { credits: 300, label: "Professional", color: "bg-primary/40", icon: Gem },
   enterprise: { credits: Infinity, label: "Enterprise", color: "bg-primary/50", icon: Building2 },
 };
+
+/** Compute the credit cost for a generation based on project type + length */
+function getCreditCostForGeneration(projectType: string | undefined, length: string | undefined): number {
+  if (projectType === "smartflow" || projectType === "smart-flow") return CREDIT_COSTS.smartflow;
+  if (projectType === "cinematic") return CREDIT_COSTS.cinematic;
+  if (length && length in CREDIT_COSTS) return CREDIT_COSTS[length as keyof typeof CREDIT_COSTS];
+  return CREDIT_COSTS.short;
+}
 
 export default function Usage() {
   const navigate = useNavigate();
@@ -90,34 +98,25 @@ export default function Usage() {
     }
   }, [searchParams, checkSubscription]);
 
-  // Fetch usage data from generations table
-  const { data: usageData, isLoading: isLoadingUsage } = useQuery({
-    queryKey: ["usage-stats", user?.id],
+  // Fetch credits consumed this cycle from credit_transactions
+  const { data: creditsUsedThisCycle = 0, isLoading: isLoadingCreditsUsed } = useQuery({
+    queryKey: ["credits-used-cycle", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return 0;
+      const monthStart = startOfMonth(new Date());
+      const monthEnd = endOfMonth(new Date());
 
-      const now = new Date();
-      const monthStart = startOfMonth(now);
-      const monthEnd = endOfMonth(now);
-
-      // Get generations for current billing cycle
-      const { data: generations, error } = await supabase
-        .from("generations")
-        .select("id, created_at, status")
+      const { data, error } = await supabase
+        .from("credit_transactions")
+        .select("amount")
         .eq("user_id", user.id)
+        .eq("transaction_type", "usage")
         .gte("created_at", monthStart.toISOString())
         .lte("created_at", monthEnd.toISOString());
 
       if (error) throw error;
-
-      const completedGenerations = generations?.filter(g => g.status === "completed" || g.status === "complete") || [];
-      
-      return {
-        videosCreated: completedGenerations.length,
-        totalGenerations: generations?.length || 0,
-        billingStart: monthStart,
-        billingEnd: monthEnd,
-      };
+      // amount is negative for usage, sum the absolute values
+      return (data || []).reduce((sum, t) => sum + Math.abs(t.amount), 0);
     },
     enabled: !!user?.id,
   });
@@ -156,14 +155,13 @@ export default function Usage() {
           completed_at,
           status,
           scenes,
-          project:projects(title, project_type)
+          project:projects(title, project_type, length)
         `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       
-      // Extract cost tracking and calculate generation time
       return (data || []).map(item => {
         const scenes = item.scenes as any[];
         const costTracking = scenes?.[0]?._meta?.costTracking;
@@ -206,8 +204,7 @@ export default function Usage() {
   const planInfo = planLimits[plan as keyof typeof planLimits] || planLimits.free;
   const PlanIcon = planInfo.icon;
   const creditsLimit = planInfo.credits;
-  const videosCreated = usageData?.videosCreated || 0;
-  const creditsPercentage = creditsLimit === Infinity ? 0 : (videosCreated / creditsLimit) * 100;
+  const creditsPercentage = creditsLimit === Infinity ? 0 : (creditsUsedThisCycle / creditsLimit) * 100;
 
   // Calculate renewal date
   const renewalDate = subscriptionEnd 
@@ -326,24 +323,24 @@ export default function Usage() {
             <Card className="border-border/50 bg-card/50 shadow-sm">
               <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
                 <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                  <Video className="h-4 w-4 text-primary" />
-                  Videos This Cycle
+                  <Coins className="h-4 w-4 text-primary" />
+                  Credits Used This Cycle
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
                 <div className="flex items-end justify-between">
                   <span className="text-2xl sm:text-3xl font-bold">
-                    {isLoadingUsage ? "..." : videosCreated}
+                    {isLoadingCreditsUsed ? "..." : creditsUsedThisCycle}
                   </span>
                   <span className="text-sm text-muted-foreground">
                     / {creditsLimit === Infinity ? "∞" : creditsLimit}
                   </span>
                 </div>
-                <Progress value={creditsPercentage} className="mt-3 h-2" />
+                <Progress value={Math.min(creditsPercentage, 100)} className="mt-3 h-2" />
                 <p className="mt-2 text-xs text-muted-foreground">
                   {creditsLimit === Infinity 
                     ? "Unlimited credits with your plan" 
-                    : `${Math.max(0, creditsLimit - videosCreated)} credits remaining this cycle`}
+                    : `${Math.max(0, creditsLimit - creditsUsedThisCycle)} plan credits remaining this cycle`}
                 </p>
               </CardContent>
             </Card>
@@ -360,7 +357,7 @@ export default function Usage() {
                   <span className="text-2xl sm:text-3xl font-bold">
                     {isLoadingSub ? "..." : creditsBalance}
                   </span>
-                  <span className="text-sm text-muted-foreground">bonus credits</span>
+                  <span className="text-sm text-muted-foreground">credits</span>
                 </div>
                 <Button 
                   variant="outline" 
@@ -463,7 +460,7 @@ export default function Usage() {
           </Card>
 
           {/* Generation Stats */}
-          <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card className="border-border/50 bg-card/50 shadow-sm">
               <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center gap-4">
@@ -482,34 +479,18 @@ export default function Usage() {
               <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center gap-4">
                   <div className="p-3 rounded-xl bg-primary/10">
-                    <Clock className="h-5 w-5 text-primary" />
+                    <Coins className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {Math.round(allActivity.reduce((acc, a) => {
-                        if (Array.isArray(a.scenes)) {
-                          (a.scenes as any[]).forEach((scene: any) => {
-                            if (typeof scene?.duration === "number") acc += scene.duration;
-                          });
-                        }
-                        return acc;
-                      }, 0) / 60)}
+                      {allActivity
+                        .filter(a => a.status === "complete" || a.status === "completed")
+                        .reduce((sum, a) => {
+                          const proj = a.project as any;
+                          return sum + getCreditCostForGeneration(proj?.project_type, proj?.length);
+                        }, 0)}
                     </p>
-                    <p className="text-sm text-muted-foreground">Total Minutes</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-border/50 bg-card/50 shadow-sm">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{allActivity.filter(a => a.status === "complete" || a.status === "completed").length * 15} MB</p>
-                    <p className="text-sm text-muted-foreground">Storage Used</p>
+                    <p className="text-sm text-muted-foreground">Total Credits Used</p>
                   </div>
                 </div>
               </CardContent>
@@ -580,15 +561,19 @@ export default function Usage() {
                           const isComplete = activity.status === "complete" || activity.status === "completed";
                           const isFailed = activity.status === "failed" || activity.status === "error";
                           const isGenerating = !isComplete && !isFailed;
-                          const projectType = (activity.project as any)?.project_type;
+                          const proj = activity.project as any;
+                          const projectType = proj?.project_type;
+                          const projectLength = proj?.length;
                           const IconComponent = projectType === "storytelling" 
                             ? Clapperboard 
                             : projectType === "smartflow" || projectType === "smart-flow"
                               ? Wallpaper
                               : Video;
                           
+                          const creditCost = getCreditCostForGeneration(projectType, projectLength);
+                          
                           // Clean up title - remove redundant prefixes
-                          const rawTitle = (activity.project as any)?.title || "Untitled Video";
+                          const rawTitle = proj?.title || "Untitled Video";
                           const cleanTitle = rawTitle.replace(/^(AudioMax|MotionMax):\s*/i, "");
                           
                           return (
@@ -607,19 +592,18 @@ export default function Usage() {
                                     <span className="font-normal opacity-85 truncate text-xs sm:text-sm">
                                       {cleanTitle}
                                     </span>
-                                    {/* Only show non-complete status badges */}
-                                      {!isComplete && (
-                                        <Badge
-                                          variant="secondary"
-                                          className={`shrink-0 text-[10px] px-1.5 py-0 h-4 font-normal ${
-                                            isFailed
-                                              ? "bg-destructive/20 text-destructive"
-                                              : "bg-primary/10 text-primary"
-                                          }`}
-                                        >
-                                          {activity.status}
-                                        </Badge>
-                                      )}
+                                    {!isComplete && (
+                                      <Badge
+                                        variant="secondary"
+                                        className={`shrink-0 text-[10px] px-1.5 py-0 h-4 font-normal ${
+                                          isFailed
+                                            ? "bg-destructive/20 text-destructive"
+                                            : "bg-primary/10 text-primary"
+                                        }`}
+                                      >
+                                        {activity.status}
+                                      </Badge>
+                                    )}
                                   </div>
                                   <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
                                     {format(new Date(activity.created_at), "MMM d, h:mm a")}
@@ -640,7 +624,7 @@ export default function Usage() {
                                 {isComplete ? (
                                   <div className="flex items-center justify-end gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] text-muted-foreground" title="Credits used">
                                     <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                    <span>1</span>
+                                    <span>{creditCost}</span>
                                   </div>
                                 ) : (
                                   <span className="text-[10px] sm:text-[11px] text-muted-foreground">—</span>

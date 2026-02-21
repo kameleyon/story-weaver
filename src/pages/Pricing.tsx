@@ -40,7 +40,6 @@ const plans = [
     id: "free",
     name: "Free",
     price: "$0",
-    yearlyPrice: "$0",
     period: "/month",
     description: "Get started with basic features",
     icon: Sparkles,
@@ -66,7 +65,6 @@ const plans = [
     id: "starter",
     name: "Starter",
     price: "$14.99",
-    yearlyPrice: "$11.99",
     period: "/month",
     description: "Hobbyists & social creators",
     icon: Zap,
@@ -93,7 +91,6 @@ const plans = [
     id: "creator",
     name: "Creator",
     price: "$39.99",
-    yearlyPrice: "$31.99",
     period: "/month",
     description: "Content creators & small biz",
     icon: Crown,
@@ -107,7 +104,6 @@ const plans = [
       "1 voice clone",
       "50 infographics/month",
       "Brand mark",
-      "Basic analytics",
       "Priority support (24h)",
     ],
     excluded: [],
@@ -119,7 +115,6 @@ const plans = [
     id: "professional",
     name: "Professional",
     price: "$89.99",
-    yearlyPrice: "$71.99",
     period: "/month",
     description: "Agencies & marketing teams",
     icon: Gem,
@@ -132,9 +127,6 @@ const plans = [
       "3 voice clones",
       "Unlimited infographics",
       "Full brand kit",
-      "Advanced analytics",
-      "Batch export",
-      "3 team seats",
       "Priority support (12h)",
     ],
     excluded: [],
@@ -146,7 +138,6 @@ const plans = [
     id: "enterprise",
     name: "Enterprise",
     price: "Custom",
-    yearlyPrice: "Custom",
     period: "",
     description: "Large organizations",
     icon: Building2,
@@ -157,8 +148,6 @@ const plans = [
       "Custom voice training",
       "Unlimited voice clones",
       "White-label solution",
-      "Unlimited API access",
-      "Unlimited team seats",
       "SSO/SAML integration",
       "On-premise available",
       "Custom SLA guarantee",
@@ -175,8 +164,8 @@ const plans = [
 
 const creditPackages = [
   { credits: 15 as const, price: "$11.99", perCredit: "$0.80", priceId: CREDIT_PACKS[15].priceId },
-  { credits: 50 as const, price: "$34.99", perCredit: "$0.70", priceId: CREDIT_PACKS[50].priceId },
-  { credits: 150 as const, price: "$89.99", perCredit: "$0.60", popular: true, priceId: CREDIT_PACKS[150].priceId },
+  { credits: 50 as const, price: "$14.99", perCredit: "$0.30", priceId: CREDIT_PACKS[50].priceId },
+  { credits: 150 as const, price: "$39.99", perCredit: "$0.27", popular: true, priceId: CREDIT_PACKS[150].priceId },
   { credits: 500 as const, price: "$249.99", perCredit: "$0.50", bestValue: true, priceId: CREDIT_PACKS[500].priceId },
 ];
 
@@ -193,7 +182,6 @@ export default function Pricing() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { plan: currentPlan, createCheckout, openCustomerPortal, isLoading: isLoadingSub } = useSubscription();
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [loadingCredits, setLoadingCredits] = useState<number | null>(null);
   const [showDowngradeDialog, setShowDowngradeDialog] = useState(false);
@@ -283,14 +271,6 @@ export default function Pricing() {
     return false;
   };
 
-  const getDisplayPrice = (plan: typeof plans[0]) => {
-    if (plan.price === "Custom") return plan.price;
-    if (billingCycle === "yearly" && plan.yearlyPrice !== "$0") {
-      return plan.yearlyPrice;
-    }
-    return plan.price;
-  };
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -326,33 +306,6 @@ export default function Pricing() {
             <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
               Start free and scale as you grow. All plans include core features with images and narration.
             </p>
-
-            {/* Billing Toggle */}
-            <div className="mt-6 sm:mt-8 inline-flex items-center gap-3 rounded-full bg-muted/50 p-1">
-              <button
-                onClick={() => setBillingCycle("monthly")}
-                className={cn(
-                  "px-4 py-2 rounded-full text-sm font-medium transition-all",
-                  billingCycle === "monthly" 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle("yearly")}
-                className={cn(
-                  "px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
-                  billingCycle === "yearly" 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Yearly
-                <Badge variant="secondary" className="text-xs">Save 20%</Badge>
-              </button>
-            </div>
           </div>
 
           {/* Pricing Cards */}
@@ -402,7 +355,7 @@ export default function Pricing() {
                       </div>
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl sm:text-3xl font-bold">
-                          {getDisplayPrice(plan)}
+                          {plan.price}
                         </span>
                         {plan.period && (
                           <span className="text-sm text-muted-foreground">
@@ -410,11 +363,6 @@ export default function Pricing() {
                           </span>
                         )}
                       </div>
-                      {billingCycle === "yearly" && plan.price !== "$0" && plan.price !== "Custom" && (
-                        <p className="text-xs text-muted-foreground">
-                          Billed yearly (${(parseFloat(plan.yearlyPrice.replace("$", "")) * 12).toFixed(0)}/yr)
-                        </p>
-                      )}
                       <CardDescription className="text-xs sm:text-sm">{plan.description}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 flex-1 flex flex-col">
@@ -593,7 +541,7 @@ export default function Pricing() {
             </div>
           </motion.div>
 
-          {/* FAQ Link */}
+          {/* Support Link */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -601,13 +549,9 @@ export default function Pricing() {
             className="text-center mt-10 sm:mt-14"
           >
             <p className="text-sm text-muted-foreground">
-              Have questions? Check our{" "}
+              Have questions?{" "}
               <a href="mailto:support@motionmax.io" className="text-primary hover:underline">
-                FAQ
-              </a>{" "}
-              or{" "}
-              <a href="mailto:support@motionmax.io" className="text-primary hover:underline">
-                contact support
+                Contact support
               </a>
             </p>
           </motion.div>
