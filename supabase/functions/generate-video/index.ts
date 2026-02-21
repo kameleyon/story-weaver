@@ -109,8 +109,8 @@ async function moderateContent(content: string): Promise<ModerationResult> {
     const geminiKey = Deno.env.get("GOOGLE_TTS_API_KEY");
 
     if (!geminiKey) {
-      console.error("[MODERATION] GOOGLE_TTS_API_KEY missing, rejecting content (fail-closed)");
-      return { passed: false, reason: "Content moderation is temporarily unavailable. Please try again later.", flagType: "warning" };
+      console.warn("[MODERATION] GOOGLE_TTS_API_KEY missing, allowing content (fail-open)");
+      return { passed: true };
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
@@ -139,8 +139,8 @@ User Prompt: "${content.substring(0, 5000)}"`,
     });
 
     if (!response.ok) {
-      console.error(`[MODERATION] Gemini API failed: ${response.status}`);
-      return { passed: false, reason: "Content moderation is temporarily unavailable. Please try again later.", flagType: "warning" }; // Fail closed
+      console.warn(`[MODERATION] Gemini API failed: ${response.status}, allowing content (fail-open)`);
+      return { passed: true };
     }
 
     const data = await response.json();
@@ -161,8 +161,8 @@ User Prompt: "${content.substring(0, 5000)}"`,
 
     return { passed: true };
   } catch (err) {
-    console.error("[MODERATION] Error calling Gemini moderation:", err);
-    return { passed: false, reason: "Content moderation is temporarily unavailable. Please try again later.", flagType: "warning" }; // Fail closed
+    console.warn("[MODERATION] Error calling Gemini moderation:", err, "- allowing content (fail-open)");
+    return { passed: true };
   }
 }
 
