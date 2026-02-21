@@ -18,7 +18,7 @@ import pixarPreview from "@/assets/styles/3d-pixar-preview.png";
 import claymationPreview from "@/assets/styles/claymation-preview.png";
 import sketchPreview from "@/assets/styles/sketch-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
-import storybookPreview from "@/assets/styles/painterly-preview.png";
+import storybookPreview from "@/assets/styles/storybook-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
 import moodyPreview from "@/assets/styles/moody-preview.png";
