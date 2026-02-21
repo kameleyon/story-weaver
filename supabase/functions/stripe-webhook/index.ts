@@ -110,32 +110,28 @@ serve(async (req) => {
             const credits = creditPackProducts[productId];
             
             if (credits) {
-              logStep("Adding credits", { userId, credits, productId });
-              
-              // Upsert user credits
-              const { data: existingCredits } = await supabaseAdmin
-                .from("user_credits")
-                .select("*")
-                .eq("user_id", userId)
-                .single();
+              const paymentIntentId = session.payment_intent as string;
+              logStep("Adding credits", { userId, credits, productId, paymentIntentId });
 
-              if (existingCredits) {
-                await supabaseAdmin
-                  .from("user_credits")
-                  .update({
-                    credits_balance: existingCredits.credits_balance + credits,
-                    total_purchased: existingCredits.total_purchased + credits,
-                  })
-                  .eq("user_id", userId);
-              } else {
-                await supabaseAdmin
-                  .from("user_credits")
-                  .insert({
-                    user_id: userId,
-                    credits_balance: credits,
-                    total_purchased: credits,
-                  });
+              // Idempotency check: skip if this payment intent was already processed
+              if (paymentIntentId) {
+                const { data: existingTx } = await supabaseAdmin
+                  .from("credit_transactions")
+                  .select("id")
+                  .eq("stripe_payment_intent_id", paymentIntentId)
+                  .limit(1);
+
+                if (existingTx && existingTx.length > 0) {
+                  logStep("Duplicate webhook detected, skipping credit addition", { paymentIntentId });
+                  break;
+                }
               }
+
+              // Use atomic RPC to increment credits
+              await supabaseAdmin.rpc("increment_user_credits", {
+                p_user_id: userId,
+                p_credits: credits,
+              });
 
               // Log the transaction
               await supabaseAdmin
@@ -145,7 +141,7 @@ serve(async (req) => {
                   amount: credits,
                   transaction_type: "purchase",
                   description: `Purchased ${credits} credits`,
-                  stripe_payment_intent_id: session.payment_intent as string,
+                  stripe_payment_intent_id: paymentIntentId,
                 });
             }
           }
