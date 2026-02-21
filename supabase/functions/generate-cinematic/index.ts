@@ -2057,6 +2057,33 @@ STYLE CONTEXT: ${fullStylePrompt}`;
 
       await supabase.from("projects").update({ status: "complete" }).eq("id", generation.project_id);
 
+      // Save permanent thumbnail
+      try {
+        const firstSceneWithImage = scenes.find((s) => s.imageUrl);
+        if (firstSceneWithImage?.imageUrl) {
+          const imageResponse = await fetch(firstSceneWithImage.imageUrl);
+          if (imageResponse.ok) {
+            const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+            const thumbnailPath = `${generation.user_id}/${generation.project_id}/thumbnail-${Date.now()}.png`;
+            await supabase.storage
+              .from("project-thumbnails")
+              .upload(thumbnailPath, imageBytes, { contentType: "image/png", upsert: true });
+            const { data: publicUrlData } = supabase.storage
+              .from("project-thumbnails")
+              .getPublicUrl(thumbnailPath);
+            if (publicUrlData?.publicUrl) {
+              await supabase
+                .from("projects")
+                .update({ thumbnail_url: publicUrlData.publicUrl })
+                .eq("id", generation.project_id);
+              console.log(`[FINALIZE] Cinematic thumbnail saved: ${publicUrlData.publicUrl}`);
+            }
+          }
+        }
+      } catch (thumbErr) {
+        console.error("[FINALIZE] Failed to save cinematic thumbnail:", thumbErr);
+      }
+
       // Title from project
       const { data: project } = await supabase
         .from("projects")

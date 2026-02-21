@@ -4431,6 +4431,35 @@ async function handleFinalizePhase(
 
   await supabase.from("projects").update({ status: "complete" }).eq("id", projectId).eq("user_id", user.id);
 
+  // ============= SAVE PERMANENT THUMBNAIL =============
+  try {
+    const firstSceneWithImage = finalScenes.find((s: Scene) => s.imageUrl || (Array.isArray(s.imageUrls) && s.imageUrls.length > 0));
+    const thumbSourceUrl = firstSceneWithImage?.imageUrl || firstSceneWithImage?.imageUrls?.[0];
+    if (thumbSourceUrl) {
+      const imageResponse = await fetch(thumbSourceUrl);
+      if (imageResponse.ok) {
+        const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+        const thumbnailPath = `${user.id}/${projectId}/thumbnail-${Date.now()}.png`;
+        await supabase.storage
+          .from("project-thumbnails")
+          .upload(thumbnailPath, imageBytes, { contentType: "image/png", upsert: true });
+        const { data: publicUrlData } = supabase.storage
+          .from("project-thumbnails")
+          .getPublicUrl(thumbnailPath);
+        if (publicUrlData?.publicUrl) {
+          await supabase
+            .from("projects")
+            .update({ thumbnail_url: publicUrlData.publicUrl })
+            .eq("id", projectId);
+          console.log(`[FINALIZE] Thumbnail saved: ${publicUrlData.publicUrl}`);
+        }
+      }
+    }
+  } catch (thumbErr) {
+    console.error("[FINALIZE] Failed to save project thumbnail:", thumbErr);
+  }
+  // ============= END SAVE PERMANENT THUMBNAIL =============
+
   // Log generation completed event with FULL cost breakdown
   await logSystemEvent({
     supabase,
