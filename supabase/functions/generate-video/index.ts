@@ -4359,66 +4359,20 @@ async function handleFinalizePhase(
     return rest;
   });
 
-  // ============= CREDIT DEDUCTION =============
-  // Calculate credits based on length: Short/SmartFlow=1, Brief=2, Presentation=4
+  // ============= CREDIT DEDUCTION (SKIPPED - now done upfront) =============
+  // Credits are deducted at generation start to prevent tab-close exploit.
+  // Keeping cost tracking variables for the response.
   const projectLength = generation.projects.length || "short";
   const projectType = generation.projects.project_type || "doc2video";
-
-  let creditsToDeduct = 1; // Default for short
+  let creditsToDeduct = 1;
   if (projectType === "smartflow") {
-    creditsToDeduct = 1; // Smart Flow always 1 credit
+    creditsToDeduct = 1;
   } else if (projectLength === "brief") {
     creditsToDeduct = 2;
   } else if (projectLength === "presentation") {
     creditsToDeduct = 4;
   }
-
-  console.log(`[FINALIZE] Deducting ${creditsToDeduct} credit(s) for ${projectType}/${projectLength} video`);
-
-  // Deduct credits from user_credits table
-  const { data: currentCredits, error: creditsError } = await supabase
-    .from("user_credits")
-    .select("credits_balance, total_used")
-    .eq("user_id", user.id)
-    .single();
-
-  if (creditsError && creditsError.code !== "PGRST116") {
-    console.error("[FINALIZE] Error fetching user credits:", creditsError);
-  }
-
-  if (currentCredits) {
-    const newBalance = Math.max(0, (currentCredits.credits_balance || 0) - creditsToDeduct);
-    const newTotalUsed = (currentCredits.total_used || 0) + creditsToDeduct;
-
-    const { error: updateError } = await supabase
-      .from("user_credits")
-      .update({
-        credits_balance: newBalance,
-        total_used: newTotalUsed,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id);
-
-    if (updateError) {
-      console.error("[FINALIZE] Error updating credits:", updateError);
-    } else {
-      console.log(`[FINALIZE] Credits updated: ${currentCredits.credits_balance} -> ${newBalance}`);
-
-      // Record transaction in credit_transactions table
-      const { error: txError } = await supabase.from("credit_transactions").insert({
-        user_id: user.id,
-        amount: -creditsToDeduct,
-        transaction_type: "generation",
-        description: `Video generation: ${generation.projects.title || "Untitled"} (${projectLength})`,
-      });
-
-      if (txError) {
-        console.error("[FINALIZE] Error recording credit transaction:", txError);
-      }
-    }
-  } else {
-    console.log("[FINALIZE] No user_credits record found, skipping deduction");
-  }
+  console.log(`[FINALIZE] Credits already deducted upfront (${creditsToDeduct} for ${projectType}/${projectLength})`);
   // ============= END CREDIT DEDUCTION =============
 
   // ============= RECORD GENERATION COSTS =============
@@ -5326,6 +5280,49 @@ serve(async (req) => {
         `[generate-video] User ${user.id} (${userPlan}): Credits ${creditsBalance}/${creditsRequired}, Daily ${todayGenerations ?? 0}/${dailyLimit}`,
       );
       // ============= END PLAN RESTRICTION VALIDATION =============
+
+      // ============= UPFRONT CREDIT DEDUCTION =============
+      // Deduct credits BEFORE any API calls to prevent tab-close exploit
+      const { data: currentCredits, error: preFetchError } = await supabase
+        .from("user_credits")
+        .select("credits_balance, total_used")
+        .eq("user_id", user.id)
+        .single();
+
+      if (preFetchError && preFetchError.code !== "PGRST116") {
+        console.error("[generate-video] Error fetching credits for upfront deduction:", preFetchError);
+      }
+
+      if (currentCredits) {
+        const newBalance = Math.max(0, (currentCredits.credits_balance || 0) - creditsRequired);
+        const newTotalUsed = (currentCredits.total_used || 0) + creditsRequired;
+
+        const { error: deductError } = await supabase
+          .from("user_credits")
+          .update({
+            credits_balance: newBalance,
+            total_used: newTotalUsed,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", user.id);
+
+        if (deductError) {
+          console.error("[generate-video] Upfront credit deduction failed:", deductError);
+        } else {
+          console.log(`[generate-video] Credits reserved upfront: ${currentCredits.credits_balance} -> ${newBalance} (cost: ${creditsRequired})`);
+
+          // Record transaction immediately
+          await supabase.from("credit_transactions").insert({
+            user_id: user.id,
+            amount: -creditsRequired,
+            transaction_type: "generation",
+            description: `Video generation started: ${body.projectType || "doc2video"} / ${length}`,
+          });
+        }
+      } else {
+        console.log("[generate-video] No user_credits record found, skipping upfront deduction");
+      }
+      // ============= END UPFRONT CREDIT DEDUCTION =============
 
       // Route based on project type
       if (body.projectType === "smartflow") {
