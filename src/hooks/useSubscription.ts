@@ -88,7 +88,16 @@ async function fetchSubscription(accessToken: string | undefined): Promise<Subsc
   if (isTokenExpired) {
     const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
     if (refreshError || !refreshData.session) {
-      throw new Error("Session expired. Please log in again.");
+      // Session is truly dead — sign out to trigger redirect to /auth
+      await supabase.auth.signOut();
+      return {
+        subscribed: false,
+        plan: "free" as const,
+        subscriptionStatus: null,
+        subscriptionEnd: null,
+        cancelAtPeriodEnd: false,
+        creditsBalance: 0,
+      };
     }
     // Retry with refreshed token
     const { data: retryData, error: retryError } = await supabase.functions.invoke("check-subscription", {
