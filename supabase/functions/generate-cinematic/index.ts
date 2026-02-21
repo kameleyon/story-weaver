@@ -1461,6 +1461,49 @@ serve(async (req) => {
       const length = requireString(body.length, "length");
       const style = requireString(body.style, "style");
 
+      // ============= UPFRONT CREDIT DEDUCTION (Cinematic = 12 credits) =============
+      const CINEMATIC_CREDIT_COST = 12;
+
+      const { data: creditData } = await supabase
+        .from("user_credits")
+        .select("credits_balance, total_used")
+        .eq("user_id", user.id)
+        .single();
+
+      const creditsBalance = creditData?.credits_balance || 0;
+
+      if (creditsBalance < CINEMATIC_CREDIT_COST) {
+        return jsonResponse({
+          error: `Insufficient credits. Cinematic generation requires ${CINEMATIC_CREDIT_COST} credits but you have ${creditsBalance}.`,
+          code: "INSUFFICIENT_CREDITS",
+        }, { status: 402 });
+      }
+
+      // Deduct immediately before any API calls
+      if (creditData) {
+        const newBalance = Math.max(0, creditsBalance - CINEMATIC_CREDIT_COST);
+        const newTotalUsed = (creditData.total_used || 0) + CINEMATIC_CREDIT_COST;
+
+        await supabase
+          .from("user_credits")
+          .update({
+            credits_balance: newBalance,
+            total_used: newTotalUsed,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", user.id);
+
+        await supabase.from("credit_transactions").insert({
+          user_id: user.id,
+          amount: -CINEMATIC_CREDIT_COST,
+          transaction_type: "generation",
+          description: `Cinematic generation started (${length})`,
+        });
+
+        console.log(`[CINEMATIC] Credits reserved upfront: ${creditsBalance} -> ${newBalance} (cost: ${CINEMATIC_CREDIT_COST})`);
+      }
+      // ============= END UPFRONT CREDIT DEDUCTION =============
+
       console.log("=== CINEMATIC SCRIPT START ===");
 
       const script = await generateScriptWithGemini(
