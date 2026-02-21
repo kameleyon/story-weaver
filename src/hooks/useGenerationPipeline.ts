@@ -381,7 +381,7 @@ export function useGenerationPipeline() {
             }));
           }
 
-          // Phase 3: Images (scene-by-scene)
+          // Phase 3: Images (scene-by-scene, fault-tolerant)
           setState((prev) => ({
             ...prev,
             progress: 35,
@@ -395,17 +395,58 @@ export function useGenerationPipeline() {
               progress: 35 + Math.floor(((i + 0.25) / cSceneCount) * 25),
             }));
 
-            const imgRes = await callPhase(
-              { phase: "images", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
-              480000,
-              cinematicEndpoint
-            );
-            if (!imgRes.success) throw new Error(imgRes.error || "Image generation failed");
+            try {
+              const imgRes = await callPhase(
+                { phase: "images", projectId: cProjectId, generationId: cGenerationId, sceneIndex: i },
+                480000,
+                cinematicEndpoint
+              );
+              if (!imgRes.success) {
+                console.warn(`[IMAGES] Cinematic scene ${i + 1} failed: ${imgRes.error}`);
+                // Don't throw – continue with other scenes, retry pass below will handle it
+              }
+            } catch (err) {
+              console.warn(`[IMAGES] Cinematic scene ${i + 1} error:`, err);
+              // Don't throw – continue with other scenes
+            }
 
             setState((prev) => ({
               ...prev,
               progress: 35 + Math.floor(((i + 1) / cSceneCount) * 25),
             }));
+          }
+
+          // Retry pass: re-attempt any scenes that are missing images (up to 2 rounds)
+          const IMG_RETRY_ROUNDS = 2;
+          for (let round = 0; round < IMG_RETRY_ROUNDS; round++) {
+            const { data: latestImgGen } = await supabase
+              .from("generations")
+              .select("scenes")
+              .eq("id", cGenerationId)
+              .maybeSingle();
+            const latestImgScenes = normalizeScenes(latestImgGen?.scenes) ?? [];
+            const missingImgs = latestImgScenes
+              .map((s, i) => (!s.imageUrl ? i : -1))
+              .filter((i) => i >= 0);
+            if (missingImgs.length === 0) break;
+
+            console.log(`[IMAGES] Retry round ${round + 1}: ${missingImgs.length} scenes missing images`);
+            setState((prev) => ({
+              ...prev,
+              statusMessage: `Retrying ${missingImgs.length} missing images (round ${round + 1})...`,
+            }));
+
+            for (const idx of missingImgs) {
+              try {
+                await callPhase(
+                  { phase: "images", projectId: cProjectId, generationId: cGenerationId, sceneIndex: idx },
+                  480000,
+                  cinematicEndpoint
+                );
+              } catch {
+                // Continue with remaining retries
+              }
+            }
           }
 
           // Phase 4: Video clips (concurrent batches of 3 for speed)
@@ -653,7 +694,7 @@ export function useGenerationPipeline() {
           } while (audioResult.hasMore);
         }
 
-        // ============= PHASE 3: IMAGES (chunked) =============
+        // ============= PHASE 3: IMAGES (chunked, fault-tolerant) =============
         setState((prev) => ({ 
           ...prev, 
           progress: 45,
@@ -665,26 +706,39 @@ export function useGenerationPipeline() {
         
         // Loop until all images are generated
         do {
-          // Images phase can take 3-5 minutes per chunk with Replicate Pro models
-          imagesResult = await callPhase(
-            {
-              phase: "images",
-              generationId,
-              projectId,
-              imageStartIndex,
-            },
-            480000 // 8 minutes timeout for images (Replicate Pro can be slow)
-          );
+          try {
+            // Images phase can take 3-5 minutes per chunk with Replicate Pro models
+            imagesResult = await callPhase(
+              {
+                phase: "images",
+                generationId,
+                projectId,
+                imageStartIndex,
+              },
+              480000 // 8 minutes timeout for images (Replicate Pro can be slow)
+            );
 
-          if (!imagesResult.success) throw new Error(imagesResult.error || "Image generation failed");
+            if (!imagesResult.success) {
+              console.warn(`[IMAGES] Chunk at index ${imageStartIndex} failed: ${imagesResult.error}`);
+              // Move past this chunk to try the next one
+              imageStartIndex += 4; // MAX_IMAGES_PER_CALL_DEFAULT
+              imagesResult = { hasMore: imageStartIndex < (imagesResult?.totalImages || expectedSceneCount * 3) };
+              continue;
+            }
+          } catch (err) {
+            console.warn(`[IMAGES] Chunk at index ${imageStartIndex} error:`, err);
+            imageStartIndex += 4;
+            imagesResult = { hasMore: imageStartIndex < expectedSceneCount * 3 };
+            continue;
+          }
 
           setState((prev) => ({
             ...prev,
-            progress: imagesResult.progress,
-            completedImages: imagesResult.imagesGenerated,
-            totalImages: imagesResult.totalImages,
-            statusMessage: `Images ${imagesResult.imagesGenerated}/${imagesResult.totalImages}...`,
-            costTracking: imagesResult.costTracking,
+            progress: imagesResult.progress || prev.progress,
+            completedImages: imagesResult.imagesGenerated || prev.completedImages,
+            totalImages: imagesResult.totalImages || prev.totalImages,
+            statusMessage: `Images ${imagesResult.imagesGenerated || 0}/${imagesResult.totalImages || prev.totalImages}...`,
+            costTracking: imagesResult.costTracking || prev.costTracking,
             phaseTimings: { ...prev.phaseTimings, images: (prev.phaseTimings?.images || 0) + (imagesResult.phaseTime || 0) },
           }));
 
@@ -693,13 +747,62 @@ export function useGenerationPipeline() {
           }
         } while (imagesResult.hasMore);
 
+        // Retry pass: re-attempt any chunks that had missing images (up to 2 rounds)
+        const DOC_IMG_RETRY_ROUNDS = 2;
+        for (let retryRound = 0; retryRound < DOC_IMG_RETRY_ROUNDS; retryRound++) {
+          // Re-fetch from DB to see current state
+          const { data: imgCheckGen } = await supabase
+            .from("generations")
+            .select("scenes")
+            .eq("id", generationId)
+            .maybeSingle();
+          const imgCheckScenes = normalizeScenes(imgCheckGen?.scenes) ?? [];
+          const missingImageScenes = imgCheckScenes.filter((s) => !s.imageUrl).length;
+          if (missingImageScenes === 0) break;
+
+          console.log(`[IMAGES] Retry round ${retryRound + 1}: ${missingImageScenes} scenes missing images`);
+          setState((prev) => ({
+            ...prev,
+            statusMessage: `Retrying ${missingImageScenes} missing images (round ${retryRound + 1})...`,
+          }));
+
+          // Re-run the entire images phase from scratch for missing scenes
+          let retryIndex = 0;
+          let retryResult: any;
+          do {
+            try {
+              retryResult = await callPhase(
+                { phase: "images", generationId, projectId, imageStartIndex: retryIndex },
+                480000
+              );
+              if (retryResult?.hasMore && retryResult.nextStartIndex !== undefined) {
+                retryIndex = retryResult.nextStartIndex;
+              } else {
+                retryResult = { hasMore: false };
+              }
+            } catch {
+              retryResult = { hasMore: false };
+            }
+          } while (retryResult.hasMore);
+        }
+
+        // Re-fetch final state after retries
+        const { data: postRetryGen } = await supabase
+          .from("generations")
+          .select("scenes")
+          .eq("id", generationId)
+          .maybeSingle();
+        const postRetryScenes = normalizeScenes(postRetryGen?.scenes) ?? [];
+        const finalImagesGenerated = postRetryScenes.filter((s) => !!s.imageUrl).length;
+        const finalTotalImages = imagesResult?.totalImages || postRetryScenes.length * 3;
+
         setState((prev) => ({
           ...prev,
           progress: 90,
-          completedImages: imagesResult.imagesGenerated,
-          totalImages: imagesResult.totalImages,
-          statusMessage: `Images complete (${imagesResult.imagesGenerated}/${imagesResult.totalImages}). Finalizing...`,
-          costTracking: imagesResult.costTracking,
+          completedImages: finalImagesGenerated,
+          totalImages: finalTotalImages,
+          statusMessage: `Images complete (${finalImagesGenerated}/${finalTotalImages}). Finalizing...`,
+          costTracking: imagesResult?.costTracking || prev.costTracking,
         }));
 
         // ============= PHASE 4: FINALIZE =============
@@ -805,15 +908,32 @@ export function useGenerationPipeline() {
           }
         }
 
-        // Phase 3: Images (resume – skip scenes that already have images)
+        // Phase 3: Images (resume – skip scenes that already have images, fault-tolerant)
         if (resumeFrom === "audio" || resumeFrom === "images") {
           setState((prev) => ({ ...prev, progress: 35, statusMessage: "Resuming images..." }));
           for (let i = 0; i < cSceneCount; i++) {
             if (existingScenes[i]?.imageUrl) continue;
             setState((prev) => ({ ...prev, statusMessage: `Creating images (${i + 1}/${cSceneCount})...`, progress: 35 + Math.floor(((i + 0.25) / cSceneCount) * 25) }));
-            const imgRes = await callPhase({ phase: "images", projectId: cProjectId, generationId, sceneIndex: i }, 480000, cinematicEndpoint);
-            if (!imgRes.success) throw new Error(imgRes.error || "Image generation failed");
+            try {
+              const imgRes = await callPhase({ phase: "images", projectId: cProjectId, generationId, sceneIndex: i }, 480000, cinematicEndpoint);
+              if (!imgRes.success) console.warn(`[IMAGES] Resume scene ${i + 1} failed: ${imgRes.error}`);
+            } catch (err) {
+              console.warn(`[IMAGES] Resume scene ${i + 1} error:`, err);
+            }
             setState((prev) => ({ ...prev, progress: 35 + Math.floor(((i + 1) / cSceneCount) * 25) }));
+          }
+
+          // Retry pass for missing images
+          for (let round = 0; round < 2; round++) {
+            const { data: imgRetryGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+            const imgRetryScenes = normalizeScenes(imgRetryGen?.scenes) ?? [];
+            const missingImgs = imgRetryScenes.map((s, i) => (!s.imageUrl ? i : -1)).filter((i) => i >= 0);
+            if (missingImgs.length === 0) break;
+            console.log(`[IMAGES] Resume retry round ${round + 1}: ${missingImgs.length} missing images`);
+            setState((prev) => ({ ...prev, statusMessage: `Retrying ${missingImgs.length} missing images...` }));
+            for (const idx of missingImgs) {
+              try { await callPhase({ phase: "images", projectId: cProjectId, generationId, sceneIndex: idx }, 480000, cinematicEndpoint); } catch { /* continue */ }
+            }
           }
         }
 
