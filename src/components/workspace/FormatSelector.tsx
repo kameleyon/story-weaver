@@ -1,6 +1,7 @@
-import { Monitor, Smartphone, Square } from "lucide-react";
+import { Monitor, Smartphone, Square, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export type VideoFormat = "landscape" | "portrait" | "square";
 
@@ -17,6 +18,20 @@ const formats: { id: VideoFormat; label: string; ratio: string; icon: React.Elem
 ];
 
 export function FormatSelector({ selected, onSelect, disabledFormats = [] }: FormatSelectorProps) {
+  const handleClick = (formatId: VideoFormat, isDisabled: boolean) => {
+    if (isDisabled) {
+      toast("Upgrade Required", {
+        description: `${formatId.charAt(0).toUpperCase() + formatId.slice(1)} format requires Starter plan or higher.`,
+        action: {
+          label: "View Plans",
+          onClick: () => window.location.href = "/pricing",
+        },
+      });
+      return;
+    }
+    onSelect(formatId);
+  };
+
   return (
     <div className="space-y-3">
       <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Format</h3>
@@ -27,19 +42,24 @@ export function FormatSelector({ selected, onSelect, disabledFormats = [] }: For
           return (
             <motion.button
               key={format.id}
-              onClick={() => !isDisabled && onSelect(format.id)}
-              disabled={isDisabled}
+              onClick={() => handleClick(format.id, isDisabled)}
               className={cn(
                 "relative flex flex-col items-center gap-2 sm:gap-3 rounded-xl border p-3 sm:p-4 transition-all",
                 isDisabled
-                  ? "cursor-not-allowed opacity-40 border-transparent dark:border-white/10 bg-muted/20 dark:bg-white/5"
+                  ? "cursor-pointer opacity-60 border-transparent dark:border-white/10 bg-muted/20 dark:bg-white/5"
                   : selected === format.id
                   ? "border-primary/50 bg-primary/5 shadow-sm"
                   : "border-transparent dark:border-white/10 bg-muted dark:bg-white/10 hover:bg-muted/80 dark:hover:bg-white/15 hover:border-border"
               )}
-              whileHover={isDisabled ? {} : { scale: 1.01 }}
-              whileTap={isDisabled ? {} : { scale: 0.99 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
             >
+              {isDisabled && (
+                <span className="absolute -top-2 right-1 sm:right-2 flex items-center gap-0.5 rounded-full bg-muted-foreground/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium text-muted-foreground">
+                  <Lock className="h-2.5 w-2.5" />
+                  Pro
+                </span>
+              )}
               {format.badge && !isDisabled && (
                 <span className="absolute -top-2 right-1 sm:right-2 rounded-full bg-primary px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium text-primary-foreground">
                   {format.badge}

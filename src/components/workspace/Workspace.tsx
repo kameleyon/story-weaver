@@ -1,6 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff } from "lucide-react";
+import { Play, Menu, AlertCircle, RotateCcw, ChevronDown, Lightbulb, Users, MessageSquareOff, ChevronRight, ChevronLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { PresenterFocusInput } from "./PresenterFocusInput";
 import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationResult } from "./GenerationResult";
+import { CreditEstimate } from "./CreditEstimate";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
@@ -22,11 +23,16 @@ import { useSubscription, validateGenerationAccess, getCreditsRequired, PLAN_LIM
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
+import { cn } from "@/lib/utils";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
   openProject: (projectId: string) => Promise<void>;
 }
+
+type WizardStep = 1 | 2 | 3;
+
+const STEP_LABELS = ["Content", "Art Direction", "Voice & Polish"] as const;
 
 export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) {
   const [content, setContent] = useState("");
@@ -42,6 +48,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [brandMarkEnabled, setBrandMarkEnabled] = useState(false);
   const [brandMarkText, setBrandMarkText] = useState("");
   const [disableExpressions, setDisableExpressions] = useState(false);
+  const [wizardStep, setWizardStep] = useState<WizardStep>(1);
 
   // Subscription and plan validation
   const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
@@ -60,16 +67,8 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const disabledFormats: VideoFormat[] = (["landscape", "portrait", "square"] as VideoFormat[]).filter(
     f => !limits.allowedFormats.includes(f)
   );
-  
-  // Auto-switch to allowed format if current format becomes disabled
-  useEffect(() => {
-    if (disabledFormats.includes(format) && limits.allowedFormats.length > 0) {
-      setFormat(limits.allowedFormats[0] as VideoFormat);
-    }
-  }, [plan, format, disabledFormats, limits.allowedFormats]);
 
   // Auto-recovery: if we're in a "generating" state but the generation actually completed
-  // (e.g., after page reload/rebuild), poll the database to verify and restore complete state
   useEffect(() => {
     if (
       generationState.projectId && 
@@ -86,17 +85,13 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
           .limit(1)
           .maybeSingle();
 
-        // If database says complete but UI shows generating, reload the project
         if (data?.status === "complete" && generationState.step !== "complete") {
           console.log("[Workspace] Found completed generation in DB, reloading project");
           await loadProject(generationState.projectId!);
         }
       };
 
-      // Check immediately
       checkGenerationStatus();
-
-      // Also set up a periodic check every 5 seconds while "generating"
       const intervalId = setInterval(checkGenerationStatus, 5000);
       return () => clearInterval(intervalId);
     }
@@ -105,17 +100,14 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const handleGenerate = async () => {
     if (!canGenerate) return;
 
-    // Check for subscription issues first
     if (subscriptionStatus === "past_due" || subscriptionStatus === "unpaid") {
       setSuspendedStatus(subscriptionStatus as "past_due" | "unpaid");
       setShowSuspendedModal(true);
       return;
     }
 
-    // Calculate credits needed
     const creditsRequired = getCreditsRequired("doc2video", length);
     
-    // Validate plan access
     const validation = validateGenerationAccess(
       plan,
       creditsBalance,
@@ -138,7 +130,6 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       return;
     }
 
-    // All checks passed, start generation
     startGeneration({
       content,
       format,
@@ -151,7 +142,6 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       disableExpressions,
     });
 
-    // Refresh subscription state after starting generation
     setTimeout(() => checkSubscription(), 2000);
   };
 
@@ -170,6 +160,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
     setBrandMarkEnabled(false);
     setBrandMarkText("");
     setDisableExpressions(false);
+    setWizardStep(1);
   };
 
   const handleOpenProject = async (projectId: string) => {
@@ -205,12 +196,16 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
       setStyle("custom");
       setCustomStyle(project.style);
     }
+
+    setWizardStep(1);
   };
 
   useImperativeHandle(ref, () => ({
     resetWorkspace: handleNewProject,
     openProject: handleOpenProject,
   }));
+
+  const canProceedStep1 = content.trim().length > 0;
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden">
@@ -261,100 +256,203 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                   </p>
                 </div>
 
-                {/* Content Input */}
-                <ContentInput content={content} onContentChange={setContent} />
+                {/* Step Indicator */}
+                <div className="flex items-center justify-center gap-2">
+                  {STEP_LABELS.map((label, i) => {
+                    const stepNum = (i + 1) as WizardStep;
+                    const isActive = wizardStep === stepNum;
+                    const isCompleted = wizardStep > stepNum;
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => {
+                          if (stepNum === 1 || canProceedStep1) setWizardStep(stepNum);
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : isCompleted
+                            ? "bg-muted/50 text-foreground cursor-pointer hover:bg-muted"
+                            : "bg-transparent text-muted-foreground/50"
+                        )}
+                      >
+                        <span className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : isCompleted
+                            ? "bg-muted-foreground/30 text-foreground"
+                            : "bg-muted-foreground/15 text-muted-foreground/50"
+                        )}>
+                          {stepNum}
+                        </span>
+                        <span className="hidden sm:inline">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                {/* Collapsible Advanced Options */}
-                <div className="space-y-2 sm:space-y-3">
-                  {/* Character Description - Collapsible */}
-                  <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
-                      <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        Character Appearance
-                      </span>
-                      <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
-                        <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  {/* Presenter Focus - Collapsible */}
-                  <Collapsible open={presenterFocusOpen} onOpenChange={setPresenterFocusOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
-                      <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
-                        <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        Presenter Focus
-                      </span>
-                      <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
-                        <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  {/* Disable Expressions Toggle */}
-                  <div className="flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm">
-                    <Checkbox
-                      id="disable-expressions"
-                      checked={disableExpressions}
-                      onCheckedChange={(checked) => setDisableExpressions(checked === true)}
-                    />
-                    <label
-                      htmlFor="disable-expressions"
-                      className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium cursor-pointer flex-wrap"
+                {/* Wizard Steps */}
+                <AnimatePresence mode="wait">
+                  {wizardStep === 1 && (
+                    <motion.div
+                      key="step1"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-4 sm:space-y-6"
                     >
-                      <MessageSquareOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                      <span>Disable voice expressions</span>
-                      <span className="text-[10px] sm:text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
-                    </label>
-                  </div>
-                </div>
+                      <ContentInput content={content} onContentChange={setContent} />
 
-                {/* Configuration */}
-                <div className="space-y-4 sm:space-y-6 rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-6 backdrop-blur-sm shadow-sm overflow-hidden">
-                  <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
-                  <div className="h-px bg-border/30" />
-                  
-                  {/* Length and Voice side by side on desktop, stacked on mobile */}
-                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-                    <div className="flex-1">
-                      <LengthSelector selected={length} onSelect={setLength} />
-                    </div>
-                    <div className="sm:flex-shrink-0">
-                      <VoiceSelector selected={voice} onSelect={setVoice} />
-                    </div>
-                  </div>
-                  
-                  <div className="h-px bg-border/30" />
-                  <StyleSelector
-                    selected={style}
-                    customStyle={customStyle}
-                    onSelect={setStyle}
-                    onCustomStyleChange={setCustomStyle}
-                    brandMarkEnabled={brandMarkEnabled}
-                    brandMarkText={brandMarkText}
-                    onBrandMarkEnabledChange={setBrandMarkEnabled}
-                    onBrandMarkTextChange={setBrandMarkText}
-                  />
-                </div>
+                      {/* Collapsible Advanced Options */}
+                      <div className="space-y-2 sm:space-y-3">
+                        <Collapsible open={characterDescOpen} onOpenChange={setCharacterDescOpen}>
+                          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
+                            <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              Character Appearance
+                            </span>
+                            <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${characterDescOpen ? "rotate-180" : ""}`} />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
+                              <CharacterDescriptionInput value={characterDescription} onChange={setCharacterDescription} />
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
 
-                {/* Generate Button */}
-                <motion.div whileHover={{ scale: canGenerate ? 1.01 : 1 }} whileTap={{ scale: canGenerate ? 0.99 : 1 }}>
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={!canGenerate}
-                    className="w-full gap-2 sm:gap-2.5 rounded-full bg-primary py-5 sm:py-6 text-sm sm:text-base font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-40"
-                  >
-                    <Play className="h-4 w-4" />
-                    Generate Video
-                  </Button>
-                </motion.div>
+                        <Collapsible open={presenterFocusOpen} onOpenChange={setPresenterFocusOpen}>
+                          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-4 backdrop-blur-sm shadow-sm hover:bg-muted/30 transition-colors">
+                            <span className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                              <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              Presenter Focus
+                            </span>
+                            <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 ${presenterFocusOpen ? "rotate-180" : ""}`} />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="rounded-b-xl sm:rounded-b-2xl border border-t-0 border-border/50 bg-card/50 p-4 sm:p-6 backdrop-blur-sm shadow-sm -mt-2">
+                              <PresenterFocusInput value={presenterFocus} onChange={setPresenterFocus} />
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      </div>
+
+                      {/* Next Step */}
+                      <Button
+                        onClick={() => setWizardStep(2)}
+                        disabled={!canProceedStep1}
+                        className="w-full gap-2 rounded-full py-5 sm:py-6 text-sm sm:text-base font-medium"
+                      >
+                        Continue to Art Direction
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </motion.div>
+                  )}
+
+                  {wizardStep === 2 && (
+                    <motion.div
+                      key="step2"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="space-y-4 sm:space-y-6"
+                    >
+                      <div className="rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-6 backdrop-blur-sm shadow-sm space-y-4 sm:space-y-6 overflow-hidden">
+                        <FormatSelector selected={format} onSelect={setFormat} disabledFormats={disabledFormats} />
+                        <div className="h-px bg-border/30" />
+                        <LengthSelector selected={length} onSelect={setLength} />
+                        <div className="h-px bg-border/30" />
+                        <StyleSelector
+                          selected={style}
+                          customStyle={customStyle}
+                          onSelect={setStyle}
+                          onCustomStyleChange={setCustomStyle}
+                          brandMarkEnabled={brandMarkEnabled}
+                          brandMarkText={brandMarkText}
+                          onBrandMarkEnabledChange={setBrandMarkEnabled}
+                          onBrandMarkTextChange={setBrandMarkText}
+                        />
+                      </div>
+
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setWizardStep(1)}
+                          className="flex-1 gap-2 rounded-full py-5 sm:py-6"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Back
+                        </Button>
+                        <Button
+                          onClick={() => setWizardStep(3)}
+                          className="flex-1 gap-2 rounded-full py-5 sm:py-6 text-sm sm:text-base font-medium"
+                        >
+                          Continue to Voice
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {wizardStep === 3 && (
+                    <motion.div
+                      key="step3"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="space-y-4 sm:space-y-6"
+                    >
+                      <div className="rounded-xl sm:rounded-2xl border border-border/50 bg-card/50 p-3 sm:p-6 backdrop-blur-sm shadow-sm space-y-4 sm:space-y-6">
+                        <VoiceSelector selected={voice} onSelect={setVoice} />
+                        <div className="h-px bg-border/30" />
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <Checkbox
+                            id="disable-expressions"
+                            checked={disableExpressions}
+                            onCheckedChange={(checked) => setDisableExpressions(checked === true)}
+                          />
+                          <label
+                            htmlFor="disable-expressions"
+                            className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium cursor-pointer flex-wrap"
+                          >
+                            <MessageSquareOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                            <span>Disable voice expressions</span>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground/70">(no [chuckle], [sigh], etc.)</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Credit Estimate */}
+                      <CreditEstimate
+                        projectType="doc2video"
+                        length={length}
+                        creditsBalance={creditsBalance}
+                      />
+
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setWizardStep(2)}
+                          className="rounded-full py-5 sm:py-6 px-6"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Back
+                        </Button>
+                        <motion.div className="flex-1" whileHover={{ scale: canGenerate ? 1.01 : 1 }} whileTap={{ scale: canGenerate ? 0.99 : 1 }}>
+                          <Button
+                            onClick={handleGenerate}
+                            disabled={!canGenerate}
+                            className="w-full gap-2 sm:gap-2.5 rounded-full py-5 sm:py-6 text-sm sm:text-base font-medium shadow-sm transition-all hover:shadow-md disabled:opacity-40"
+                          >
+                            <Play className="h-4 w-4" />
+                            Generate Video
+                          </Button>
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ) : generationState.step === "error" ? (
               <motion.div
