@@ -5340,7 +5340,7 @@ serve(async (req) => {
           {
             p_user_id: user.id,
             p_amount: creditsRequired,
-            p_transaction_type: "generation",
+            p_transaction_type: "usage",
             p_description: `Video generation started: ${body.projectType || "doc2video"} / ${length}`,
           },
         );

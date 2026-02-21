@@ -1469,7 +1469,7 @@ serve(async (req) => {
         {
           p_user_id: user.id,
           p_amount: CINEMATIC_CREDIT_COST,
-          p_transaction_type: "generation",
+          p_transaction_type: "usage",
           p_description: `Cinematic generation started (${length})`,
         },
       );
