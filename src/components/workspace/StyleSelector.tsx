@@ -1,4 +1,4 @@
-import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon, Upload, X } from "lucide-react";
+import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon, Upload, X, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useRef, useState, useEffect } from "react";
+import { useStyleImageUpload } from "@/hooks/useStyleImageUpload";
 
 // Import style preview images
 import minimalistPreview from "@/assets/styles/minimalist-preview.png";
@@ -100,23 +101,25 @@ export function StyleSelector({
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const { uploadStyleImage, deleteStyleImage, uploading } = useStyleImageUpload();
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return;
+    const url = await uploadStyleImage(file);
+    if (url) {
+      onCustomStyleImageChange?.(url);
     }
-    
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onCustomStyleImageChange?.(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = async () => {
+    if (customStyleImage) {
+      await deleteStyleImage(customStyleImage);
+    }
     onCustomStyleImageChange?.(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -288,10 +291,11 @@ export function StyleSelector({
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
                   className="gap-2 rounded-lg border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 >
-                  <Upload className="h-3.5 w-3.5" />
-                  Upload reference image
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  {uploading ? "Uploading..." : "Upload reference image"}
                 </Button>
               )}
             </div>
