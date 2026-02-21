@@ -13,6 +13,8 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -44,8 +46,9 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
-    // Clear session storage to reset upgrade modal and other session-based states
-    sessionStorage.clear();
+    // Clear only auth-related session storage keys (preserve sidebar prefs, etc.)
+    const authKeys = ['upgrade-modal-dismissed', 'subscription-suspended-dismissed'];
+    authKeys.forEach(key => sessionStorage.removeItem(key));
     const { error } = await supabase.auth.signOut();
     return { error };
   }, []);
