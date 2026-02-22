@@ -26,6 +26,8 @@ import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
 import { useAdminLogs } from "@/hooks/useAdminLogs";
 import { AdminLogsPanel } from "./AdminLogsPanel";
+import { useGenerationLogs } from "@/hooks/useGenerationLogs";
+import { GenerationLogsPanel } from "./GenerationLogsPanel";
 import type { WorkspaceHandle } from "./Doc2VideoWorkspace";
 
 interface CinematicWorkspaceProps {
@@ -62,6 +64,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     const [showSuspendedModal, setShowSuspendedModal] = useState(false);
     const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
     const { isAdmin, adminLogs, showAdminLogs, setShowAdminLogs } = useAdminLogs(generationState.generationId, generationState.step);
+    const { logs: generationLogs, showLogs, setShowLogs } = useGenerationLogs(generationState.generationId, generationState.projectId, generationState.isGenerating);
     const [isResuming, setIsResuming] = useState(false);
 
     const handleResume = async () => {
