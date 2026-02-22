@@ -1849,6 +1849,78 @@ serve(async (req) => {
       return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
     }
 
+    // =============== VIDEO-BATCH PHASE (Poll ALL missing scenes in one call) ===============
+    if (phase === "video-batch") {
+      // Find all scenes that have a videoPredictionId but no videoUrl
+      const missingIndices: number[] = [];
+      for (let i = 0; i < scenes.length; i++) {
+        if (scenes[i].videoPredictionId && !scenes[i].videoUrl && scenes[i].imageUrl) {
+          missingIndices.push(i);
+        }
+      }
+
+      if (missingIndices.length === 0) {
+        return jsonResponse({ success: true, status: "all_complete", completedCount: scenes.length, scenes });
+      }
+
+      console.log(`[VIDEO-BATCH] Polling ${missingIndices.length} missing scenes: [${missingIndices.map(i => i + 1).join(",")}]`);
+
+      let completedThisRound = 0;
+      let rateLimitHit = false;
+
+      for (const idx of missingIndices) {
+        const scene = scenes[idx];
+        
+        // 3s delay between each poll to avoid rate limits
+        if (idx !== missingIndices[0]) {
+          await new Promise(r => setTimeout(r, 3000));
+        }
+
+        try {
+          const videoUrl = scene.videoProvider === "hypereal"
+            ? await resolveHyperealVideo(scene.videoPredictionId, supabase, scene.number, scene.videoModel || "seedance-1-5-i2v")
+            : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
+
+          if (videoUrl === "RATE_LIMITED") {
+            console.log(`[VIDEO-BATCH] Scene ${scene.number}: rate limited, stopping batch poll`);
+            rateLimitHit = true;
+            break; // Stop polling remaining scenes — rate limit is account-wide
+          }
+
+          if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
+            console.log(`[VIDEO-BATCH] Scene ${scene.number}: timeout/queue full, skipping`);
+            continue;
+          }
+
+          if (videoUrl && typeof videoUrl === "string") {
+            scenes[idx] = { ...scene, videoUrl };
+            completedThisRound++;
+            console.log(`[VIDEO-BATCH] Scene ${scene.number}: video retrieved! (${completedThisRound} this round)`);
+          }
+          // null = still processing, continue to next scene
+        } catch (err) {
+          console.warn(`[VIDEO-BATCH] Scene ${scene.number} error:`, err);
+        }
+      }
+
+      // Persist any scenes that got their videoUrl this round
+      if (completedThisRound > 0) {
+        await updateScenes(supabase, generationId, scenes);
+      }
+
+      // Count remaining missing
+      const stillMissing = scenes.filter(s => s.videoPredictionId && !s.videoUrl && s.imageUrl).length;
+
+      return jsonResponse({
+        success: true,
+        status: stillMissing === 0 ? "all_complete" : "partial",
+        completedThisRound,
+        stillMissing,
+        rateLimitHit,
+        scenes,
+      });
+    }
+
     // =============== IMAGE-EDIT PHASE (Apply modification then regenerate video) ===============
     if (phase === "image-edit") {
       const idx = requireNumber(sceneIndex, "sceneIndex");
