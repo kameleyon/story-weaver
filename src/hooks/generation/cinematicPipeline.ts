@@ -221,8 +221,8 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
       break;
     }
 
-    // Wait before next batch round
-    const waitMs = batchRes.rateLimitHit ? 45000 : 15000;
+    // Wait before next batch round — aggressive cooldown to avoid 429
+    const waitMs = batchRes.rateLimitHit ? 90000 : 30000;
     console.log(LOG, `Batch round ${round + 1} done: ${batchRes.completedThisRound} completed, ${batchRes.stillMissing} remaining. Waiting ${waitMs / 1000}s`);
     await sleep(waitMs);
   }
@@ -417,7 +417,7 @@ export async function resumeCinematicPipeline(
           break;
         }
 
-        const waitMs = batchRes.rateLimitHit ? 45000 : 15000;
+        const waitMs = batchRes.rateLimitHit ? 90000 : 30000;
         console.log(LOG, `Resume batch round ${round + 1}: ${batchRes.completedThisRound} completed, ${batchRes.stillMissing} remaining. Waiting ${waitMs / 1000}s`);
         await sleep(waitMs);
       }
