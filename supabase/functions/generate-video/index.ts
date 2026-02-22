@@ -4,6 +4,9 @@ import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/b
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 
+// Module-level CORS headers, set on each request in the serve() handler
+let corsHeaders: Record<string, string> = {};
+
 // ============= INPUT VALIDATION =============
 const INPUT_LIMITS = {
   content: 500000, // Max 500K characters for content (Smart Flow data sources)
@@ -4954,7 +4957,7 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
 
 // ============= MAIN HANDLER =============
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
+  corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
