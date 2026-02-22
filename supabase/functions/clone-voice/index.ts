@@ -189,9 +189,9 @@ serve(async (req) => {
             text: testPhrase,
             model_id: "eleven_multilingual_v2",
             voice_settings: {
-              stability: 0.5,
+              stability: 0.3,
               similarity_boost: 0.75,
-              style: 0.3,
+              style: 0.65,
               use_speaker_boost: true,
             },
           }),
