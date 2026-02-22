@@ -20,16 +20,18 @@ export function useAdminAuth() {
       }
 
       try {
-        // Check admin status via the admin-stats edge function
-        const { data, error } = await supabase.functions.invoke("admin-stats", {
-          body: { action: "dashboard_stats" },
-        });
+        // Check admin status via the user_roles table directly
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin")
+          .maybeSingle();
 
         if (error) {
-          // Non-2xx responses (403, etc.) are expected for non-admin users - don't log these
           setIsAdmin(false);
         } else {
-          setIsAdmin(true);
+          setIsAdmin(!!data);
         }
       } catch (err) {
         console.error("Error checking admin status:", err);
