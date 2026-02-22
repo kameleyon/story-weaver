@@ -1677,9 +1677,9 @@ async function generateSceneAudioElevenLabs(
           text: voiceoverText,
           model_id: "eleven_multilingual_v2",
           voice_settings: {
-            stability: 0.5,
+            stability: 0.3,
             similarity_boost: 0.75,
-            style: 0.5,
+            style: 0.65,
             use_speaker_boost: true,
           },
         }),
@@ -1771,7 +1771,7 @@ async function transformAudioWithElevenLabsSTS(
     parts.push(encoder.encode(`--${boundary}\r\n`));
     parts.push(encoder.encode(`Content-Disposition: form-data; name="voice_settings"\r\n\r\n`));
     parts.push(
-      encoder.encode(`{"stability": 0.5, "similarity_boost": 0.8, "style": 0.5, "use_speaker_boost": true}\r\n`),
+      encoder.encode(`{"stability": 0.3, "similarity_boost": 0.75, "style": 0.65, "use_speaker_boost": true}\r\n`),
     );
 
     // End boundary
