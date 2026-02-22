@@ -1000,8 +1000,8 @@ async function resolveHyperealVideo(
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
 
-  // Server-side throttle: 5s delay before each poll to reduce API pressure
-  await new Promise(r => setTimeout(r, 5000));
+  // Server-side throttle: 1s delay before each poll to reduce API pressure
+  await new Promise(r => setTimeout(r, 1000));
 
   const response = await fetch(`${HYPEREAL_JOB_POLL_URL}/${jobId}?model=${model}&type=video`, {
     headers: { Authorization: `Bearer ${hyperealApiKey}` },
@@ -1871,9 +1871,9 @@ serve(async (req) => {
       for (const idx of missingIndices) {
         const scene = scenes[idx];
         
-        // 10s delay between each poll to avoid rate limits
+        // 3s delay between each poll to avoid rate limits
         if (idx !== missingIndices[0]) {
-          await new Promise(r => setTimeout(r, 10000));
+          await new Promise(r => setTimeout(r, 3000));
         }
 
         try {

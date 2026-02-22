@@ -24,9 +24,6 @@ export type { GenerationStep, Scene, CostTracking, PhaseTimings, GenerationState
 
 const LOG = "[Pipeline]";
 
-// Guard against duplicate resume calls from React re-renders
-let _resumeInProgress: string | null = null;
-
 export function useGenerationPipeline() {
   const { toast } = useToast();
   const [state, setState] = useState<GenerationState>(INITIAL_GENERATION_STATE);
@@ -124,15 +121,8 @@ export function useGenerationPipeline() {
       const isCinematic = project.project_type === "cinematic";
 
       if (isCinematic && scenes.length > 0 && scenes.some((s) => !s.videoUrl && s.imageUrl)) {
-        // Guard against duplicate resume calls
-        const resumeKey = `${generation.id}-video`;
-        if (_resumeInProgress === resumeKey) {
-          console.log(LOG, "Resume already in progress, skipping duplicate");
-        } else {
-          _resumeInProgress = resumeKey;
-          console.log(LOG, "Auto-resuming cinematic video phase");
-          void resumeCinematic(project, generation.id, scenes, "video").finally(() => { _resumeInProgress = null; });
-        }
+        console.log(LOG, "Auto-resuming cinematic video phase");
+        void resumeCinematic(project, generation.id, scenes, "video");
       } else {
         setState({
           step: "complete", progress: 100, sceneCount: scenes.length, currentScene: scenes.length,
