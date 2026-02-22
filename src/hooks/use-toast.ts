@@ -1,7 +1,16 @@
+/**
+ * Toast state management using an external store pattern (module-level state).
+ *
+ * NOTE: This uses module-level mutable state intentionally as a lightweight
+ * external store (similar to how sonner, zustand, and jotai work).
+ * A singleton guard warns if multiple component trees subscribe simultaneously,
+ * which could indicate a misconfiguration.
+ */
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
+const LOG = "[Toast]";
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
 
@@ -126,6 +135,7 @@ const listeners: Array<(state: State) => void> = [];
 let memoryState: State = { toasts: [] };
 
 function dispatch(action: Action) {
+  console.log(LOG, "dispatch", action.type, "toastId" in action ? action.toastId : "");
   memoryState = reducer(memoryState, action);
   listeners.forEach((listener) => {
     listener(memoryState);
@@ -136,6 +146,7 @@ type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
   const id = genId();
+  console.log(LOG, "toast() called", { id, title: props.title, variant: (props as any).variant });
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -168,6 +179,9 @@ function useToast() {
 
   React.useEffect(() => {
     listeners.push(setState);
+    if (listeners.length > 3) {
+      console.warn(LOG, `Unusually high listener count (${listeners.length}). Possible multiple mount or missing cleanup.`);
+    }
     return () => {
       const index = listeners.indexOf(setState);
       if (index > -1) {
