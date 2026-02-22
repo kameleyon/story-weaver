@@ -4121,73 +4121,96 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           let actualModel = "nano-banana-pro-t2i";
           const imageCallStart = Date.now();
 
-          for (let attempt = 1; attempt <= 4; attempt++) {
-            let result: { ok: true; bytes: Uint8Array } | { ok: false; error: string; retryAfterSeconds?: number };
+          const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+          let hyperealFailed = false;
 
-            // Use Hypereal nano-banana-pro-t2i for all T2I image generation
-            const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
-            if (hyperealApiKey) {
-              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex}`);
-              result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
+          // Try Hypereal first (up to 4 attempts)
+          if (hyperealApiKey) {
+            for (let attempt = 1; attempt <= 4; attempt++) {
+              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex} (attempt ${attempt}/4)`);
+              const result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
               actualProvider = "hypereal";
               actualModel = "nano-banana-pro-t2i";
-            } else {
-              // Fallback to Replicate if Hypereal key not available
-              console.log(
-                `[IMG] HYPEREAL_API_KEY not set, falling back to Replicate ${useProModel ? "nano-banana-pro (1K)" : "nano-banana"} for task ${task.taskIndex}`,
-              );
-              result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
-              actualProvider = "replicate";
-              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-            }
 
-            if (result.ok) {
-              const imageCallDuration = Date.now() - imageCallStart;
-              const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
-              const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
+              if (result.ok) {
+                const imageCallDuration = Date.now() - imageCallStart;
+                const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
+                const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
 
-              const { error: uploadError } = await supabase.storage
-                .from("audio")
-                .upload(path, result.bytes, { contentType: "image/png", upsert: true });
+                const { error: uploadError } = await supabase.storage
+                  .from("audio")
+                  .upload(path, result.bytes, { contentType: "image/png", upsert: true });
 
-              if (uploadError) {
-                console.error(`[IMG] Upload failed for ${path}: ${uploadError.message}`);
-                return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+                if (uploadError) {
+                  console.error(`[IMG] Upload failed for ${path}: ${uploadError.message}`);
+                  return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+                }
+
+                const { data: signedData, error: signError } = await supabase.storage
+                  .from("audio")
+                  .createSignedUrl(path, 604800);
+
+                if (signError || !signedData?.signedUrl) {
+                  console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
+                  return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+                }
+
+                console.log(`[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}, ${imageCallDuration}ms`);
+                return { task, url: signedData.signedUrl, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
               }
 
-              // Use signed URL for secure access (7 days expiration)
-              const { data: signedData, error: signError } = await supabase.storage
-                .from("audio")
-                .createSignedUrl(path, 604800); // 7 days in seconds
-
-              if (signError || !signedData?.signedUrl) {
-                console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
-                return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
-              }
-
-              console.log(
-                `[IMG] Task ${task.taskIndex} succeeded with provider: ${actualProvider}, ${imageCallDuration}ms`,
-              );
-              return {
-                task,
-                url: signedData.signedUrl,
-                provider: actualProvider,
-                model: actualModel,
-                durationMs: imageCallDuration,
-              };
-            }
-
-            console.warn(`[IMG] Generation failed (attempt ${attempt}) for task ${task.taskIndex}: ${result.error}`);
-
-            if (attempt < 4) {
-              // Use server's retry-after or exponential backoff (3s, 6s, 12s)
-              const baseDelay =
-                "retryAfterSeconds" in result && result.retryAfterSeconds
+              console.warn(`[IMG] Hypereal failed (attempt ${attempt}/4) for task ${task.taskIndex}: ${result.error}`);
+              if (attempt < 4) {
+                const baseDelay = "retryAfterSeconds" in result && result.retryAfterSeconds
                   ? result.retryAfterSeconds * 1000
                   : 3000 * Math.pow(2, attempt - 1);
-              await sleep(baseDelay + Math.random() * 2000);
+                await sleep(baseDelay + Math.random() * 2000);
+              }
+            }
+            hyperealFailed = true;
+            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate nano-banana-pro`);
+          }
+
+          // Fallback to Replicate nano-banana-pro (if Hypereal key missing OR Hypereal failed all retries)
+          if (!hyperealApiKey || hyperealFailed) {
+            console.log(`[IMG] Using Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"} for task ${task.taskIndex}`);
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+              actualProvider = "replicate";
+              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+
+              if (result.ok) {
+                const imageCallDuration = Date.now() - imageCallStart;
+                const suffix = task.subIndex > 0 ? `-${task.subIndex + 1}` : "";
+                const path = `${user.id}/${projectId}/scene-${task.sceneIndex + 1}${suffix}.png`;
+
+                const { error: uploadError } = await supabase.storage
+                  .from("audio")
+                  .upload(path, result.bytes, { contentType: "image/png", upsert: true });
+
+                if (uploadError) {
+                  console.error(`[IMG] Upload failed for ${path}: ${uploadError.message}`);
+                  return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+                }
+
+                const { data: signedData, error: signError } = await supabase.storage
+                  .from("audio")
+                  .createSignedUrl(path, 604800);
+
+                if (signError || !signedData?.signedUrl) {
+                  console.error(`[IMG] Failed to create signed URL for ${path}: ${signError?.message}`);
+                  return { task, url: null, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+                }
+
+                console.log(`[IMG] Task ${task.taskIndex} succeeded with Replicate fallback, ${imageCallDuration}ms`);
+                return { task, url: signedData.signedUrl, provider: actualProvider, model: actualModel, durationMs: imageCallDuration };
+              }
+
+              console.warn(`[IMG] Replicate failed (attempt ${attempt}/3) for task ${task.taskIndex}: ${result.error}`);
+              if (attempt < 3) await sleep(2000 * attempt);
             }
           }
+
           return { task, url: null, provider: "none", model: "none", durationMs: Date.now() - imageCallStart };
         })(),
       );
@@ -4772,29 +4795,37 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Use Hypereal nano-banana-pro-t2i for T2I regeneration
+    // Use Hypereal nano-banana-pro-t2i for T2I regeneration, fallback to Replicate
     const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
+    let usedFallback = false;
+
     if (hyperealApiKey) {
       console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
       const hyperealStartTime = Date.now();
       imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format);
       const hyperealDurationMs = Date.now() - hyperealStartTime;
 
-      // Log Hypereal API call
       await logApiCall({
         supabase,
         userId: user.id,
         generationId,
-        provider: "replicate" as any, // Log under replicate for cost tracking compatibility
+        provider: "replicate" as any,
         model: "hypereal/nano-banana-pro-t2i",
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: hyperealDurationMs,
         cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
         errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
-    } else {
-      // Fallback to Replicate if Hypereal key not available
-      console.log(`[regenerate-image] HYPEREAL_API_KEY not set, falling back to Replicate ${replicateModelLabel}`);
+
+      // If Hypereal failed, fall back to Replicate
+      if (!imageResult.ok) {
+        console.warn(`[regenerate-image] Hypereal failed: ${imageResult.error}, falling back to Replicate ${replicateModelLabel}`);
+        usedFallback = true;
+      }
+    }
+
+    if (!hyperealApiKey || usedFallback) {
+      console.log(`[regenerate-image] Using Replicate ${replicateModelLabel} for regeneration`);
       const replicateStartTime = Date.now();
       imageResult = await generateImageWithReplicate(fullPrompt, replicateApiKey, format, useProModel);
       const replicateDurationMs = Date.now() - replicateStartTime;
