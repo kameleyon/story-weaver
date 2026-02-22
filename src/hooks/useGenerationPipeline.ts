@@ -70,7 +70,7 @@ interface GenerationParams {
   length: string;
   style: string;
   customStyle?: string;
-  customStyleImage?: string | null; // Public URL from storage bucket
+  customStyleImage?: string | null; // Base64 image for custom style reference
   brandMark?: string;
   presenterFocus?: string;
   characterDescription?: string;

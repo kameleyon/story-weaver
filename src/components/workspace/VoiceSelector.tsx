@@ -1,10 +1,9 @@
-import { User, UserRound, Mic, Play, Pause } from "lucide-react";
+import { User, UserRound, Mic } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -14,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 
 export type VoiceGender = "male" | "female";
 
@@ -34,7 +32,6 @@ interface UserVoice {
   id: string;
   voice_name: string;
   voice_id: string;
-  sample_url: string;
 }
 
 const standardVoices: { id: VoiceGender; label: string; icon: typeof User }[] = [
@@ -44,8 +41,6 @@ const standardVoices: { id: VoiceGender; label: string; icon: typeof User }[] = 
 
 export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
   const { user } = useAuth();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   
   // Fetch user's custom voices
   const { data: customVoices = [] } = useQuery({
@@ -54,7 +49,7 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from("user_voices")
-        .select("id, voice_name, voice_id, sample_url")
+        .select("id, voice_name, voice_id")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       
@@ -63,26 +58,6 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
     },
     enabled: !!user?.id,
   });
-
-  const togglePreview = (e: React.MouseEvent, voiceId: string, sampleUrl: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    if (playingVoiceId === voiceId) {
-      audioRef.current?.pause();
-      setPlayingVoiceId(null);
-      return;
-    }
-    
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    const audio = new Audio(sampleUrl);
-    audioRef.current = audio;
-    audio.onended = () => setPlayingVoiceId(null);
-    audio.play();
-    setPlayingVoiceId(voiceId);
-  };
 
   const hasCustomVoices = customVoices.length > 0;
 
@@ -175,19 +150,7 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
               >
                 <div className="flex items-center gap-2">
                   <Mic className="h-3.5 w-3.5 text-primary" />
-                  <span className="flex-1">{voice.voice_name}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 ml-1 shrink-0"
-                    onClick={(e) => togglePreview(e, voice.voice_id, voice.sample_url)}
-                  >
-                    {playingVoiceId === voice.voice_id 
-                      ? <Pause className="h-3 w-3" />
-                      : <Play className="h-3 w-3" />
-                    }
-                  </Button>
+                  {voice.voice_name}
                 </div>
               </SelectItem>
             ))}

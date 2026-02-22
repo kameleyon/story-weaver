@@ -8,9 +8,7 @@ export interface VideoExportLogEntry {
 
 const GLOBAL_KEY = "__motionmax_video_export_logs__";
 const STORAGE_KEY = "motionmax_video_export_logs_v1";
-/** @deprecated Legacy keys kept for one-time migration from old branding. */
 const LEGACY_GLOBAL_KEY = "__audiomax_video_export_logs__";
-/** @deprecated */
 const LEGACY_STORAGE_KEY = "audiomax_video_export_logs_v1";
 
 function loadPersisted(): VideoExportLogEntry[] | null {

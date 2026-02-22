@@ -1,4 +1,4 @@
-import { Wand2, Pencil, Users, Camera, Palette, Laugh, PenTool, Baby, ChevronLeft, ChevronRight, Upload, X, GraduationCap, Loader2 } from "lucide-react";
+import { Wand2, Pencil, Users, Camera, Palette, Laugh, PenTool, Baby, ChevronLeft, ChevronRight, Upload, X, GraduationCap } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -6,14 +6,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useRef, useState, useEffect } from "react";
-import { useStyleImageUpload } from "@/hooks/useStyleImageUpload";
 
 // Import style preview images
 import minimalistPreview from "@/assets/styles/minimalist-preview.png";
 import doodlePreview from "@/assets/styles/doodle-preview.png";
 import stickPreview from "@/assets/styles/stick-preview.png";
 import realisticPreview from "@/assets/styles/realistic-preview.png";
-import storybookPreview from "@/assets/styles/storybook-preview.png";
+import storybookPreview from "@/assets/styles/painterly-preview.png";
 import caricaturePreview from "@/assets/styles/caricature-preview.png";
 import sketchPreview from "@/assets/styles/sketch-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
@@ -95,25 +94,23 @@ export function SmartFlowStyleSelector({
     }
   };
 
-  const { uploadStyleImage, deleteStyleImage, uploading } = useStyleImageUpload();
-
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    const url = await uploadStyleImage(file);
-    if (url) {
-      onCustomStyleImageChange?.(url);
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return;
     }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      onCustomStyleImageChange?.(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleRemoveImage = async () => {
-    if (customStyleImage) {
-      await deleteStyleImage(customStyleImage);
-    }
+  const handleRemoveImage = () => {
     onCustomStyleImageChange?.(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -286,11 +283,10 @@ export function SmartFlowStyleSelector({
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
                   className="gap-2 rounded-lg border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 >
-                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {uploading ? "Uploading..." : "Upload reference image"}
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload reference image
                 </Button>
               )}
             </div>

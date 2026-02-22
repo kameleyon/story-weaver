@@ -133,14 +133,20 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
         return;
       }
 
-      // StoryLength values now match backend directly (short, brief, presentation)
+      // Map story length to standard length for backend
+      const lengthMap: Record<StoryLength, string> = {
+        short: "short",
+        brief: "brief",
+        extended: "presentation",
+      };
+      const mappedLength = lengthMap[length];
 
       // Validate plan access
       const validation = validateGenerationAccess(
         plan,
         creditsBalance,
         "storytelling",
-        length,
+        mappedLength,
         format,
         brandMarkEnabled && brandMarkText.trim().length > 0,
         style === "custom",
@@ -161,7 +167,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
       startGeneration({
         content: storyIdea,
         format,
-        length,
+        length: mappedLength,
         style,
         customStyle: style === "custom" ? customStyle : undefined,
         customStyleImage: style === "custom" ? customStyleImage : undefined,
@@ -214,8 +220,10 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
 
       // Map project length to story length
       const projectLength = project.length as string;
-      if (["short", "brief", "presentation"].includes(projectLength)) {
-        setLength(projectLength as StoryLength);
+      if (projectLength === "presentation") {
+        setLength("extended");
+      } else if (projectLength === "short") {
+        setLength("short");
       } else {
         setLength("brief");
       }

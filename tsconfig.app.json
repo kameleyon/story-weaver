@@ -16,11 +16,10 @@
 
     /* Linting */
     "strict": false,
-    "noImplicitAny": true,
-    "strictNullChecks": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": false,
+    "noFallthroughCasesInSwitch": false,
 
     "baseUrl": ".",
     "paths": {

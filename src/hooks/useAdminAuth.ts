@@ -20,18 +20,19 @@ export function useAdminAuth() {
       }
 
       try {
-        // Use the lightweight is_admin database function instead of calling the edge function
-        // This avoids 403 errors for non-admin users
-        const { data, error } = await supabase.rpc("is_admin", {
-          _user_id: user.id,
+        // Check admin status via the admin-stats edge function
+        const { data, error } = await supabase.functions.invoke("admin-stats", {
+          body: { action: "dashboard_stats" },
         });
 
         if (error) {
+          // Non-2xx responses (403, etc.) are expected for non-admin users - don't log these
           setIsAdmin(false);
         } else {
-          setIsAdmin(!!data);
+          setIsAdmin(true);
         }
       } catch (err) {
+        console.error("Error checking admin status:", err);
         setIsAdmin(false);
       } finally {
         setLoading(false);

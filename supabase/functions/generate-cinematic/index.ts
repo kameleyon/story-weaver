@@ -9,7 +9,11 @@ import {
   type StorageStrategy,
 } from "../_shared/audioEngine.ts";
 
-import { getCorsHeaders } from "../_shared/cors.ts";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
 
 type Phase = "script" | "audio" | "images" | "video" | "finalize" | "image-edit" | "image-regen";
 
@@ -1387,7 +1391,6 @@ async function updateScenes(
 }
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

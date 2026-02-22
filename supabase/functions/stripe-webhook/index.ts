@@ -2,7 +2,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
-import { getCorsHeaders } from "../_shared/cors.ts";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
+};
 
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -33,7 +36,6 @@ const subscriptionProducts: Record<string, string> = {
 };
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -85,27 +87,7 @@ serve(async (req) => {
       });
     }
 
-    logStep("Event verified and parsed", { type: event.type, eventId: event.id });
-
-    // Event-level idempotency: check if this Stripe event was already processed
-    const { data: existingEvent } = await supabaseAdmin
-      .from("webhook_events")
-      .select("id")
-      .eq("event_id", event.id)
-      .limit(1);
-
-    if (existingEvent && existingEvent.length > 0) {
-      logStep("Duplicate event detected, skipping", { eventId: event.id });
-      return new Response(JSON.stringify({ received: true, duplicate: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
-    // Record event as processed (before processing to prevent races)
-    await supabaseAdmin
-      .from("webhook_events")
-      .insert({ event_id: event.id, event_type: event.type });
+    logStep("Event verified and parsed", { type: event.type });
 
     switch (event.type) {
       case "checkout.session.completed": {
@@ -128,28 +110,32 @@ serve(async (req) => {
             const credits = creditPackProducts[productId];
             
             if (credits) {
-              const paymentIntentId = session.payment_intent as string;
-              logStep("Adding credits", { userId, credits, productId, paymentIntentId });
+              logStep("Adding credits", { userId, credits, productId });
+              
+              // Upsert user credits
+              const { data: existingCredits } = await supabaseAdmin
+                .from("user_credits")
+                .select("*")
+                .eq("user_id", userId)
+                .single();
 
-              // Idempotency check: skip if this payment intent was already processed
-              if (paymentIntentId) {
-                const { data: existingTx } = await supabaseAdmin
-                  .from("credit_transactions")
-                  .select("id")
-                  .eq("stripe_payment_intent_id", paymentIntentId)
-                  .limit(1);
-
-                if (existingTx && existingTx.length > 0) {
-                  logStep("Duplicate webhook detected, skipping credit addition", { paymentIntentId });
-                  break;
-                }
+              if (existingCredits) {
+                await supabaseAdmin
+                  .from("user_credits")
+                  .update({
+                    credits_balance: existingCredits.credits_balance + credits,
+                    total_purchased: existingCredits.total_purchased + credits,
+                  })
+                  .eq("user_id", userId);
+              } else {
+                await supabaseAdmin
+                  .from("user_credits")
+                  .insert({
+                    user_id: userId,
+                    credits_balance: credits,
+                    total_purchased: credits,
+                  });
               }
-
-              // Use atomic RPC to increment credits
-              await supabaseAdmin.rpc("increment_user_credits", {
-                p_user_id: userId,
-                p_credits: credits,
-              });
 
               // Log the transaction
               await supabaseAdmin
@@ -159,7 +145,7 @@ serve(async (req) => {
                   amount: credits,
                   transaction_type: "purchase",
                   description: `Purchased ${credits} credits`,
-                  stripe_payment_intent_id: paymentIntentId,
+                  stripe_payment_intent_id: session.payment_intent as string,
                 });
             }
           }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 const SIDEBAR_STATE_KEY = "motionmax-sidebar-state";
-/** @deprecated Legacy key kept for one-time migration from old branding. */
 const LEGACY_SIDEBAR_STATE_KEY = "audiomax-sidebar-state";
 
 export function useSidebarState() {

@@ -30,7 +30,7 @@ export const CREDIT_PACKS = {
   15: { priceId: "price_1SuJk36hfVkBDzkSCbSorQJY", productId: "prod_Ts3r9EBXzzKKfU", price: 11.99 },
   50: { priceId: "price_1SqN2q6hfVkBDzkSNbEXBWTL", productId: "prod_Tnz0B2aJPD895y", price: 14.99 },
   150: { priceId: "price_1SqN316hfVkBDzkSVq77cGDd", productId: "prod_Tnz1CygtJnMhUz", price: 39.99 },
-  500: { priceId: "price_1SuJk46hfVkBDzkSSkkal5QG", productId: "prod_Ts3rl1zDT9oLVt", price: 99.99 },
+  500: { priceId: "price_1SuJk46hfVkBDzkSSkkal5QG", productId: "prod_Ts3rl1zDT9oLVt", price: 249.99 },
 } as const;
 
 // Re-export for convenience
@@ -128,7 +128,7 @@ export function useSubscription() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isPending, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: SUBSCRIPTION_QUERY_KEY,
     queryFn: () => fetchSubscription(session?.access_token),
     enabled: !!session?.access_token,
@@ -138,12 +138,6 @@ export function useSubscription() {
     refetchOnWindowFocus: false, // Avoid extra calls on tab switch
     retry: 1, // Only retry once on failure
   });
-
-  // True when we don't yet have reliable subscription data:
-  // - isLoading: actively fetching for the first time
-  // - isPending && !session: query disabled because no session yet
-  // - Neither data nor error: query hasn't resolved yet
-  const subscriptionPending = isLoading || (isPending && !session?.access_token) || (!data && !error);
 
   // Manual refresh function
   const checkSubscription = useCallback(async () => {
@@ -204,7 +198,7 @@ export function useSubscription() {
     subscriptionEnd: data?.subscriptionEnd ?? null,
     cancelAtPeriodEnd: data?.cancelAtPeriodEnd ?? false,
     creditsBalance: data?.creditsBalance ?? 0,
-    isLoading: subscriptionPending,
+    isLoading,
     error: error instanceof Error ? error.message : null,
     checkSubscription,
     createCheckout,

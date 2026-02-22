@@ -1,6 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2, Lightbulb, MessageSquareOff, RefreshCw } from "lucide-react";
+import { Play, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2, Lightbulb, MessageSquareOff, RefreshCw, Terminal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,6 @@ import { CharacterDescriptionInput } from "./CharacterDescriptionInput";
 import { CharacterConsistencyToggle } from "./CharacterConsistencyToggle";
 import { GenerationProgress } from "./GenerationProgress";
 import { CinematicResult } from "./CinematicResult";
-import { AdminGenerationLogs } from "./AdminGenerationLogs";
 
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { getUserFriendlyErrorMessage } from "@/lib/errorMessages";
@@ -63,6 +62,7 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
     const { isAdmin } = useAdminAuth();
     const [adminLogs, setAdminLogs] = useState<any[]>([]);
+    const [showAdminLogs, setShowAdminLogs] = useState(false);
     const [isResuming, setIsResuming] = useState(false);
 
     // Fetch admin logs for the current generation
@@ -420,7 +420,36 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                    </div>
 
                    {/* Admin Generation Logs */}
-                   {isAdmin && <AdminGenerationLogs logs={adminLogs} />}
+                   {isAdmin && adminLogs.length > 0 && (
+                     <div className="mt-4">
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         onClick={() => setShowAdminLogs(!showAdminLogs)}
+                         className="gap-2 text-xs text-muted-foreground"
+                       >
+                         <Terminal className="h-3.5 w-3.5" />
+                         {showAdminLogs ? "Hide" : "Show"} Generation Logs ({adminLogs.length})
+                       </Button>
+                       {showAdminLogs && (
+                         <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-border/50 bg-background/80 p-3 font-mono text-xs space-y-1">
+                           {adminLogs.map((log) => (
+                             <div key={log.id} className={cn(
+                               "flex gap-2",
+                               log.event_type === "error" && "text-destructive",
+                               log.event_type === "warning" && "text-amber-500 dark:text-amber-400",
+                             )}>
+                               <span className="text-muted-foreground whitespace-nowrap">
+                                 {new Date(log.created_at).toLocaleTimeString()}
+                               </span>
+                               <span className="text-muted-foreground">[{log.category}]</span>
+                               <span>{log.message}</span>
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                     </div>
+                   )}
                 </motion.div>
               ) : generationState.step === "complete" && generationState.scenes && generationState.scenes.length > 0 ? (
                 <motion.div
@@ -439,8 +468,6 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                     onNewProject={handleNewProject}
                     format={format}
                   />
-                  {/* Admin Generation Logs (success) */}
-                  {isAdmin && <AdminGenerationLogs logs={adminLogs} />}
                 </motion.div>
               ) : (
                 <motion.div
