@@ -24,6 +24,8 @@ import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
 import { cn } from "@/lib/utils";
+import { useAdminLogs } from "@/hooks/useAdminLogs";
+import { AdminLogsPanel } from "./AdminLogsPanel";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
@@ -59,6 +61,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
   const [suspendedStatus, setSuspendedStatus] = useState<"past_due" | "unpaid" | "canceled">("past_due");
 
   const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+  const { isAdmin, adminLogs, showAdminLogs, setShowAdminLogs } = useAdminLogs(generationState.generationId, generationState.step);
 
   const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
 
@@ -470,6 +473,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                     <RotateCcw className="h-4 w-4" />
                     Try Again
                   </Button>
+                  {isAdmin && <AdminLogsPanel logs={adminLogs} show={showAdminLogs} onToggle={() => setShowAdminLogs(!showAdminLogs)} />}
                 </div>
               </motion.div>
             ) : generationState.step === "complete" && generationState.scenes ? (
@@ -491,6 +495,7 @@ export const Workspace = forwardRef<WorkspaceHandle>(function Workspace(_, ref) 
                   projectId={generationState.projectId}
                   brandMark={brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined}
                 />
+                {isAdmin && <AdminLogsPanel logs={adminLogs} show={showAdminLogs} onToggle={() => setShowAdminLogs(!showAdminLogs)} />}
               </motion.div>
             ) : (
               <motion.div

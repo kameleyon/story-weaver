@@ -1,4 +1,4 @@
-import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon, Upload, X } from "lucide-react";
+import { Wand2, Pencil, Users, Cherry, Camera, Box, Hand, PenTool, Laugh, ChevronLeft, ChevronRight, Palette, Baby, CloudMoon, Upload, X, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useRef, useState, useEffect } from "react";
+import { uploadStyleReference } from "@/lib/uploadStyleReference";
 
 // Import style preview images
 import minimalistPreview from "@/assets/styles/minimalist-preview.png";
@@ -22,6 +23,13 @@ import customPreview from "@/assets/styles/custom-preview.png";
 import crayonPreview from "@/assets/styles/crayon-preview.png";
 import moodyPreview from "@/assets/styles/moody-preview.png";
 
+/**
+ * Main StyleSelector used by Doc2Video, Storytelling, and Cinematic workspaces.
+ * Offers 13 styles: minimalist, doodle, stick, anime, realistic, 3d-pixar,
+ * claymation, sketch (Papercut 3D), caricature, storybook, crayon, moody, custom.
+ * Note: SmartFlowStyleSelector has a different set (10 styles, includes chalkboard,
+ * excludes anime/moody/3d-pixar/claymation) — see SmartFlowStyleSelector.tsx.
+ */
 export type VisualStyle = "minimalist" | "doodle" | "stick" | "anime" | "realistic" | "3d-pixar" | "claymation" | "sketch" | "caricature" | "storybook" | "crayon" | "moody" | "custom";
 
 interface StyleSelectorProps {
@@ -69,6 +77,7 @@ export function StyleSelector({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const checkScrollPosition = () => {
     const container = scrollContainerRef.current;
@@ -100,20 +109,22 @@ export function StyleSelector({
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
     // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return;
-    }
+    if (file.size > 5 * 1024 * 1024) return;
     
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onCustomStyleImageChange?.(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setUploading(true);
+    try {
+      const url = await uploadStyleReference(file);
+      onCustomStyleImageChange?.(url);
+    } catch (err) {
+      console.error("Style reference upload error:", err);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleRemoveImage = () => {
@@ -288,10 +299,11 @@ export function StyleSelector({
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
                   className="gap-2 rounded-lg border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 >
-                  <Upload className="h-3.5 w-3.5" />
-                  Upload reference image
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  {uploading ? "Uploading..." : "Upload reference image"}
                 </Button>
               )}
             </div>

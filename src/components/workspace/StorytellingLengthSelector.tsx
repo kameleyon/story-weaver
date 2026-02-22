@@ -1,6 +1,11 @@
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+/**
+ * Storytelling uses its own length type with user-friendly labels.
+ * Backend mapping: short → "short", brief → "brief", extended → "presentation".
+ * See StorytellingWorkspace.handleGenerate() for the mapping.
+ */
 export type StoryLength = "short" | "brief" | "extended";
 
 interface StorytellingLengthSelectorProps {
