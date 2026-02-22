@@ -1,92 +1,85 @@
 
+# Fix: Hypereal 429 Rate Limit Persisting Despite Backoff
 
-# Fix: Hypereal Video Rate Limit Death Spiral + Concurrency Reduction
+## Problem
 
-## What's happening
+Even with concurrency=1 and 15s backoff, every single Hypereal poll returns 429. The generation has 17 scenes with 11 still missing videos. Hypereal's rate limit appears to be very strict -- even 1 request per 15 seconds triggers it when you have many active jobs on the account.
 
-The video phase polls Hypereal for status on **3 scenes simultaneously**, each every **2 seconds**. That's ~1.5 requests/second to their API, which triggers 429 rate limits. The backend treats 429 as "still processing" (returns `null`), so the client immediately retries -- creating an infinite loop of rejected requests. The logs show continuous 429 errors for all active job IDs.
+The videos are likely **already completed** on Hypereal's side, but we cannot retrieve them because every status check is rejected.
 
-Your current generation has 17 scenes with images, but only 7 have videos -- the other 10 are stuck in this 429 loop.
+## Root Cause
 
-The "duplicate" thumbnails you circled are not actual duplicates in the data -- each scene has exactly 1 unique image. The similar-looking scenes (Melvin's rage, whistle, red card) just look alike because they have similar visual descriptions.
+The 15-second backoff is per-scene. But the frontend processes scenes sequentially and each scene attempt triggers a new edge function call to Hypereal. With 11 scenes to poll, even with 15s delays, the effective request rate is too high for Hypereal's account-level rate limit.
 
-## The Fix (3 changes)
+## Solution: Aggressive Global Cooldown on 429
 
-### 1. Frontend: Reduce video concurrency and increase poll interval
-
-**File: `src/hooks/generation/cinematicPipeline.ts`**
-
-- Change `VIDEO_CONCURRENCY` from **3 to 1** (both in initial generation and resume paths)
-- Change video poll sleep from **2000ms to 8000ms** (video generation takes minutes, fast polling adds zero value)
-- Respect `retryAfterMs` from backend response when present
-
-### 2. Backend: Add server-side throttle and return backoff hints on 429
+### Change 1: Backend - Increase cooldown and add jitter on 429
 
 **File: `supabase/functions/generate-cinematic/index.ts`**
 
-In `resolveHyperealVideo` function (~line 994):
-- Add a 1-second delay before each Hypereal poll fetch (server-side throttle)
-- On 429 response, instead of just returning `null`, return a special marker so the video phase handler can tell the client to wait longer
+- When `resolveHyperealVideo` returns `RATE_LIMITED`, respond with `retryAfterMs: 30000` (30 seconds) instead of 15s
+- This gives Hypereal's rate limit window more time to reset between polls
 
-In the video phase handler (~line 1782-1840):
-- When 429 is detected, respond with `retryAfterMs: 15000` to tell the client to wait 15 seconds
-- When `null` (still processing), respond with `retryAfterMs: 8000`
+### Change 2: Frontend - Add global 429 cooldown across scenes
 
-### 3. Backend: Don't clear videoPredictionId on SEEDANCE_TIMEOUT_RETRY
+**File: `src/hooks/generation/cinematicPipeline.ts`**
 
-Currently line 1828 clears `videoPredictionId` on retry, which causes a **new** video job to be created on the next poll -- wasting credits and creating orphan jobs on Hypereal's side. Instead, keep the prediction ID and just increment the retry counter so the same job keeps being polled.
+Currently, when scene N gets a 429 and waits 15s, the frontend immediately tries scene N again. If that scene completes (or gives up), it moves to scene N+1 -- which also gets 429'd immediately.
 
-## Summary
+The fix: after ANY 429 response, add an **extra cooldown before the next poll** regardless of which scene it's for. This means:
 
-| What | Before | After |
-|------|--------|-------|
-| Video concurrency | 3 scenes at once | 1 scene at a time |
-| Poll interval | 2 seconds | 8 seconds (15s on 429) |
-| Server throttle | None | 1s delay before each Hypereal poll |
-| Retry behavior | Clears prediction, starts new job | Keeps polling same job with backoff |
-| API load | ~1.5 req/s | ~0.12 req/s (12x reduction) |
+- Track a `lastRateLimitTime` timestamp in the polling loop
+- Before each poll, check if we're within a 30s cooldown window from the last 429
+- If so, wait until the cooldown expires before polling
 
-## Files Modified
+### Change 3: Frontend - Skip already-completed scenes in retry loop
 
-- `src/hooks/generation/cinematicPipeline.ts` -- concurrency and poll timing
-- `supabase/functions/generate-cinematic/index.ts` -- server throttle, backoff hints, retry logic
+In `runCinematicVideo`, the retry rounds re-check scenes from the DB. But the main polling loop (lines 199-204) processes ALL scenes sequentially even if some already have `videoUrl`. The loop should check the DB for existing videoUrl before starting the poll for each scene.
+
+Add a pre-check in `generateVideoForScene`: before starting the poll loop, fetch the latest scene data from DB. If `videoUrl` already exists, skip immediately.
+
+## Summary of Changes
+
+| File | Change |
+|------|--------|
+| `supabase/functions/generate-cinematic/index.ts` | Increase 429 `retryAfterMs` from 15s to 30s |
+| `src/hooks/generation/cinematicPipeline.ts` | Add global cooldown tracking; skip scenes with existing videoUrl; increase retry sleep |
 
 ## Technical Details
 
-### `src/hooks/generation/cinematicPipeline.ts`
-
-**`runCinematicVideo` (line 156):**
-```text
-VIDEO_CONCURRENCY = 3  -->  VIDEO_CONCURRENCY = 1
-await sleep(2000)      -->  await sleep(vidRes.retryAfterMs || 8000)
-```
-
-**`resumeCinematicPipeline` video section (line 357):**
-Same changes: concurrency 1, dynamic sleep with backoff.
-
 ### `supabase/functions/generate-cinematic/index.ts`
 
-**`resolveHyperealVideo` (line 994):**
-```text
-// Add before the fetch call:
-await new Promise(r => setTimeout(r, 1000));
-
-// On 429, return "RATE_LIMITED" constant instead of null
-if (response.status === 429) return "RATE_LIMITED";
+**Line 1839 (RATE_LIMITED handler):**
+```
+retryAfterMs: 15000  -->  retryAfterMs: 30000
 ```
 
-**Video phase handler (line 1833):**
-```text
-// When resolveHyperealVideo returns null:
-return { success: true, status: "processing", retryAfterMs: 8000 }
-
-// When it returns "RATE_LIMITED":
-return { success: true, status: "processing", retryAfterMs: 15000 }
+**Line 1834 (SEEDANCE_TIMEOUT_RETRY handler):**
+```
+retryAfterMs: 15000  -->  retryAfterMs: 30000
 ```
 
-**SEEDANCE_TIMEOUT_RETRY handler (line 1828):**
-```text
-// STOP clearing videoPredictionId -- keep polling the same job
-// Only increment videoRetryCount for tracking
-scenes[idx] = { ...scene, videoRetryCount: retryCount };
+### `src/hooks/generation/cinematicPipeline.ts`
+
+**`generateVideoForScene` function (line 159):**
+Add a DB pre-check at the start:
 ```
+// Check if this scene already has a video (completed on backend while we were polling others)
+const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
+if (checkScenes[sceneIdx]?.videoUrl) {
+  completedVideos++;
+  // update progress...
+  return;
+}
+```
+
+**Polling loop (line 183-184):**
+When a 429-based `retryAfterMs` comes back (>= 20000), add extra logging and ensure the full duration is respected:
+```
+const waitMs = vidRes.retryAfterMs || 8000;
+console.log(LOG, `Scene ${sceneIdx+1}: waiting ${waitMs/1000}s before next poll`);
+await sleep(waitMs);
+```
+
+**Both initial and resume paths** get identical changes for consistency.
