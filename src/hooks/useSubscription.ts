@@ -128,7 +128,7 @@ export function useSubscription() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isPending, error, refetch } = useQuery({
     queryKey: SUBSCRIPTION_QUERY_KEY,
     queryFn: () => fetchSubscription(session?.access_token),
     enabled: !!session?.access_token,
@@ -138,6 +138,12 @@ export function useSubscription() {
     refetchOnWindowFocus: false, // Avoid extra calls on tab switch
     retry: 1, // Only retry once on failure
   });
+
+  // True when we don't yet have reliable subscription data:
+  // - isLoading: actively fetching for the first time
+  // - isPending && !session: query disabled because no session yet
+  // - Neither data nor error: query hasn't resolved yet
+  const subscriptionPending = isLoading || (isPending && !session?.access_token) || (!data && !error);
 
   // Manual refresh function
   const checkSubscription = useCallback(async () => {
@@ -198,7 +204,7 @@ export function useSubscription() {
     subscriptionEnd: data?.subscriptionEnd ?? null,
     cancelAtPeriodEnd: data?.cancelAtPeriodEnd ?? false,
     creditsBalance: data?.creditsBalance ?? 0,
-    isLoading,
+    isLoading: subscriptionPending,
     error: error instanceof Error ? error.message : null,
     checkSubscription,
     createCheckout,
