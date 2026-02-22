@@ -366,18 +366,25 @@ export async function resumeCinematicPipeline(
       console.log(LOG, "Resume: starting video phase (batch mode)");
       ctx.setState((prev) => ({ ...prev, progress: 60, statusMessage: "Resuming video clips..." }));
 
-      // Kick off any scenes that don't have a videoPredictionId yet
-      for (let i = 0; i < sceneCount; i++) {
-        const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
-        const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
-        if (checkScenes[i]?.videoUrl || (checkScenes[i] as any)?.videoPredictionId) continue;
-        if (!checkScenes[i]?.imageUrl) continue;
-        console.log(LOG, `Resume: kicking off video for scene ${i + 1}`);
-        try {
-          await ctx.callPhase({ phase: "video", projectId, generationId, sceneIndex: i }, 480000, CINEMATIC_ENDPOINT);
-        } catch (err) {
-          console.warn(LOG, `Resume: video kickoff for scene ${i + 1} failed:`, err);
+      // Check once if any scenes need kickoff (single DB query, not per-scene)
+      const { data: kickoffCheck } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+      const kickoffScenes = normalizeScenes(kickoffCheck?.scenes) ?? [];
+      const needsKickoff = kickoffScenes
+        .map((s, i) => (!s.videoUrl && !(s as any).videoPredictionId && s.imageUrl ? i : -1))
+        .filter((i) => i >= 0);
+
+      if (needsKickoff.length > 0) {
+        console.log(LOG, `Resume: ${needsKickoff.length} scenes need video kickoff: [${needsKickoff.map(i => i + 1).join(",")}]`);
+        for (const i of needsKickoff) {
+          console.log(LOG, `Resume: kicking off video for scene ${i + 1}`);
+          try {
+            await ctx.callPhase({ phase: "video", projectId, generationId, sceneIndex: i }, 480000, CINEMATIC_ENDPOINT);
+          } catch (err) {
+            console.warn(LOG, `Resume: video kickoff for scene ${i + 1} failed:`, err);
+          }
         }
+      } else {
+        console.log(LOG, "Resume: all scenes already have predictionIds, skipping kickoff");
       }
 
       // Batch polling loop
