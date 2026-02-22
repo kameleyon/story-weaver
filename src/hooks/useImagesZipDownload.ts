@@ -52,23 +52,31 @@ export function useImagesZipDownload() {
         return;
       }
 
-      // Download each image and add to zip
-      for (let i = 0; i < imageEntries.length; i++) {
-        const { url, filename } = imageEntries[i];
-        const progress = Math.round(((i + 1) / imageEntries.length) * 80);
-        setState({ status: "downloading", progress });
+      // Download images with concurrency limit to avoid overwhelming the browser
+      const CONCURRENCY = 4;
+      let completed = 0;
 
+      const downloadOne = async ({ url, filename }: { url: string; filename: string }) => {
         try {
           const response = await fetch(url);
           if (!response.ok) {
             console.warn(`Failed to fetch image: ${url}`);
-            continue;
+            return;
           }
           const blob = await response.blob();
           folder.file(filename, blob);
         } catch (err) {
           console.warn(`Error fetching image ${url}:`, err);
+        } finally {
+          completed++;
+          setState({ status: "downloading", progress: Math.round((completed / imageEntries.length) * 80) });
         }
+      };
+
+      // Process in batches of CONCURRENCY
+      for (let i = 0; i < imageEntries.length; i += CONCURRENCY) {
+        const batch = imageEntries.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(batch.map(downloadOne));
       }
 
       setState({ status: "zipping", progress: 90 });
