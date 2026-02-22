@@ -59,8 +59,8 @@ const plans = [
     ],
     cta: "Current Plan",
     popular: false,
-    monthlyPriceId: null,
-    yearlyPriceId: null,
+    monthlyPriceId: null as string | null,
+    yearlyPriceId: null as string | null,
   },
   {
     id: "starter",
