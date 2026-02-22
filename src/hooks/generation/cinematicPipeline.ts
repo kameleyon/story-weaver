@@ -153,7 +153,7 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
   console.log(LOG, "Starting video phase", { sceneCount });
   ctx.setState((prev) => ({ ...prev, progress: 60, statusMessage: "Images complete. Generating video clips..." }));
 
-  const VIDEO_CONCURRENCY = 3;
+  const VIDEO_CONCURRENCY = 1;
   let completedVideos = 0;
 
   const generateVideoForScene = async (sceneIdx: number) => {
@@ -181,7 +181,7 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
           videoComplete = true;
           console.log(LOG, `Video scene ${sceneIdx + 1} complete after ${pollAttempts} poll(s)`);
         } else {
-          await sleep(2000);
+          await sleep(vidRes.retryAfterMs || 8000);
         }
       }
       completedVideos++;
@@ -354,7 +354,7 @@ export async function resumeCinematicPipeline(
     if (resumeFrom === "audio" || resumeFrom === "images" || resumeFrom === "video") {
       console.log(LOG, "Resume: starting video phase");
       ctx.setState((prev) => ({ ...prev, progress: 60, statusMessage: "Resuming video clips..." }));
-      const VIDEO_CONCURRENCY = 3;
+      const VIDEO_CONCURRENCY = 1;
       let completedVideos = existingScenes.filter((s) => !!s.videoUrl).length;
 
       const generateVideoForScene = async (sceneIdx: number) => {
@@ -367,7 +367,7 @@ export async function resumeCinematicPipeline(
             if (pollAttempts > 180) { console.warn(LOG, `Resume video scene ${sceneIdx + 1} timed out`); return; }
             const vidRes = await ctx.callPhase({ phase: "video", projectId, generationId, sceneIndex: sceneIdx }, 480000, CINEMATIC_ENDPOINT);
             if (!vidRes.success) { console.warn(LOG, `Resume video scene ${sceneIdx + 1} failed: ${vidRes.error}`); return; }
-            if (vidRes.status === "complete") videoComplete = true; else await sleep(2000);
+            if (vidRes.status === "complete") videoComplete = true; else await sleep(vidRes.retryAfterMs || 8000);
           }
           completedVideos++;
           ctx.setState((prev) => ({ ...prev, statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`, progress: 60 + Math.floor((completedVideos / sceneCount) * 35) }));
