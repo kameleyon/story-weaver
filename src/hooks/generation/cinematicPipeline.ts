@@ -211,8 +211,16 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
           if (waitMs >= 20000) {
             lastRateLimitTime = Date.now();
             console.log(LOG, `Scene ${sceneIdx + 1}: rate limited, waiting ${waitMs / 1000}s (global cooldown set)`);
+            ctx.setState((prev) => ({
+              ...prev,
+              statusMessage: `Provider busy. Pausing for ${waitMs / 1000}s (Scene ${sceneIdx + 1})...`,
+            }));
           }
           await sleep(waitMs);
+          ctx.setState((prev) => ({
+            ...prev,
+            statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
+          }));
         }
       }
       completedVideos++;
@@ -429,8 +437,16 @@ export async function resumeCinematicPipeline(
               if (waitMs >= 20000) {
                 lastRateLimitTime = Date.now();
                 console.log(LOG, `Resume scene ${sceneIdx + 1}: rate limited, waiting ${waitMs / 1000}s (global cooldown set)`);
+                ctx.setState((prev) => ({
+                  ...prev,
+                  statusMessage: `Provider busy. Pausing for ${waitMs / 1000}s (Scene ${sceneIdx + 1})...`,
+                }));
               }
               await sleep(waitMs);
+              ctx.setState((prev) => ({
+                ...prev,
+                statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
+              }));
             }
           }
           completedVideos++;
