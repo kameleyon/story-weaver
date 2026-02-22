@@ -1831,12 +1831,12 @@ serve(async (req) => {
         );
         scenes[idx] = { ...scene, videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
-        return jsonResponse({ success: true, status: "processing", retryAfterMs: 15000, scene: scenes[idx] });
+        return jsonResponse({ success: true, status: "processing", retryAfterMs: 30000, scene: scenes[idx] });
       }
 
       if (videoUrl === "RATE_LIMITED") {
-        console.log(`[VIDEO] Scene ${scene.number}: Hypereal rate limited, telling client to back off 15s`);
-        return jsonResponse({ success: true, status: "processing", retryAfterMs: 15000, scene });
+        console.log(`[VIDEO] Scene ${scene.number}: Hypereal rate limited, telling client to back off 30s`);
+        return jsonResponse({ success: true, status: "processing", retryAfterMs: 30000, scene });
       }
 
       if (!videoUrl) {

@@ -156,8 +156,25 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
   const VIDEO_CONCURRENCY = 1;
   let completedVideos = 0;
 
+  let lastRateLimitTime = 0;
+  const GLOBAL_COOLDOWN_MS = 30000;
+
   const generateVideoForScene = async (sceneIdx: number) => {
     try {
+      // Pre-check: skip if video already exists in DB
+      const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+      const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
+      if (checkScenes[sceneIdx]?.videoUrl) {
+        completedVideos++;
+        console.log(LOG, `Video scene ${sceneIdx + 1}: already has videoUrl, skipping`);
+        ctx.setState((prev) => ({
+          ...prev,
+          statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
+          progress: 60 + Math.floor((completedVideos / sceneCount) * 35),
+        }));
+        return;
+      }
+
       let videoComplete = false;
       let pollAttempts = 0;
       const MAX_POLL = 180;
@@ -168,6 +185,15 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
           console.warn(LOG, `Video scene ${sceneIdx + 1} timed out after ${MAX_POLL} polls`);
           return;
         }
+
+        // Global cooldown: wait if we recently hit a rate limit
+        const now = Date.now();
+        if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
+          const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
+          console.log(LOG, `Scene ${sceneIdx + 1}: global cooldown active, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
+          await sleep(cooldownWait);
+        }
+
         const vidRes = await ctx.callPhase(
           { phase: "video", projectId, generationId, sceneIndex: sceneIdx },
           480000,
@@ -181,7 +207,12 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
           videoComplete = true;
           console.log(LOG, `Video scene ${sceneIdx + 1} complete after ${pollAttempts} poll(s)`);
         } else {
-          await sleep(vidRes.retryAfterMs || 8000);
+          const waitMs = vidRes.retryAfterMs || 8000;
+          if (waitMs >= 20000) {
+            lastRateLimitTime = Date.now();
+            console.log(LOG, `Scene ${sceneIdx + 1}: rate limited, waiting ${waitMs / 1000}s (global cooldown set)`);
+          }
+          await sleep(waitMs);
         }
       }
       completedVideos++;
@@ -357,17 +388,50 @@ export async function resumeCinematicPipeline(
       const VIDEO_CONCURRENCY = 1;
       let completedVideos = existingScenes.filter((s) => !!s.videoUrl).length;
 
+      let lastRateLimitTime = 0;
+      const GLOBAL_COOLDOWN_MS = 30000;
+
       const generateVideoForScene = async (sceneIdx: number) => {
-        if (existingScenes[sceneIdx]?.videoUrl) return;
+        // Pre-check: skip if video already exists in DB
+        const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+        const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
+        if (checkScenes[sceneIdx]?.videoUrl) {
+          completedVideos++;
+          console.log(LOG, `Resume: video scene ${sceneIdx + 1} already has videoUrl, skipping`);
+          ctx.setState((prev) => ({
+            ...prev,
+            statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
+            progress: 60 + Math.floor((completedVideos / sceneCount) * 35),
+          }));
+          return;
+        }
         try {
           let videoComplete = false;
           let pollAttempts = 0;
           while (!videoComplete) {
             pollAttempts++;
             if (pollAttempts > 180) { console.warn(LOG, `Resume video scene ${sceneIdx + 1} timed out`); return; }
+
+            // Global cooldown
+            const now = Date.now();
+            if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
+              const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
+              console.log(LOG, `Resume scene ${sceneIdx + 1}: global cooldown, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
+              await sleep(cooldownWait);
+            }
+
             const vidRes = await ctx.callPhase({ phase: "video", projectId, generationId, sceneIndex: sceneIdx }, 480000, CINEMATIC_ENDPOINT);
             if (!vidRes.success) { console.warn(LOG, `Resume video scene ${sceneIdx + 1} failed: ${vidRes.error}`); return; }
-            if (vidRes.status === "complete") videoComplete = true; else await sleep(vidRes.retryAfterMs || 8000);
+            if (vidRes.status === "complete") {
+              videoComplete = true;
+            } else {
+              const waitMs = vidRes.retryAfterMs || 8000;
+              if (waitMs >= 20000) {
+                lastRateLimitTime = Date.now();
+                console.log(LOG, `Resume scene ${sceneIdx + 1}: rate limited, waiting ${waitMs / 1000}s (global cooldown set)`);
+              }
+              await sleep(waitMs);
+            }
           }
           completedVideos++;
           ctx.setState((prev) => ({ ...prev, statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`, progress: 60 + Math.floor((completedVideos / sceneCount) * 35) }));
