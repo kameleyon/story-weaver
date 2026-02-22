@@ -153,98 +153,78 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
   console.log(LOG, "Starting video phase", { sceneCount });
   ctx.setState((prev) => ({ ...prev, progress: 60, statusMessage: "Images complete. Generating video clips..." }));
 
-  const VIDEO_CONCURRENCY = 1;
-  let completedVideos = 0;
-
-  let lastRateLimitTime = 0;
-  const GLOBAL_COOLDOWN_MS = 30000;
-
-  const generateVideoForScene = async (sceneIdx: number) => {
-    try {
-      // Pre-check: skip if video already exists in DB
-      const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
-      const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
-      if (checkScenes[sceneIdx]?.videoUrl) {
-        completedVideos++;
-        console.log(LOG, `Video scene ${sceneIdx + 1}: already has videoUrl, skipping`);
-        ctx.setState((prev) => ({
-          ...prev,
-          statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
-          progress: 60 + Math.floor((completedVideos / sceneCount) * 35),
-        }));
-        return;
-      }
-
-      let videoComplete = false;
-      let pollAttempts = 0;
-      const MAX_POLL = 180;
-
-      while (!videoComplete) {
-        pollAttempts++;
-        if (pollAttempts > MAX_POLL) {
-          console.warn(LOG, `Video scene ${sceneIdx + 1} timed out after ${MAX_POLL} polls`);
-          return;
-        }
-
-        // Global cooldown: wait if we recently hit a rate limit
-        const now = Date.now();
-        if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
-          const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
-          console.log(LOG, `Scene ${sceneIdx + 1}: global cooldown active, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
-          await sleep(cooldownWait);
-        }
-
-        const vidRes = await ctx.callPhase(
-          { phase: "video", projectId, generationId, sceneIndex: sceneIdx },
-          480000,
-          CINEMATIC_ENDPOINT
-        );
-        if (!vidRes.success) {
-          console.warn(LOG, `Video scene ${sceneIdx + 1} failed: ${vidRes.error}`);
-          return;
-        }
-        if (vidRes.status === "complete") {
-          videoComplete = true;
-          console.log(LOG, `Video scene ${sceneIdx + 1} complete after ${pollAttempts} poll(s)`);
-        } else {
-          const waitMs = vidRes.retryAfterMs || 8000;
-          if (waitMs >= 20000) {
-            lastRateLimitTime = Date.now();
-            console.log(LOG, `Scene ${sceneIdx + 1}: rate limited, waiting ${waitMs / 1000}s (global cooldown set)`);
-          }
-          await sleep(waitMs);
-        }
-      }
-      completedVideos++;
-      ctx.setState((prev) => ({
-        ...prev,
-        statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
-        progress: 60 + Math.floor((completedVideos / sceneCount) * 35),
-      }));
-    } catch (err) {
-      console.warn(LOG, `Video scene ${sceneIdx + 1} error:`, err);
+  // First pass: kick off video generation for each scene (one at a time)
+  for (let i = 0; i < sceneCount; i++) {
+    // Check if this scene already has a video
+    const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+    const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
+    if (checkScenes[i]?.videoUrl) {
+      console.log(LOG, `Video scene ${i + 1}: already has videoUrl, skipping`);
+      continue;
     }
-  };
-
-  // Process in concurrent batches
-  for (let batchStart = 0; batchStart < sceneCount; batchStart += VIDEO_CONCURRENCY) {
-    const batchEnd = Math.min(batchStart + VIDEO_CONCURRENCY, sceneCount);
-    const batch = [];
-    for (let i = batchStart; i < batchEnd; i++) batch.push(generateVideoForScene(i));
-    console.log(LOG, `Processing video batch ${batchStart + 1}–${batchEnd}`);
-    await Promise.allSettled(batch);
+    // If no videoPredictionId, kick off generation
+    if (!(checkScenes[i] as any)?.videoPredictionId) {
+      ctx.setState((prev) => ({ ...prev, statusMessage: `Starting video for scene ${i + 1}/${sceneCount}...` }));
+      const vidRes = await ctx.callPhase(
+        { phase: "video", projectId, generationId, sceneIndex: i },
+        480000,
+        CINEMATIC_ENDPOINT
+      );
+      if (!vidRes.success) {
+        console.warn(LOG, `Video scene ${i + 1} kickoff failed: ${vidRes.error}`);
+      }
+    }
   }
 
-  // Retry missing videos (up to 2 rounds)
-  for (let round = 0; round < 2; round++) {
-    const { data: latestGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
-    const latestScenes = normalizeScenes(latestGen?.scenes) ?? [];
-    const missing = latestScenes.map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1)).filter((i) => i >= 0);
-    if (missing.length === 0) break;
+  // Batch polling loop: poll ALL missing scenes in a single edge function call
+  const MAX_BATCH_ROUNDS = 60; // 60 rounds * ~30-60s each = ~30-60 min max
+  for (let round = 0; round < MAX_BATCH_ROUNDS; round++) {
+    // Check current state
+    const { data: currentGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+    const currentScenes = normalizeScenes(currentGen?.scenes) ?? [];
+    const completed = currentScenes.filter((s) => !!s.videoUrl).length;
+    const missing = currentScenes.filter((s) => (s as any).videoPredictionId && !s.videoUrl && s.imageUrl).length;
 
-    console.log(LOG, `Video retry round ${round + 1}: ${missing.length} scenes missing`);
-    ctx.setState((prev) => ({ ...prev, statusMessage: `Retrying ${missing.length} missing clips (round ${round + 1})...` }));
-    for (const idx of missing) await generateVideoForScene(idx);
+    ctx.setState((prev) => ({
+      ...prev,
+      statusMessage: `Generating clips (${completed}/${sceneCount})...`,
+      progress: 60 + Math.floor((completed / sceneCount) * 35),
+    }));
+
+    if (missing === 0) {
+      console.log(LOG, `All ${completed} videos complete after ${round} batch rounds`);
+      break;
+    }
+
+    console.log(LOG, `Batch poll round ${round + 1}: ${missing} scenes still missing, ${completed} complete`);
+
+    const batchRes = await ctx.callPhase(
+      { phase: "video-batch", projectId, generationId },
+      480000,
+      CINEMATIC_ENDPOINT
+    );
+
+    if (!batchRes.success) {
+      console.warn(LOG, `Batch poll failed: ${batchRes.error}`);
+      await sleep(15000);
+      continue;
+    }
+
+    if (batchRes.status === "all_complete") {
+      console.log(LOG, "All videos complete via batch poll");
+      const finalCompleted = (normalizeScenes(batchRes.scenes) ?? []).filter((s) => !!s.videoUrl).length;
+      ctx.setState((prev) => ({
+        ...prev,
+        statusMessage: `Generating clips (${finalCompleted}/${sceneCount})...`,
+        progress: 60 + Math.floor((finalCompleted / sceneCount) * 35),
+      }));
+      break;
+    }
+
+    // Wait before next batch round
+    const waitMs = batchRes.rateLimitHit ? 45000 : 15000;
+    console.log(LOG, `Batch round ${round + 1} done: ${batchRes.completedThisRound} completed, ${batchRes.stillMissing} remaining. Waiting ${waitMs / 1000}s`);
+    await sleep(waitMs);
   }
 
   // Final check
@@ -381,80 +361,65 @@ export async function resumeCinematicPipeline(
       await retryMissingImages(generationId, sceneCount, ctx, projectId);
     }
 
-    // Phase 4: Video (resume)
+    // Phase 4: Video (resume) — use batch polling
     if (resumeFrom === "audio" || resumeFrom === "images" || resumeFrom === "video") {
-      console.log(LOG, "Resume: starting video phase");
+      console.log(LOG, "Resume: starting video phase (batch mode)");
       ctx.setState((prev) => ({ ...prev, progress: 60, statusMessage: "Resuming video clips..." }));
-      const VIDEO_CONCURRENCY = 1;
-      let completedVideos = existingScenes.filter((s) => !!s.videoUrl).length;
 
-      let lastRateLimitTime = 0;
-      const GLOBAL_COOLDOWN_MS = 30000;
-
-      const generateVideoForScene = async (sceneIdx: number) => {
-        // Pre-check: skip if video already exists in DB
+      // Kick off any scenes that don't have a videoPredictionId yet
+      for (let i = 0; i < sceneCount; i++) {
         const { data: checkGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
         const checkScenes = normalizeScenes(checkGen?.scenes) ?? [];
-        if (checkScenes[sceneIdx]?.videoUrl) {
-          completedVideos++;
-          console.log(LOG, `Resume: video scene ${sceneIdx + 1} already has videoUrl, skipping`);
-          ctx.setState((prev) => ({
-            ...prev,
-            statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`,
-            progress: 60 + Math.floor((completedVideos / sceneCount) * 35),
-          }));
-          return;
-        }
+        if (checkScenes[i]?.videoUrl || (checkScenes[i] as any)?.videoPredictionId) continue;
+        if (!checkScenes[i]?.imageUrl) continue;
+        console.log(LOG, `Resume: kicking off video for scene ${i + 1}`);
         try {
-          let videoComplete = false;
-          let pollAttempts = 0;
-          while (!videoComplete) {
-            pollAttempts++;
-            if (pollAttempts > 180) { console.warn(LOG, `Resume video scene ${sceneIdx + 1} timed out`); return; }
-
-            // Global cooldown
-            const now = Date.now();
-            if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
-              const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
-              console.log(LOG, `Resume scene ${sceneIdx + 1}: global cooldown, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
-              await sleep(cooldownWait);
-            }
-
-            const vidRes = await ctx.callPhase({ phase: "video", projectId, generationId, sceneIndex: sceneIdx }, 480000, CINEMATIC_ENDPOINT);
-            if (!vidRes.success) { console.warn(LOG, `Resume video scene ${sceneIdx + 1} failed: ${vidRes.error}`); return; }
-            if (vidRes.status === "complete") {
-              videoComplete = true;
-            } else {
-              const waitMs = vidRes.retryAfterMs || 8000;
-              if (waitMs >= 20000) {
-                lastRateLimitTime = Date.now();
-                console.log(LOG, `Resume scene ${sceneIdx + 1}: rate limited, waiting ${waitMs / 1000}s (global cooldown set)`);
-              }
-              await sleep(waitMs);
-            }
-          }
-          completedVideos++;
-          ctx.setState((prev) => ({ ...prev, statusMessage: `Generating clips (${completedVideos}/${sceneCount})...`, progress: 60 + Math.floor((completedVideos / sceneCount) * 35) }));
+          await ctx.callPhase({ phase: "video", projectId, generationId, sceneIndex: i }, 480000, CINEMATIC_ENDPOINT);
         } catch (err) {
-          console.warn(LOG, `Resume video scene ${sceneIdx + 1} error:`, err);
+          console.warn(LOG, `Resume: video kickoff for scene ${i + 1} failed:`, err);
         }
-      };
-
-      for (let batchStart = 0; batchStart < sceneCount; batchStart += VIDEO_CONCURRENCY) {
-        const batch = [];
-        for (let i = batchStart; i < Math.min(batchStart + VIDEO_CONCURRENCY, sceneCount); i++) batch.push(generateVideoForScene(i));
-        await Promise.allSettled(batch);
       }
 
-      // Retry pass
-      for (let round = 0; round < 2; round++) {
-        const { data: latestGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
-        const latestScenes = normalizeScenes(latestGen?.scenes) ?? [];
-        const missing = latestScenes.map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1)).filter((i) => i >= 0);
-        if (missing.length === 0) break;
-        console.log(LOG, `Resume video retry round ${round + 1}: ${missing.length} missing`);
-        ctx.setState((prev) => ({ ...prev, statusMessage: `Retrying ${missing.length} missing clips (round ${round + 1})...` }));
-        for (const idx of missing) await generateVideoForScene(idx);
+      // Batch polling loop
+      const MAX_BATCH_ROUNDS = 60;
+      for (let round = 0; round < MAX_BATCH_ROUNDS; round++) {
+        const { data: currentGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
+        const currentScenes = normalizeScenes(currentGen?.scenes) ?? [];
+        const completed = currentScenes.filter((s) => !!s.videoUrl).length;
+        const missing = currentScenes.filter((s) => (s as any).videoPredictionId && !s.videoUrl && s.imageUrl).length;
+
+        ctx.setState((prev) => ({
+          ...prev,
+          statusMessage: `Generating clips (${completed}/${sceneCount})...`,
+          progress: 60 + Math.floor((completed / sceneCount) * 35),
+        }));
+
+        if (missing === 0) {
+          console.log(LOG, `Resume: all ${completed} videos complete after ${round} batch rounds`);
+          break;
+        }
+
+        console.log(LOG, `Resume batch poll round ${round + 1}: ${missing} missing, ${completed} complete`);
+        const batchRes = await ctx.callPhase(
+          { phase: "video-batch", projectId, generationId },
+          480000,
+          CINEMATIC_ENDPOINT
+        );
+
+        if (!batchRes.success) {
+          console.warn(LOG, `Resume batch poll failed: ${batchRes.error}`);
+          await sleep(15000);
+          continue;
+        }
+
+        if (batchRes.status === "all_complete") {
+          console.log(LOG, "Resume: all videos complete via batch poll");
+          break;
+        }
+
+        const waitMs = batchRes.rateLimitHit ? 45000 : 15000;
+        console.log(LOG, `Resume batch round ${round + 1}: ${batchRes.completedThisRound} completed, ${batchRes.stillMissing} remaining. Waiting ${waitMs / 1000}s`);
+        await sleep(waitMs);
       }
     }
 
