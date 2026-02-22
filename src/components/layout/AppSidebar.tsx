@@ -138,6 +138,7 @@ export function AppSidebar() {
   };
 
   const getPlanDisplayName = () => {
+    if (subscriptionLoading) return "Loading…";
     if (cancelAtPeriodEnd) return "Cancelled";
     switch (plan) {
       case "starter": return "Starter";
