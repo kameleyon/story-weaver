@@ -178,7 +178,7 @@ export default function VoiceLab() {
     }
   };
 
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     const validAudioTypes = [
       "audio/mpeg", "audio/wav", "audio/mp3", "audio/m4a", "audio/x-m4a",
       "video/mp4", "audio/mp4" // MP4 can contain audio
@@ -187,13 +187,28 @@ export default function VoiceLab() {
     const hasValidType = validAudioTypes.includes(file.type);
     const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
     
-    if (file && (hasValidType || hasValidExtension)) {
-      setUploadedFile(file);
-    } else {
+    if (!(file && (hasValidType || hasValidExtension))) {
       toast.error("Invalid file type", {
         description: "Please upload an MP3, WAV, M4A, or MP4 file.",
       });
+      return;
     }
+
+    // Validate minimum duration (10 seconds) for uploaded files
+    try {
+      const duration = await getAudioDuration(file);
+      if (duration < 10) {
+        toast.error("Audio too short", {
+          description: "Uploaded audio must be at least 10 seconds long for voice cloning.",
+        });
+        return;
+      }
+    } catch {
+      // If we can't determine duration client-side, allow and let backend validate
+      console.warn("[VoiceLab] Could not validate upload duration client-side, proceeding");
+    }
+
+    setUploadedFile(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {

@@ -170,8 +170,8 @@ const plans = [
 const creditPackages = [
   { credits: 15 as const, price: "$11.99", perCredit: "$0.80", priceId: CREDIT_PACKS[15].priceId },
   { credits: 50 as const, price: "$14.99", perCredit: "$0.30", priceId: CREDIT_PACKS[50].priceId },
-  { credits: 150 as const, price: "$39.99", perCredit: "$0.27", popular: true, priceId: CREDIT_PACKS[150].priceId },
-  { credits: 500 as const, price: "$249.99", perCredit: "$0.50", bestValue: true, priceId: CREDIT_PACKS[500].priceId },
+  { credits: 150 as const, price: "$39.99", perCredit: "$0.27", popular: true, bestValue: true, priceId: CREDIT_PACKS[150].priceId },
+  { credits: 500 as const, price: "$249.99", perCredit: "$0.50", priceId: CREDIT_PACKS[500].priceId },
 ];
 
 // Credit usage info
