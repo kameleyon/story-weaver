@@ -1,4 +1,4 @@
-import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
+import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Play, AlertCircle, RotateCcw, ChevronDown, Users, Film, Loader2, Lightbulb, MessageSquareOff, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -90,6 +90,10 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
     }, [length, format]);
 
     // DB polling: detect if generation completed while app was backgrounded (mobile resilience)
+    // IMPORTANT: Only triggers loadProject when the generation is NOT already being actively
+    // processed on the client side. Without this guard, loadProject would see missing videos,
+    // start a new resumeCinematic loop, and the effect would keep spawning duplicates every 5s.
+    const isResumeInFlightRef = useRef(false);
     useEffect(() => {
       if (
         generationState.projectId && 
@@ -98,6 +102,9 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
         generationState.step !== "error"
       ) {
         const checkGenerationStatus = async () => {
+          // Don't re-trigger if a resume is already in flight
+          if (isResumeInFlightRef.current) return;
+
           const { data } = await supabase
             .from("generations")
             .select("id,status,progress,scenes,error_message")
@@ -106,14 +113,22 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
             .limit(1)
             .maybeSingle();
 
+          // Only reload if backend says complete AND we haven't reached complete on client
+          // AND the generation truly has all videos (otherwise the current resume handles it)
           if (data?.status === "complete" && generationState.step !== "complete") {
-            console.log("[CinematicWorkspace] Found completed generation in DB, reloading project");
-            await loadProject(generationState.projectId!);
+            const scenes = Array.isArray(data.scenes) ? data.scenes : [];
+            const allVideos = scenes.every((s: any) => !!s?.videoUrl);
+            if (allVideos) {
+              console.log("[CinematicWorkspace] All videos done in DB, reloading project");
+              isResumeInFlightRef.current = true;
+              await loadProject(generationState.projectId!);
+              isResumeInFlightRef.current = false;
+            }
           }
         };
 
         checkGenerationStatus();
-        const intervalId = setInterval(checkGenerationStatus, 5000);
+        const intervalId = setInterval(checkGenerationStatus, 10000);
         return () => clearInterval(intervalId);
       }
     }, [generationState.projectId, generationState.isGenerating, generationState.step, loadProject]);
