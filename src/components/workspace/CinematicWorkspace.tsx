@@ -450,7 +450,31 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
                       />
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">{generationState.progress}% complete</p>
+
+                    {/* Continue Generation button - always visible during generation */}
+                    {generationState.projectId && (
+                      <div className="mt-6">
+                        <Button
+                          onClick={handleResume}
+                          disabled={isResuming}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {isResuming ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                          Continue Generation
+                        </Button>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Generation Logs - visible to everyone */}
+                  <GenerationLogsPanel
+                    logs={generationLogs}
+                    show={showLogs}
+                    onToggle={() => setShowLogs(!showLogs)}
+                    isGenerating={generationState.isGenerating}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
