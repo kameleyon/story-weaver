@@ -996,9 +996,12 @@ async function resolveHyperealVideo(
   supabase: ReturnType<typeof createClient>,
   sceneNumber: number,
   model: string = "seedance-1-5-i2v",
-): Promise<string | null> {
+): Promise<string | null | "RATE_LIMITED"> {
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   if (!hyperealApiKey) throw new Error("HYPEREAL_API_KEY not configured");
+
+  // Server-side throttle: 1s delay before each poll to reduce API pressure
+  await new Promise(r => setTimeout(r, 1000));
 
   const response = await fetch(`${HYPEREAL_JOB_POLL_URL}/${jobId}?model=${model}&type=video`, {
     headers: { Authorization: `Bearer ${hyperealApiKey}` },
@@ -1007,7 +1010,8 @@ async function resolveHyperealVideo(
   if (!response.ok) {
     const errText = await response.text();
     console.error(`[Seedance-Hypereal] Poll failed for job ${jobId}: ${response.status} - ${errText}`);
-    if (response.status === 429 || response.status >= 500) return null; // Treat as still processing
+    if (response.status === 429) return "RATE_LIMITED";
+    if (response.status >= 500) return null; // Treat as still processing
     throw new Error(`Hypereal poll failed: ${response.status}`);
   }
 
@@ -1821,17 +1825,22 @@ serve(async (req) => {
           }
         }
 
-        // Under retry limit — clear prediction and retry on next poll
+        // Under retry limit — keep polling same job (don't clear videoPredictionId to avoid creating orphan jobs)
         console.log(
-          `[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry.`,
+          `[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry same job.`,
         );
-        scenes[idx] = { ...scene, videoPredictionId: undefined, videoUrl: undefined, videoRetryCount: retryCount };
+        scenes[idx] = { ...scene, videoRetryCount: retryCount };
         await updateScenes(supabase, generationId, scenes);
-        return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
+        return jsonResponse({ success: true, status: "processing", retryAfterMs: 15000, scene: scenes[idx] });
+      }
+
+      if (videoUrl === "RATE_LIMITED") {
+        console.log(`[VIDEO] Scene ${scene.number}: Hypereal rate limited, telling client to back off 15s`);
+        return jsonResponse({ success: true, status: "processing", retryAfterMs: 15000, scene });
       }
 
       if (!videoUrl) {
-        return jsonResponse({ success: true, status: "processing", scene });
+        return jsonResponse({ success: true, status: "processing", retryAfterMs: 8000, scene });
       }
 
       scenes[idx] = { ...scene, videoUrl };
