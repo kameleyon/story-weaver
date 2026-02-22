@@ -1,4 +1,5 @@
-import { User, UserRound, Mic } from "lucide-react";
+import { useState, useRef } from "react";
+import { User, UserRound, Mic, Play, Pause } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,6 +33,7 @@ interface UserVoice {
   id: string;
   voice_name: string;
   voice_id: string;
+  sample_url: string;
 }
 
 const standardVoices: { id: VoiceGender; label: string; icon: typeof User }[] = [
@@ -41,6 +43,8 @@ const standardVoices: { id: VoiceGender; label: string; icon: typeof User }[] = 
 
 export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
   const { user } = useAuth();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   
   // Fetch user's custom voices
   const { data: customVoices = [] } = useQuery({
@@ -49,7 +53,7 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from("user_voices")
-        .select("id, voice_name, voice_id")
+        .select("id, voice_name, voice_id, sample_url")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       
@@ -58,6 +62,26 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
     },
     enabled: !!user?.id,
   });
+
+  const togglePreview = (e: React.MouseEvent, voice: UserVoice) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    if (playingVoiceId === voice.voice_id) {
+      audioRef.current?.pause();
+      setPlayingVoiceId(null);
+      return;
+    }
+    
+    if (audioRef.current) audioRef.current.pause();
+    
+    if (!voice.sample_url) return;
+    const audio = new Audio(voice.sample_url);
+    audioRef.current = audio;
+    audio.onended = () => setPlayingVoiceId(null);
+    audio.play();
+    setPlayingVoiceId(voice.voice_id);
+  };
 
   const hasCustomVoices = customVoices.length > 0;
 
@@ -149,7 +173,21 @@ export function VoiceSelector({ selected, onSelect }: VoiceSelectorProps) {
                 className="cursor-pointer"
               >
                 <div className="flex items-center gap-2">
-                  <Mic className="h-3.5 w-3.5 text-primary" />
+                  {voice.sample_url ? (
+                    <button
+                      type="button"
+                      onPointerDown={(e) => togglePreview(e, voice)}
+                      className="p-0.5 rounded hover:bg-muted/50"
+                    >
+                      {playingVoiceId === voice.voice_id ? (
+                        <Pause className="h-3.5 w-3.5 text-primary" />
+                      ) : (
+                        <Play className="h-3.5 w-3.5 text-primary" />
+                      )}
+                    </button>
+                  ) : (
+                    <Mic className="h-3.5 w-3.5 text-primary" />
+                  )}
                   {voice.voice_name}
                 </div>
               </SelectItem>
