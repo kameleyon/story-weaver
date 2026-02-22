@@ -1,4 +1,4 @@
-import { Wand2, Pencil, Users, Camera, Palette, Laugh, PenTool, Baby, ChevronLeft, ChevronRight, Upload, X, GraduationCap } from "lucide-react";
+import { Wand2, Pencil, Users, Camera, Palette, Laugh, PenTool, Baby, ChevronLeft, ChevronRight, Upload, X, GraduationCap, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useRef, useState, useEffect } from "react";
+import { uploadStyleReference } from "@/lib/uploadStyleReference";
 
 // Import style preview images
 import minimalistPreview from "@/assets/styles/minimalist-preview.png";
@@ -19,6 +20,11 @@ import crayonPreview from "@/assets/styles/crayon-preview.png";
 import chalkboardPreview from "@/assets/styles/chalkboard-preview.png";
 import customPreview from "@/assets/styles/custom-preview.png";
 
+/**
+ * SmartFlow-specific style selector with 10 styles.
+ * Includes chalkboard (educational focus), excludes anime/moody/3d-pixar/claymation
+ * which are available in the main StyleSelector used by other workspaces.
+ */
 export type SmartFlowStyle = "minimalist" | "doodle" | "stick" | "realistic" | "storybook" | "caricature" | "sketch" | "crayon" | "chalkboard" | "custom";
 
 interface SmartFlowStyleSelectorProps {
@@ -63,6 +69,7 @@ export function SmartFlowStyleSelector({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const checkScrollPosition = () => {
     const container = scrollContainerRef.current;
@@ -94,20 +101,22 @@ export function SmartFlowStyleSelector({
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
     // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return;
-    }
+    if (file.size > 5 * 1024 * 1024) return;
     
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onCustomStyleImageChange?.(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setUploading(true);
+    try {
+      const url = await uploadStyleReference(file);
+      onCustomStyleImageChange?.(url);
+    } catch (err) {
+      console.error("Style reference upload error:", err);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleRemoveImage = () => {
@@ -283,10 +292,11 @@ export function SmartFlowStyleSelector({
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
                   className="gap-2 rounded-lg border-dashed border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 >
-                  <Upload className="h-3.5 w-3.5" />
-                  Upload reference image
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  {uploading ? "Uploading..." : "Upload reference image"}
                 </Button>
               )}
             </div>

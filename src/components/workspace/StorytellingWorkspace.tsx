@@ -29,6 +29,8 @@ import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
 import type { WorkspaceHandle } from "./Doc2VideoWorkspace";
+import { useAdminLogs } from "@/hooks/useAdminLogs";
+import { AdminLogsPanel } from "./AdminLogsPanel";
 
 interface StorytellingWorkspaceProps {
   projectId?: string | null;
@@ -58,6 +60,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
     const [brandMarkText, setBrandMarkText] = useState("");
 
     const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+    const { isAdmin, adminLogs, showAdminLogs, setShowAdminLogs } = useAdminLogs(generationState.generationId, generationState.step);
 
     // Subscription and plan validation  
     const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
@@ -133,11 +136,12 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
         return;
       }
 
-      // Map story length to standard length for backend
+      // Map storytelling UI length → backend length parameter.
+      // "extended" maps to "presentation" because the backend uses doc2video length names.
       const lengthMap: Record<StoryLength, string> = {
         short: "short",
         brief: "brief",
-        extended: "presentation",
+        extended: "presentation", // "Extended (< 15 min)" → backend's "presentation" tier
       };
       const mappedLength = lengthMap[length];
 
@@ -406,6 +410,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                       <RotateCcw className="h-4 w-4" />
                       Try Again
                     </Button>
+                    {isAdmin && <AdminLogsPanel logs={adminLogs} show={showAdminLogs} onToggle={() => setShowAdminLogs(!showAdminLogs)} />}
                   </div>
                 </motion.div>
               ) : generationState.step === "complete" && generationState.scenes ? (
@@ -431,6 +436,7 @@ export const StorytellingWorkspace = forwardRef<WorkspaceHandle, StorytellingWor
                     projectId={generationState.projectId}
                     brandMark={brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined}
                   />
+                  {isAdmin && <AdminLogsPanel logs={adminLogs} show={showAdminLogs} onToggle={() => setShowAdminLogs(!showAdminLogs)} />}
                 </motion.div>
               ) : (
                 <motion.div

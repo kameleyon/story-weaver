@@ -20,6 +20,8 @@ import { useSubscription, validateGenerationAccess } from "@/hooks/useSubscripti
 import { useToast } from "@/hooks/use-toast";
 import { UpgradeRequiredModal } from "@/components/modals/UpgradeRequiredModal";
 import { SubscriptionSuspendedModal } from "@/components/modals/SubscriptionSuspendedModal";
+import { useAdminLogs } from "@/hooks/useAdminLogs";
+import { AdminLogsPanel } from "./AdminLogsPanel";
 
 export interface WorkspaceHandle {
   resetWorkspace: () => void;
@@ -46,6 +48,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
     const [brandMarkText, setBrandMarkText] = useState("");
 
     const { state: generationState, startGeneration, reset, loadProject } = useGenerationPipeline();
+    const { isAdmin, adminLogs, showAdminLogs, setShowAdminLogs } = useAdminLogs(generationState.generationId, generationState.step);
     
     // Subscription and plan validation
     const { plan, creditsBalance, subscriptionStatus, checkSubscription } = useSubscription();
@@ -345,6 +348,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                       <RotateCcw className="h-4 w-4" />
                       Try Again
                     </Button>
+                    {isAdmin && <AdminLogsPanel logs={adminLogs} show={showAdminLogs} onToggle={() => setShowAdminLogs(!showAdminLogs)} />}
                   </div>
                 </motion.div>
               ) : generationState.step === "complete" && generationState.scenes ? (
@@ -370,6 +374,7 @@ export const SmartFlowWorkspace = forwardRef<WorkspaceHandle, SmartFlowWorkspace
                     }}
                     brandMark={brandMarkEnabled && brandMarkText.trim() ? brandMarkText.trim() : undefined}
                   />
+                  {isAdmin && <AdminLogsPanel logs={adminLogs} show={showAdminLogs} onToggle={() => setShowAdminLogs(!showAdminLogs)} />}
                 </motion.div>
               ) : (
                 <motion.div
