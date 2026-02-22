@@ -95,7 +95,7 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdminAuth();
-  const { plan, cancelAtPeriodEnd, createCheckout, isLoading: subscriptionLoading } = useSubscription();
+  const { plan, subscribed, cancelAtPeriodEnd, createCheckout, isLoading: subscriptionLoading } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -105,21 +105,25 @@ export function AppSidebar() {
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   // Show upgrade modal for free tier or cancelled users (once per session per tier version)
+  // Wait for subscription data to be fully loaded before deciding
   useEffect(() => {
+    // Don't show modal while still loading subscription data
     if (subscriptionLoading) return;
+    // Also guard against the brief window where session isn't ready yet
+    if (!user) return;
     
     const modalKey = "upgrade-modal-shown-v2"; // Reset key for new tiers
     const hasSeenModal = sessionStorage.getItem(modalKey);
-    const shouldShowModal = (plan === "free" || cancelAtPeriodEnd) && !hasSeenModal;
+    const shouldShowModal = (plan === "free" && !subscribed) && !cancelAtPeriodEnd && !hasSeenModal;
     
     if (shouldShowModal) {
       const timer = setTimeout(() => {
         setUpgradeModalOpen(true);
         sessionStorage.setItem(modalKey, "true");
-      }, 2000);
+      }, 3000); // Slightly longer delay to ensure subscription data is resolved
       return () => clearTimeout(timer);
     }
-  }, [plan, cancelAtPeriodEnd, subscriptionLoading]);
+  }, [plan, cancelAtPeriodEnd, subscriptionLoading, user, subscribed]);
 
   const handleUpgradeNow = async () => {
     try {
