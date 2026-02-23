@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
-import { FileText, Volume2, Clapperboard, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, CircleUserRound } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FileText, Volume2, Clapperboard, ArrowRight, Check, X, Sparkles, Zap, Crown, Building2, Menu } from "lucide-react";
 import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -39,7 +40,10 @@ const pricingPlans = [
       { text: "Short videos only (<2 min)", included: true },
       { text: "720p quality", included: true },
       { text: "5 basic visual styles", included: true },
-      { text: `${PLAN_LIMITS.free.allowedFormats.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(" ")} format only`, included: true },
+      { text: PLAN_LIMITS.free.allowedFormats.length === 1
+          ? `${PLAN_LIMITS.free.allowedFormats[0].charAt(0).toUpperCase() + PLAN_LIMITS.free.allowedFormats[0].slice(1)} format only`
+          : PLAN_LIMITS.free.allowedFormats.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(", ").replace(/, ([^,]*)$/, " and $1") + " formats",
+        included: true },
       { text: "Watermark on exports", included: false },
       { text: "Voice cloning", included: !PLAN_LIMITS.free.allowVoiceCloning },
       { text: "Infographics", included: PLAN_LIMITS.free.infographicsPerMonth > 0 },
@@ -108,6 +112,7 @@ const pricingPlans = [
 
 export default function Landing() {
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[hsl(185,30%,95%)] via-[hsl(185,25%,97%)] to-[hsl(180,20%,98%)] dark:bg-none dark:bg-background">
@@ -133,14 +138,15 @@ export default function Landing() {
           {/* Right Actions */}
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            {/* Mobile: Profile icon */}
+            {/* Mobile: Hamburger menu */}
             <Button
               variant="ghost"
               size="icon"
               className="md:hidden rounded-full h-9 w-9"
-              onClick={() => navigate("/auth")}
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label="Toggle menu"
             >
-              <CircleUserRound className="h-5 w-5" />
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
             {/* Desktop: Sign In + Get Started */}
             <Button
@@ -158,6 +164,39 @@ export default function Landing() {
             </Button>
           </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.nav
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden overflow-hidden border-t border-border/30 bg-background/95 backdrop-blur-md"
+            >
+              <div className="flex flex-col gap-1 px-6 py-4">
+                <a href="#features" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  Features
+                </a>
+                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  Pricing
+                </a>
+                <a href="#about" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  About
+                </a>
+                <div className="pt-2 border-t border-border/30 mt-2">
+                  <Button
+                    className="w-full rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+                    onClick={() => { setMobileMenuOpen(false); navigate("/auth"); }}
+                  >
+                    Sign In
+                  </Button>
+                </div>
+              </div>
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Hero Section */}
@@ -201,8 +240,10 @@ export default function Landing() {
                 <video
                   src={heroPromoVideo}
                   className="w-full h-full"
-                  controls
-                  preload="metadata"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
                   poster={heroVideoPoster}
                 >
                   Your browser does not support the video tag.
