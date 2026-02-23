@@ -127,6 +127,13 @@ export default function Dashboard() {
   const creditsBalance = credits?.balance ?? 0;
   const displayName = profile?.display_name || user?.email?.split('@')[0] || 'User';
 
+  const formatCredits = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (n >= 10_000) return `${Math.round(n / 1000)}K`;
+    if (n >= 1_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+    return n.toString();
+  };
+
   const getCreateMode = (projectType?: string | null) => {
     switch (projectType) {
       case "storytelling":
@@ -193,8 +200,8 @@ export default function Dashboard() {
             {/* Credits Remaining Card */}
             <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-5 shadow-sm">
               <div className="flex items-center gap-5">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-primary/30 bg-primary/10">
-                  <span className="text-xl font-bold text-primary">{creditsBalance}</span>
+                 <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-primary/30 bg-primary/10">
+                   <span className="text-base font-bold text-primary">{formatCredits(creditsBalance)}</span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground mb-1">Credits Remaining</h3>
