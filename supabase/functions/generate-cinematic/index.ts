@@ -735,7 +735,8 @@ QUALITY REQUIREMENTS:
           const errText = await response.text();
           console.error(`[IMG] Hypereal create failed (attempt ${attempt}): ${response.status} - ${errText}`);
 
-          if ((response.status === 429 || response.status >= 500) && attempt < MAX_IMG_RETRIES) {
+          // FIX 2: Only retry on 429, not 5xx (avoids double-billing on timeout)
+          if (response.status === 429 && attempt < MAX_IMG_RETRIES) {
             const retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
             console.warn(
               `[IMG] Scene ${scene.number}: Rate limited (${response.status}), retry ${attempt}/${MAX_IMG_RETRIES} in ${retryAfterMs}ms`,
@@ -836,7 +837,8 @@ QUALITY REQUIREMENTS:
           `[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`,
         );
 
-        if ((createResponse.status === 429 || createResponse.status >= 500) && attempt < MAX_IMG_RETRIES) {
+        // FIX 2: Only retry on 429, not 5xx
+        if (createResponse.status === 429 && attempt < MAX_IMG_RETRIES) {
           const retryAfterMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
           await sleep(retryAfterMs);
           continue;
@@ -952,7 +954,8 @@ ANIMATION RULES (CRITICAL):
       if (!response.ok) {
         const errText = await response.text();
         console.error(`[Seedance-Hypereal] Start failed (attempt ${attempt}): ${response.status} - ${errText}`);
-        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+        // FIX 2: Only retry on 429 (rate limit), NOT on 5xx (avoids double-billing)
+        if (response.status === 429 && attempt < MAX_RETRIES) {
           const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
           console.warn(`[Seedance-Hypereal] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
           await sleep(delayMs);
@@ -971,10 +974,8 @@ ANIMATION RULES (CRITICAL):
       return jobId as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if (
-        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
-        attempt < MAX_RETRIES
-      ) {
+      // FIX 2: Only retry on 429, not 5xx
+      if (errMsg.includes("429") && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[Seedance-Hypereal] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
@@ -1113,7 +1114,8 @@ ANIMATION RULES (CRITICAL):
       if (!response.ok) {
         const errText = await response.text();
         console.error(`[Seedance-T2V] Start failed (attempt ${attempt}): ${response.status} - ${errText}`);
-        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+        // FIX 2: Only retry on 429, not 5xx
+        if (response.status === 429 && attempt < MAX_RETRIES) {
           const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
           console.warn(`[Seedance-T2V] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
           await sleep(delayMs);
@@ -1132,10 +1134,8 @@ ANIMATION RULES (CRITICAL):
       return jobId as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if (
-        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
-        attempt < MAX_RETRIES
-      ) {
+      // FIX 2: Only retry on 429, not 5xx
+      if (errMsg.includes("429") && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[Seedance-T2V] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
@@ -1195,7 +1195,8 @@ ANIMATION RULES (CRITICAL):
       if (!response.ok) {
         const errText = await response.text();
         console.error(`[Seedance-Replicate-I2V] Start failed (attempt ${attempt}): ${response.status} - ${errText}`);
-        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+        // FIX 2: Only retry on 429, not 5xx
+        if (response.status === 429 && attempt < MAX_RETRIES) {
           const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
           await sleep(delayMs);
           continue;
@@ -1212,10 +1213,8 @@ ANIMATION RULES (CRITICAL):
       return predictionId as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if (
-        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
-        attempt < MAX_RETRIES
-      ) {
+      // FIX 2: Only retry on 429, not 5xx
+      if (errMsg.includes("429") && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         await sleep(delayMs);
         continue;
@@ -1267,7 +1266,8 @@ ANIMATION RULES (CRITICAL):
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[GrokVideo] Create prediction error (attempt ${attempt}): ${response.status} - ${errorText}`);
-        if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+        // FIX 2: Only retry on 429, not 5xx
+        if (response.status === 429 && attempt < MAX_RETRIES) {
           const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
           console.warn(`[GrokVideo] Rate limited on attempt ${attempt}, retrying in ${delayMs}ms`);
           await sleep(delayMs);
@@ -1281,10 +1281,8 @@ ANIMATION RULES (CRITICAL):
       return prediction.id as string;
     } catch (err: any) {
       const errMsg = err?.message || "";
-      if (
-        (errMsg.includes("429") || errMsg.includes("500") || errMsg.includes("Queue is full")) &&
-        attempt < MAX_RETRIES
-      ) {
+      // FIX 2: Only retry on 429, not 5xx
+      if (errMsg.includes("429") && attempt < MAX_RETRIES) {
         const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
         console.warn(`[GrokVideo] Error on attempt ${attempt}, retrying in ${delayMs}ms`);
         await sleep(delayMs);
@@ -1795,43 +1793,17 @@ serve(async (req) => {
           : await resolveSeedance(scene.videoPredictionId, replicateToken, supabase, scene.number);
 
       if (videoUrl === SEEDANCE_TIMEOUT_RETRY) {
-        // Track retry count for Grok failures
-        const retryCount = (scene.videoRetryCount || 0) + 1;
-        const MAX_VIDEO_RETRIES = 2;
-
-        // After 2 failed Grok attempts, fall back to Hypereal Seedance 1.5
-        if (retryCount >= MAX_VIDEO_RETRIES) {
-          console.log(
-            `[VIDEO] Scene ${scene.number}: Failed ${retryCount} times, falling back to Hypereal Seedance 1.5`,
-          );
-          try {
-            const seedancePredictionId = await startSeedance(scene, scene.imageUrl, format, replicateToken);
-            scenes[idx] = {
-              ...scene,
-              videoPredictionId: seedancePredictionId,
-              videoUrl: undefined,
-              videoRetryAfter: undefined,
-              videoRetryCount: 0,
-              videoProvider: "hypereal",
-            };
-            await updateScenes(supabase, generationId, scenes);
-            return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
-          } catch (seedanceErr) {
-            console.error(`[VIDEO] Scene ${scene.number}: Hypereal Seedance fallback also failed:`, seedanceErr);
-            return jsonResponse(
-              { success: false, error: "Video generation service is busy. Please try again later." },
-              { status: 500 },
-            );
-          }
-        }
-
-        // Under retry limit — keep polling same job (don't clear videoPredictionId to avoid creating orphan jobs)
-        console.log(
-          `[VIDEO] Scene ${scene.number}: Queue full/timeout (attempt ${retryCount}/${MAX_VIDEO_RETRIES}). Will retry same job.`,
+        // FIX 1: Do NOT auto-retrigger a new video job — this wastes credits.
+        // Instead, return a hard error so the user can manually regenerate.
+        console.error(
+          `[VIDEO] Scene ${scene.number}: Provider reported job failed. Stopping — user must regenerate manually.`,
         );
-        scenes[idx] = { ...scene, videoRetryCount: retryCount };
+        scenes[idx] = { ...scene, videoPredictionId: undefined, videoRetryCount: 0 };
         await updateScenes(supabase, generationId, scenes);
-        return jsonResponse({ success: true, status: "processing", retryAfterMs: 30000, scene: scenes[idx] });
+        return jsonResponse(
+          { success: false, error: `Video generation failed for scene ${scene.number}. Please regenerate this scene manually.` },
+          { status: 500 },
+        );
       }
 
       if (videoUrl === "RATE_LIMITED") {
