@@ -1392,6 +1392,22 @@ async function updateScenes(
     .eq("id", generationId);
 }
 
+/** Atomic single-scene update using jsonb_set — prevents race conditions */
+async function updateSceneAtIndex(
+  supabase: ReturnType<typeof createClient>,
+  generationId: string,
+  sceneIndex: number,
+  sceneData: Scene,
+  progress?: number,
+) {
+  await supabase.rpc("update_scene_at_index", {
+    p_generation_id: generationId,
+    p_scene_index: sceneIndex,
+    p_scene_data: sceneData as unknown as Record<string, unknown>,
+    p_progress: progress ?? null,
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1595,7 +1611,7 @@ serve(async (req) => {
         scene.audioUrl = undefined;
         scene.audioPredictionId = undefined;
         scenes[idx] = scene;
-        await updateScenes(supabase, generationId, scenes);
+        await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
       }
 
       if (scene.audioUrl) {
@@ -1657,7 +1673,7 @@ serve(async (req) => {
 
       if (result.url) {
         scenes[idx] = { ...scene, audioUrl: result.url, audioPredictionId: undefined };
-        await updateScenes(supabase, generationId, scenes);
+        await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
         return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
       }
 
@@ -1695,7 +1711,7 @@ serve(async (req) => {
       );
 
       scenes[idx] = { ...scene, imageUrl };
-      await updateScenes(supabase, generationId, scenes);
+      await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
 
       return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
     }
@@ -1717,7 +1733,7 @@ serve(async (req) => {
         scene.videoRetryCount = 0; // Reset retry counter on explicit regen
         scene.videoRetryAfter = undefined;
         scenes[idx] = scene;
-        await updateScenes(supabase, generationId, scenes);
+        await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
       }
 
       if (scene.videoUrl) return jsonResponse({ success: true, status: "complete", scene });
@@ -1744,7 +1760,7 @@ serve(async (req) => {
             videoProvider: "hypereal",
             videoModel: "seedance-1-5-i2v",
           };
-          await updateScenes(supabase, generationId, scenes);
+          await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
           return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
 
@@ -1762,7 +1778,7 @@ serve(async (req) => {
             videoProvider: "hypereal",
             videoModel: "seedance-1-5-i2v",
           };
-          await updateScenes(supabase, generationId, scenes);
+          await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
           return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         } catch (i2vErr) {
           console.warn(
@@ -1776,7 +1792,7 @@ serve(async (req) => {
             videoProvider: "replicate",
             videoModel: "seedance-1-pro-fast",
           };
-          await updateScenes(supabase, generationId, scenes);
+          await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
           return jsonResponse({ success: true, status: "processing", scene: scenes[idx] });
         }
       }
@@ -1799,7 +1815,7 @@ serve(async (req) => {
           `[VIDEO] Scene ${scene.number}: Provider reported job failed. Stopping — user must regenerate manually.`,
         );
         scenes[idx] = { ...scene, videoPredictionId: undefined, videoRetryCount: 0 };
-        await updateScenes(supabase, generationId, scenes);
+        await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
         return jsonResponse(
           { success: false, error: `Video generation failed for scene ${scene.number}. Please regenerate this scene manually.` },
           { status: 500 },
@@ -1816,7 +1832,7 @@ serve(async (req) => {
       }
 
       scenes[idx] = { ...scene, videoUrl };
-      await updateScenes(supabase, generationId, scenes);
+      await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
 
       return jsonResponse({ success: true, status: "complete", scene: scenes[idx] });
     }
@@ -1947,7 +1963,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoRetryAfter: undefined,
         videoProvider: "hypereal",
       };
-      await updateScenes(supabase, generationId, scenes);
+      await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
 
       // Return processing status immediately to avoid Edge Function timeout
       console.log(`[IMG-EDIT] Scene ${scene.number}: Returning processing status, frontend will poll video phase`);
@@ -1990,7 +2006,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
         videoRetryAfter: undefined,
         videoProvider: "hypereal",
       };
-      await updateScenes(supabase, generationId, scenes);
+      await updateSceneAtIndex(supabase, generationId, idx, scenes[idx]);
 
       // Return processing status immediately to avoid Edge Function timeout
       console.log(`[IMG-REGEN] Scene ${scene.number}: Returning processing status, frontend will poll video phase`);
