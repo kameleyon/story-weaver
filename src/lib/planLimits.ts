@@ -80,6 +80,13 @@ export const CREDIT_COSTS = {
 /**
  * Calculate credits required for a generation
  */
+const VIDEO_LENGTHS = ["short", "brief", "presentation"] as const;
+type VideoLength = (typeof VIDEO_LENGTHS)[number];
+
+function isVideoLength(value: string): value is VideoLength {
+  return (VIDEO_LENGTHS as readonly string[]).includes(value);
+}
+
 export function getCreditsRequired(
   projectType: "doc2video" | "storytelling" | "smartflow" | "cinematic",
   length: string
@@ -90,7 +97,10 @@ export function getCreditsRequired(
   if (projectType === "cinematic") {
     return CREDIT_COSTS.cinematic;
   }
-  return CREDIT_COSTS[length as keyof typeof CREDIT_COSTS] || CREDIT_COSTS.short;
+  if (!isVideoLength(length)) {
+    throw new Error(`Invalid video length "${length}". Expected one of: ${VIDEO_LENGTHS.join(", ")}`);
+  }
+  return CREDIT_COSTS[length];
 }
 
 /**
@@ -143,7 +153,7 @@ export function validateGenerationAccess(
   }
 
   // Check length restrictions
-  if (!limits.allowedLengths.includes(length as any)) {
+  if (!isVideoLength(length) || !limits.allowedLengths.includes(length)) {
     const requiredPlan = length === "presentation" ? "creator" : "starter";
     return {
       canGenerate: false,
@@ -154,7 +164,8 @@ export function validateGenerationAccess(
   }
 
   // Check format restrictions (only for free plan)
-  if (!limits.allowedFormats.includes(format as any)) {
+  const validFormats: readonly string[] = limits.allowedFormats;
+  if (!validFormats.includes(format)) {
     return {
       canGenerate: false,
       error: `${format.charAt(0).toUpperCase() + format.slice(1)} format is not available on the ${plan} plan. Upgrade to unlock all formats.`,
