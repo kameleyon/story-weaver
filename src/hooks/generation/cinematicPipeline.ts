@@ -15,6 +15,10 @@ import {
 
 const LOG = "[Pipeline:Cinematic]";
 
+// Global rate-limit cooldown shared across image and video phases
+let lastRateLimitTime = 0;
+const GLOBAL_COOLDOWN_MS = 30000;
+
 // ---- Main Pipeline ----
 
 /** Execute the full cinematic pipeline from scratch */
@@ -128,13 +132,27 @@ async function runCinematicImages(projectId: string, generationId: string, scene
       progress: 35 + Math.floor(((i + 0.25) / sceneCount) * 25),
     }));
 
+    // Respect global rate-limit cooldown before image requests
+    const now = Date.now();
+    if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
+      const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
+      console.log(LOG, `Image scene ${i + 1}: global cooldown active, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
+      await sleep(cooldownWait);
+    }
+
     try {
       const imgRes = await ctx.callPhase(
         { phase: "images", projectId, generationId, sceneIndex: i },
         480000,
         CINEMATIC_ENDPOINT
       );
-      if (!imgRes.success) console.warn(LOG, `Image scene ${i + 1} failed: ${imgRes.error}`);
+      if (!imgRes.success) {
+        if (imgRes.retryAfterMs && imgRes.retryAfterMs >= 20000) {
+          lastRateLimitTime = Date.now();
+          console.log(LOG, `Image scene ${i + 1}: rate limited, global cooldown set`);
+        }
+        console.warn(LOG, `Image scene ${i + 1} failed: ${imgRes.error}`);
+      }
     } catch (err) {
       console.warn(LOG, `Image scene ${i + 1} error:`, err);
     }
@@ -155,9 +173,6 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
 
   const VIDEO_CONCURRENCY = 1;
   let completedVideos = 0;
-
-  let lastRateLimitTime = 0;
-  const GLOBAL_COOLDOWN_MS = 30000;
 
   const generateVideoForScene = async (sceneIdx: number) => {
     try {
@@ -311,12 +326,22 @@ async function retryMissingImages(generationId: string, sceneCount: number, ctx:
     ctx.setState((prev) => ({ ...prev, statusMessage: `Retrying ${missing.length} missing images (round ${round + 1})...` }));
 
     for (const idx of missing) {
+      // Respect global rate-limit cooldown
+      const now = Date.now();
+      if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
+        const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
+        console.log(LOG, `Image retry ${idx + 1}: global cooldown, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
+        await sleep(cooldownWait);
+      }
       try {
-        await ctx.callPhase(
+        const imgRes = await ctx.callPhase(
           { phase: "images", projectId, generationId, sceneIndex: idx },
           480000,
           CINEMATIC_ENDPOINT
         );
+        if (imgRes && imgRes.retryAfterMs && imgRes.retryAfterMs >= 20000) {
+          lastRateLimitTime = Date.now();
+        }
       } catch {
         // Continue with remaining retries
       }
@@ -379,9 +404,21 @@ export async function resumeCinematicPipeline(
       for (let i = 0; i < sceneCount; i++) {
         if (existingScenes[i]?.imageUrl) { console.log(LOG, `Resume: skipping image scene ${i + 1} (done)`); continue; }
         ctx.setState((prev) => ({ ...prev, statusMessage: `Creating images (${i + 1}/${sceneCount})...`, progress: 35 + Math.floor(((i + 0.25) / sceneCount) * 25) }));
+        // Respect global rate-limit cooldown
+        const now = Date.now();
+        if (now - lastRateLimitTime < GLOBAL_COOLDOWN_MS) {
+          const cooldownWait = GLOBAL_COOLDOWN_MS - (now - lastRateLimitTime);
+          console.log(LOG, `Resume image ${i + 1}: global cooldown, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
+          await sleep(cooldownWait);
+        }
         try {
           const imgRes = await ctx.callPhase({ phase: "images", projectId, generationId, sceneIndex: i }, 480000, CINEMATIC_ENDPOINT);
-          if (!imgRes.success) console.warn(LOG, `Resume image scene ${i + 1} failed: ${imgRes.error}`);
+          if (!imgRes.success) {
+            if (imgRes.retryAfterMs && imgRes.retryAfterMs >= 20000) {
+              lastRateLimitTime = Date.now();
+            }
+            console.warn(LOG, `Resume image scene ${i + 1} failed: ${imgRes.error}`);
+          }
         } catch (err) {
           console.warn(LOG, `Resume image scene ${i + 1} error:`, err);
         }
@@ -396,9 +433,6 @@ export async function resumeCinematicPipeline(
       ctx.setState((prev) => ({ ...prev, progress: 60, statusMessage: "Resuming video clips..." }));
       const VIDEO_CONCURRENCY = 1;
       let completedVideos = existingScenes.filter((s) => !!s.videoUrl).length;
-
-      let lastRateLimitTime = 0;
-      const GLOBAL_COOLDOWN_MS = 30000;
 
       const generateVideoForScene = async (sceneIdx: number) => {
         // Pre-check: skip if video already exists in DB
