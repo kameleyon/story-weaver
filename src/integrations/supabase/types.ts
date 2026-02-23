@@ -729,6 +729,15 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      update_scene_at_index: {
+        Args: {
+          p_generation_id: string
+          p_progress?: number
+          p_scene_data: Json
+          p_scene_index: number
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
