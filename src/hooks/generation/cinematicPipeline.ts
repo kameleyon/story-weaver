@@ -243,8 +243,8 @@ async function runCinematicVideo(projectId: string, generationId: string, sceneC
     await Promise.allSettled(batch);
   }
 
-  // Retry missing videos (up to 2 rounds)
-  for (let round = 0; round < 2; round++) {
+  // FIX 3: Reduced from 2 rounds to 1 to prevent double-billing
+  for (let round = 0; round < 1; round++) {
     const { data: latestGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
     const latestScenes = normalizeScenes(latestGen?.scenes) ?? [];
     const missing = latestScenes.map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1)).filter((i) => i >= 0);
@@ -300,7 +300,8 @@ async function finalizeCinematic(projectId: string, generationId: string, sceneC
 // ---- Shared Retry Logic ----
 
 async function retryMissingImages(generationId: string, sceneCount: number, ctx: PipelineContext, projectId: string) {
-  for (let round = 0; round < 2; round++) {
+  // FIX 3: Reduced from 2 rounds to 1 to prevent double-billing on timeouts
+  for (let round = 0; round < 1; round++) {
     const { data: gen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
     const scenes = normalizeScenes(gen?.scenes) ?? [];
     const missing = scenes.map((s, i) => (!s.imageUrl ? i : -1)).filter((i) => i >= 0);
@@ -463,7 +464,8 @@ export async function resumeCinematicPipeline(
       }
 
       // Retry pass
-      for (let round = 0; round < 2; round++) {
+      // FIX 3: Reduced from 2 rounds to 1
+      for (let round = 0; round < 1; round++) {
         const { data: latestGen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
         const latestScenes = normalizeScenes(latestGen?.scenes) ?? [];
         const missing = latestScenes.map((s, i) => (!s.videoUrl && s.imageUrl ? i : -1)).filter((i) => i >= 0);
