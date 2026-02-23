@@ -5,18 +5,50 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// AES-GCM encryption using Web Crypto API
+// PBKDF2 salt for key derivation (fixed per deployment, stored alongside ciphertext is also valid)
+const PBKDF2_SALT = new TextEncoder().encode("manage-api-keys-v2-salt");
+const PBKDF2_ITERATIONS = 100_000;
+
+// Derive AES-256-GCM key using PBKDF2 (strong KDF)
 async function getEncryptionKey(): Promise<CryptoKey> {
   const keyString = Deno.env.get("ENCRYPTION_KEY");
   if (!keyString) {
     throw new Error("ENCRYPTION_KEY not configured");
   }
-  
-  // Create a consistent 256-bit key from the secret
+
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(keyString);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", keyData);
-  
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(keyString),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: PBKDF2_SALT,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+// Legacy SHA-256 key derivation (for decrypting old data)
+async function getLegacyEncryptionKey(): Promise<CryptoKey> {
+  const keyString = Deno.env.get("ENCRYPTION_KEY");
+  if (!keyString) {
+    throw new Error("ENCRYPTION_KEY not configured");
+  }
+
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(keyString));
+
   return crypto.subtle.importKey(
     "raw",
     hashBuffer,
@@ -26,51 +58,59 @@ async function getEncryptionKey(): Promise<CryptoKey> {
   );
 }
 
+// Prefix to distinguish PBKDF2-encrypted values from legacy SHA-256 ones
+const V2_PREFIX = "v2:";
+
 async function encrypt(plaintext: string): Promise<string> {
   if (!plaintext) return "";
-  
+
   const key = await getEncryptionKey();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoder = new TextEncoder();
-  
+
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
     encoder.encode(plaintext)
   );
-  
-  // Combine IV + ciphertext and encode as base64
+
   const combined = new Uint8Array(iv.length + encrypted.byteLength);
   combined.set(iv, 0);
   combined.set(new Uint8Array(encrypted), iv.length);
-  
-  return btoa(String.fromCharCode(...combined));
+
+  // Prefix with v2: so decrypt knows which KDF was used
+  return V2_PREFIX + btoa(String.fromCharCode(...combined));
 }
 
-async function decrypt(ciphertext: string): Promise<string> {
-  if (!ciphertext) return "";
-  
+async function decrypt(ciphertext: string): Promise<{ value: string; needsReEncrypt: boolean }> {
+  if (!ciphertext) return { value: "", needsReEncrypt: false };
+
+  const isV2 = ciphertext.startsWith(V2_PREFIX);
+  const raw = isV2 ? ciphertext.slice(V2_PREFIX.length) : ciphertext;
+
   try {
-    const key = await getEncryptionKey();
-    
-    // Decode base64
-    const combined = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
-    
-    // Extract IV and ciphertext
+    const key = isV2 ? await getEncryptionKey() : await getLegacyEncryptionKey();
+    const combined = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
     const iv = combined.slice(0, 12);
     const encrypted = combined.slice(12);
-    
+
     const decrypted = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv },
       key,
       encrypted
     );
-    
-    return new TextDecoder().decode(decrypted);
+
+    return { value: new TextDecoder().decode(decrypted), needsReEncrypt: !isV2 };
   } catch (error) {
-    console.error("Decryption failed:", error);
-    // Return empty string if decryption fails (legacy unencrypted data)
-    return "";
+    // If v2 decryption failed, don't silently swallow — this is real data loss
+    if (isV2) {
+      console.error("PBKDF2 decryption failed — possible key mismatch or corrupt data:", error);
+      throw new Error("Failed to decrypt API key. The encryption key may have changed.");
+    }
+
+    // Legacy fallback also failed — try treating as plaintext (very old data)
+    console.warn("Legacy decryption failed, treating as unencrypted plaintext");
+    return { value: ciphertext, needsReEncrypt: true };
   }
 }
 
@@ -133,9 +173,25 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Decrypt the keys
-      const decryptedGemini = await decrypt(data.gemini_api_key || "");
-      const decryptedReplicate = await decrypt(data.replicate_api_token || "");
+      // Decrypt the keys (returns { value, needsReEncrypt })
+      const geminiResult = await decrypt(data.gemini_api_key || "");
+      const replicateResult = await decrypt(data.replicate_api_token || "");
+
+      // Transparently re-encrypt legacy keys with PBKDF2
+      if (geminiResult.needsReEncrypt || replicateResult.needsReEncrypt) {
+        const updates: Record<string, string | null> = { updated_at: new Date().toISOString() };
+        if (geminiResult.needsReEncrypt && geminiResult.value) {
+          updates.gemini_api_key = await encrypt(geminiResult.value);
+        }
+        if (replicateResult.needsReEncrypt && replicateResult.value) {
+          updates.replicate_api_token = await encrypt(replicateResult.value);
+        }
+        await serviceClient
+          .from("user_api_keys")
+          .update(updates)
+          .eq("user_id", userId);
+        console.log("Re-encrypted legacy keys for user:", userId);
+      }
 
       // Return masked versions for display (show last 4 chars only)
       const maskKey = (key: string) => {
@@ -145,10 +201,10 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({
-          gemini_api_key: maskKey(decryptedGemini),
-          replicate_api_token: maskKey(decryptedReplicate),
-          has_gemini: !!decryptedGemini,
-          has_replicate: !!decryptedReplicate,
+          gemini_api_key: maskKey(geminiResult.value),
+          replicate_api_token: maskKey(replicateResult.value),
+          has_gemini: !!geminiResult.value,
+          has_replicate: !!replicateResult.value,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
