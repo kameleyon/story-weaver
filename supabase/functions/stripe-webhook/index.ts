@@ -89,6 +89,28 @@ serve(async (req) => {
 
     logStep("Event verified and parsed", { type: event.type });
 
+    // === IDEMPOTENCY CHECK: Skip already-processed events ===
+    const { data: existingEvent } = await supabaseAdmin
+      .from("webhook_events")
+      .select("id")
+      .eq("event_id", event.id)
+      .maybeSingle();
+
+    if (existingEvent) {
+      logStep("Duplicate event, skipping", { eventId: event.id });
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Record event as processed BEFORE handling to prevent race conditions
+    await supabaseAdmin
+      .from("webhook_events")
+      .insert({ event_id: event.id, event_type: event.type });
+
+    logStep("Event recorded for idempotency", { eventId: event.id });
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -104,6 +126,22 @@ serve(async (req) => {
 
         if (session.mode === "payment") {
           // One-time payment (credit purchase)
+          const paymentIntentId = session.payment_intent as string;
+
+          // === DEDUP CHECK: Prevent duplicate credit grants for same payment ===
+          if (paymentIntentId) {
+            const { data: existingTx } = await supabaseAdmin
+              .from("credit_transactions")
+              .select("id")
+              .eq("stripe_payment_intent_id", paymentIntentId)
+              .maybeSingle();
+
+            if (existingTx) {
+              logStep("Credits already granted for this payment, skipping", { paymentIntentId });
+              break;
+            }
+          }
+
           const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
           for (const item of lineItems.data) {
             const productId = item.price?.product as string;
@@ -112,30 +150,11 @@ serve(async (req) => {
             if (credits) {
               logStep("Adding credits", { userId, credits, productId });
               
-              // Upsert user credits
-              const { data: existingCredits } = await supabaseAdmin
-                .from("user_credits")
-                .select("*")
-                .eq("user_id", userId)
-                .single();
-
-              if (existingCredits) {
-                await supabaseAdmin
-                  .from("user_credits")
-                  .update({
-                    credits_balance: existingCredits.credits_balance + credits,
-                    total_purchased: existingCredits.total_purchased + credits,
-                  })
-                  .eq("user_id", userId);
-              } else {
-                await supabaseAdmin
-                  .from("user_credits")
-                  .insert({
-                    user_id: userId,
-                    credits_balance: credits,
-                    total_purchased: credits,
-                  });
-              }
+              // Use atomic RPC to safely increment credits
+              await supabaseAdmin.rpc("increment_user_credits", {
+                p_user_id: userId,
+                p_credits: credits,
+              });
 
               // Log the transaction
               await supabaseAdmin
@@ -145,7 +164,7 @@ serve(async (req) => {
                   amount: credits,
                   transaction_type: "purchase",
                   description: `Purchased ${credits} credits`,
-                  stripe_payment_intent_id: session.payment_intent as string,
+                  stripe_payment_intent_id: paymentIntentId,
                 });
             }
           }
