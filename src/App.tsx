@@ -26,14 +26,16 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const PricingWrapper = () => (
-  <SidebarProvider defaultOpen={true}>
-    <div className="flex min-h-screen w-full overflow-hidden">
-      <AppSidebar />
-      <main className="flex-1 min-w-0 overflow-hidden">
-        <Pricing />
-      </main>
-    </div>
-  </SidebarProvider>
+  <ProtectedRoute>
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex min-h-screen w-full overflow-hidden">
+        <AppSidebar />
+        <main className="flex-1 min-w-0 overflow-hidden">
+          <Pricing />
+        </main>
+      </div>
+    </SidebarProvider>
+  </ProtectedRoute>
 );
 
 const App = () => (

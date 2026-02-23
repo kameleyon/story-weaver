@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ChevronLeft, 
-  ChevronRight,
   Lightbulb,
   Clapperboard,
   Wallpaper,
@@ -12,14 +10,21 @@ import {
   Video,
   Film,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
-import { PLAN_LIMITS } from "@/lib/planLimits";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemedLogo } from "@/components/ThemedLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { format } from "date-fns";
 
 // Import background images
@@ -45,50 +50,11 @@ const GREETINGS = [
   { greeting: "Welcome", suffix: "Let's get creative." },
 ];
 
-// Circular progress component
-const CircularProgress = ({ percentage, size = 80 }: { percentage: number; size?: number }) => {
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (percentage / 100) * circumference;
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="hsl(var(--primary) / 0.2)"
-          strokeWidth={strokeWidth}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="hsl(var(--primary))"
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          className="transition-all duration-500"
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-lg font-semibold text-foreground">{percentage}%</span>
-      </div>
-    </div>
-  );
-};
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { plan } = useSubscription();
+  const { plan, creditsBalance: subCreditsBalance } = useSubscription();
   const [currentTip, setCurrentTip] = useState(0);
-  const [projectScrollIndex, setProjectScrollIndex] = useState(0);
   const [greetingIndex] = useState(() => Math.floor(Math.random() * GREETINGS.length));
 
   // Rotate tips
@@ -135,7 +101,7 @@ export default function Dashboard() {
   });
 
   // Fetch recent projects - single lightweight query using permanent thumbnail_url
-  const { data: recentProjects = [] } = useQuery({
+  const { data: recentProjects = [], isLoading: isLoadingProjects } = useQuery({
     queryKey: ["dashboard-recent", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -158,11 +124,7 @@ export default function Dashboard() {
     staleTime: 30000,
   });
 
-  const planMonthlyLimit = PLAN_LIMITS[plan]?.creditsPerMonth ?? 5;
   const creditsBalance = credits?.balance ?? 0;
-  const creditsUsed = Math.max(0, planMonthlyLimit - creditsBalance);
-  const usagePercentage = Math.min(100, Math.round((creditsUsed / planMonthlyLimit) * 100));
-
   const displayName = profile?.display_name || user?.email?.split('@')[0] || 'User';
 
   const getCreateMode = (projectType?: string | null) => {
@@ -191,31 +153,16 @@ export default function Dashboard() {
     }
   };
 
-  const visibleProjects = 4;
-  const maxScrollIndex = Math.max(0, recentProjects.length - visibleProjects);
-
-  const scrollProjects = (direction: 'left' | 'right') => {
-    if (direction === 'left') {
-      setProjectScrollIndex(Math.max(0, projectScrollIndex - 1));
-    } else {
-      setProjectScrollIndex(Math.min(maxScrollIndex, projectScrollIndex + 1));
-    }
-  };
-
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden relative">
       {/* Background Image - more subtle in light mode */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-15 dark:opacity-0 pointer-events-none"
-        style={{ 
-          backgroundImage: `url(${dashboardBgLight})`,
-        }}
+        style={{ backgroundImage: `url(${dashboardBgLight})` }}
       />
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-0 dark:opacity-40 pointer-events-none"
-        style={{ 
-          backgroundImage: `url(${dashboardBgDark})`,
-        }}
+        style={{ backgroundImage: `url(${dashboardBgDark})` }}
       />
       
       {/* Header */}
@@ -241,17 +188,19 @@ export default function Dashboard() {
             <p className="text-muted-foreground">{GREETINGS[greetingIndex].suffix}</p>
           </div>
 
-          {/* Usage Overview + Did You Know Row */}
+          {/* Credits Remaining + Did You Know Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Usage Overview Card */}
+            {/* Credits Remaining Card */}
             <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-5 shadow-sm">
               <div className="flex items-center gap-5">
-                <CircularProgress percentage={usagePercentage} />
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-primary/30 bg-primary/10">
+                  <span className="text-xl font-bold text-primary">{creditsBalance}</span>
+                </div>
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">Usage Overview</h3>
-                  <p className="text-sm text-primary font-medium">{usagePercentage}% Credits Used</p>
+                  <h3 className="font-semibold text-foreground mb-1">Credits Remaining</h3>
+                  <p className="text-sm text-primary font-medium">{creditsBalance} credits available</p>
                   <p className="text-xs text-muted-foreground">
-                    {creditsBalance} / {planMonthlyLimit} Credits Left
+                    {plan === "free" ? "Free plan" : `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan`}
                   </p>
                 </div>
               </div>
@@ -294,7 +243,20 @@ export default function Dashboard() {
               </Button>
             </div>
 
-            {recentProjects.length === 0 ? (
+            {isLoadingProjects ? (
+              /* Skeleton loader while projects are loading */
+              <div className="flex gap-4 overflow-hidden">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="shrink-0 w-[200px] rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden shadow-sm">
+                    <Skeleton className="h-24 w-full" />
+                    <div className="p-3 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : recentProjects.length === 0 ? (
               <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-8 text-center shadow-sm">
                 <p className="text-muted-foreground mb-4">No projects yet</p>
                 <Button onClick={() => navigate("/app/create")} className="gap-2">
@@ -303,33 +265,24 @@ export default function Dashboard() {
                 </Button>
               </div>
             ) : (
-              <div className="relative">
-                {/* Scroll Left Button */}
-                {projectScrollIndex > 0 && (
-                  <button
-                    onClick={() => scrollProjects('left')}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 p-2 rounded-full bg-card border border-primary/75 shadow-sm hover:bg-muted transition-colors"
-                  >
-                    <ChevronLeft className="h-4 w-4 text-foreground" />
-                  </button>
-                )}
-
-                {/* Projects Carousel */}
-                <div className="overflow-hidden" ref={(el) => { if (el) el.setAttribute('data-carousel', 'true'); }}>
-                  <div 
-                    className="flex gap-4 transition-transform duration-300 ease-out"
-                    style={{ transform: `translateX(calc(-${projectScrollIndex} * (200px + 1rem)))` }}
-                  >
-                    {recentProjects.map((project) => {
-                      const ProjectIcon = getProjectIcon(project.project_type);
-                      return (
+              <Carousel
+                opts={{
+                  align: "start",
+                  slidesToScroll: 1,
+                }}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-4">
+                  {recentProjects.map((project) => {
+                    const ProjectIcon = getProjectIcon(project.project_type);
+                    return (
+                      <CarouselItem key={project.id} className="pl-4 basis-[200px] sm:basis-[220px]">
                         <div
-                          key={project.id}
                           onClick={() => {
                             const mode = getCreateMode(project.project_type);
                             navigate(`/app/create?mode=${mode}&project=${project.id}`);
                           }}
-                          className="shrink-0 w-[200px] rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-primary transition-colors shadow-sm group"
+                          className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm overflow-hidden cursor-pointer hover:border-primary transition-colors shadow-sm group"
                         >
                           {/* Thumbnail area */}
                           <div className="h-24 bg-gradient-to-br from-primary/30 via-primary/15 to-muted/20 flex items-center justify-center relative overflow-hidden">
@@ -338,7 +291,7 @@ export default function Dashboard() {
                               alt={project.title}
                               className="absolute inset-0 w-full h-full object-cover"
                             />
-                            {/* Category icon overlay - always visible */}
+                            {/* Category icon overlay */}
                             <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 backdrop-blur-sm z-10">
                               <ProjectIcon className="h-4 w-4 text-white" />
                             </div>
@@ -353,21 +306,17 @@ export default function Dashboard() {
                             </p>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Scroll Right Button */}
-                {projectScrollIndex < maxScrollIndex && (
-                  <button
-                    onClick={() => scrollProjects('right')}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 p-2 rounded-full bg-card border border-primary/75 shadow-sm hover:bg-muted transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4 text-foreground" />
-                  </button>
+                      </CarouselItem>
+                    );
+                  })}
+                </CarouselContent>
+                {recentProjects.length > 3 && (
+                  <>
+                    <CarouselPrevious className="hidden sm:flex -left-3 border-primary/75" />
+                    <CarouselNext className="hidden sm:flex -right-3 border-primary/75" />
+                  </>
                 )}
-              </div>
+              </Carousel>
             )}
           </div>
 
