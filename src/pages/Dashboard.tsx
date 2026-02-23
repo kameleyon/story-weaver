@@ -200,8 +200,10 @@ export default function Dashboard() {
             {/* Credits Remaining Card */}
             <div className="rounded-xl border border-primary/75 bg-white/90 dark:bg-card/80 backdrop-blur-sm p-5 shadow-sm">
               <div className="flex items-center gap-5">
-                 <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-primary/30 bg-primary/10">
-                   <span className="text-base font-bold text-primary">{formatCredits(creditsBalance)}</span>
+                 <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-primary/30 bg-primary/10 shrink-0">
+                   <span className={`font-bold text-primary ${creditsBalance >= 100000 ? 'text-[11px]' : creditsBalance >= 10000 ? 'text-xs' : creditsBalance >= 1000 ? 'text-sm' : 'text-lg'}`}>
+                     {creditsBalance.toLocaleString()}
+                   </span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground mb-1">Credits Remaining</h3>
