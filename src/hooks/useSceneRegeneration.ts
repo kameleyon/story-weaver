@@ -114,14 +114,16 @@ export function useSceneRegeneration(
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Not authenticated");
 
-        const scene = scenes[sceneIndex];
-        const hasNoImages = !scene.imageUrl && (!scene.imageUrls || scene.imageUrls.length === 0);
-        const expectedImageCount = scene.imageUrls?.length || 3; // Default to 3 for doc2video
+      const scene = scenes[sceneIndex];
+      const hasNoImages = !scene.imageUrl && (!scene.imageUrls || scene.imageUrls.filter(Boolean).length === 0);
+      const expectedImageCount = 3; // primary + 2 sub-visuals
 
-        // If the scene has NO images at all, generate all sub-images (primary + 2 sub-visuals)
-        const indicesToGenerate = hasNoImages
-          ? Array.from({ length: expectedImageCount }, (_, i) => i)
-          : [imageIndex ?? 0];
+      // If the scene has NO images at all, generate ALL sub-images regardless of imageIndex passed
+      const indicesToGenerate = hasNoImages
+        ? Array.from({ length: expectedImageCount }, (_, i) => i)
+        : [imageIndex ?? 0];
+
+      console.log(`[SceneRegen] Scene ${sceneIndex + 1}: hasNoImages=${hasNoImages}, generating indices`, indicesToGenerate);
 
         console.log(`[SceneRegen] Scene ${sceneIndex + 1}: generating ${indicesToGenerate.length} image(s)`, indicesToGenerate);
 
