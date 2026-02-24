@@ -114,62 +114,78 @@ export function useSceneRegeneration(
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Not authenticated");
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              phase: "regenerate-image",
-              generationId,
-              projectId,
-              sceneIndex,
-              imageModification,
-              imageIndex: imageIndex ?? 0, // Default to first image if not specified
-            }),
-          }
-        );
+        const scene = scenes[sceneIndex];
+        const hasNoImages = !scene.imageUrl && (!scene.imageUrls || scene.imageUrls.length === 0);
+        const expectedImageCount = scene.imageUrls?.length || 3; // Default to 3 for doc2video
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || "Failed to regenerate image");
-        }
+        // If the scene has NO images at all, generate all sub-images (primary + 2 sub-visuals)
+        const indicesToGenerate = hasNoImages
+          ? Array.from({ length: expectedImageCount }, (_, i) => i)
+          : [imageIndex ?? 0];
 
-        const result = await response.json();
+        console.log(`[SceneRegen] Scene ${sceneIndex + 1}: generating ${indicesToGenerate.length} image(s)`, indicesToGenerate);
 
-        if (!result.success) {
-          throw new Error(result.error || "Image regeneration failed");
-        }
-
-        // Update local scenes with new image(s)
         const updatedScenes = [...scenes];
-        
-        // If we have imageUrls and a specific imageIndex, update just that image
-        if (result.imageUrl && typeof imageIndex === 'number' && updatedScenes[sceneIndex].imageUrls?.length) {
-          const newImageUrls = [...updatedScenes[sceneIndex].imageUrls!];
-          newImageUrls[imageIndex] = result.imageUrl;
-          updatedScenes[sceneIndex] = {
-            ...updatedScenes[sceneIndex],
-            imageUrls: newImageUrls,
-            imageUrl: imageIndex === 0 ? result.imageUrl : updatedScenes[sceneIndex].imageUrl,
-          };
-        } else {
-          // Fallback: replace all images (for full regeneration or single-image scenes)
-          updatedScenes[sceneIndex] = {
-            ...updatedScenes[sceneIndex],
-            imageUrl: result.imageUrl,
-            imageUrls: result.imageUrls || [result.imageUrl],
-          };
+        const newImageUrls: string[] = [...(scene.imageUrls || [])];
+
+        for (const idx of indicesToGenerate) {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                phase: "regenerate-image",
+                generationId,
+                projectId,
+                sceneIndex,
+                imageModification,
+                imageIndex: idx,
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            const error = await response.json();
+            console.warn(`[SceneRegen] Image ${idx} failed:`, error.error);
+            continue; // Try remaining images
+          }
+
+          const result = await response.json();
+          if (!result.success) {
+            console.warn(`[SceneRegen] Image ${idx} failed:`, result.error);
+            continue;
+          }
+
+          // Update the specific image
+          while (newImageUrls.length <= idx) newImageUrls.push("");
+          newImageUrls[idx] = result.imageUrl;
+          if (idx === 0) {
+            updatedScenes[sceneIndex] = {
+              ...updatedScenes[sceneIndex],
+              imageUrl: result.imageUrl,
+            };
+          }
         }
+
+        const validUrls = newImageUrls.filter(Boolean);
+        updatedScenes[sceneIndex] = {
+          ...updatedScenes[sceneIndex],
+          imageUrl: validUrls[0] || updatedScenes[sceneIndex].imageUrl,
+          imageUrls: validUrls.length > 0 ? validUrls : updatedScenes[sceneIndex].imageUrls,
+        };
 
         onScenesUpdate(updatedScenes);
 
+        const generatedCount = indicesToGenerate.length;
         toast({
           title: "Image Regenerated",
-          description: `Scene ${sceneIndex + 1}${typeof imageIndex === 'number' ? ` image ${imageIndex + 1}` : ''} has been updated.`,
+          description: generatedCount > 1
+            ? `Scene ${sceneIndex + 1}: ${validUrls.length} of ${generatedCount} images generated.`
+            : `Scene ${sceneIndex + 1}${typeof imageIndex === 'number' ? ` image ${imageIndex + 1}` : ''} has been updated.`,
         });
       } catch (error) {
         console.error("Image regeneration error:", error);
