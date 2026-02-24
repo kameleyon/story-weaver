@@ -5,6 +5,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { refreshScenesSignedUrls } from "@/lib/refreshSignedUrls";
 import { callPhase } from "./generation/callPhase";
 import { runCinematicPipeline, resumeCinematicPipeline } from "./generation/cinematicPipeline";
 import { runStandardPipeline } from "./generation/standardPipeline";
@@ -116,9 +117,12 @@ export function useGenerationPipeline() {
     console.log(LOG, "loadProject: generation", { status: generation?.status, projectType: project.project_type });
 
     if (generation?.status === "complete") {
-      const scenes = normalizeScenes(generation.scenes) ?? [];
+      let scenes = normalizeScenes(generation.scenes) ?? [];
       const meta = extractMeta(Array.isArray(generation.scenes) ? generation.scenes : []);
       const isCinematic = project.project_type === "cinematic";
+
+      // Refresh expired signed URLs for old projects
+      scenes = await refreshScenesSignedUrls(scenes);
 
       if (isCinematic && scenes.length > 0 && scenes.some((s) => !s.videoUrl && s.imageUrl)) {
         console.log(LOG, "Auto-resuming cinematic video phase");
