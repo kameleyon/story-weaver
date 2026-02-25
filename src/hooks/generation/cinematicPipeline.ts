@@ -315,21 +315,15 @@ async function finalizeCinematic(projectId: string, generationId: string, sceneC
 // ---- Shared Retry Logic ----
 
 async function retryMissingImages(generationId: string, sceneCount: number, ctx: PipelineContext, projectId: string) {
-  // 2 retry rounds to recover images that were generated on the provider but failed to download/upload
-  for (let round = 0; round < 2; round++) {
+  // FIX 3: Reduced from 2 rounds to 1 to prevent double-billing on timeouts
+  for (let round = 0; round < 1; round++) {
     const { data: gen } = await supabase.from("generations").select("scenes").eq("id", generationId).maybeSingle();
     const scenes = normalizeScenes(gen?.scenes) ?? [];
     const missing = scenes.map((s, i) => (!s.imageUrl ? i : -1)).filter((i) => i >= 0);
     if (missing.length === 0) break;
 
     console.log(LOG, `Image retry round ${round + 1}: ${missing.length} scenes missing`);
-    ctx.setState((prev) => ({ ...prev, statusMessage: `Retrying ${missing.length} missing images (round ${round + 1}/2)...` }));
-
-    // Add delay between retry rounds to let provider recover
-    if (round > 0) {
-      console.log(LOG, `Image retry: waiting 5s before round ${round + 1}`);
-      await sleep(5000);
-    }
+    ctx.setState((prev) => ({ ...prev, statusMessage: `Retrying ${missing.length} missing images (round ${round + 1})...` }));
 
     for (const idx of missing) {
       // Respect global rate-limit cooldown
@@ -339,8 +333,6 @@ async function retryMissingImages(generationId: string, sceneCount: number, ctx:
         console.log(LOG, `Image retry ${idx + 1}: global cooldown, waiting ${(cooldownWait / 1000).toFixed(1)}s`);
         await sleep(cooldownWait);
       }
-      // Small stagger between individual retries
-      await sleep(1500);
       try {
         const imgRes = await ctx.callPhase(
           { phase: "images", projectId, generationId, sceneIndex: idx },
@@ -350,11 +342,8 @@ async function retryMissingImages(generationId: string, sceneCount: number, ctx:
         if (imgRes && imgRes.retryAfterMs && imgRes.retryAfterMs >= 20000) {
           lastRateLimitTime = Date.now();
         }
-        if (imgRes.success) {
-          console.log(LOG, `Image retry: scene ${idx + 1} recovered successfully`);
-        }
-      } catch (err) {
-        console.warn(LOG, `Image retry: scene ${idx + 1} failed again:`, err);
+      } catch {
+        // Continue with remaining retries
       }
     }
   }
