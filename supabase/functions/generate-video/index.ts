@@ -654,7 +654,7 @@ async function isProOrEnterpriseTier(supabase: any, userId: string): Promise<boo
   }
 }
 
-// ============= IMAGE GENERATION WITH HYPEREAL (nano-banana-pro-t2i via https://hypereal.tech/api/v1/images/generate) =============
+// ============= IMAGE GENERATION WITH HYPEREAL (nano-banana-pro-t2i / nano-banana-t2i via https://hypereal.tech/api/v1/images/generate) =============
 const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
 const HYPEREAL_IMAGE_RETRIES = 4;
 
@@ -662,7 +662,9 @@ async function generateImageWithHypereal(
   prompt: string,
   hyperealApiKey: string,
   format: string,
+  useProModel: boolean = true,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number }> {
+  const hyperealModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   let lastError = "Unknown error";
@@ -671,7 +673,7 @@ async function generateImageWithHypereal(
   for (let attempt = 1; attempt <= HYPEREAL_IMAGE_RETRIES; attempt++) {
     try {
       console.log(
-        `[HYPEREAL-IMG] Generating image with nano-banana-pro-t2i (attempt ${attempt}/${HYPEREAL_IMAGE_RETRIES}), format: ${format}`,
+        `[HYPEREAL-IMG] Generating image with ${hyperealModel} (attempt ${attempt}/${HYPEREAL_IMAGE_RETRIES}), format: ${format}`,
       );
 
       const response = await fetch(HYPEREAL_API_URL, {
@@ -682,7 +684,7 @@ async function generateImageWithHypereal(
         },
         body: JSON.stringify({
           prompt,
-          model: "nano-banana-pro-t2i",
+          model: hyperealModel,
           aspect_ratio: aspectRatio,
         }),
       });
@@ -690,7 +692,7 @@ async function generateImageWithHypereal(
       if (!response.ok) {
         const status = response.status;
         const errText = await response.text().catch(() => "");
-        lastError = `Hypereal nano-banana-pro-t2i failed: ${status}${errText ? ` - ${errText}` : ""}`;
+        lastError = `Hypereal ${hyperealModel} failed: ${status}${errText ? ` - ${errText}` : ""}`;
         lastStatus = status;
         console.error(`[HYPEREAL-IMG] Create failed: ${status} - ${errText}`);
 
@@ -2310,7 +2312,7 @@ async function generateImageWithReplicate(
   return { ok: false, error: lastError, status: lastStatus };
 }
 
-// ============= TRUE IMAGE EDITING WITH REPLICATE NANO BANANA PRO =============
+// ============= TRUE IMAGE EDITING WITH REPLICATE NANO BANANA (PRO or standard based on plan) =============
 async function editImageWithReplicatePro(
   sourceImageUrl: string,
   editPrompt: string,
@@ -2318,9 +2320,12 @@ async function editImageWithReplicatePro(
   format: string,
   styleDescription: string,
   overlayText?: { title?: string; subtitle?: string },
+  useProModel: boolean = true,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  const editModelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  const editModelLabel = useProModel ? "Nano Banana Pro" : "Nano Banana";
   try {
-    console.log(`[editImage] Starting image edit with Replicate Nano Banana Pro...`);
+    console.log(`[editImage] Starting image edit with Replicate ${editModelLabel}...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
     console.log(`[editImage] Edit prompt: ${editPrompt}`);
 
@@ -2358,12 +2363,12 @@ STYLE CONTEXT: ${styleDescription}`;
       image_input: [sourceImageUrl], // Pass source image URL for editing
       aspect_ratio: aspectRatio,
       output_format: "png",
-      resolution: "1K", // Pro model supports 1K resolution
+      resolution: useProModel ? "1K" : undefined, // Pro model supports 1K resolution
     };
 
-    console.log(`[editImage] Calling Replicate nano-banana-pro with image_input...`);
+    console.log(`[editImage] Calling Replicate ${editModelLabel} with image_input...`);
 
-    const createResponse = await fetch(`https://api.replicate.com/v1/models/google/nano-banana-pro/predictions`, {
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/${editModelPath}/predictions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -2376,15 +2381,15 @@ STYLE CONTEXT: ${styleDescription}`;
     if (!createResponse.ok) {
       const status = createResponse.status;
       const errText = await createResponse.text().catch(() => "");
-      console.error(`[editImage] Replicate nano-banana-pro create failed: ${status} - ${errText}`);
+      console.error(`[editImage] Replicate ${editModelLabel} create failed: ${status} - ${errText}`);
       return {
         ok: false,
-        error: `Replicate nano-banana-pro edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
+        error: `Replicate ${editModelLabel} edit failed: ${status}${errText ? ` - ${errText}` : ""}`,
       };
     }
 
     let prediction = await createResponse.json();
-    console.log(`[editImage] Nano Banana Pro prediction started: ${prediction.id}, status: ${prediction.status}`);
+    console.log(`[editImage] ${editModelLabel} prediction started: ${prediction.id}, status: ${prediction.status}`);
 
     // Poll for completion if not finished
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
@@ -2396,7 +2401,7 @@ STYLE CONTEXT: ${styleDescription}`;
     }
 
     if (prediction.status === "failed") {
-      console.error(`[editImage] Nano Banana Pro prediction failed: ${prediction.error}`);
+      console.error(`[editImage] ${editModelLabel} prediction failed: ${prediction.error}`);
       return { ok: false, error: prediction.error || "Image edit failed" };
     }
 
@@ -3840,12 +3845,11 @@ async function handleImagesPhase(
   // Check if this style ALWAYS requires premium model (e.g., Papercut 3D)
   const isPremiumRequiredStyle = PREMIUM_REQUIRED_STYLES.includes(projectStyle);
 
-  // Check if user is Pro/Enterprise tier (for logging purposes only - all tiers now use nano-banana)
+  // Check if user is Pro/Enterprise tier — Pro/Enterprise get nano-banana-pro, others get nano-banana
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
-  // All tiers now use standard nano-banana for image generation
-  // Only premium-required styles (like Papercut 3D) get nano-banana-pro
-  const useProModel = isPremiumRequiredStyle;
+  // Pro/Enterprise users OR premium-required styles get nano-banana-pro
+  const useProModel = isProUser || isPremiumRequiredStyle;
 
   const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT;
 
@@ -4118,7 +4122,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           if (staggerDelay > 0) await sleep(staggerDelay);
 
           let actualProvider = "hypereal"; // Track which provider actually succeeded
-          let actualModel = "nano-banana-pro-t2i";
+          let actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
           const imageCallStart = Date.now();
 
           const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
@@ -4127,10 +4131,10 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           // Try Hypereal first (up to 4 attempts)
           if (hyperealApiKey) {
             for (let attempt = 1; attempt <= 4; attempt++) {
-              console.log(`[IMG] Using Hypereal nano-banana-pro-t2i for task ${task.taskIndex} (attempt ${attempt}/4)`);
-              const result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format);
+              console.log(`[IMG] Using Hypereal ${actualModel} for task ${task.taskIndex} (attempt ${attempt}/4)`);
+              const result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format, useProModel);
               actualProvider = "hypereal";
-              actualModel = "nano-banana-pro-t2i";
+              actualModel = useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i";
 
               if (result.ok) {
                 const imageCallDuration = Date.now() - imageCallStart;
@@ -4168,7 +4172,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               }
             }
             hyperealFailed = true;
-            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate nano-banana-pro`);
+            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"}`);
           }
 
           // Fallback to Replicate nano-banana-pro (if Hypereal key missing OR Hypereal failed all retries)
@@ -4732,9 +4736,9 @@ async function handleRegenerateImage(
   // Check if user is Pro/Enterprise tier (for logging purposes only)
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
-  // For regeneration without modification (full T2I), use standard nano-banana for all tiers
-  // Only premium-required styles get nano-banana-pro for T2I regeneration
-  const useProModel = isPremiumRequiredStyle;
+  // Pro/Enterprise users OR premium-required styles get nano-banana-pro
+  // All other tiers get standard nano-banana
+  const useProModel = isProUser || isPremiumRequiredStyle;
 
   if (useProModel) {
     console.log(`[regenerate-image] Premium style "${projectStyle}" - will use Replicate nano-banana-pro (1K) for T2I`);
@@ -4795,14 +4799,15 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
-    // Use Hypereal nano-banana-pro-t2i for T2I regeneration, fallback to Replicate
+    // Use Hypereal for T2I regeneration, fallback to Replicate
+    // Pro/Enterprise get nano-banana-pro-t2i, others get nano-banana-t2i
     const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
     let usedFallback = false;
 
     if (hyperealApiKey) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-pro-t2i for regeneration`);
+      console.log(`[regenerate-image] Using Hypereal ${useProModel ? "nano-banana-pro-t2i" : "nano-banana-t2i"} for regeneration`);
       const hyperealStartTime = Date.now();
-      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format);
+      imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format, useProModel);
       const hyperealDurationMs = Date.now() - hyperealStartTime;
 
       await logApiCall({
@@ -4843,17 +4848,18 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       });
     }
   } else {
-    // Apply Edit - use TRUE IMAGE EDITING with Replicate Nano Banana Pro
+    // Apply Edit - use TRUE IMAGE EDITING with Replicate Nano Banana (Pro for pro users, standard for others)
     // This preserves the original image and only modifies the requested section/element
     console.log(
-      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - TRUE IMAGE EDIT with Replicate Nano Banana Pro`,
+      `[regenerate-image] Scene ${sceneIndex + 1}, Image ${targetImageIndex + 1} - TRUE IMAGE EDIT with Replicate ${useProModel ? "Nano Banana Pro" : "Nano Banana"}`,
     );
 
     if (!sourceImageUrl) {
       throw new Error("No source image available for editing");
     }
 
-    // Use Replicate nano-banana-pro for true image editing (accepts image_input)
+    // Use Replicate nano-banana for true image editing (accepts image_input)
+    // Pro/Enterprise get nano-banana-pro, others get nano-banana
     const editStartTime = Date.now();
     imageResult = await editImageWithReplicatePro(
       sourceImageUrl,
@@ -4862,6 +4868,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       format,
       styleDescription,
       scene.title || scene.subtitle ? { title: scene.title, subtitle: scene.subtitle } : undefined,
+      useProModel,
     );
     const editDurationMs = Date.now() - editStartTime;
 
@@ -4871,10 +4878,10 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       userId: user.id,
       generationId,
       provider: "replicate",
-      model: "google/nano-banana-pro",
+      model: useProModel ? "google/nano-banana-pro" : "google/nano-banana",
       status: imageResult.ok ? "success" : "error",
       totalDurationMs: editDurationMs,
-      cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0, // Pro model pricing
+      cost: imageResult.ok ? (useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana) : 0,
       errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
     });
 
@@ -4913,10 +4920,10 @@ STYLE: ${styleDescription}
 
 Professional illustration with dynamic composition and clear visual hierarchy. Apply the user's modification to enhance the image while maintaining consistency with the original scene concept.`;
 
-      // Use Replicate nano-banana-pro for fallback text-to-image
-      console.log(`[regenerate-image] Fallback: Using Replicate nano-banana-pro for T2I`);
+      // Use Replicate nano-banana for fallback text-to-image (plan-aware)
+      console.log(`[regenerate-image] Fallback: Using Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"} for T2I`);
       const replicateStartTime = Date.now();
-      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, true); // Always use Pro for edits
+      imageResult = await generateImageWithReplicate(modifiedPrompt, replicateApiKey, format, useProModel);
       const replicateDurationMs = Date.now() - replicateStartTime;
 
       await logApiCall({
@@ -4924,10 +4931,10 @@ Professional illustration with dynamic composition and clear visual hierarchy. A
         userId: user.id,
         generationId,
         provider: "replicate",
-        model: "google/nano-banana-pro",
+        model: useProModel ? "google/nano-banana-pro" : "google/nano-banana",
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: replicateDurationMs,
-        cost: imageResult.ok ? PRICING.imageNanoBananaPro : 0,
+        cost: imageResult.ok ? (useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana) : 0,
         errorMessage: imageResult.ok ? undefined : imageResult.error || "Unknown error",
       });
     }
