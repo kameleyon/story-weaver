@@ -674,7 +674,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 // resolveChatterbox removed — shared engine handles Chatterbox synchronously
 
 // ============================================
-// STEP 3: Image Generation with Hypereal nano-banana-pro-t2i
+// STEP 3: Image Generation with Hypereal nano-banana-2-t2i
 // ============================================
 const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
 
@@ -708,10 +708,10 @@ QUALITY REQUIREMENTS:
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   const MAX_IMG_RETRIES = 4;
 
-  // Prefer Hypereal nano-banana-pro-t2i
+  // Prefer Hypereal nano-banana-2-t2i
   if (hyperealApiKey) {
     console.log(
-      `[IMG] Generating scene ${scene.number} with Hypereal nano-banana-pro-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
+      `[IMG] Generating scene ${scene.number} with Hypereal nano-banana-2-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
     );
 
     for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
@@ -724,7 +724,7 @@ QUALITY REQUIREMENTS:
           },
           body: JSON.stringify({
             prompt: imagePrompt,
-            model: "nano-banana-pro-t2i",
+            model: "nano-banana-2-t2i",
             resolution: "1k",
             aspect_ratio: aspectRatio,
             output_format: "png",
@@ -745,7 +745,7 @@ QUALITY REQUIREMENTS:
             continue;
           }
 
-          throw new Error(`Hypereal nano-banana-pro-t2i failed: ${response.status}`);
+          throw new Error(`Hypereal nano-banana-2-t2i failed: ${response.status}`);
         }
 
         const data = await response.json();
@@ -1857,7 +1857,7 @@ serve(async (req) => {
       const format = (project.format || "portrait") as "landscape" | "portrait" | "square";
       const style = project.style || "realistic";
 
-      // Use Replicate nano-banana-pro for image editing (img2img)
+      // Use Replicate nano-banana-pro for image editing (cinematic is Pro-only)
       const replicateApiToken = Deno.env.get("REPLICATE_API_TOKEN") || replicateToken;
 
       const fullStylePrompt = getStylePrompt(style);
