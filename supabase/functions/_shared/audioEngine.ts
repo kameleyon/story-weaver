@@ -8,7 +8,7 @@
  *   1. Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs STS
  *   2. Custom Voice (non-HC) → ElevenLabs TTS directly
  *   3. Haitian Creole (standard) → Gemini TTS with 3-key failover
- *   4. Default → Replicate Chatterbox-Turbo (with chunk & stitch)
+ *   4. Default → Lemonfox TTS (adam/river) → Chatterbox fallback → Gemini fallback
  *
  * Key rotation: accepts array of Google API keys (reverse order: KEY_3, KEY_2, KEY_1).
  * Batching: processes max BATCH_SIZE=3 scenes at once with 500ms inter-batch delay.
@@ -42,6 +42,7 @@ export interface AudioEngineConfig {
   replicateApiKey: string;
   googleApiKeys: string[];         // reverse order: [KEY_3, KEY_2, KEY_1]
   elevenLabsApiKey?: string;
+  lemonfoxApiKey?: string;         // Lemonfox TTS API key
   supabase: any;
   storage: StorageStrategy;
   voiceGender?: string;            // "male" | "female"
@@ -638,6 +639,83 @@ async function transformWithElevenLabsSTS(
   }
 }
 
+// ============= LEMONFOX TTS =============
+
+const LEMONFOX_TTS_URL = "https://api.lemonfox.ai/v1/audio/speech";
+const LEMONFOX_MAX_RETRIES = 3;
+
+async function generateLemonfoxTTS(
+  scene: AudioScene,
+  sceneNumber: number,
+  lemonfoxApiKey: string,
+  supabase: any,
+  storage: StorageStrategy,
+  voiceGender: string,
+): Promise<AudioResult> {
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  // adam for male, river for female
+  const voice = voiceGender === "male" ? "adam" : "river";
+
+  for (let attempt = 1; attempt <= LEMONFOX_MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[TTS-Lemonfox] Scene ${sceneNumber}: Using voice "${voice}" (attempt ${attempt}/${LEMONFOX_MAX_RETRIES})`);
+
+      const response = await fetch(LEMONFOX_TTS_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lemonfoxApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: voiceoverText,
+          voice,
+          response_format: "mp3",
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        console.error(`[TTS-Lemonfox] API error: ${response.status} - ${errText}`);
+
+        if ((response.status === 429 || response.status >= 500) && attempt < LEMONFOX_MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          console.warn(`[TTS-Lemonfox] Scene ${sceneNumber}: ${response.status}, retry in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+
+        return { url: null, error: `Lemonfox TTS failed: ${response.status}` };
+      }
+
+      const audioBytes = new Uint8Array(await response.arrayBuffer());
+      if (audioBytes.length < 100) {
+        console.error(`[TTS-Lemonfox] Scene ${sceneNumber}: Suspiciously small audio (${audioBytes.length} bytes)`);
+        return { url: null, error: "Lemonfox returned empty audio" };
+      }
+
+      // Estimate duration from MP3 file size (128kbps = 16000 bytes/sec)
+      const durationSeconds = Math.max(1, audioBytes.length / 16000);
+
+      const url = await uploadAndGetUrl(supabase, audioBytes, "audio/mpeg", storage, sceneNumber);
+
+      console.log(`[TTS-Lemonfox] Scene ${sceneNumber} ✅ SUCCESS (${durationSeconds.toFixed(1)}s, voice: ${voice})`);
+      return { url, durationSeconds, provider: `Lemonfox TTS (${voice})` };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Unknown Lemonfox error";
+      console.error(`[TTS-Lemonfox] Scene ${sceneNumber} attempt ${attempt} error:`, errorMsg);
+      if (attempt < LEMONFOX_MAX_RETRIES) {
+        await sleep(2000 * Math.pow(2, attempt - 1));
+      }
+    }
+  }
+
+  return { url: null, error: `Lemonfox TTS failed after ${LEMONFOX_MAX_RETRIES} attempts` };
+}
+
 // ============= REPLICATE CHATTERBOX (Chunk & Stitch) =============
 
 async function callChatterboxChunk(
@@ -765,6 +843,7 @@ export async function generateSceneAudio(
     replicateApiKey,
     googleApiKeys,
     elevenLabsApiKey,
+    lemonfoxApiKey,
     supabase,
     storage,
     voiceGender = "female",
@@ -826,7 +905,19 @@ export async function generateSceneAudio(
     return { ...result, provider: result.provider || "Gemini TTS" };
   }
 
-  // ========== CASE 4: Default (English/other) — Chatterbox with Gemini fallback ==========
+  // ========== CASE 4: Default (English/other) — Lemonfox → Chatterbox → Gemini fallback ==========
+
+  // Try Lemonfox first (if key available)
+  if (lemonfoxApiKey) {
+    console.log(`[TTS] Scene ${scene.number}: Standard voice via Lemonfox TTS`);
+    const lemonfoxResult = await generateLemonfoxTTS(
+      scene, scene.number, lemonfoxApiKey, supabase, storage, voiceGender,
+    );
+    if (lemonfoxResult.url) return lemonfoxResult;
+    console.warn(`[TTS] Scene ${scene.number}: Lemonfox failed (${lemonfoxResult.error}), falling back to Chatterbox`);
+  }
+
+  // Chatterbox fallback
   console.log(`[TTS] Scene ${scene.number}: Standard voice via Chatterbox`);
   const chatterboxResult = await generateChatterboxChunked(
     scene, scene.number, replicateApiKey, supabase, storage, voiceGender,
@@ -847,7 +938,7 @@ export async function generateSceneAudio(
       return { ...geminiResult, provider: "Gemini TTS (Chatterbox fallback)" };
     }
     console.error(`[TTS] Scene ${scene.number}: Gemini TTS fallback also failed: ${geminiResult.error}`);
-    return { url: null, error: `TTS failed: Chatterbox (${chatterboxResult.error}), Gemini (${geminiResult.error})` };
+    return { url: null, error: `TTS failed: Lemonfox, Chatterbox (${chatterboxResult.error}), Gemini (${geminiResult.error})` };
   }
 
   // No fallback available

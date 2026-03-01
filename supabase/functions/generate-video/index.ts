@@ -1181,6 +1181,92 @@ async function callReplicateTTSChunk(
   return new Uint8Array(await audioResponse.arrayBuffer());
 }
 
+// ============= LEMONFOX TTS =============
+const LEMONFOX_TTS_URL = "https://api.lemonfox.ai/v1/audio/speech";
+const LEMONFOX_MAX_RETRIES = 3;
+
+async function generateSceneAudioLemonfox(
+  scene: Scene,
+  sceneIndex: number,
+  lemonfoxApiKey: string,
+  supabase: any,
+  userId: string,
+  projectId: string,
+  isRegeneration: boolean = false,
+  voiceGender: string = "female",
+): Promise<{ url: string | null; error?: string; durationSeconds?: number; provider?: string }> {
+  const voiceoverText = sanitizeVoiceover(scene.voiceover);
+  if (!voiceoverText || voiceoverText.length < 2) {
+    return { url: null, error: "No voiceover text" };
+  }
+
+  const voice = voiceGender === "male" ? "adam" : "river";
+
+  for (let attempt = 1; attempt <= LEMONFOX_MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[TTS-Lemonfox] Scene ${sceneIndex + 1}: voice "${voice}" (attempt ${attempt}/${LEMONFOX_MAX_RETRIES})`);
+
+      const response = await fetch(LEMONFOX_TTS_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lemonfoxApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: voiceoverText,
+          voice,
+          response_format: "mp3",
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        console.error(`[TTS-Lemonfox] Scene ${sceneIndex + 1}: API error ${response.status} - ${errText}`);
+        if ((response.status === 429 || response.status >= 500) && attempt < LEMONFOX_MAX_RETRIES) {
+          const delayMs = 2000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
+          await sleep(delayMs);
+          continue;
+        }
+        return { url: null, error: `Lemonfox TTS failed: ${response.status}` };
+      }
+
+      const audioBytes = new Uint8Array(await response.arrayBuffer());
+      if (audioBytes.length < 100) {
+        return { url: null, error: "Lemonfox returned empty audio" };
+      }
+
+      const durationSeconds = Math.max(1, audioBytes.length / 16000);
+
+      const audioPath = isRegeneration
+        ? `${userId}/${projectId}/scene-${sceneIndex + 1}-${Date.now()}.mp3`
+        : `${userId}/${projectId}/scene-${sceneIndex + 1}.mp3`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("audio")
+        .upload(audioPath, audioBytes, { contentType: "audio/mpeg", upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: signedData, error: signError } = await supabase.storage
+        .from("audio")
+        .createSignedUrl(audioPath, 604800);
+
+      if (signError || !signedData?.signedUrl) {
+        throw new Error(`Failed to create signed URL: ${signError?.message || "Unknown error"}`);
+      }
+
+      console.log(`[TTS-Lemonfox] Scene ${sceneIndex + 1} ✅ SUCCESS (${durationSeconds.toFixed(1)}s, voice: ${voice})`);
+      return { url: signedData.signedUrl, durationSeconds, provider: `Lemonfox TTS (${voice})` };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Unknown Lemonfox error";
+      console.error(`[TTS-Lemonfox] Scene ${sceneIndex + 1} attempt ${attempt} error:`, errorMsg);
+      if (attempt < LEMONFOX_MAX_RETRIES) await sleep(2000 * Math.pow(2, attempt - 1));
+    }
+  }
+
+  return { url: null, error: `Lemonfox TTS failed after ${LEMONFOX_MAX_RETRIES} attempts` };
+}
+
 // Generate audio with chunking for long scripts
 async function generateSceneAudioReplicateChunked(
   scene: Scene,
@@ -2170,16 +2256,23 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 4: Default (English/other languages) ==========
-  // Use Replicate Chatterbox with Chunk & Stitch for long scripts
+  // Lemonfox TTS (primary) → Chatterbox fallback
+
+  const LEMONFOX_API_KEY = Deno.env.get("LEMONFOX_API_KEY");
+  if (LEMONFOX_API_KEY) {
+    console.log(`[TTS] Scene ${sceneIndex + 1}: Trying Lemonfox TTS first`);
+    const lemonfoxResult = await generateSceneAudioLemonfox(
+      scene, sceneIndex, LEMONFOX_API_KEY, supabase, userId, projectId, isRegeneration, voiceGender,
+    );
+    if (lemonfoxResult.url) {
+      console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lemonfox TTS`);
+      return lemonfoxResult;
+    }
+    console.warn(`[TTS] Scene ${sceneIndex + 1}: Lemonfox failed (${lemonfoxResult.error}), falling back to Chatterbox`);
+  }
+
   const result = await generateSceneAudioReplicateChunked(
-    scene,
-    sceneIndex,
-    replicateApiKey,
-    supabase,
-    userId,
-    projectId,
-    isRegeneration,
-    voiceGender,
+    scene, sceneIndex, replicateApiKey, supabase, userId, projectId, isRegeneration, voiceGender,
   );
   if (result.url) {
     console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox (Chunked)`);
