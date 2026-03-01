@@ -2185,91 +2185,20 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
-  // Primary: Lemonfox TTS (adam for male, river for female)
-  // Fallback: Gemini TTS with key rotation
+  // Lemonfox TTS: adam (male), river (female)
   if (isHC) {
-    console.log(
-      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole (standard voice), trying Lemonfox first`,
-    );
-
-    // Try Lemonfox first for HC standard voices
     const LEMONFOX_API_KEY = Deno.env.get("LEMONFOX_API_KEY");
-    if (LEMONFOX_API_KEY) {
-      const lemonfoxResult = await generateSceneAudioLemonfox(
-        scene, sceneIndex, LEMONFOX_API_KEY, supabase, userId, projectId, isRegeneration, voiceGender,
-      );
-      if (lemonfoxResult.url) {
-        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lemonfox TTS (HC standard)`);
-        return { ...lemonfoxResult, provider: `Lemonfox TTS HC (${voiceGender === "male" ? "adam" : "river"})` };
-      }
-      console.warn(`[TTS] Scene ${sceneIndex + 1} - Lemonfox failed for HC (${lemonfoxResult.error}), falling back to Gemini TTS`);
+    if (!LEMONFOX_API_KEY) {
+      return { url: null, error: "LEMONFOX_API_KEY not configured for Haitian Creole standard voice" };
     }
-
-    // Fallback: Gemini TTS with key rotation
-    if (googleApiKeys.length > 0) {
-      console.log(
-        `[TTS] Scene ${sceneIndex + 1} - Falling back to Gemini TTS with ${googleApiKeys.length} API keys`,
-      );
-      const KEY_ROTATION_ROUNDS = 5;
-
-      for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
-        if (round > 0) {
-          const roundDelay = 3000 * round;
-          console.log(
-            `[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`,
-          );
-          await sleep(roundDelay);
-        }
-
-        for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
-          const currentKey = googleApiKeys[keyIdx];
-          console.log(
-            `[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`,
-          );
-
-          const geminiResult = await generateSceneAudioGemini(
-            scene,
-            sceneIndex,
-            currentKey,
-            supabase,
-            userId,
-            projectId,
-            round,
-            isRegeneration,
-          );
-
-          if (geminiResult.url) {
-            console.log(
-              `✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1}) on round ${round + 1}`,
-            );
-            return { ...geminiResult, provider: "Gemini TTS" };
-          }
-
-          if (
-            geminiResult.error?.includes("429") ||
-            geminiResult.error?.includes("quota") ||
-            geminiResult.error?.includes("RESOURCE_EXHAUSTED")
-          ) {
-            console.warn(
-              `[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`,
-            );
-            continue;
-          }
-          console.log(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} failed: ${geminiResult.error}`);
-        }
-      }
-    } else {
-      console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API keys configured for HC fallback`);
-    }
-
-    // All TTS options failed for Haitian Creole
-    console.error(
-      `[TTS] Scene ${sceneIndex + 1} - All HC TTS options exhausted (Lemonfox + Gemini)`,
+    console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole standard voice → Lemonfox (${voiceGender === "male" ? "adam" : "river"})`);
+    const lemonfoxResult = await generateSceneAudioLemonfox(
+      scene, sceneIndex, LEMONFOX_API_KEY, supabase, userId, projectId, isRegeneration, voiceGender,
     );
-    return {
-      url: null,
-      error: "Audio generation failed — all TTS options exhausted for Haitian Creole. Please try again later.",
-    };
+    if (lemonfoxResult.url) {
+      console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lemonfox TTS HC (${voiceGender === "male" ? "adam" : "river"})`);
+    }
+    return { ...lemonfoxResult, provider: `Lemonfox TTS HC (${voiceGender === "male" ? "adam" : "river"})` };
   }
 
   // ========== CASE 4: Default (English/other languages) ==========
