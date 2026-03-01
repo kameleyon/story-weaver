@@ -7,7 +7,7 @@
  * Routing:
  *   1. Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs STS
  *   2. Custom Voice (non-HC) → ElevenLabs TTS directly
- *   3. Haitian Creole (standard) → Gemini TTS (3-key rotation) → ElevenLabs STS (IRHApOXLvnW57QJPQH2P / XZUXLIpE3dqJ9aCZUj2R)
+ *   3. Haitian Creole (standard) → Gemini TTS (3-key rotation) → ElevenLabs STS (WyscUDDs9ZWbMjTYd7By / XZUXLIpE3dqJ9aCZUj2R)
  *   4. Default → Lemonfox TTS (adam/river) → Chatterbox fallback → Gemini fallback
  *
  * Key rotation: accepts array of Google API keys (reverse order: KEY_3, KEY_2, KEY_1).
@@ -898,9 +898,9 @@ export async function generateSceneAudio(
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
   // Gemini TTS (3-key rotation, 5 rounds) → ElevenLabs STS (voice-over)
-  // Male: IRHApOXLvnW57QJPQH2P | Female: XZUXLIpE3dqJ9aCZUj2R
+  // Male: WyscUDDs9ZWbMjTYd7By | Female: XZUXLIpE3dqJ9aCZUj2R
   if (isHC && googleApiKeys.length > 0 && elevenLabsApiKey) {
-    const stsVoiceId = voiceGender === "male" ? "IRHApOXLvnW57QJPQH2P" : "XZUXLIpE3dqJ9aCZUj2R";
+    const stsVoiceId = voiceGender === "male" ? "WyscUDDs9ZWbMjTYd7By" : "XZUXLIpE3dqJ9aCZUj2R";
     console.log(`[TTS] Scene ${scene.number}: HC standard voice → Gemini TTS → ElevenLabs STS (${voiceGender}, voice ${stsVoiceId})`);
 
     const geminiResult = await generateGeminiTTSWithKeyRotation(
