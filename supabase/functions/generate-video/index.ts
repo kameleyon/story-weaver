@@ -2046,9 +2046,9 @@ async function generateSceneAudioReplicate(
 
 // ============= UNIFIED TTS HANDLER =============
 // For Haitian Creole + cloned voice: Gemini TTS → ElevenLabs Speech-to-Speech (voice changer)
-// For Haitian Creole (standard voice): Lemonfox TTS (adam/river) → Gemini TTS fallback
+// For Haitian Creole (standard voice): Gemini TTS only (2 models)
 // For custom/cloned voices (non-HC): ElevenLabs directly
-// For English/other: Lemonfox TTS → Chatterbox fallback
+// For English/other: Replicate Chatterbox
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
@@ -2185,20 +2185,74 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
-  // Lemonfox TTS: adam (male), river (female)
+  // Use Gemini TTS with extended fallback (2 models × 5 retries = up to 10 attempts)
   if (isHC) {
-    const LEMONFOX_API_KEY = Deno.env.get("LEMONFOX_API_KEY");
-    if (!LEMONFOX_API_KEY) {
-      return { url: null, error: "LEMONFOX_API_KEY not configured for Haitian Creole standard voice" };
-    }
-    console.log(`[TTS] Scene ${sceneIndex + 1} - Haitian Creole standard voice → Lemonfox (${voiceGender === "male" ? "adam" : "river"})`);
-    const lemonfoxResult = await generateSceneAudioLemonfox(
-      scene, sceneIndex, LEMONFOX_API_KEY, supabase, userId, projectId, isRegeneration, voiceGender,
+    console.log(
+      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with ${googleApiKeys.length} API keys`,
     );
-    if (lemonfoxResult.url) {
-      console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lemonfox TTS HC (${voiceGender === "male" ? "adam" : "river"})`);
+
+    if (googleApiKeys.length > 0) {
+      const KEY_ROTATION_ROUNDS = 5;
+
+      for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
+        if (round > 0) {
+          const roundDelay = 3000 * round;
+          console.log(
+            `[TTS] Scene ${sceneIndex + 1} - Starting round ${round + 1}/${KEY_ROTATION_ROUNDS} (waiting ${roundDelay}ms)`,
+          );
+          await sleep(roundDelay);
+        }
+
+        for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
+          const currentKey = googleApiKeys[keyIdx];
+          console.log(
+            `[TTS] Scene ${sceneIndex + 1} - Round ${round + 1}/${KEY_ROTATION_ROUNDS}, Key ${keyIdx + 1}/${googleApiKeys.length}`,
+          );
+
+          const geminiResult = await generateSceneAudioGemini(
+            scene,
+            sceneIndex,
+            currentKey,
+            supabase,
+            userId,
+            projectId,
+            round,
+            isRegeneration,
+          );
+
+          if (geminiResult.url) {
+            console.log(
+              `✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (key ${keyIdx + 1}) on round ${round + 1}`,
+            );
+            return { ...geminiResult, provider: "Gemini TTS" };
+          }
+
+          // Check if quota exhausted - cycle to next key
+          if (
+            geminiResult.error?.includes("429") ||
+            geminiResult.error?.includes("quota") ||
+            geminiResult.error?.includes("RESOURCE_EXHAUSTED")
+          ) {
+            console.warn(
+              `[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} quota exhausted on round ${round + 1}, cycling to next key`,
+            );
+            continue;
+          }
+          console.log(`[TTS] Scene ${sceneIndex + 1} - Key ${keyIdx + 1} failed: ${geminiResult.error}`);
+        }
+      }
+    } else {
+      console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API keys configured`);
     }
-    return { ...lemonfoxResult, provider: `Lemonfox TTS HC (${voiceGender === "male" ? "adam" : "river"})` };
+
+    // All TTS options failed for Haitian Creole
+    console.error(
+      `[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted after 5 rounds for Haitian Creole`,
+    );
+    return {
+      url: null,
+      error: "Audio generation failed — all TTS API keys exhausted. Please try again later.",
+    };
   }
 
   // ========== CASE 4: Default (English/other languages) ==========
