@@ -725,7 +725,7 @@ QUALITY REQUIREMENTS:
           body: JSON.stringify({
             prompt: imagePrompt,
             model: "nano-banana-2-t2i",
-            resolution: "1k",
+            resolution: "4k",
             aspect_ratio: aspectRatio,
             output_format: "png",
           }),
