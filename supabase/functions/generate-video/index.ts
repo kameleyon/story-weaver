@@ -2046,9 +2046,9 @@ async function generateSceneAudioReplicate(
 
 // ============= UNIFIED TTS HANDLER =============
 // For Haitian Creole + cloned voice: Gemini TTS → ElevenLabs Speech-to-Speech (voice changer)
-// For Haitian Creole (standard voice): Gemini TTS only (2 models)
+// For Haitian Creole (standard voice): Lemonfox TTS (adam/river) → Gemini TTS fallback
 // For custom/cloned voices (non-HC): ElevenLabs directly
-// For English/other: Replicate Chatterbox
+// For English/other: Lemonfox TTS → Chatterbox fallback
 async function generateSceneAudio(
   scene: Scene,
   sceneIndex: number,
@@ -2185,13 +2185,31 @@ async function generateSceneAudio(
   }
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
-  // Use Gemini TTS with extended fallback (2 models × 5 retries = up to 10 attempts)
+  // Primary: Lemonfox TTS (adam for male, river for female)
+  // Fallback: Gemini TTS with key rotation
   if (isHC) {
     console.log(
-      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole, using Gemini TTS with ${googleApiKeys.length} API keys`,
+      `[TTS] Scene ${sceneIndex + 1} - Detected Haitian Creole (standard voice), trying Lemonfox first`,
     );
 
+    // Try Lemonfox first for HC standard voices
+    const LEMONFOX_API_KEY = Deno.env.get("LEMONFOX_API_KEY");
+    if (LEMONFOX_API_KEY) {
+      const lemonfoxResult = await generateSceneAudioLemonfox(
+        scene, sceneIndex, LEMONFOX_API_KEY, supabase, userId, projectId, isRegeneration, voiceGender,
+      );
+      if (lemonfoxResult.url) {
+        console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Lemonfox TTS (HC standard)`);
+        return { ...lemonfoxResult, provider: `Lemonfox TTS HC (${voiceGender === "male" ? "adam" : "river"})` };
+      }
+      console.warn(`[TTS] Scene ${sceneIndex + 1} - Lemonfox failed for HC (${lemonfoxResult.error}), falling back to Gemini TTS`);
+    }
+
+    // Fallback: Gemini TTS with key rotation
     if (googleApiKeys.length > 0) {
+      console.log(
+        `[TTS] Scene ${sceneIndex + 1} - Falling back to Gemini TTS with ${googleApiKeys.length} API keys`,
+      );
       const KEY_ROTATION_ROUNDS = 5;
 
       for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
@@ -2227,7 +2245,6 @@ async function generateSceneAudio(
             return { ...geminiResult, provider: "Gemini TTS" };
           }
 
-          // Check if quota exhausted - cycle to next key
           if (
             geminiResult.error?.includes("429") ||
             geminiResult.error?.includes("quota") ||
@@ -2242,16 +2259,16 @@ async function generateSceneAudio(
         }
       }
     } else {
-      console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API keys configured`);
+      console.warn(`[TTS] Scene ${sceneIndex + 1} - No Google TTS API keys configured for HC fallback`);
     }
 
     // All TTS options failed for Haitian Creole
     console.error(
-      `[TTS] Scene ${sceneIndex + 1} - All ${googleApiKeys.length} Gemini TTS keys exhausted after 5 rounds for Haitian Creole`,
+      `[TTS] Scene ${sceneIndex + 1} - All HC TTS options exhausted (Lemonfox + Gemini)`,
     );
     return {
       url: null,
-      error: "Audio generation failed — all TTS API keys exhausted. Please try again later.",
+      error: "Audio generation failed — all TTS options exhausted for Haitian Creole. Please try again later.",
     };
   }
 
