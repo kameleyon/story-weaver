@@ -1653,6 +1653,7 @@ serve(async (req) => {
         replicateApiKey: replicateToken,
         googleApiKeys,
         elevenLabsApiKey: Deno.env.get("ELEVENLABS_API_KEY"),
+        lemonfoxApiKey: Deno.env.get("LEMONFOX_API_KEY"),
         supabase,
         storage: {
           bucket: "audio-files",
