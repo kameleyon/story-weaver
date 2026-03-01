@@ -7,7 +7,7 @@
  * Routing:
  *   1. Haitian Creole + Custom Voice → Gemini TTS → ElevenLabs STS
  *   2. Custom Voice (non-HC) → ElevenLabs TTS directly
- *   3. Haitian Creole (standard) → Gemini TTS (3-key rotation) → Lemonfox TTS fallback (adam/river)
+ *   3. Haitian Creole (standard) → Gemini TTS (3-key rotation) → ElevenLabs STS (IRHApOXLvnW57QJPQH2P / XZUXLIpE3dqJ9aCZUj2R)
  *   4. Default → Lemonfox TTS (adam/river) → Chatterbox fallback → Gemini fallback
  *
  * Key rotation: accepts array of Google API keys (reverse order: KEY_3, KEY_2, KEY_1).
@@ -897,30 +897,29 @@ export async function generateSceneAudio(
   }
 
   // ========== CASE 3: Haitian Creole (Standard Voice) ==========
-  // Gemini TTS (3-key rotation) → Lemonfox TTS fallback (adam/river)
-  if (isHC && googleApiKeys.length > 0) {
-    console.log(`[TTS] Scene ${scene.number}: HC standard voice via Gemini TTS (${googleApiKeys.length} keys)`);
+  // Gemini TTS (3-key rotation, 5 rounds) → ElevenLabs STS (voice-over)
+  // Male: IRHApOXLvnW57QJPQH2P | Female: XZUXLIpE3dqJ9aCZUj2R
+  if (isHC && googleApiKeys.length > 0 && elevenLabsApiKey) {
+    const stsVoiceId = voiceGender === "male" ? "IRHApOXLvnW57QJPQH2P" : "XZUXLIpE3dqJ9aCZUj2R";
+    console.log(`[TTS] Scene ${scene.number}: HC standard voice → Gemini TTS → ElevenLabs STS (${voiceGender}, voice ${stsVoiceId})`);
+
     const geminiResult = await generateGeminiTTSWithKeyRotation(
       voiceoverText, scene.number, googleApiKeys, supabase, storage,
     );
-    if (geminiResult.url) {
-      return { ...geminiResult, provider: geminiResult.provider || "Gemini TTS" };
+    if (!geminiResult.url) {
+      return { url: null, error: `HC standard TTS failed: Gemini exhausted — ${geminiResult.error}` };
     }
 
-    // Gemini exhausted — fall back to Lemonfox TTS
-    if (lemonfoxApiKey) {
-      console.warn(`[TTS] Scene ${scene.number}: Gemini TTS failed for HC, falling back to Lemonfox TTS`);
-      const lemonfoxResult = await generateLemonfoxTTS(
-        scene, scene.number, lemonfoxApiKey, supabase, storage, voiceGender,
-      );
-      if (lemonfoxResult.url) {
-        console.log(`✅ Scene ${scene.number} SUCCEEDED: Lemonfox TTS fallback for HC`);
-        return { ...lemonfoxResult, provider: `Lemonfox TTS HC fallback (${voiceGender === "male" ? "adam" : "river"})` };
-      }
-      console.error(`[TTS] Scene ${scene.number}: Lemonfox fallback also failed: ${lemonfoxResult.error}`);
+    // Voice-over via ElevenLabs Speech-to-Speech
+    console.log(`[TTS] Scene ${scene.number}: Transforming with ElevenLabs STS (${voiceGender})`);
+    const stsResult = await transformWithElevenLabsSTS(
+      geminiResult.url, stsVoiceId, scene.number, elevenLabsApiKey, supabase, storage,
+    );
+    if (stsResult.url) {
+      console.log(`✅ Scene ${scene.number} SUCCEEDED: Gemini TTS → ElevenLabs STS (HC standard ${voiceGender})`);
+      return { ...stsResult, provider: `ElevenLabs STS HC (${voiceGender})` };
     }
-
-    return { url: null, error: `HC TTS failed: Gemini exhausted${lemonfoxApiKey ? ", Lemonfox fallback failed" : ", no Lemonfox key"}` };
+    return stsResult;
   }
 
   // ========== CASE 4: Default (English/other) — Lemonfox → Chatterbox → Gemini fallback ==========
