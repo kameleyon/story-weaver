@@ -79,15 +79,8 @@ export const CinematicWorkspace = forwardRef<WorkspaceHandle, CinematicWorkspace
 
     const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
 
-    // When "short" is selected, force portrait format and disable landscape/square
-    const disabledFormats: VideoFormat[] = length === "short" ? ["landscape", "square"] : [];
-    
-    // Auto-switch to portrait when short is selected and current format is disabled
-    useEffect(() => {
-      if (length === "short" && (format === "landscape" || format === "square")) {
-        setFormat("portrait");
-      }
-    }, [length, format]);
+    // All formats (landscape, portrait, square) are available for short
+    const disabledFormats: VideoFormat[] = [];
 
     // DB polling: detect if generation completed while app was backgrounded (mobile resilience)
     // IMPORTANT: Only triggers loadProject when the generation is NOT already being actively

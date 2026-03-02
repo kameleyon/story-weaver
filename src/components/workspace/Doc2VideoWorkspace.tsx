@@ -53,15 +53,8 @@ export const Doc2VideoWorkspace = forwardRef<WorkspaceHandle, Doc2VideoWorkspace
 
     const canGenerate = content.trim().length > 0 && !generationState.isGenerating;
 
-    // When "short" is selected, force portrait format and disable landscape/square
-    const disabledFormats: VideoFormat[] = length === "short" ? ["landscape", "square"] : [];
-    
-    // Auto-switch to portrait when short is selected and current format is disabled
-    useEffect(() => {
-      if (length === "short" && (format === "landscape" || format === "square")) {
-        setFormat("portrait");
-      }
-    }, [length, format]);
+    // All formats (landscape, portrait, square) are available for short
+    const disabledFormats: VideoFormat[] = [];
 
     // Load project if projectId provided
     useEffect(() => {
