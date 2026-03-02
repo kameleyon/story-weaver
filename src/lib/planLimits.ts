@@ -20,7 +20,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   free: {
     creditsPerMonth: 5,
     allowedLengths: ["short"],
-    allowedFormats: ["landscape"],
+    allowedFormats: ["landscape", "square"],
     infographicsPerMonth: 0,
     voiceClones: 0,
     allowBrandMark: false,
