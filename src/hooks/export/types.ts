@@ -85,7 +85,8 @@ export async function findSupportedAudioConfig(
 ): Promise<any | null> {
   for (const cfg of AUDIO_CANDIDATES) {
     try {
-      if (await AudioEncoderCtor.isConfigSupported(cfg)) {
+      const result = await AudioEncoderCtor.isConfigSupported(cfg);
+      if (result?.supported) {
         console.log("[Export:Audio]", "Found supported config:", cfg);
         return cfg;
       }
