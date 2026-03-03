@@ -760,6 +760,60 @@ serve(async (req) => {
         break;
       }
 
+      case "api_call_detail": {
+        const { callId } = params || {};
+        if (!callId) throw new Error("callId is required");
+
+        // Get the specific call
+        const { data: call, error: callError } = await supabaseAdmin
+          .from("api_call_logs")
+          .select("*")
+          .eq("id", callId)
+          .single();
+
+        if (callError) throw callError;
+
+        // Get related API calls for the same generation (if generation_id exists)
+        let relatedCalls: any[] = [];
+        if (call.generation_id) {
+          const { data: related } = await supabaseAdmin
+            .from("api_call_logs")
+            .select("*")
+            .eq("generation_id", call.generation_id)
+            .order("created_at", { ascending: true });
+          relatedCalls = related || [];
+        }
+
+        // Get system logs for the same generation
+        let systemLogs: any[] = [];
+        if (call.generation_id) {
+          const { data: sysLogs } = await supabaseAdmin
+            .from("system_logs")
+            .select("*")
+            .eq("generation_id", call.generation_id)
+            .order("created_at", { ascending: true })
+            .limit(200);
+          systemLogs = sysLogs || [];
+        }
+
+        // Enrich call with user display
+        const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+        const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, display_name");
+        const au = authUsers?.users.find(u => u.id === call.user_id);
+        const profile = profiles?.find(p => p.user_id === call.user_id);
+        const userDisplay = profile?.display_name || au?.email?.split("@")[0] || call.user_id.slice(0, 8);
+
+        result = {
+          call: { ...call, user_display: userDisplay },
+          related_calls: relatedCalls.map(rc => ({
+            ...rc,
+            user_display: userDisplay,
+          })),
+          system_logs: systemLogs,
+        };
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
