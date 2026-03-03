@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { RefreshCw, Filter, CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import { RefreshCw, Filter, CheckCircle, XCircle, Clock, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 interface ApiCallLog {
   id: string;
   generation_id: string | null;
   user_id: string;
+  user_display?: string;
   provider: string;
   model: string;
   status: string;
@@ -38,19 +40,33 @@ export function AdminApiCalls() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [providerFilter, setProviderFilter] = useState<string>("all");
+  const [userSearch, setUserSearch] = useState("");
+  const [activeUserSearch, setActiveUserSearch] = useState("");
 
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["admin-api-calls", page, statusFilter, providerFilter],
+    queryKey: ["admin-api-calls", page, statusFilter, providerFilter, activeUserSearch],
     queryFn: async () => {
       const result = await callAdminApi("api_calls_list", {
         page,
         limit: 50,
         status: statusFilter === "all" ? undefined : statusFilter,
         provider: providerFilter === "all" ? undefined : providerFilter,
+        user_search: activeUserSearch || undefined,
       });
       return result as ApiCallsResponse;
     },
   });
+
+  const handleUserSearch = () => {
+    setPage(1);
+    setActiveUserSearch(userSearch.trim());
+  };
+
+  const clearUserSearch = () => {
+    setUserSearch("");
+    setActiveUserSearch("");
+    setPage(1);
+  };
 
   const formatDuration = (ms: number | null) => {
     if (ms === null || ms === undefined) return "-";
@@ -98,24 +114,15 @@ export function AdminApiCalls() {
   };
 
   const getProviderColor = (provider: string) => {
-    // Use teal theme shades for all providers per admin UI spec
     switch (provider.toLowerCase()) {
-      case "openrouter":
-        return "text-primary"; // Main teal - for OpenRouter (script generation)
-      case "lovable_ai":
-        return "text-[hsl(170,45%,55%)]"; // Mid teal - for image editing
-      case "replicate":
-        return "text-[hsl(170,55%,65%)]"; // Lighter teal
-      case "replicate_fallback":
-        return "text-[hsl(30,70%,50%)]"; // Orange for fallback
-      case "hypereal":
-        return "text-[hsl(170,55%,40%)]"; // Darker teal
-      case "google_tts":
-        return "text-[hsl(170,30%,50%)]"; // Muted teal
-      case "elevenlabs":
-        return "text-[hsl(170,45%,55%)]"; // Mid teal
-      default:
-        return "text-muted-foreground";
+      case "openrouter": return "text-primary";
+      case "lovable_ai": return "text-[hsl(170,45%,55%)]";
+      case "replicate": return "text-[hsl(170,55%,65%)]";
+      case "replicate_fallback": return "text-[hsl(30,70%,50%)]";
+      case "hypereal": return "text-[hsl(170,55%,40%)]";
+      case "google_tts": return "text-[hsl(170,30%,50%)]";
+      case "elevenlabs": return "text-[hsl(170,45%,55%)]";
+      default: return "text-muted-foreground";
     }
   };
 
@@ -123,52 +130,76 @@ export function AdminApiCalls() {
     <div className="space-y-4">
       <Card className="bg-card border shadow-sm">
         <CardHeader className="py-3 px-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle className="text-base font-medium flex items-center gap-2">
-              <Filter className="h-4 w-4 text-[#49cdbf]" />
-              API Call Logs
-            </CardTitle>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[120px] h-8 text-xs">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="succeeded">Succeeded</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="running">Running</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={providerFilter} onValueChange={setProviderFilter}>
-                <SelectTrigger className="w-[130px] h-8 text-xs">
-                  <SelectValue placeholder="Provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Providers</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
-                  <SelectItem value="replicate">Replicate</SelectItem>
-                  <SelectItem value="hypereal">Hypereal</SelectItem>
-                  <SelectItem value="google_tts">Google TTS</SelectItem>
-                  <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                  <SelectItem value="lovable_ai">Lovable AI</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isFetching}
-                className="h-8 text-xs"
-              >
-                <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? "animate-spin" : ""}`} />
-                Refresh
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Filter className="h-4 w-4 text-[#49cdbf]" />
+                API Call Logs
+              </CardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+                  <SelectTrigger className="w-[120px] h-8 text-xs">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="succeeded">Succeeded</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="running">Running</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={providerFilter} onValueChange={(v) => { setProviderFilter(v); setPage(1); }}>
+                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                    <SelectValue placeholder="Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Providers</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                    <SelectItem value="replicate">Replicate</SelectItem>
+                    <SelectItem value="hypereal">Hypereal</SelectItem>
+                    <SelectItem value="google_tts">Google TTS</SelectItem>
+                    <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                    <SelectItem value="lovable_ai">Lovable AI</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  className="h-8 text-xs"
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+            {/* User search bar */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search by user email or name..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleUserSearch()}
+                  className="h-8 pl-8 pr-8 text-xs"
+                />
+                {userSearch && (
+                  <button onClick={clearUserSearch} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <Button variant="outline" size="sm" onClick={handleUserSearch} className="h-8 text-xs">
+                Search
               </Button>
-              {data && (
-                <span className="text-xs text-muted-foreground">
-                  Last updated: {format(new Date(), "MMM dd HH:mm:ss")}
-                </span>
+              {activeUserSearch && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  User: {activeUserSearch}
+                  <button onClick={clearUserSearch}><X className="h-3 w-3" /></button>
+                </Badge>
               )}
             </div>
           </div>
@@ -182,7 +213,9 @@ export function AdminApiCalls() {
             </div>
           ) : !data?.logs?.length ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              No API calls logged yet. API calls will appear here once the generate-video edge function is updated to log them.
+              {activeUserSearch
+                ? `No API calls found for "${activeUserSearch}".`
+                : "No API calls logged yet."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -190,7 +223,7 @@ export function AdminApiCalls() {
                 <TableHeader>
                   <TableRow className="text-xs">
                     <TableHead className="py-2 px-2">Status</TableHead>
-                    <TableHead className="py-2 px-2">ID</TableHead>
+                    <TableHead className="py-2 px-2">User</TableHead>
                     <TableHead className="py-2 px-2">Provider / Model</TableHead>
                     <TableHead className="py-2 px-2 text-right">Queued</TableHead>
                     <TableHead className="py-2 px-2 text-right">Running</TableHead>
@@ -205,8 +238,14 @@ export function AdminApiCalls() {
                       <TableCell className="py-2 px-2">
                         {getStatusBadge(log.status)}
                       </TableCell>
-                      <TableCell className="py-2 px-2 font-mono text-[10px] text-muted-foreground">
-                        {log.id.slice(0, 8)}...
+                      <TableCell className="py-2 px-2">
+                        <button
+                          onClick={() => { setUserSearch(log.user_display || log.user_id.slice(0, 8)); setActiveUserSearch(log.user_display || log.user_id.slice(0, 8)); setPage(1); }}
+                          className="text-primary hover:underline font-medium truncate max-w-[120px] block"
+                          title={log.user_id}
+                        >
+                          {log.user_display || log.user_id.slice(0, 8)}
+                        </button>
                       </TableCell>
                       <TableCell className="py-2 px-2">
                         <div className="flex flex-col">
