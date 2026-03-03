@@ -688,7 +688,31 @@ serve(async (req) => {
       }
 
       case "api_calls_list": {
-        const { page = 1, limit = 50, status, provider } = params || {};
+        const { page = 1, limit = 50, status, provider, user_id, user_search } = params || {};
+
+        // If user_search is provided, resolve to user_id(s)
+        let resolvedUserIds: string[] = [];
+        if (user_search && typeof user_search === "string" && user_search.trim()) {
+          const searchLower = user_search.trim().toLowerCase();
+          const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, display_name");
+          
+          resolvedUserIds = (authUsers?.users || [])
+            .filter(u => {
+              const profile = profiles?.find(p => p.user_id === u.id);
+              return (
+                u.email?.toLowerCase().includes(searchLower) ||
+                profile?.display_name?.toLowerCase().includes(searchLower)
+              );
+            })
+            .map(u => u.id);
+
+          // If no users matched, return empty
+          if (resolvedUserIds.length === 0) {
+            result = { logs: [], total: 0, page, limit, totalPages: 0, resolvedUsers: [] };
+            break;
+          }
+        }
 
         let query = supabaseAdmin
           .from("api_call_logs")
@@ -701,14 +725,33 @@ serve(async (req) => {
         if (provider) {
           query = query.eq("provider", provider);
         }
+        // Apply user filter
+        if (user_id) {
+          query = query.eq("user_id", user_id);
+        } else if (resolvedUserIds.length > 0) {
+          query = query.in("user_id", resolvedUserIds);
+        }
 
         const { data: logs, count, error: logsError } = await query
           .range((page - 1) * limit, page * limit - 1);
 
         if (logsError) throw logsError;
 
+        // Enrich logs with user email for display
+        const logUserIds = [...new Set((logs || []).map(l => l.user_id))];
+        let userEmailMap: Record<string, string> = {};
+        if (logUserIds.length > 0) {
+          const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, display_name");
+          for (const uid of logUserIds) {
+            const au = authUsers?.users.find(u => u.id === uid);
+            const profile = profiles?.find(p => p.user_id === uid);
+            userEmailMap[uid] = profile?.display_name || au?.email?.split("@")[0] || uid.slice(0, 8);
+          }
+        }
+
         result = {
-          logs: logs || [],
+          logs: (logs || []).map(l => ({ ...l, user_display: userEmailMap[l.user_id] || l.user_id.slice(0, 8) })),
           total: count || 0,
           page,
           limit,
