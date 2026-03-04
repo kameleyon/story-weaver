@@ -668,6 +668,14 @@ serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(20);
 
+        // Get user's system logs
+        const { data: userLogs } = await supabaseAdmin
+          .from("system_logs")
+          .select("*")
+          .eq("user_id", targetUserId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+
         result = {
           user: authUser?.user,
           profile,
@@ -683,6 +691,7 @@ serve(async (req) => {
           recentGenerations: generations,
           flags,
           recentTransactions: transactions,
+          recentUserLogs: userLogs,
         };
         break;
       }
