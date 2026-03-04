@@ -399,10 +399,10 @@ const PRICING = {
   // Audio - Chatterbox TTS on Replicate
   audioPerCall: 0.01, // ~$0.01 per audio generation call (Replicate chatterbox)
   audioPerSecond: 0.002, // fallback estimate
-  // Images - Hypereal nano-banana-2-t2i pricing
-  imageNanoBanana: 0.04, // $0.04 per image (google/nano-banana on Replicate fallback)
+  // Images - Hypereal gemini-3-1-flash-t2i pricing
+  imageNanoBanana: 0.04, // $0.04 per image (google/nano-banana-2 on Replicate fallback)
   imageNanoBananaPro: 0.05, // $0.05 per image (nano-banana-pro higher res - legacy)
-  imageNanoBanana2: 0.04, // $0.04 per image (nano-banana-2-t2i on Hypereal)
+  imageNanoBanana2: 0.04, // $0.04 per image (gemini-3-1-flash-t2i on Hypereal)
 };
 
 // ============= LLM CALL HELPER (OpenRouter Only) =============
@@ -621,7 +621,7 @@ const TEXT_OVERLAY_STYLES = ["minimalist", "doodle", "stick"];
 // These styles require higher quality rendering regardless of subscription tier
 const PREMIUM_REQUIRED_STYLES = ["sketch"]; // Papercut 3D style
 
-// Pro/Enterprise tiers that get Replicate nano-banana-pro access
+// Pro/Enterprise tiers that get Replicate nano-banana-pro access (fallback only; Hypereal uses gemini-3-1-flash-t2i for all)
 const PRO_TIER_PLANS = ["professional", "enterprise"];
 
 // ============= SUBSCRIPTION TIER CHECK =============
@@ -655,7 +655,7 @@ async function isProOrEnterpriseTier(supabase: any, userId: string): Promise<boo
   }
 }
 
-// ============= IMAGE GENERATION WITH HYPEREAL (nano-banana-2-t2i via https://hypereal.tech/api/v1/images/generate) =============
+// ============= IMAGE GENERATION WITH HYPEREAL (gemini-3-1-flash-t2i via https://hypereal.tech/api/v1/images/generate) =============
 const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
 const HYPEREAL_IMAGE_RETRIES = 4;
 
@@ -663,9 +663,9 @@ async function generateImageWithHypereal(
   prompt: string,
   hyperealApiKey: string,
   format: string,
-  _useProModel: boolean = true, // kept for signature compat but model is always nano-banana-2-t2i
+  _useProModel: boolean = true, // kept for signature compat but model is always gemini-3-1-flash-t2i
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number }> {
-  const hyperealModel = "nano-banana-2-t2i";
+  const hyperealModel = "gemini-3-1-flash-t2i";
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
 
   let lastError = "Unknown error";
@@ -2293,8 +2293,8 @@ async function generateImageWithReplicate(
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-  const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana";
+  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana-2";
+  const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana 2";
 
   const input: Record<string, unknown> = {
     prompt,
@@ -2418,8 +2418,8 @@ async function editImageWithReplicatePro(
   overlayText?: { title?: string; subtitle?: string },
   useProModel: boolean = true,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const editModelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
-  const editModelLabel = useProModel ? "Nano Banana Pro" : "Nano Banana";
+  const editModelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana-2";
+  const editModelLabel = useProModel ? "Nano Banana Pro" : "Nano Banana 2";
   try {
     console.log(`[editImage] Starting image edit with Replicate ${editModelLabel}...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
@@ -3430,7 +3430,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
     if (hyperealApiKey) {
       console.log(
-        `[HYPEREAL] Character Consistency enabled - generating ${Object.keys(parsedScript.characters).length} character references with nano-banana-2-t2i`,
+        `[HYPEREAL] Character Consistency enabled - generating ${Object.keys(parsedScript.characters).length} character references with gemini-3-1-flash-t2i`,
       );
 
       // Generate reference images for each character in parallel (max 4 at a time)
@@ -3949,9 +3949,9 @@ async function handleImagesPhase(
 
   const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT;
 
-  // Hypereal always uses nano-banana-2-t2i for all tiers
+  // Hypereal always uses gemini-3-1-flash-t2i for all tiers
   console.log(
-    `[IMAGES] Using Hypereal nano-banana-2-t2i (Replicate fallback: ${useProModel ? "nano-banana-pro" : "nano-banana"}) (project type: ${generation.projects.project_type})`,
+    `[IMAGES] Using Hypereal gemini-3-1-flash-t2i (Replicate fallback: ${useProModel ? "nano-banana-pro" : "nano-banana-2"}) (project type: ${generation.projects.project_type})`,
   );
 
   const scenes = generation.scenes as Scene[];
@@ -4142,8 +4142,8 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       endIndex,
       totalImages,
       primaryProvider: "hypereal",
-      model: "nano-banana-2-t2i",
-      fallbackModel: useProModel ? "nano-banana-pro" : "nano-banana",
+      model: "gemini-3-1-flash-t2i",
+      fallbackModel: useProModel ? "nano-banana-pro" : "nano-banana-2",
       format,
       style,
     },
@@ -4212,7 +4212,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           if (staggerDelay > 0) await sleep(staggerDelay);
 
           let actualProvider = "hypereal"; // Track which provider actually succeeded
-          let actualModel = "nano-banana-2-t2i";
+          let actualModel = "gemini-3-1-flash-t2i";
           const imageCallStart = Date.now();
 
           const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
@@ -4224,7 +4224,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               console.log(`[IMG] Using Hypereal ${actualModel} for task ${task.taskIndex} (attempt ${attempt}/4)`);
               const result = await generateImageWithHypereal(task.prompt, hyperealApiKey, format, useProModel);
               actualProvider = "hypereal";
-              actualModel = "nano-banana-2-t2i";
+              actualModel = "gemini-3-1-flash-t2i";
 
               if (result.ok) {
                 const imageCallDuration = Date.now() - imageCallStart;
@@ -4890,12 +4890,12 @@ STYLE: ${styleDescription}
 Professional illustration with dynamic composition and clear visual hierarchy.`;
 
     // Use Hypereal for T2I regeneration, fallback to Replicate
-    // All tiers use Hypereal nano-banana-2-t2i, fallback to Replicate
+    // All tiers use Hypereal gemini-3-1-flash-t2i, fallback to Replicate
     const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
     let usedFallback = false;
 
     if (hyperealApiKey) {
-      console.log(`[regenerate-image] Using Hypereal nano-banana-2-t2i for regeneration`);
+      console.log(`[regenerate-image] Using Hypereal gemini-3-1-flash-t2i for regeneration`);
       const hyperealStartTime = Date.now();
       imageResult = await generateImageWithHypereal(fullPrompt, hyperealApiKey, format, useProModel);
       const hyperealDurationMs = Date.now() - hyperealStartTime;
@@ -4905,7 +4905,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
         userId: user.id,
         generationId,
         provider: "replicate" as any,
-        model: "hypereal/nano-banana-2-t2i",
+        model: "hypereal/gemini-3-1-flash-t2i",
         status: imageResult.ok ? "success" : "error",
         totalDurationMs: hyperealDurationMs,
         cost: imageResult.ok ? PRICING.imageNanoBanana2 : 0,
@@ -4968,7 +4968,7 @@ Professional illustration with dynamic composition and clear visual hierarchy.`;
       userId: user.id,
       generationId,
       provider: "replicate",
-      model: useProModel ? "google/nano-banana-pro" : "google/nano-banana",
+      model: useProModel ? "google/nano-banana-pro" : "google/nano-banana-2",
       status: imageResult.ok ? "success" : "error",
       totalDurationMs: editDurationMs,
       cost: imageResult.ok ? (useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana) : 0,

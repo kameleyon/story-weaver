@@ -68,7 +68,7 @@ const SEEDANCE_VIDEO_MODEL = "bytedance/seedance-1-pro-fast";
 const GROK_VIDEO_MODEL = "xai/grok-imagine-video";
 
 // Nano Banana models for image generation (Replicate)
-const NANO_BANANA_MODEL = "google/nano-banana";
+const NANO_BANANA_MODEL = "google/nano-banana-2";
 
 // ============= STYLE PROMPTS (from generate-video/index.ts) =============
 const STYLE_PROMPTS: Record<string, string> = {
@@ -674,7 +674,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 // resolveChatterbox removed — shared engine handles Chatterbox synchronously
 
 // ============================================
-// STEP 3: Image Generation with Hypereal nano-banana-2-t2i
+// STEP 3: Image Generation with Hypereal gemini-3-1-flash-t2i
 // ============================================
 const HYPEREAL_API_URL = "https://hypereal.tech/api/v1/images/generate";
 
@@ -708,10 +708,10 @@ QUALITY REQUIREMENTS:
   const hyperealApiKey = Deno.env.get("HYPEREAL_API_KEY");
   const MAX_IMG_RETRIES = 4;
 
-  // Prefer Hypereal nano-banana-2-t2i
+  // Prefer Hypereal gemini-3-1-flash-t2i
   if (hyperealApiKey) {
     console.log(
-      `[IMG] Generating scene ${scene.number} with Hypereal nano-banana-2-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
+      `[IMG] Generating scene ${scene.number} with Hypereal gemini-3-1-flash-t2i, format: ${format}, aspect_ratio: ${aspectRatio}`,
     );
 
     for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
@@ -724,7 +724,7 @@ QUALITY REQUIREMENTS:
           },
           body: JSON.stringify({
             prompt: imagePrompt,
-            model: "nano-banana-2-t2i",
+            model: "gemini-3-1-flash-t2i",
             resolution: "4k",
             aspect_ratio: aspectRatio,
             output_format: "png",
@@ -745,7 +745,7 @@ QUALITY REQUIREMENTS:
             continue;
           }
 
-          throw new Error(`Hypereal nano-banana-2-t2i failed: ${response.status}`);
+          throw new Error(`Hypereal gemini-3-1-flash-t2i failed: ${response.status}`);
         }
 
         const data = await response.json();
@@ -810,8 +810,8 @@ QUALITY REQUIREMENTS:
     }
   }
 
-  // Fallback to Replicate nano-banana if Hypereal key not available
-  console.log(`[IMG] HYPEREAL_API_KEY not set, falling back to Replicate nano-banana for scene ${scene.number}`);
+  // Fallback to Replicate nano-banana-2 if Hypereal key not available
+  console.log(`[IMG] HYPEREAL_API_KEY not set, falling back to Replicate nano-banana-2 for scene ${scene.number}`);
 
   for (let attempt = 1; attempt <= MAX_IMG_RETRIES; attempt++) {
     try {
@@ -834,7 +834,7 @@ QUALITY REQUIREMENTS:
       if (!createResponse.ok) {
         const errText = await createResponse.text();
         console.error(
-          `[IMG] Replicate nano-banana create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`,
+          `[IMG] Replicate nano-banana-2 create failed (attempt ${attempt}): ${createResponse.status} - ${errText}`,
         );
 
         // FIX 2: Only retry on 429, not 5xx
@@ -843,7 +843,7 @@ QUALITY REQUIREMENTS:
           await sleep(retryAfterMs);
           continue;
         }
-        throw new Error(`Replicate nano-banana failed: ${createResponse.status}`);
+        throw new Error(`Replicate nano-banana-2 failed: ${createResponse.status}`);
       }
 
       let prediction = await createResponse.json();
