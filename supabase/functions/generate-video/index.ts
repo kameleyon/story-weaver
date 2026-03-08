@@ -2416,8 +2416,8 @@ async function editImageWithReplicatePro(
   overlayText?: { title?: string; subtitle?: string },
   useProModel: boolean = true,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const editModelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana-2";
-  const editModelLabel = useProModel ? "Nano Banana Pro" : "Nano Banana 2";
+  const editModelPath = "google/nano-banana-2";
+  const editModelLabel = "Nano Banana 2";
   try {
     console.log(`[editImage] Starting image edit with Replicate ${editModelLabel}...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
