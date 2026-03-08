@@ -3005,7 +3005,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
