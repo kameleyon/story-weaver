@@ -4141,7 +4141,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       totalImages,
       primaryProvider: "hypereal",
       model: "gemini-3-1-flash-t2i",
-      fallbackModel: useProModel ? "nano-banana-pro" : "nano-banana-2",
+      fallbackModel: "nano-banana-2",
       format,
       style,
     },
