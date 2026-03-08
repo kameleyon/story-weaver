@@ -4376,14 +4376,14 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   // Update cost tracking
   costTracking.imagesGenerated = newCompletedTotal;
   costTracking.imageProvider = "replicate";
-  costTracking.imageModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  costTracking.imageModel = "google/nano-banana-2";
 
   console.log(
-    `[IMG] Final stats: ${newCompletedTotal} images generated with Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"}`,
+    `[IMG] Final stats: ${newCompletedTotal} images generated`,
   );
 
-  // Calculate costs based on Replicate pricing
-  const imageCost = newCompletedTotal * (useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana);
+  // Calculate costs based on pricing
+  const imageCost = newCompletedTotal * PRICING.imageNanoBanana;
   costTracking.estimatedCostUsd =
     costTracking.scriptTokens * PRICING.scriptPerToken + costTracking.audioSeconds * PRICING.audioPerSecond + imageCost;
 

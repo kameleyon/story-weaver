@@ -1899,7 +1899,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
 
       let editPrediction = await editResponse.json();
       console.log(
-        `[IMG-EDIT] Nano Banana Pro prediction started: ${editPrediction.id}, status: ${editPrediction.status}`,
+        `[IMG-EDIT] Nano Banana 2 prediction started: ${editPrediction.id}, status: ${editPrediction.status}`,
       );
 
       // Poll for completion if not finished
