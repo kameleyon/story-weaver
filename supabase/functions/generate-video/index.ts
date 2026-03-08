@@ -4323,7 +4323,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
           supabase,
           userId: user.id,
           generationId,
-          provider: actualProvider || "replicate",
+          provider: provider || "replicate",
           model: model || "google/nano-banana-2",
           status: "success",
           totalDurationMs: durationMs || 0,
