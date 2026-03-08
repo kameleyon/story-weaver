@@ -1893,7 +1893,7 @@ STYLE CONTEXT: ${fullStylePrompt}`;
 
       if (!editResponse.ok) {
         const errText = await editResponse.text();
-        console.error(`[IMG-EDIT] Replicate nano-banana-pro failed: ${editResponse.status} - ${errText}`);
+        console.error(`[IMG-EDIT] Replicate nano-banana-2 failed: ${editResponse.status} - ${errText}`);
         throw new Error("Image editing failed");
       }
 
