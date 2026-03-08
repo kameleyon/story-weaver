@@ -2293,17 +2293,15 @@ async function generateImageWithReplicate(
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana-2";
-  const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana 2";
+  const modelPath = "google/nano-banana-2";
+  const modelName = "Nano Banana 2";
 
   const input: Record<string, unknown> = {
     prompt,
     aspect_ratio: aspectRatio,
     output_format: "png",
+    resolution: "1K",
   };
-  if (useProModel) {
-    input.resolution = "1K";
-  }
 
   let lastError = "Unknown error";
   let lastStatus: number | undefined;
