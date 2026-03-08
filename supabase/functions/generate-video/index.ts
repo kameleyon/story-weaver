@@ -421,7 +421,7 @@ async function callLLMWithFallback(
     model?: string;
   } = {},
 ): Promise<LLMCallResult> {
-  const model = options.model || "google/gemini-3-pro-preview";
+  const model = options.model || "google/gemini-3.1-pro-preview";
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 8192;
 
