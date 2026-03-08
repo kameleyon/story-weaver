@@ -28,9 +28,25 @@ export async function getFreshSession(): Promise<string> {
  * Call a backend phase endpoint with configurable timeout, retries, and fresh auth.
  * Retries up to 3 times for transient network failures and 503 errors.
  */
+/**
+ * Main entry point – routes all calls through the direct Edge Function HTTP path.
+ * Worker queue path (Render) is not yet active.
+ */
 export async function callPhase(
   body: Record<string, unknown>,
-  timeoutMs: number = 120000,
+  timeoutMs: number = 300000,
+  endpoint: string = DEFAULT_ENDPOINT
+): Promise<any> {
+  return legacyCallPhase(body, timeoutMs, endpoint);
+}
+
+/**
+ * Direct Edge Function call with configurable timeout, retries, and fresh auth.
+ * Retries up to 3 times for transient network failures and 503 errors.
+ */
+async function legacyCallPhase(
+  body: Record<string, unknown>,
+  timeoutMs: number = 300000,
   endpoint: string = DEFAULT_ENDPOINT
 ): Promise<any> {
   const MAX_ATTEMPTS = 3;

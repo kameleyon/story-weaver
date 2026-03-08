@@ -396,7 +396,7 @@ export type Database = {
           brand_mark?: string | null
           character_consistency_enabled?: boolean | null
           character_description?: string | null
-          content: string
+          content?: string
           created_at?: string
           description?: string | null
           disable_expressions?: boolean
