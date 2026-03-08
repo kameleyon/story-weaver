@@ -3942,14 +3942,14 @@ async function handleImagesPhase(
   // Check if user is Pro/Enterprise tier — affects Replicate fallback model choice
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
-  // Pro/Enterprise users OR premium-required styles get nano-banana-pro on Replicate fallback
-  const useProModel = isProUser || isPremiumRequiredStyle;
+  // All tiers now use nano-banana-2 on Replicate fallback
+  const useProModel = false;
 
   const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT;
 
   // Hypereal always uses gemini-3-1-flash-t2i for all tiers
   console.log(
-    `[IMAGES] Using Hypereal gemini-3-1-flash-t2i (Replicate fallback: ${useProModel ? "nano-banana-pro" : "nano-banana-2"}) (project type: ${generation.projects.project_type})`,
+    `[IMAGES] Using Hypereal gemini-3-1-flash-t2i (Replicate fallback: nano-banana-2) (project type: ${generation.projects.project_type})`,
   );
 
   const scenes = generation.scenes as Scene[];
