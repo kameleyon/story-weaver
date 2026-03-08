@@ -4259,16 +4259,16 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               }
             }
             hyperealFailed = true;
-            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"}`);
+            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate nano-banana-2`);
           }
 
-          // Fallback to Replicate nano-banana-pro (if Hypereal key missing OR Hypereal failed all retries)
+          // Fallback to Replicate nano-banana-2 (if Hypereal key missing OR Hypereal failed all retries)
           if (!hyperealApiKey || hyperealFailed) {
-            console.log(`[IMG] Using Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"} for task ${task.taskIndex}`);
+            console.log(`[IMG] Using Replicate nano-banana-2 for task ${task.taskIndex}`);
             for (let attempt = 1; attempt <= 3; attempt++) {
-              const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+              const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false);
               actualProvider = "replicate";
-              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+              actualModel = "google/nano-banana-2";
 
               if (result.ok) {
                 const imageCallDuration = Date.now() - imageCallStart;
