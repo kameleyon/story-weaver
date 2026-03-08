@@ -2457,7 +2457,7 @@ STYLE CONTEXT: ${styleDescription}`;
       image_input: [sourceImageUrl], // Pass source image URL for editing
       aspect_ratio: aspectRatio,
       output_format: "png",
-      resolution: useProModel ? "1K" : undefined, // Pro model supports 1K resolution
+      resolution: "1K",
     };
 
     console.log(`[editImage] Calling Replicate ${editModelLabel} with image_input...`);
