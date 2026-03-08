@@ -421,7 +421,7 @@ async function callLLMWithFallback(
     model?: string;
   } = {},
 ): Promise<LLMCallResult> {
-  const model = options.model || "google/gemini-3-pro-preview";
+  const model = options.model || "google/gemini-3.1-pro-preview";
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 8192;
 
@@ -687,7 +687,7 @@ async function generateImageWithHypereal(
           prompt,
           model: hyperealModel,
           aspect_ratio: aspectRatio,
-          resolution: "4k",
+          resolution: "1K",
           output_format: "png",
         }),
       });
@@ -2293,17 +2293,15 @@ async function generateImageWithReplicate(
   { ok: true; bytes: Uint8Array } | { ok: false; error: string; status?: number; retryAfterSeconds?: number }
 > {
   const aspectRatio = format === "portrait" ? "9:16" : format === "square" ? "1:1" : "16:9";
-  const modelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana-2";
-  const modelName = useProModel ? "Nano Banana Pro (1K)" : "Nano Banana 2";
+  const modelPath = "google/nano-banana-2";
+  const modelName = "Nano Banana 2";
 
   const input: Record<string, unknown> = {
     prompt,
     aspect_ratio: aspectRatio,
     output_format: "png",
+    resolution: "1K",
   };
-  if (useProModel) {
-    input.resolution = "1K";
-  }
 
   let lastError = "Unknown error";
   let lastStatus: number | undefined;
@@ -2418,8 +2416,8 @@ async function editImageWithReplicatePro(
   overlayText?: { title?: string; subtitle?: string },
   useProModel: boolean = true,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const editModelPath = useProModel ? "google/nano-banana-pro" : "google/nano-banana-2";
-  const editModelLabel = useProModel ? "Nano Banana Pro" : "Nano Banana 2";
+  const editModelPath = "google/nano-banana-2";
+  const editModelLabel = "Nano Banana 2";
   try {
     console.log(`[editImage] Starting image edit with Replicate ${editModelLabel}...`);
     console.log(`[editImage] Source URL: ${sourceImageUrl.substring(0, 80)}...`);
@@ -2459,7 +2457,7 @@ STYLE CONTEXT: ${styleDescription}`;
       image_input: [sourceImageUrl], // Pass source image URL for editing
       aspect_ratio: aspectRatio,
       output_format: "png",
-      resolution: useProModel ? "1K" : undefined, // Pro model supports 1K resolution
+      resolution: "1K",
     };
 
     console.log(`[editImage] Calling Replicate ${editModelLabel} with image_input...`);
@@ -2657,12 +2655,12 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
   // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
-  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
+  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 4000,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
   });
 
   // Log API call
@@ -2671,7 +2669,7 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
@@ -2993,12 +2991,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
+  console.log("Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 8192,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
   });
 
   // Log API call
@@ -3007,7 +3005,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
@@ -3384,12 +3382,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.8, // Slightly higher for creative storytelling
     maxTokens: 12000, // More tokens for longer narratives
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
   });
 
   // Log API call
@@ -3398,7 +3396,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
@@ -3944,14 +3942,14 @@ async function handleImagesPhase(
   // Check if user is Pro/Enterprise tier — affects Replicate fallback model choice
   const isProUser = await isProOrEnterpriseTier(supabase, user.id);
 
-  // Pro/Enterprise users OR premium-required styles get nano-banana-pro on Replicate fallback
-  const useProModel = isProUser || isPremiumRequiredStyle;
+  // All tiers now use nano-banana-2 on Replicate fallback
+  const useProModel = false;
 
   const maxImagesPerCall = MAX_IMAGES_PER_CALL_DEFAULT;
 
   // Hypereal always uses gemini-3-1-flash-t2i for all tiers
   console.log(
-    `[IMAGES] Using Hypereal gemini-3-1-flash-t2i (Replicate fallback: ${useProModel ? "nano-banana-pro" : "nano-banana-2"}) (project type: ${generation.projects.project_type})`,
+    `[IMAGES] Using Hypereal gemini-3-1-flash-t2i (Replicate fallback: nano-banana-2) (project type: ${generation.projects.project_type})`,
   );
 
   const scenes = generation.scenes as Scene[];
@@ -4143,7 +4141,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
       totalImages,
       primaryProvider: "hypereal",
       model: "gemini-3-1-flash-t2i",
-      fallbackModel: useProModel ? "nano-banana-pro" : "nano-banana-2",
+      fallbackModel: "nano-banana-2",
       format,
       style,
     },
@@ -4167,8 +4165,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let totalImagesGenerated = 0;
 
   // Process this chunk in batches.
-  // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
-  const BATCH_SIZE = useProModel ? 3 : 5;
+  const BATCH_SIZE = 5;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
@@ -4262,16 +4259,16 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
               }
             }
             hyperealFailed = true;
-            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"}`);
+            console.warn(`[IMG] Hypereal exhausted all retries for task ${task.taskIndex}, falling back to Replicate nano-banana-2`);
           }
 
-          // Fallback to Replicate nano-banana-pro (if Hypereal key missing OR Hypereal failed all retries)
+          // Fallback to Replicate nano-banana-2 (if Hypereal key missing OR Hypereal failed all retries)
           if (!hyperealApiKey || hyperealFailed) {
-            console.log(`[IMG] Using Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"} for task ${task.taskIndex}`);
+            console.log(`[IMG] Using Replicate nano-banana-2 for task ${task.taskIndex}`);
             for (let attempt = 1; attempt <= 3; attempt++) {
-              const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, useProModel);
+              const result = await generateImageWithReplicate(task.prompt, replicateApiKey, format, false);
               actualProvider = "replicate";
-              actualModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+              actualModel = "google/nano-banana-2";
 
               if (result.ok) {
                 const imageCallDuration = Date.now() - imageCallStart;
@@ -4321,13 +4318,13 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         totalImagesGenerated++;
 
         // LOG EACH INDIVIDUAL IMAGE API CALL with accurate per-image cost
-        const perImageCost = useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana;
+        const perImageCost = PRICING.imageNanoBanana;
         await logApiCall({
           supabase,
           userId: user.id,
           generationId,
-          provider: "replicate",
-          model: model || "google/nano-banana",
+          provider: actualProvider || "replicate",
+          model: model || "google/nano-banana-2",
           status: "success",
           totalDurationMs: durationMs || 0,
           cost: perImageCost,
@@ -4379,14 +4376,14 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   // Update cost tracking
   costTracking.imagesGenerated = newCompletedTotal;
   costTracking.imageProvider = "replicate";
-  costTracking.imageModel = useProModel ? "google/nano-banana-pro" : "google/nano-banana";
+  costTracking.imageModel = "google/nano-banana-2";
 
   console.log(
-    `[IMG] Final stats: ${newCompletedTotal} images generated with Replicate ${useProModel ? "nano-banana-pro" : "nano-banana"}`,
+    `[IMG] Final stats: ${newCompletedTotal} images generated`,
   );
 
-  // Calculate costs based on Replicate pricing
-  const imageCost = newCompletedTotal * (useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana);
+  // Calculate costs based on pricing
+  const imageCost = newCompletedTotal * PRICING.imageNanoBanana;
   costTracking.estimatedCostUsd =
     costTracking.scriptTokens * PRICING.scriptPerToken + costTracking.audioSeconds * PRICING.audioPerSecond + imageCost;
 
