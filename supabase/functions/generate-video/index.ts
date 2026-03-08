@@ -4318,13 +4318,13 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
         totalImagesGenerated++;
 
         // LOG EACH INDIVIDUAL IMAGE API CALL with accurate per-image cost
-        const perImageCost = useProModel ? PRICING.imageNanoBananaPro : PRICING.imageNanoBanana;
+        const perImageCost = PRICING.imageNanoBanana;
         await logApiCall({
           supabase,
           userId: user.id,
           generationId,
-          provider: "replicate",
-          model: model || "google/nano-banana",
+          provider: actualProvider || "replicate",
+          model: model || "google/nano-banana-2",
           status: "success",
           totalDurationMs: durationMs || 0,
           cost: perImageCost,
