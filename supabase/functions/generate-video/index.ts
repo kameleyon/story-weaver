@@ -4165,8 +4165,7 @@ OUTPUT: Ultra high resolution, professional illustration with dynamic compositio
   let totalImagesGenerated = 0;
 
   // Process this chunk in batches.
-  // Use smaller batch size (3) for nano-banana-pro to avoid rate limits
-  const BATCH_SIZE = useProModel ? 3 : 5;
+  const BATCH_SIZE = 5;
   for (let batchStart = 0; batchStart < tasksThisChunk.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, tasksThisChunk.length);
 
