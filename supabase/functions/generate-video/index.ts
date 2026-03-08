@@ -2655,12 +2655,12 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
   // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
-  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
+  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 4000,
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
   });
 
   // Log API call
