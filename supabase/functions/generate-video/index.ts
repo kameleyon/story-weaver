@@ -3382,12 +3382,12 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3-pro-preview...");
+  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
 
   const llmResult = await callLLMWithFallback(scriptPrompt, {
     temperature: 0.8, // Slightly higher for creative storytelling
     maxTokens: 12000, // More tokens for longer narratives
-    model: "google/gemini-3-pro-preview",
+    model: "google/gemini-3.1-pro-preview",
   });
 
   // Log API call
