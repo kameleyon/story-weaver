@@ -5300,8 +5300,23 @@ serve(async (req) => {
         });
       }
 
+      // ============= PARALLELIZED PRE-FLIGHT CHECKS =============
+      const [moderationResult, { data: subscriptionData }, { data: creditData }] = await Promise.all([
+        moderateContent(content),
+        supabase
+          .from("subscriptions")
+          .select("plan_name, status")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .single(),
+        supabase
+          .from("user_credits")
+          .select("credits_balance")
+          .eq("user_id", user.id)
+          .single(),
+      ]);
+
       // ============= CONTENT MODERATION CHECK =============
-      const moderationResult = await moderateContent(content);
       if (!moderationResult.passed) {
         console.log(`[MODERATION] Content rejected for user ${user.id}: ${moderationResult.reason}`);
 
@@ -5334,24 +5349,9 @@ serve(async (req) => {
         enterprise: 999,
       };
 
-      // Get user subscription and credits
-      const { data: subscriptionData } = await supabase
-        .from("subscriptions")
-        .select("plan_name, status")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .single();
-
       const userPlan = subscriptionData?.plan_name || "free";
       const subscriptionStatus = subscriptionData?.status || null;
       const dailyLimit = PLAN_DAILY_LIMITS[userPlan] || PLAN_DAILY_LIMITS.free;
-
-      // Get user credits
-      const { data: creditData } = await supabase
-        .from("user_credits")
-        .select("credits_balance")
-        .eq("user_id", user.id)
-        .single();
 
       const creditsBalance = creditData?.credits_balance || 0;
 
