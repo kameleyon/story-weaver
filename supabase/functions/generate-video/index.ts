@@ -2352,6 +2352,29 @@ async function generateSceneAudio(
     console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Replicate Chatterbox (Chunked)`);
     return { ...result, provider: "Replicate Chatterbox" };
   }
+
+  // ========== Gemini TTS fallback after Chatterbox failure ==========
+  if (googleApiKeys.length > 0) {
+    console.warn(
+      `[TTS] Scene ${sceneIndex + 1}: Chatterbox exhausted (${result.error}). Falling back to Gemini TTS.`,
+    );
+    const KEY_ROTATION_ROUNDS = 3;
+    for (let round = 0; round < KEY_ROTATION_ROUNDS; round++) {
+      if (round > 0) await sleep(3000 * round);
+      for (let keyIdx = 0; keyIdx < googleApiKeys.length; keyIdx++) {
+        const geminiResult = await generateSceneAudioGemini(
+          scene, sceneIndex, googleApiKeys[keyIdx], supabase, userId, projectId, round, isRegeneration,
+        );
+        if (geminiResult.url) {
+          console.log(`✅ Scene ${sceneIndex + 1} SUCCEEDED with: Gemini TTS (fallback after Chatterbox failure)`);
+          return { ...geminiResult, provider: "Gemini TTS (Chatterbox fallback)" };
+        }
+        if (geminiResult.error?.includes("429") || geminiResult.error?.includes("RESOURCE_EXHAUSTED")) continue;
+      }
+    }
+    console.error(`[TTS] Scene ${sceneIndex + 1}: Gemini TTS fallback also failed`);
+  }
+
   return result;
 }
 
