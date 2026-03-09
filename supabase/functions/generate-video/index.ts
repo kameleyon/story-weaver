@@ -406,14 +406,17 @@ const PRICING = {
 };
 
 // ============= LLM CALL HELPER (OpenRouter Only) =============
-interface LLMCallResult {
+interface LLMCallResult<T = unknown> {
   content: string;
   tokensUsed: number;
   provider: "openrouter";
   durationMs: number;
+  modelUsed: string;
+  parsed?: T;
 }
 
-const FALLBACK_MODEL = "anthropic/claude-sonnet-4.6";
+const PRIMARY_MODEL = "anthropic/claude-sonnet-4.6";
+const FALLBACK_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 async function callOpenRouter(
   apiKey: string,
@@ -421,7 +424,7 @@ async function callOpenRouter(
   prompt: string,
   temperature: number,
   maxTokens: number,
-): Promise<LLMCallResult> {
+): Promise<{ content: string; tokensUsed: number; durationMs: number }> {
   const startTime = Date.now();
   console.log(`[LLM] Calling OpenRouter with ${model}...`);
 
@@ -459,22 +462,42 @@ async function callOpenRouter(
   return {
     content,
     tokensUsed: data.usage?.total_tokens || 0,
-    provider: "openrouter",
     durationMs,
   };
 }
 
-async function callLLMWithFallback(
+// Extract JSON from LLM response (handles fenced code blocks, extra text)
+function extractJsonFromLLMResponse(content: string): string {
+  let cleaned = content.trim();
+  // Strip markdown code blocks if present
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned
+      .replace(/^```[a-z]*\n?/i, "")
+      .replace(/\n?```$/i, "")
+      .trim();
+  }
+  // Extract JSON between first { and last }
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+  return cleaned;
+}
+
+async function callLLMWithFallback<T = unknown>(
   prompt: string,
   options: {
     temperature?: number;
     maxTokens?: number;
     model?: string;
+    parseJson?: boolean; // If true, parse as JSON and treat parse failures as retry-triggering errors
   } = {},
-): Promise<LLMCallResult> {
-  const primaryModel = options.model || "google/gemini-3.1-pro-preview";
+): Promise<LLMCallResult<T>> {
+  const primaryModel = options.model || PRIMARY_MODEL;
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 8192;
+  const shouldParseJson = options.parseJson ?? false;
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) {
@@ -487,10 +510,33 @@ async function callLLMWithFallback(
   for (const model of models) {
     try {
       const result = await callOpenRouter(OPENROUTER_API_KEY, model, prompt, temperature, maxTokens);
+      
+      let parsed: T | undefined;
+      if (shouldParseJson) {
+        // Attempt to parse JSON - if it fails, treat it as a fallback-triggering error
+        try {
+          const jsonStr = extractJsonFromLLMResponse(result.content);
+          parsed = JSON.parse(jsonStr) as T;
+          console.log(`[LLM] JSON parsed successfully from ${model}`);
+        } catch (parseErr) {
+          const parseMsg = parseErr instanceof Error ? parseErr.message : "JSON parse error";
+          console.warn(`[LLM] Model ${model} returned invalid JSON: ${parseMsg}. Content preview: ${result.content.substring(0, 300)}...`);
+          throw new Error(`Invalid JSON from ${model}: ${parseMsg}`);
+        }
+      }
+      
       if (model !== primaryModel) {
         console.warn(`[LLM] Primary model ${primaryModel} failed, succeeded with fallback ${model}`);
       }
-      return result;
+      
+      return {
+        content: result.content,
+        tokensUsed: result.tokensUsed,
+        provider: "openrouter",
+        durationMs: result.durationMs,
+        modelUsed: model,
+        parsed,
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${model}: ${msg}`);
@@ -2682,58 +2728,41 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Create magazine-editorial quality that looks professional
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
-  // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
-  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
+  // Call LLM for script generation via OpenRouter with JSON parsing and fallback
+  console.log(`Phase: SMART FLOW SCRIPT - Generating via OpenRouter with ${PRIMARY_MODEL}...`);
 
-  const llmResult = await callLLMWithFallback(scriptPrompt, {
+  type SmartFlowScript = {
+    title: string;
+    scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }>;
+  };
+
+  const llmResult = await callLLMWithFallback<SmartFlowScript>(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 4000,
-    model: "google/gemini-3.1-pro-preview",
+    model: PRIMARY_MODEL,
+    parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
 
-  // Log API call
+  // Log API call with actual model that succeeded
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3.1-pro-preview",
+    model: llmResult.modelUsed, // Log the actual model that succeeded
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
   console.log(
-    `[API_LOG] ${llmResult.provider} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+    `[API_LOG] ${llmResult.provider}/${llmResult.modelUsed} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
   );
 
   const scriptContent = llmResult.content;
   const tokensUsed = llmResult.tokensUsed;
 
-  // Parse the script
-  let parsedScript: {
-    title: string;
-    scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }>;
-  };
-  try {
-    // Strip markdown code blocks if present
-    let cleanedContent = scriptContent.trim();
-    if (cleanedContent.startsWith("```")) {
-      cleanedContent = cleanedContent
-        .replace(/^```[a-z]*\n?/i, "")
-        .replace(/\n?```$/i, "")
-        .trim();
-    }
-    // Extract JSON between first { and last }
-    const firstBrace = cleanedContent.indexOf("{");
-    const lastBrace = cleanedContent.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      cleanedContent = cleanedContent.slice(firstBrace, lastBrace + 1);
-    }
-    parsedScript = JSON.parse(cleanedContent);
-  } catch (parseError) {
-    console.error("[generate-video] Smart Flow script parsing failed:", parseError);
-    throw new Error("Failed to parse Smart Flow script - invalid JSON response");
-  }
+  // Use pre-parsed script from fallback helper
+  let parsedScript = llmResult.parsed!;
 
   // Force exactly 1 scene
   if (!parsedScript.scenes || parsedScript.scenes.length === 0) {
@@ -3019,27 +3048,28 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
+  console.log(`Phase: DOC2VIDEO SCRIPT - Generating via OpenRouter with ${PRIMARY_MODEL}...`);
 
-  const llmResult = await callLLMWithFallback(scriptPrompt, {
+  const llmResult = await callLLMWithFallback<ScriptResponse>(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 8192,
-    model: "google/gemini-3.1-pro-preview",
+    model: PRIMARY_MODEL,
+    parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
 
-  // Log API call
+  // Log API call with actual model that succeeded
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3.1-pro-preview",
+    model: llmResult.modelUsed, // Log the actual model that succeeded
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
   console.log(
-    `[API_LOG] ${llmResult.provider} Doc2Video script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+    `[API_LOG] ${llmResult.provider}/${llmResult.modelUsed} Doc2Video script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
   );
 
   const scriptContent = llmResult.content;
@@ -3047,14 +3077,8 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   if (!scriptContent) throw new Error("No script content received");
 
-  let parsedScript: ScriptResponse;
-  try {
-    const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found");
-    parsedScript = JSON.parse(jsonMatch[0]);
-  } catch {
-    throw new Error("Failed to parse script");
-  }
+  // Use pre-parsed script from fallback helper
+  let parsedScript = llmResult.parsed!;
 
   // Sanitize voiceovers and append style to visualPrompts for visibility
   parsedScript.scenes = parsedScript.scenes.map((s) => ({
@@ -3410,27 +3434,28 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
+  console.log(`Phase: STORYTELLING SCRIPT - Generating via OpenRouter with ${PRIMARY_MODEL}...`);
 
-  const llmResult = await callLLMWithFallback(scriptPrompt, {
+  const llmResult = await callLLMWithFallback<ScriptResponse>(scriptPrompt, {
     temperature: 0.8, // Slightly higher for creative storytelling
     maxTokens: 12000, // More tokens for longer narratives
-    model: "google/gemini-3.1-pro-preview",
+    model: PRIMARY_MODEL,
+    parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
 
-  // Log API call
+  // Log API call with actual model that succeeded
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3.1-pro-preview",
+    model: llmResult.modelUsed, // Log the actual model that succeeded
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
   console.log(
-    `[API_LOG] ${llmResult.provider} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+    `[API_LOG] ${llmResult.provider}/${llmResult.modelUsed} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
   );
 
   const scriptContent = llmResult.content;
@@ -3438,15 +3463,8 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   if (!scriptContent) throw new Error("No script content received");
 
-  let parsedScript: ScriptResponse;
-  try {
-    const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found in response");
-    parsedScript = JSON.parse(jsonMatch[0]);
-  } catch (parseError) {
-    console.error("Script parse error:", parseError, "Raw content:", scriptContent.substring(0, 500));
-    throw new Error("Failed to parse script JSON");
-  }
+  // Use pre-parsed script from fallback helper
+  let parsedScript = llmResult.parsed!;
 
   // ============= HYPEREAL CHARACTER REFERENCE GENERATION (Pro/Enterprise only) =============
   let characterReferences: Record<string, string> = {}; // Maps character name to reference image URL
