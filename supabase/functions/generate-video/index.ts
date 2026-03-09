@@ -3052,7 +3052,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   const llmResult = await callLLMWithFallback<ScriptResponse>(scriptPrompt, {
     temperature: 0.7,
-    maxTokens: 8192,
+    maxTokens: 4096, // Reduced to prevent Claude truncation/malformed JSON
     model: PRIMARY_MODEL,
     parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
@@ -3438,7 +3438,7 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   const llmResult = await callLLMWithFallback<ScriptResponse>(scriptPrompt, {
     temperature: 0.8, // Slightly higher for creative storytelling
-    maxTokens: 12000, // More tokens for longer narratives
+    maxTokens: 8192, // Reduced from 12000 to prevent Claude truncation
     model: PRIMARY_MODEL,
     parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
