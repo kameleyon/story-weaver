@@ -406,14 +406,17 @@ const PRICING = {
 };
 
 // ============= LLM CALL HELPER (OpenRouter Only) =============
-interface LLMCallResult {
+interface LLMCallResult<T = unknown> {
   content: string;
   tokensUsed: number;
   provider: "openrouter";
   durationMs: number;
+  modelUsed: string;
+  parsed?: T;
 }
 
-const FALLBACK_MODEL = "anthropic/claude-sonnet-4.6";
+const PRIMARY_MODEL = "anthropic/claude-sonnet-4.6";
+const FALLBACK_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 async function callOpenRouter(
   apiKey: string,
@@ -421,7 +424,7 @@ async function callOpenRouter(
   prompt: string,
   temperature: number,
   maxTokens: number,
-): Promise<LLMCallResult> {
+): Promise<{ content: string; tokensUsed: number; durationMs: number }> {
   const startTime = Date.now();
   console.log(`[LLM] Calling OpenRouter with ${model}...`);
 
@@ -459,22 +462,42 @@ async function callOpenRouter(
   return {
     content,
     tokensUsed: data.usage?.total_tokens || 0,
-    provider: "openrouter",
     durationMs,
   };
 }
 
-async function callLLMWithFallback(
+// Extract JSON from LLM response (handles fenced code blocks, extra text)
+function extractJsonFromLLMResponse(content: string): string {
+  let cleaned = content.trim();
+  // Strip markdown code blocks if present
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned
+      .replace(/^```[a-z]*\n?/i, "")
+      .replace(/\n?```$/i, "")
+      .trim();
+  }
+  // Extract JSON between first { and last }
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+  return cleaned;
+}
+
+async function callLLMWithFallback<T = unknown>(
   prompt: string,
   options: {
     temperature?: number;
     maxTokens?: number;
     model?: string;
+    parseJson?: boolean; // If true, parse as JSON and treat parse failures as retry-triggering errors
   } = {},
-): Promise<LLMCallResult> {
-  const primaryModel = options.model || "google/gemini-3.1-pro-preview";
+): Promise<LLMCallResult<T>> {
+  const primaryModel = options.model || PRIMARY_MODEL;
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 8192;
+  const shouldParseJson = options.parseJson ?? false;
 
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_API_KEY) {
@@ -487,10 +510,33 @@ async function callLLMWithFallback(
   for (const model of models) {
     try {
       const result = await callOpenRouter(OPENROUTER_API_KEY, model, prompt, temperature, maxTokens);
+      
+      let parsed: T | undefined;
+      if (shouldParseJson) {
+        // Attempt to parse JSON - if it fails, treat it as a fallback-triggering error
+        try {
+          const jsonStr = extractJsonFromLLMResponse(result.content);
+          parsed = JSON.parse(jsonStr) as T;
+          console.log(`[LLM] JSON parsed successfully from ${model}`);
+        } catch (parseErr) {
+          const parseMsg = parseErr instanceof Error ? parseErr.message : "JSON parse error";
+          console.warn(`[LLM] Model ${model} returned invalid JSON: ${parseMsg}. Content preview: ${result.content.substring(0, 300)}...`);
+          throw new Error(`Invalid JSON from ${model}: ${parseMsg}`);
+        }
+      }
+      
       if (model !== primaryModel) {
         console.warn(`[LLM] Primary model ${primaryModel} failed, succeeded with fallback ${model}`);
       }
-      return result;
+      
+      return {
+        content: result.content,
+        tokensUsed: result.tokensUsed,
+        provider: "openrouter",
+        durationMs: result.durationMs,
+        modelUsed: model,
+        parsed,
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${model}: ${msg}`);
