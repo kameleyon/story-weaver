@@ -3434,27 +3434,28 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
   ]
 }`;
 
-  console.log("Phase: STORYTELLING SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
+  console.log(`Phase: STORYTELLING SCRIPT - Generating via OpenRouter with ${PRIMARY_MODEL}...`);
 
-  const llmResult = await callLLMWithFallback(scriptPrompt, {
+  const llmResult = await callLLMWithFallback<ScriptResponse>(scriptPrompt, {
     temperature: 0.8, // Slightly higher for creative storytelling
     maxTokens: 12000, // More tokens for longer narratives
-    model: "google/gemini-3.1-pro-preview",
+    model: PRIMARY_MODEL,
+    parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
 
-  // Log API call
+  // Log API call with actual model that succeeded
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3.1-pro-preview",
+    model: llmResult.modelUsed, // Log the actual model that succeeded
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
   console.log(
-    `[API_LOG] ${llmResult.provider} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+    `[API_LOG] ${llmResult.provider}/${llmResult.modelUsed} Storytelling script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
   );
 
   const scriptContent = llmResult.content;
@@ -3462,15 +3463,8 @@ Return ONLY valid JSON (no markdown, no \`\`\`json blocks):
 
   if (!scriptContent) throw new Error("No script content received");
 
-  let parsedScript: ScriptResponse;
-  try {
-    const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found in response");
-    parsedScript = JSON.parse(jsonMatch[0]);
-  } catch (parseError) {
-    console.error("Script parse error:", parseError, "Raw content:", scriptContent.substring(0, 500));
-    throw new Error("Failed to parse script JSON");
-  }
+  // Use pre-parsed script from fallback helper
+  let parsedScript = llmResult.parsed!;
 
   // ============= HYPEREAL CHARACTER REFERENCE GENERATION (Pro/Enterprise only) =============
   let characterReferences: Record<string, string> = {}; // Maps character name to reference image URL
