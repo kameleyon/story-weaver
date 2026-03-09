@@ -413,24 +413,15 @@ interface LLMCallResult {
   durationMs: number;
 }
 
-async function callLLMWithFallback(
+const FALLBACK_MODEL = "anthropic/claude-sonnet-4.6";
+
+async function callOpenRouter(
+  apiKey: string,
+  model: string,
   prompt: string,
-  options: {
-    temperature?: number;
-    maxTokens?: number;
-    model?: string;
-  } = {},
+  temperature: number,
+  maxTokens: number,
 ): Promise<LLMCallResult> {
-  const model = options.model || "google/gemini-3.1-pro-preview";
-  const temperature = options.temperature ?? 0.7;
-  const maxTokens = options.maxTokens ?? 8192;
-
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-
-  if (!OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not configured");
-  }
-
   const startTime = Date.now();
   console.log(`[LLM] Calling OpenRouter with ${model}...`);
 
@@ -438,7 +429,7 @@ async function callLLMWithFallback(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       "HTTP-Referer": "https://audiomax.lovable.app",
       "X-Title": "AudioMax",
     },
@@ -454,23 +445,60 @@ async function callLLMWithFallback(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => "");
-    throw new Error(`OpenRouter failed (${response.status}): ${errText.substring(0, 200)}`);
+    throw new Error(`OpenRouter failed for ${model} (${response.status}): ${errText.substring(0, 200)}`);
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
-    throw new Error("No content received from OpenRouter");
+    throw new Error(`No content received from OpenRouter for ${model}`);
   }
 
-  console.log(`[LLM] OpenRouter success: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
+  console.log(`[LLM] OpenRouter success with ${model}: ${data.usage?.total_tokens || 0} tokens, ${durationMs}ms`);
   return {
     content,
     tokensUsed: data.usage?.total_tokens || 0,
     provider: "openrouter",
     durationMs,
   };
+}
+
+async function callLLMWithFallback(
+  prompt: string,
+  options: {
+    temperature?: number;
+    maxTokens?: number;
+    model?: string;
+  } = {},
+): Promise<LLMCallResult> {
+  const primaryModel = options.model || "google/gemini-3.1-pro-preview";
+  const temperature = options.temperature ?? 0.7;
+  const maxTokens = options.maxTokens ?? 8192;
+
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not configured");
+  }
+
+  const models = [primaryModel, FALLBACK_MODEL];
+  const errors: string[] = [];
+
+  for (const model of models) {
+    try {
+      const result = await callOpenRouter(OPENROUTER_API_KEY, model, prompt, temperature, maxTokens);
+      if (model !== primaryModel) {
+        console.warn(`[LLM] Primary model ${primaryModel} failed, succeeded with fallback ${model}`);
+      }
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${model}: ${msg}`);
+      console.warn(`[LLM] Model ${model} failed: ${msg}. Trying next...`);
+    }
+  }
+
+  throw new Error(`All LLM models failed: ${errors.join(" | ")}`);
 }
 
 // ============= API CALL LOGGING =============
