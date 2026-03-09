@@ -3979,9 +3979,9 @@ async function handleAudioPhase(
 }
 
 // Images phase now processes in chunks to avoid request timeouts.
-// IMPORTANT: Smaller chunk size (4) prevents "failed to fetch" timeouts during image generation.
-// Pro model (nano-banana-pro 1K) is slower, so we keep chunks small and manageable.
-const MAX_IMAGES_PER_CALL_DEFAULT = 4;
+// IMPORTANT: Smaller chunk size (2) prevents gateway timeouts (150s limit) during image generation.
+// Each Hypereal call takes 15-40s + retries with exponential backoff; 2 images per chunk stays well under the limit.
+const MAX_IMAGES_PER_CALL_DEFAULT = 2;
 
 async function handleImagesPhase(
   supabase: any,
