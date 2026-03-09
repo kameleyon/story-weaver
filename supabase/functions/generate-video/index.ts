@@ -2728,58 +2728,41 @@ IMPORTANT: Do NOT include any style description in visualPrompt - the system wil
 - Create magazine-editorial quality that looks professional
 - Focus on CONTENT and LAYOUT only - do NOT write style descriptions`;
 
-  // Call LLM for script generation via OpenRouter (primary) with Lovable AI fallback
-  console.log("Phase: SMART FLOW SCRIPT - Generating via OpenRouter with google/gemini-3.1-pro-preview...");
+  // Call LLM for script generation via OpenRouter with JSON parsing and fallback
+  console.log(`Phase: SMART FLOW SCRIPT - Generating via OpenRouter with ${PRIMARY_MODEL}...`);
 
-  const llmResult = await callLLMWithFallback(scriptPrompt, {
+  type SmartFlowScript = {
+    title: string;
+    scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }>;
+  };
+
+  const llmResult = await callLLMWithFallback<SmartFlowScript>(scriptPrompt, {
     temperature: 0.7,
     maxTokens: 4000,
-    model: "google/gemini-3.1-pro-preview",
+    model: PRIMARY_MODEL,
+    parseJson: true, // Parse JSON inside fallback loop so parse failures trigger retry
   });
 
-  // Log API call
+  // Log API call with actual model that succeeded
   const scriptCost = Math.max(llmResult.tokensUsed * PRICING.scriptPerToken, PRICING.scriptPerCall);
   await logApiCall({
     supabase,
     userId: user.id,
     provider: llmResult.provider,
-    model: "google/gemini-3.1-pro-preview",
+    model: llmResult.modelUsed, // Log the actual model that succeeded
     status: "success",
     totalDurationMs: llmResult.durationMs,
     cost: scriptCost,
   });
   console.log(
-    `[API_LOG] ${llmResult.provider} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
+    `[API_LOG] ${llmResult.provider}/${llmResult.modelUsed} Smart Flow script: ${llmResult.tokensUsed} tokens, $${scriptCost.toFixed(4)} cost`,
   );
 
   const scriptContent = llmResult.content;
   const tokensUsed = llmResult.tokensUsed;
 
-  // Parse the script
-  let parsedScript: {
-    title: string;
-    scenes: Array<{ number: number; voiceover: string; visualPrompt: string; duration: number }>;
-  };
-  try {
-    // Strip markdown code blocks if present
-    let cleanedContent = scriptContent.trim();
-    if (cleanedContent.startsWith("```")) {
-      cleanedContent = cleanedContent
-        .replace(/^```[a-z]*\n?/i, "")
-        .replace(/\n?```$/i, "")
-        .trim();
-    }
-    // Extract JSON between first { and last }
-    const firstBrace = cleanedContent.indexOf("{");
-    const lastBrace = cleanedContent.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      cleanedContent = cleanedContent.slice(firstBrace, lastBrace + 1);
-    }
-    parsedScript = JSON.parse(cleanedContent);
-  } catch (parseError) {
-    console.error("[generate-video] Smart Flow script parsing failed:", parseError);
-    throw new Error("Failed to parse Smart Flow script - invalid JSON response");
-  }
+  // Use pre-parsed script from fallback helper
+  let parsedScript = llmResult.parsed!;
 
   // Force exactly 1 scene
   if (!parsedScript.scenes || parsedScript.scenes.length === 0) {
