@@ -415,8 +415,8 @@ interface LLMCallResult<T = unknown> {
   parsed?: T;
 }
 
-const PRIMARY_MODEL = "google/gemini-3.1-flash-lite-preview";
-const FALLBACK_MODEL = "anthropic/claude-sonnet-4.6";
+const PRIMARY_MODEL = "anthropic/claude-sonnet-4.6";
+const FALLBACK_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 async function callOpenRouter(
   apiKey: string,
