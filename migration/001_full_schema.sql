@@ -385,128 +385,127 @@ ALTER TABLE public.video_generation_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.webhook_events ENABLE ROW LEVEL SECURITY;
 
 -- ==================== RLS POLICIES ====================
+-- Correct syntax: CREATE POLICY "name" ON table AS RESTRICTIVE FOR command TO role USING (...) WITH CHECK (...);
 
 -- profiles
-CREATE POLICY "Authenticated users can view their own profile" ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can create their own profile" ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can update their own profile" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can delete their own profile" ON public.profiles FOR DELETE TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
+CREATE POLICY "profiles_select" ON public.profiles AS RESTRICTIVE FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "profiles_insert" ON public.profiles AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "profiles_update" ON public.profiles AS RESTRICTIVE FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "profiles_delete" ON public.profiles AS RESTRICTIVE FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
 -- user_roles
-CREATE POLICY "Admins can view all roles" ON public.user_roles FOR SELECT TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can insert roles" ON public.user_roles FOR INSERT TO authenticated WITH CHECK (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can update roles" ON public.user_roles FOR UPDATE TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can delete roles" ON public.user_roles FOR DELETE TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to user_roles" ON public.user_roles FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "user_roles_select" ON public.user_roles AS RESTRICTIVE FOR SELECT TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "user_roles_insert" ON public.user_roles AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (is_admin(auth.uid()));
+CREATE POLICY "user_roles_update" ON public.user_roles AS RESTRICTIVE FOR UPDATE TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "user_roles_delete" ON public.user_roles AS RESTRICTIVE FOR DELETE TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "user_roles_deny_anon" ON public.user_roles AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- subscriptions
-CREATE POLICY "Authenticated users can view their own subscription" ON public.subscriptions FOR SELECT TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to subscriptions" ON public.subscriptions FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Deny direct subscription inserts" ON public.subscriptions FOR INSERT TO authenticated WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Deny direct subscription updates" ON public.subscriptions FOR UPDATE TO authenticated USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "subscriptions_select" ON public.subscriptions AS RESTRICTIVE FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "subscriptions_deny_anon" ON public.subscriptions AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
+CREATE POLICY "subscriptions_deny_insert" ON public.subscriptions AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (false);
+CREATE POLICY "subscriptions_deny_update" ON public.subscriptions AS RESTRICTIVE FOR UPDATE TO authenticated USING (false) WITH CHECK (false);
 
 -- user_credits
-CREATE POLICY "Authenticated users can view their own credits" ON public.user_credits FOR SELECT TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users cannot insert credits" ON public.user_credits FOR INSERT TO authenticated WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users cannot update credits" ON public.user_credits FOR UPDATE TO authenticated USING (false) WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users cannot delete credits" ON public.user_credits FOR DELETE TO authenticated USING (false) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to user_credits" ON public.user_credits FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Service role can insert credits" ON public.user_credits FOR INSERT TO service_role WITH CHECK (true) AS RESTRICTIVE;
-CREATE POLICY "Service role can update credits" ON public.user_credits FOR UPDATE TO service_role USING (true) WITH CHECK (true) AS RESTRICTIVE;
-CREATE POLICY "Service role can delete credits" ON public.user_credits FOR DELETE TO service_role USING (true) AS RESTRICTIVE;
+CREATE POLICY "user_credits_select" ON public.user_credits AS RESTRICTIVE FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "user_credits_deny_insert" ON public.user_credits AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (false);
+CREATE POLICY "user_credits_deny_update" ON public.user_credits AS RESTRICTIVE FOR UPDATE TO authenticated USING (false) WITH CHECK (false);
+CREATE POLICY "user_credits_deny_delete" ON public.user_credits AS RESTRICTIVE FOR DELETE TO authenticated USING (false);
+CREATE POLICY "user_credits_deny_anon" ON public.user_credits AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
+CREATE POLICY "user_credits_sr_insert" ON public.user_credits AS RESTRICTIVE FOR INSERT TO service_role WITH CHECK (true);
+CREATE POLICY "user_credits_sr_update" ON public.user_credits AS RESTRICTIVE FOR UPDATE TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "user_credits_sr_delete" ON public.user_credits AS RESTRICTIVE FOR DELETE TO service_role USING (true);
 
 -- credit_transactions
-CREATE POLICY "Users can view their own credit transactions" ON public.credit_transactions FOR SELECT USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Only service role can insert credit transactions" ON public.credit_transactions FOR INSERT WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to credit_transactions" ON public.credit_transactions FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "credit_tx_select" ON public.credit_transactions AS RESTRICTIVE FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "credit_tx_deny_insert" ON public.credit_transactions AS RESTRICTIVE FOR INSERT WITH CHECK (false);
+CREATE POLICY "credit_tx_deny_anon" ON public.credit_transactions AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- projects
-CREATE POLICY "Users can view their own projects" ON public.projects FOR SELECT USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can create their own projects" ON public.projects FOR INSERT WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can update their own projects" ON public.projects FOR UPDATE USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can delete their own projects" ON public.projects FOR DELETE USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to projects" ON public.projects FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "projects_select" ON public.projects AS RESTRICTIVE FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "projects_insert" ON public.projects AS RESTRICTIVE FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "projects_update" ON public.projects AS RESTRICTIVE FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "projects_delete" ON public.projects AS RESTRICTIVE FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "projects_deny_anon" ON public.projects AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- generations
-CREATE POLICY "Authenticated users can view their own generations" ON public.generations FOR SELECT TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can create their own generations" ON public.generations FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can update their own generations" ON public.generations FOR UPDATE TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can delete their own generations" ON public.generations FOR DELETE TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
+CREATE POLICY "generations_select" ON public.generations AS RESTRICTIVE FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "generations_insert" ON public.generations AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "generations_update" ON public.generations AS RESTRICTIVE FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "generations_delete" ON public.generations AS RESTRICTIVE FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
 -- generation_archives
-CREATE POLICY "Admins can view all archives" ON public.generation_archives FOR SELECT TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to generation_archives" ON public.generation_archives FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "gen_archives_select" ON public.generation_archives AS RESTRICTIVE FOR SELECT TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "gen_archives_deny_anon" ON public.generation_archives AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- generation_costs
-CREATE POLICY "Admins can view all costs" ON public.generation_costs FOR SELECT USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to generation_costs" ON public.generation_costs FOR ALL USING (false) WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Service role can insert costs" ON public.generation_costs FOR INSERT TO service_role WITH CHECK (true) AS RESTRICTIVE;
+CREATE POLICY "gen_costs_select" ON public.generation_costs AS RESTRICTIVE FOR SELECT USING (is_admin(auth.uid()));
+CREATE POLICY "gen_costs_deny_all" ON public.generation_costs AS RESTRICTIVE FOR ALL USING (false) WITH CHECK (false);
+CREATE POLICY "gen_costs_sr_insert" ON public.generation_costs AS RESTRICTIVE FOR INSERT TO service_role WITH CHECK (true);
 
 -- api_call_logs
-CREATE POLICY "Admins can view all api_call_logs" ON public.api_call_logs FOR SELECT USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to api_call_logs" ON public.api_call_logs FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Service role can insert api_call_logs" ON public.api_call_logs FOR INSERT TO service_role WITH CHECK (true) AS RESTRICTIVE;
+CREATE POLICY "api_logs_select" ON public.api_call_logs AS RESTRICTIVE FOR SELECT USING (is_admin(auth.uid()));
+CREATE POLICY "api_logs_deny_anon" ON public.api_call_logs AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
+CREATE POLICY "api_logs_sr_insert" ON public.api_call_logs AS RESTRICTIVE FOR INSERT TO service_role WITH CHECK (true);
 
 -- project_characters
-CREATE POLICY "Users can view their own characters" ON public.project_characters FOR SELECT USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can create their own characters" ON public.project_characters FOR INSERT WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can update their own characters" ON public.project_characters FOR UPDATE USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can delete their own characters" ON public.project_characters FOR DELETE USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to project_characters" ON public.project_characters FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "chars_select" ON public.project_characters AS RESTRICTIVE FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "chars_insert" ON public.project_characters AS RESTRICTIVE FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "chars_update" ON public.project_characters AS RESTRICTIVE FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "chars_delete" ON public.project_characters AS RESTRICTIVE FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "chars_deny_anon" ON public.project_characters AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- project_shares
-CREATE POLICY "Users can view their own shares" ON public.project_shares FOR SELECT USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can create their own shares" ON public.project_shares FOR INSERT WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can delete their own shares" ON public.project_shares FOR DELETE USING (auth.uid() = user_id) AS RESTRICTIVE;
+CREATE POLICY "shares_select" ON public.project_shares AS RESTRICTIVE FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "shares_insert" ON public.project_shares AS RESTRICTIVE FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "shares_delete" ON public.project_shares AS RESTRICTIVE FOR DELETE USING (auth.uid() = user_id);
 
 -- user_api_keys
-CREATE POLICY "Authenticated users can view their own API keys" ON public.user_api_keys FOR SELECT TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can insert their own API keys" ON public.user_api_keys FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can update their own API keys" ON public.user_api_keys FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Authenticated users can delete their own API keys" ON public.user_api_keys FOR DELETE TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to user_api_keys" ON public.user_api_keys FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "api_keys_select" ON public.user_api_keys AS RESTRICTIVE FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "api_keys_insert" ON public.user_api_keys AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "api_keys_update" ON public.user_api_keys AS RESTRICTIVE FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "api_keys_delete" ON public.user_api_keys AS RESTRICTIVE FOR DELETE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "api_keys_deny_anon" ON public.user_api_keys AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- user_voices
-CREATE POLICY "Users can view their own voices" ON public.user_voices FOR SELECT USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can create their own voices" ON public.user_voices FOR INSERT WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can update their own voices" ON public.user_voices FOR UPDATE USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can delete their own voices" ON public.user_voices FOR DELETE USING (auth.uid() = user_id) AS RESTRICTIVE;
+CREATE POLICY "voices_select" ON public.user_voices AS RESTRICTIVE FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "voices_insert" ON public.user_voices AS RESTRICTIVE FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "voices_update" ON public.user_voices AS RESTRICTIVE FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "voices_delete" ON public.user_voices AS RESTRICTIVE FOR DELETE USING (auth.uid() = user_id);
 
 -- system_logs
-CREATE POLICY "Admins can view all system_logs" ON public.system_logs FOR SELECT USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anon select system_logs" ON public.system_logs FOR SELECT TO anon USING (false) AS RESTRICTIVE;
-CREATE POLICY "Deny anon insert system_logs" ON public.system_logs FOR INSERT TO anon WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Deny anon update system_logs" ON public.system_logs FOR UPDATE TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
-CREATE POLICY "Deny anon delete system_logs" ON public.system_logs FOR DELETE TO anon USING (false) AS RESTRICTIVE;
+CREATE POLICY "sys_logs_admin_select" ON public.system_logs AS RESTRICTIVE FOR SELECT USING (is_admin(auth.uid()));
+CREATE POLICY "sys_logs_deny_anon_select" ON public.system_logs AS RESTRICTIVE FOR SELECT TO anon USING (false);
+CREATE POLICY "sys_logs_deny_anon_insert" ON public.system_logs AS RESTRICTIVE FOR INSERT TO anon WITH CHECK (false);
+CREATE POLICY "sys_logs_deny_anon_update" ON public.system_logs AS RESTRICTIVE FOR UPDATE TO anon USING (false) WITH CHECK (false);
+CREATE POLICY "sys_logs_deny_anon_delete" ON public.system_logs AS RESTRICTIVE FOR DELETE TO anon USING (false);
 
 -- admin_logs
-CREATE POLICY "Admins can view all logs" ON public.admin_logs FOR SELECT TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can insert logs" ON public.admin_logs FOR INSERT TO authenticated WITH CHECK (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to admin_logs" ON public.admin_logs FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "admin_logs_select" ON public.admin_logs AS RESTRICTIVE FOR SELECT TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "admin_logs_insert" ON public.admin_logs AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (is_admin(auth.uid()));
+CREATE POLICY "admin_logs_deny_anon" ON public.admin_logs AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- user_flags
-CREATE POLICY "Admins can view all flags" ON public.user_flags FOR SELECT TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can create flags" ON public.user_flags FOR INSERT TO authenticated WITH CHECK (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can update flags" ON public.user_flags FOR UPDATE TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Admins can delete flags" ON public.user_flags FOR DELETE TO authenticated USING (is_admin(auth.uid())) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to user_flags" ON public.user_flags FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "flags_select" ON public.user_flags AS RESTRICTIVE FOR SELECT TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "flags_insert" ON public.user_flags AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (is_admin(auth.uid()));
+CREATE POLICY "flags_update" ON public.user_flags AS RESTRICTIVE FOR UPDATE TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "flags_delete" ON public.user_flags AS RESTRICTIVE FOR DELETE TO authenticated USING (is_admin(auth.uid()));
+CREATE POLICY "flags_deny_anon" ON public.user_flags AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- video_generation_jobs
-CREATE POLICY "Users can view their own jobs" ON public.video_generation_jobs FOR SELECT TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can insert their own jobs" ON public.video_generation_jobs FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Users can update their own jobs" ON public.video_generation_jobs FOR UPDATE TO authenticated USING (auth.uid() = user_id) AS RESTRICTIVE;
-CREATE POLICY "Deny anonymous access to video_generation_jobs" ON public.video_generation_jobs FOR ALL TO anon USING (false) WITH CHECK (false) AS RESTRICTIVE;
--- Worker policies (permissive for service-role operations)
-CREATE POLICY "worker_read_jobs" ON public.video_generation_jobs FOR SELECT USING (true) AS RESTRICTIVE;
-CREATE POLICY "worker_insert_jobs" ON public.video_generation_jobs FOR INSERT WITH CHECK (true) AS RESTRICTIVE;
-CREATE POLICY "worker_update_jobs" ON public.video_generation_jobs FOR UPDATE USING (true) AS RESTRICTIVE;
-CREATE POLICY "worker_delete_jobs" ON public.video_generation_jobs FOR DELETE USING (true) AS RESTRICTIVE;
+CREATE POLICY "vgj_select" ON public.video_generation_jobs AS RESTRICTIVE FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "vgj_insert" ON public.video_generation_jobs AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "vgj_update" ON public.video_generation_jobs AS RESTRICTIVE FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "vgj_deny_anon" ON public.video_generation_jobs AS RESTRICTIVE FOR ALL TO anon USING (false) WITH CHECK (false);
+CREATE POLICY "vgj_worker_read" ON public.video_generation_jobs FOR SELECT USING (true);
+CREATE POLICY "vgj_worker_insert" ON public.video_generation_jobs FOR INSERT WITH CHECK (true);
+CREATE POLICY "vgj_worker_update" ON public.video_generation_jobs FOR UPDATE USING (true);
+CREATE POLICY "vgj_worker_delete" ON public.video_generation_jobs FOR DELETE USING (true);
 
 -- webhook_events
-CREATE POLICY "Deny all access to webhook_events" ON public.webhook_events FOR ALL USING (false) WITH CHECK (false) AS RESTRICTIVE;
+CREATE POLICY "webhook_deny_all" ON public.webhook_events AS RESTRICTIVE FOR ALL USING (false) WITH CHECK (false);
 
 -- ==================== STORAGE BUCKETS ====================
--- Run these via Supabase Dashboard > Storage or SQL:
 
 INSERT INTO storage.buckets (id, name, public) VALUES ('audio', 'audio', false) ON CONFLICT DO NOTHING;
 INSERT INTO storage.buckets (id, name, public) VALUES ('source_uploads', 'source_uploads', false) ON CONFLICT DO NOTHING;
@@ -518,24 +517,24 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('project-thumbnails', 'pr
 INSERT INTO storage.buckets (id, name, public) VALUES ('style-references', 'style-references', true) ON CONFLICT DO NOTHING;
 INSERT INTO storage.buckets (id, name, public) VALUES ('videos', 'videos', true) ON CONFLICT DO NOTHING;
 
--- Storage policies for public buckets (allow authenticated uploads, public reads)
-CREATE POLICY "Public read scene-images" ON storage.objects FOR SELECT USING (bucket_id = 'scene-images');
-CREATE POLICY "Auth upload scene-images" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'scene-images');
-CREATE POLICY "Public read audio-files" ON storage.objects FOR SELECT USING (bucket_id = 'audio-files');
-CREATE POLICY "Auth upload audio-files" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'audio-files');
-CREATE POLICY "Public read scene-videos" ON storage.objects FOR SELECT USING (bucket_id = 'scene-videos');
-CREATE POLICY "Auth upload scene-videos" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'scene-videos');
-CREATE POLICY "Public read project-thumbnails" ON storage.objects FOR SELECT USING (bucket_id = 'project-thumbnails');
-CREATE POLICY "Auth upload project-thumbnails" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'project-thumbnails');
-CREATE POLICY "Public read style-references" ON storage.objects FOR SELECT USING (bucket_id = 'style-references');
-CREATE POLICY "Auth upload style-references" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'style-references');
-CREATE POLICY "Public read videos" ON storage.objects FOR SELECT USING (bucket_id = 'videos');
-CREATE POLICY "Auth upload videos" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'videos');
+-- Storage policies for public buckets
+CREATE POLICY "pub_read_scene_images" ON storage.objects FOR SELECT USING (bucket_id = 'scene-images');
+CREATE POLICY "auth_upload_scene_images" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'scene-images');
+CREATE POLICY "pub_read_audio_files" ON storage.objects FOR SELECT USING (bucket_id = 'audio-files');
+CREATE POLICY "auth_upload_audio_files" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'audio-files');
+CREATE POLICY "pub_read_scene_videos" ON storage.objects FOR SELECT USING (bucket_id = 'scene-videos');
+CREATE POLICY "auth_upload_scene_videos" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'scene-videos');
+CREATE POLICY "pub_read_thumbnails" ON storage.objects FOR SELECT USING (bucket_id = 'project-thumbnails');
+CREATE POLICY "auth_upload_thumbnails" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'project-thumbnails');
+CREATE POLICY "pub_read_style_refs" ON storage.objects FOR SELECT USING (bucket_id = 'style-references');
+CREATE POLICY "auth_upload_style_refs" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'style-references');
+CREATE POLICY "pub_read_videos" ON storage.objects FOR SELECT USING (bucket_id = 'videos');
+CREATE POLICY "auth_upload_videos" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'videos');
 
 -- Private buckets: only owner can read/write
-CREATE POLICY "Owner read audio" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'audio' AND auth.uid()::text = (storage.foldername(name))[1]);
-CREATE POLICY "Owner upload audio" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'audio' AND auth.uid()::text = (storage.foldername(name))[1]);
-CREATE POLICY "Owner read voice_samples" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'voice_samples' AND auth.uid()::text = (storage.foldername(name))[1]);
-CREATE POLICY "Owner upload voice_samples" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'voice_samples' AND auth.uid()::text = (storage.foldername(name))[1]);
-CREATE POLICY "Owner read source_uploads" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'source_uploads' AND auth.uid()::text = (storage.foldername(name))[1]);
-CREATE POLICY "Owner upload source_uploads" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'source_uploads' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "owner_read_audio" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'audio' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "owner_upload_audio" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'audio' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "owner_read_voice_samples" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'voice_samples' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "owner_upload_voice_samples" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'voice_samples' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "owner_read_source_uploads" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'source_uploads' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "owner_upload_source_uploads" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'source_uploads' AND auth.uid()::text = (storage.foldername(name))[1]);
