@@ -9,6 +9,9 @@ import {
   type StorageStrategy,
 } from "../_shared/audioEngine.ts";
 
+// ============= KILL SWITCH — service is decommissioned =============
+const SERVICE_DISABLED = true;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -1411,6 +1414,14 @@ async function updateSceneAtIndex(
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Kill switch — block all generation requests
+  if (SERVICE_DISABLED) {
+    return new Response(JSON.stringify({ error: "Service is temporarily unavailable. Please try again later." }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   let parsedGenerationId: string | undefined;
