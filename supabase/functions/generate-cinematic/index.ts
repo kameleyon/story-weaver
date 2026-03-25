@@ -1416,7 +1416,14 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  let parsedGenerationId: string | undefined;
+  // Kill switch — block all generation requests
+  if (SERVICE_DISABLED) {
+    return new Response(JSON.stringify({ error: "Service is temporarily unavailable. Please try again later." }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
 
   try {
     const authHeader = req.headers.get("authorization");
