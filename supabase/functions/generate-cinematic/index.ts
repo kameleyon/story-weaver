@@ -9,6 +9,9 @@ import {
   type StorageStrategy,
 } from "../_shared/audioEngine.ts";
 
+// ============= KILL SWITCH — service is decommissioned =============
+const SERVICE_DISABLED = true;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
