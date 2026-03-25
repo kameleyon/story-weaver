@@ -5160,6 +5160,14 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Kill switch — block all generation requests
+  if (SERVICE_DISABLED) {
+    return new Response(JSON.stringify({ error: "Service is temporarily unavailable. Please try again later." }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
