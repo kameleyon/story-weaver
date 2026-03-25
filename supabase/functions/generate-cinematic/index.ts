@@ -1424,6 +1424,7 @@ serve(async (req) => {
     });
   }
 
+  let parsedGenerationId: string | undefined;
 
   try {
     const authHeader = req.headers.get("authorization");
